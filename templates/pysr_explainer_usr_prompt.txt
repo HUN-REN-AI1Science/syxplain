@@ -1,0 +1,9 @@
+Here are the two JSON objects:
+PROJECT_SPEC:
+```json
+{problem_description}
+```
+DATA_SPEC:
+```json
+{to_explain}
+```

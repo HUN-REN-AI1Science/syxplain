@@ -1,0 +1,13 @@
+{
+  "project_description": "This project aims to predict the concentration of Ammonium Lactate-soluble Phosphate (AL-P2O5) in soil samples based on other measured soil properties. The goal is to develop a regression model that can estimate AL-P2O5 values from various chemical and physical soil indicators.",
+  "target_variable": "al_p2o5",
+  "features": {
+    "mehlich3_p": "Phosphorus concentration (ppm) measured using the Mehlich-3 extraction method, indicating plant-available phosphorus.",
+    "organic_matter": "Percentage of organic matter (OM, %) in the soil, which affects nutrient retention and soil fertility.",
+    "usda_soil_type": "USDA soil classification code (USDA5), representing the soil texture or type category.",
+    "lime_content": "Percentage of lime (CaCO3, %) in the soil, indicating soil alkalinity and buffering capacity.",
+    "ph_kcl": "Soil pH measured in a potassium chloride (KCl) solution, reflecting soil acidity or alkalinity."
+  }
+
+
+}
