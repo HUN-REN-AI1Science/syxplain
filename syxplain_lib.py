@@ -1,7 +1,17 @@
+import io, base64, json
+from typing import Any, TypedDict, List
+import numpy as np
+import sympy
 import pysr
 from pysr import PySRRegressor
 from langgraph.graph import StateGraph, START, END
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import HumanMessage
+from langchain_core.prompts import PromptTemplate
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
 
 class State(TypedDict, total=False):
     data: Any
@@ -34,7 +44,7 @@ def llm_pysr_config_generator(state: State) -> State:
     img_b64 = state["data_visualization"]
     summary_csv_text = state["data_summary"]
     img_data_uri = f"data:image/png;base64,{img_b64}"
-    with open("./templates/llm_pysr_config_generator_system_prompt.txt", "r") as f:
+    with open("./templates/llm_sym_operator_selection_prompt.txt", "r") as f:
         system_prompt = f.read()
 
     parts = [
@@ -51,8 +61,8 @@ def llm_pysr_config_generator(state: State) -> State:
 def pysr_with_generated_config(state: State) -> State:
     def estimate_niterations(state):
         # Input features
-        N, D = state["data"][state["predictor_columns"].shape
-        x_complexity_factor = D * np.log10(N)
+        sample_nbr, feature_dim_nbr = state["data"][state["predictor_columns"]].shape
+        x_complexity_factor = feature_dim_nbr * np.log10(sample_nbr)
         
         # Target
         y = state["data"][state["target_column"]]
@@ -102,7 +112,7 @@ def explain_pysr_equations(state: State) -> State:
     
     parts = [
         { "type": "text", "text": py_sr_explainer_sys_prompt},
-        { "type": "text", "text": pysr_explainer_usr_prompt.format(problem_description=problem_description_src, to_explain=json.dumps(to_explain, indent=2))},
+        { "type": "text", "text": pysr_explainer_usr_prompt.format(problem_description=state["problem_description_src"], to_explain=json.dumps(to_explain, indent=2))},
     ]
     
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro")
