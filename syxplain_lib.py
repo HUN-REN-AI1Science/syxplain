@@ -49,12 +49,21 @@ def llm_pysr_config_generator(state: State) -> State:
 
 def pysr_with_generated_config(state: State) -> State:
     pysr_config = json.loads(state["pysr_config_json"])
+    pysr_config["extra_sympy_mappings"] = {
+        "gaussian": lambda x: sympy.exp(-x*x),
+        "sigmoid": lambda x: 1 / (1 + sympy.exp(-x)),
+    }
+    pysr_config["nested_constraints"] = {
+        "exp": {"exp": 2},
+        "sin": {"sin": 0},
+        "gaussian": {"gaussian": 0},
+        "sigmoid": {"sigmoid": 0},
+    }
     pysr = PySRRegressor(**pysr_config)
-    predictor_columns = state["predictor_columns"]
-    target_column = state["target_column"]
-    X = state["data"][predictor_columns]
-    y = state["data"][target_column]
-    pysr.fit(X, y)
+    pysr.fit(
+        X=state["data"][state["predictor_columns"]],
+        y=state["data"][state["target_column"]]
+    )
     state["pysr_model"] = pysr
     return state
 
