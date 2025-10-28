@@ -13,6 +13,7 @@ class State(TypedDict, total=False):
     data_visualization: str
     data_summary: str
     pysr_model: pysr.sr.PySRRegressor
+    
 def data_summary(state: State) -> State:
     data = state["data"]
     buffer = io.StringIO()
@@ -48,7 +49,23 @@ def llm_pysr_config_generator(state: State) -> State:
     return state
 
 def pysr_with_generated_config(state: State) -> State:
+    def estimate_niterations(state):
+        # Input features
+        N, D = state["data"][state["predictor_columns"].shape
+        x_complexity_factor = D * np.log10(N)
+        
+        # Target
+        y = state["data"][state["target_column"]]
+        if np.mean(y) == 0 or len(y) == 0:
+            y_complexity_factor = 1
+        else:
+            noise_level = np.std(y - np.mean(y)) / np.mean(np.abs(y))
+            y_complexity_factor = np.clip(1 + noise_level, 1, 3)
+        
+        return max(200, int(100 * x_complexity_factor * y_complexity_factor))
+        
     pysr_config = json.loads(state["pysr_config_json"])
+    pysr_config["niterations"] = estimate_niterations(state)
     pysr_config["extra_sympy_mappings"] = {
         "gaussian": lambda x: sympy.exp(-x*x),
         "sigmoid": lambda x: 1 / (1 + sympy.exp(-x)),
