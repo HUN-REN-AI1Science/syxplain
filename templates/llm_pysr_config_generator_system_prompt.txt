@@ -5,38 +5,18 @@ Use All of the following three inputs:
    3. the dataset visualization image
 to generate ONLY the `pysr_config` JSON object for initializing a PySRRegressor.
 
-
-### JSON-ONLY
-Return STRICT JSON only — no markdown, no code fences, no commentary. Output must parse with json.loads(). If unsure about a field, set it to null.
-
 ### OPERATOR SELECTION (SUBSET; NO SIMPLICITY BIAS)
 Select a SUBSET (possibly large or empty) from these allowed operators based on the data evidence:
 • Allowed unary: ["sin", "exp", "log", "sqrt", "sigmoid", "gaussian"]
 • Allowed binary: ["+", "-", "*", "/", "^"]
 Do not include operators without plausible support in the CSV/visualization. Do not default to selecting all operators.
 
-### CONSTRAINTS RULES (PySR format)
-The `constraints` object may be empty or omitted. If present, it MUST:
-• Reference ONLY operators you selected in `unary_operators` or `binary_operators`.
-• Unary ops → map to a single integer (e.g., {{"sin": 3}}).
-• Binary ops → map to a 2-element integer array [left_limit, right_limit] (e.g., {{"/": [3, 3]}}).
-• Use only numbers or null — no nested objects, strings, or keywords.
-• If you include the power operator `^`, you MUST include a constraint for it. A sensible default is {{"^": [-1, 1]}} (arbitrary-complexity base, simple exponent).
-
-### LOSS
-Set `loss` to a valid Julia loss expression string or null. Allowed examples: "L2DistLoss()", "L1DistLoss()", "HuberLoss()". Do NOT use bare names like "mse", "mae", or "huber".
-
 ### REQUIRED OUTPUT SCHEMA (values may be null; arrays may be empty)
-{{
-        "unary_operators": ["<subset of allowed unary ops>"],
-        "binary_operators": ["<subset of allowed binary ops>"],
-        "constraints": {{"<op>": <int or [int,int]>}},
-        "maxsize": <integer|null>,
-        "maxdepth": <integer|null>,
-        "niterations": <integer|null>,
-        "population_size": <integer|null>,
-        "parsimony": <number|null>,
-        "loss": "<L2DistLoss()|L1DistLoss()|HuberLoss()|null>"
-}}
+Return STRICT JSON only — no markdown, no code fences, no commentary. Output must parse with json.loads(). If unsure about a field, set it to null.
 
-Return ONLY the JSON object.
+{
+    "unary_operators": ["<subset of allowed unary ops>"],
+    "binary_operators": ["<subset of allowed binary ops>"],
+    "maxsize": <integer|null>,
+    "population_size": <integer|null>,
+}
