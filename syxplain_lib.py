@@ -20,40 +20,54 @@ class State(TypedDict, total=False):
     predictor_columns: List[str]
     pysr_config_json: str
     pysr_explanations: str
-    data_visualization: str
+    data_visualization: List[str]
     data_summary: str
     pysr_model: pysr.sr.PySRRegressor
     
 def data_summary(state: State) -> State:
+    # Summary
     data = state["data"]
     buffer = io.StringIO()
     data.describe().to_csv(buffer)
     summary_csv = buffer.getvalue()
     state["data_summary"] = summary_csv
-    buf = io.BytesIO()
-    plt.figure(figsize=(10, 8))
-    sns.pairplot(data)
-    plt.savefig(buf, format='png')
-    base64_image = base64.b64encode(buf.getvalue()).decode('utf-8')
-    state["data_visualization"] = base64_image
+
+    # Charts
+    state["data_visualization"] = []
+    for col in state["predictor_columns"]:
+        data.plot(
+            x=col,
+            y=state["target_column"],
+            kind="scatter",
+            alpha=0.1,
+            figsize=(5, 4),
+            title=f"{col} vs {state['target_column']}"
+        )
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        base64_image = base64.b64encode(buf.getvalue()).decode('utf-8')
+        state["data_visualization"].append(base64_image)
+        plt.close()
+
     return state
 
 def llm_pysr_config_generator(state: State) -> State:
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro",response_mime_type="application/json")
     project_description_src = state["problem_description_src"]
-    img_b64 = state["data_visualization"]
     summary_csv_text = state["data_summary"]
-    img_data_uri = f"data:image/png;base64,{img_b64}"
+
     with open("./templates/llm_sym_operator_selection_prompt.txt", "r") as f:
         system_prompt = f.read()
 
     parts = [
         { "type": "text", "text": system_prompt},
-        { "type": "text", "text": f"### Project description json\n{project_description_src}"},
-        { "type": "text", "text": "### Data Summary CSV\n" + summary_csv_text},
-        { "type": "text", "text": "### Visualization Image"},
-        { "type": "image_url", "image_url": img_data_uri},
+        { "type": "text", "text": f"### Project description json\n{project_description_src}\n\n"},
+        { "type": "text", "text": f"### Dataset statistics\n{summary_csv_text}\n\n"},
+        { "type": "text", "text": "### Dataset visualization"},
     ]
+    for img_b64 in state["data_visualization"]:
+        parts.append({"type": "image_url", "image_url": f"data:image/png;base64,{img_b64}"})
     msg = llm.invoke([HumanMessage(content=parts)])
     state["pysr_config_json"] = msg.content  
     return state

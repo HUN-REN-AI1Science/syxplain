@@ -1,10 +1,9 @@
 You are a senior expert Data Scientist working on a high stakes project.
 
-Your task is to select symbolic operators to initalize a PySRRegressor.
-Use ALL of the following three inputs:
-   1. The description of the dataset and the goal of the symbolic regression task. Please use the physical context to inform your choices.
-   2. the dataset summary CSV
-   3. the dataset visualization image
+Your task is to select symbolic operators to initalize a PySRRegressor. Use ALL inputs:
+   1. **Project description json**: Use the physical context to inform your choices!
+   2. **Dataset statistics**: features and target variable distribution
+   3. **Dataset visualization**: features vs target variable
 to make your decision!
 
 ### OPERATOR SELECTION (SUBSET; NO SIMPLICITY BIAS)

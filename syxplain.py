@@ -33,7 +33,7 @@ def entry_point(state: State) -> State:
     sample_data = pd.read_csv("./data/sample_data.csv")
     with open("./data/problem_description.json", "r") as f:
         problem_description = json.load(f)
-    problem_description_src = json.dumps(problem_description, indent=2)
+    problem_description_src = json.dumps(problem_description, indent=4)
     problem_description = json.loads(problem_description_src)
     state["data"] = sample_data
     state["problem_description_src"] = problem_description_src
