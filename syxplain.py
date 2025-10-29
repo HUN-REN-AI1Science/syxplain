@@ -1,10 +1,7 @@
 import os
 import subprocess
 import json
-import io, base64
 
-import seaborn as sns
-import matplotlib.pyplot as plt
 import pandas as pd
 import pysr
 from pysr import PySRRegressor
@@ -15,7 +12,7 @@ from langchain_core.messages import HumanMessage
 from langchain_core.prompts import PromptTemplate
 from syxplain_lib import State, pysr_with_generated_config, data_summary, llm_pysr_config_generator, explain_pysr_equations
 
-from typing import Any, TypedDict, List
+
 
 def get_api_key(model: str = "gemini") -> str | None:
     """Decrypt and return the API key from a GPG-encrypted file."""

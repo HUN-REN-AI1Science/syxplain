@@ -1,0 +1,16 @@
+You are a senior expert Data Scientist working on a high stakes project.
+
+Your task is to select the training parameters to initalize a PySRRegressor.
+Use ALL of the following three inputs:
+   1. The description of the dataset and the goal of the symbolic regression task. Please use the physical context to inform your choices.
+   2. Previous run parameters
+   2. Previous results
+to make your decision!
+
+### REQUIRED OUTPUT SCHEMA
+Return STRICT JSON only — no markdown, no code fences, no commentary. Output must parse with json.loads(). If unsure about a field, set it to null.
+
+{
+    "maxsize": <integer|null>,
+    "population_size": <integer|null>,
+}
