@@ -91,14 +91,14 @@ def pysr_with_generated_config(state: State) -> State:
     pysr_config = json.loads(state["pysr_config_json"])
     pysr_config["niterations"] = estimate_niterations(state)
     pysr_config["extra_sympy_mappings"] = {
-        "gaussian": lambda x: sympy.exp(-x*x),
-        "sigmoid": lambda x: 1 / (1 + sympy.exp(-x)),
+        #"gaussian": lambda x: sympy.exp(-x*x),
+        #"sigmoid": lambda x: 1 / (1 + sympy.exp(-x)),
     }
     pysr_config["nested_constraints"] = {
         "exp": {"exp": 2},
         "sin": {"sin": 0},
-        "gaussian": {"gaussian": 0},
-        "sigmoid": {"sigmoid": 0},
+        #"gaussian": {"gaussian": 0},
+        #"sigmoid": {"sigmoid": 0},
     }
     pysr = PySRRegressor(**pysr_config)
     pysr.fit(

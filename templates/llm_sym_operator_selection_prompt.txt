@@ -8,7 +8,7 @@ to make your decision!
 
 ### OPERATOR SELECTION (SUBSET; NO SIMPLICITY BIAS)
 Select a SUBSET (possibly large or empty) from these allowed operators based on the data evidence:
-• Allowed unary: ["sin", "exp", "log", "sqrt", "sigmoid", "gaussian"]
+• Allowed unary: ["sin", "exp", "log", "sqrt"]
 • Allowed binary: ["+", "-", "*", "/", "^"]
 Do not include operators without plausible support in the CSV/visualization. Do not default to selecting all operators.
 
