@@ -2,7 +2,7 @@ import os
 import subprocess
 import json
 import pandas as pd
-from syxplain_lib import run_syxplain
+from syxplain_lib import State, run_syxplain
 
 
 def get_api_key(model: str = "gemini") -> str | None:
