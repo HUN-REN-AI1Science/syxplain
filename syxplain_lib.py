@@ -20,40 +20,54 @@ class State(TypedDict, total=False):
     predictor_columns: List[str]
     pysr_config_json: str
     pysr_explanations: str
-    data_visualization: str
+    data_visualization: List[str]
     data_summary: str
     pysr_model: pysr.sr.PySRRegressor
     
 def data_summary(state: State) -> State:
+    # Summary
     data = state["data"]
     buffer = io.StringIO()
     data.describe().to_csv(buffer)
     summary_csv = buffer.getvalue()
     state["data_summary"] = summary_csv
-    buf = io.BytesIO()
-    plt.figure(figsize=(10, 8))
-    sns.pairplot(data)
-    plt.savefig(buf, format='png')
-    base64_image = base64.b64encode(buf.getvalue()).decode('utf-8')
-    state["data_visualization"] = base64_image
+
+    # Charts
+    state["data_visualization"] = []
+    for col in state["predictor_columns"]:
+        data.plot(
+            x=col,
+            y=state["target_column"],
+            kind="scatter",
+            alpha=0.1,
+            figsize=(5, 4),
+            title=f"{col} vs {state['target_column']}"
+        )
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        base64_image = base64.b64encode(buf.getvalue()).decode('utf-8')
+        state["data_visualization"].append(base64_image)
+        plt.close()
+
     return state
 
 def llm_pysr_config_generator(state: State) -> State:
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro",response_mime_type="application/json")
     project_description_src = state["problem_description_src"]
-    img_b64 = state["data_visualization"]
     summary_csv_text = state["data_summary"]
-    img_data_uri = f"data:image/png;base64,{img_b64}"
+
     with open("./templates/llm_sym_operator_selection_prompt.txt", "r") as f:
         system_prompt = f.read()
 
     parts = [
         { "type": "text", "text": system_prompt},
-        { "type": "text", "text": f"### Project description json\n{project_description_src}"},
-        { "type": "text", "text": "### Data Summary CSV\n" + summary_csv_text},
-        { "type": "text", "text": "### Visualization Image"},
-        { "type": "image_url", "image_url": img_data_uri},
+        { "type": "text", "text": f"### Project description json\n{project_description_src}\n\n"},
+        { "type": "text", "text": f"### Dataset statistics\n{summary_csv_text}\n\n"},
+        { "type": "text", "text": "### Dataset visualization"},
     ]
+    for img_b64 in state["data_visualization"]:
+        parts.append({"type": "image_url", "image_url": f"data:image/png;base64,{img_b64}"})
     msg = llm.invoke([HumanMessage(content=parts)])
     state["pysr_config_json"] = msg.content  
     return state
@@ -77,15 +91,17 @@ def pysr_with_generated_config(state: State) -> State:
     pysr_config = json.loads(state["pysr_config_json"])
     pysr_config["niterations"] = estimate_niterations(state)
     pysr_config["extra_sympy_mappings"] = {
-        "gaussian": lambda x: sympy.exp(-x*x),
-        "sigmoid": lambda x: 1 / (1 + sympy.exp(-x)),
+        # "gaussian": lambda x: sympy.exp(-x*x),
+        # "sigmoid": lambda x: 1 / (1 + sympy.exp(-x)),
     }
-    pysr_config["nested_constraints"] = {
-        "exp": {"exp": 2},
-        "sin": {"sin": 0},
-        "gaussian": {"gaussian": 0},
-        "sigmoid": {"sigmoid": 0},
-    }
+    pysr_config["constraints"] = {}
+    if "^" in pysr_config["binary_operators"]:
+        pysr_config["constraints"]["^"] = (-1, 1)
+    pysr_config["nested_constraints"] = {}
+    if "exp" in pysr_config["unary_operators"]:
+        pysr_config["nested_constraints"]["exp"] = {"exp": 2}
+    if "sin" in pysr_config["unary_operators"]:
+        pysr_config["nested_constraints"]["sin"] = {"sin": 0}
     pysr = PySRRegressor(**pysr_config)
     pysr.fit(
         X=state["data"][state["predictor_columns"]],
@@ -119,3 +135,23 @@ def explain_pysr_equations(state: State) -> State:
     msg = llm.invoke([HumanMessage(content=parts)],response_mime_type="text/plain")
     state["pysr_explanations"] = msg.content
     return state
+
+def run_syxplain(entry_point):
+    g = StateGraph(State)
+    g.add_node("entry_point", entry_point)
+    g.add_node("data_summary", data_summary)
+    g.add_node("pysr_config_generator", llm_pysr_config_generator)
+    g.add_node("pysr_executor", pysr_with_generated_config)
+    g.add_node("pysr_explainer", explain_pysr_equations)
+
+    g.add_edge(START, "entry_point")
+    g.add_edge("entry_point", "data_summary")
+    g.add_edge("data_summary", "pysr_config_generator")
+    g.add_edge("pysr_config_generator", "pysr_executor")
+    g.add_edge("pysr_executor", "pysr_explainer")
+    g.add_edge("pysr_explainer", END)
+
+    app = g.compile()
+    final = app.invoke(State())
+    with open("pysr_explanations.md", "w") as f:
+        f.write(final["pysr_explanations"])
