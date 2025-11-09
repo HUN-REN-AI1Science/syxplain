@@ -1,0 +1,10 @@
+{
+  "project_description": "This project investigates a biologically plausible universal formula describing how neuronal wire length relates to connectivity metrics across species. It seeks to capture the fundamental scaling laws between structural (Length) and network (Synapses, Degree, LocalDensity) properties of neurons in diverse connectomes.",
+  "target_variable": "Length",
+  "features": {
+    "Synapses": "Total number of synaptic connections per neuron, representing overall communication capacity.",
+    "Degree": "Number of unique neuronal partners, reflecting connectivity in the network.",
+    "LocalDensity": "Local synaptic density measure, indicating clustering or spatial compactness of connections.",
+  }
+}
+
