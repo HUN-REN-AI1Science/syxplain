@@ -4,7 +4,7 @@
   "features": {
     "Synapses": "Total number of synaptic connections per neuron, representing overall communication capacity.",
     "Degree": "Number of unique neuronal partners, reflecting connectivity in the network.",
-    "LocalDensity": "Local synaptic density measure, indicating clustering or spatial compactness of connections.",
+    "LocalDensity": "Local synaptic density measure, indicating clustering or spatial compactness of connections."
   }
 }
 

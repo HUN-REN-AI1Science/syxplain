@@ -9,6 +9,6 @@
     "Thermal annealing: Temperature [°C]": "Annealing temperature, determining crystal growth rate and final film quality.",
     "Short circuit current density, Jsc [mA/cm2]": "Current output at zero voltage, reflecting photo-generated charge carrier collection efficiency.",
     "Open circuit voltage, Voc [V]": "Voltage at zero current, representing electronic quality and recombination losses.",
-    "Fill factor [%]": "Ratio of maximum obtainable power to theoretical maximum, indicating overall cell efficiency and resistance losses.",
+    "Fill factor [%]": "Ratio of maximum obtainable power to theoretical maximum, indicating overall cell efficiency and resistance losses."
   }
 }
