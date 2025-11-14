@@ -1,6 +1,7 @@
 import io, base64, json
 from typing import Any, TypedDict, List
 import numpy as np
+import pandas as pd
 import sympy
 import pysr
 from pysr import PySRRegressor
@@ -10,6 +11,7 @@ from langchain_core.messages import HumanMessage
 from langchain_core.prompts import PromptTemplate
 import matplotlib.pyplot as plt
 import seaborn as sns
+from shap_calc import get_top_feature_interactions
 
 
 
@@ -18,6 +20,7 @@ class State(TypedDict, total=False):
     problem_description_src: str
     target_column: str
     predictor_columns: List[str]
+    col_interaction_list: List[str]
     pysr_config_json: str
     pysr_explanations: str
     data_visualization: List[str]
@@ -32,16 +35,17 @@ def data_summary(state: State) -> State:
     summary_csv = buffer.getvalue()
     state["data_summary"] = summary_csv
 
-    # Charts
+    # Charts (predictors vs target + top predictor interactions regarding target prediction)
     state["data_visualization"] = []
-    for col in state["predictor_columns"]:
+
+    def create_and_save_visualization(data: pd.DataFrame, col1: str, col2: str):
         data.plot(
-            x=col,
-            y=state["target_column"],
+            x=col1,
+            y=col2,
             kind="scatter",
             alpha=0.1,
             figsize=(5, 4),
-            title=f"{col} vs {state['target_column']}"
+            title=f"{col1} vs {col2}"
         )
         plt.tight_layout()
         buf = io.BytesIO()
@@ -49,6 +53,13 @@ def data_summary(state: State) -> State:
         base64_image = base64.b64encode(buf.getvalue()).decode('utf-8')
         state["data_visualization"].append(base64_image)
         plt.close()
+
+    for col in state["predictor_columns"]:
+        create_and_save_visualization(data, col, state["target_column"])
+
+    state["col_interaction_list"] = get_top_feature_interactions(state["data"], state["predictor_columns"], state["target_column"])
+    for (col1, col2) in state["col_interaction_list"]:
+        create_and_save_visualization(data, col1, col2)
 
     return state
 
