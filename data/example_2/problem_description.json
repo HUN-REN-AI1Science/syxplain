@@ -1,0 +1,14 @@
+{
+  "project_description": "This project aims to model how environmental fabrication parameters affect the performance of perovskite solar cells. The goal is to derive a physically interpretable formula that describes how temperature, humidity, and solvent partial pressure during spin coating and thermal annealing influence key photovoltaic performance metrics, especially power conversion efficiency.",
+  "target_variable": "Power conversion efficiency [%]",
+  "features": {
+    "Spin coater: Absolute Humidity [g/m3]": "Ambient humidity during spin coating, influencing solvent evaporation and initial film morphology.",
+    "Spin coater: Temperature [°C]": "Temperature during spin coating, affecting crystallization kinetics and solvent dynamics.",
+    "Spin coater: Solvent Partial Pressure [ppm]": "Vapor pressure of solvent during spin coating, modulating solvent evaporation rate and film uniformity.",
+    "Thermal annealing: Absolute Humidity [g/m3]": "Ambient humidity during annealing, controlling perovskite phase transformation and defect formation.",
+    "Thermal annealing: Temperature [°C]": "Annealing temperature, determining crystal growth rate and final film quality.",
+    "Short circuit current density, Jsc [mA/cm2]": "Current output at zero voltage, reflecting photo-generated charge carrier collection efficiency.",
+    "Open circuit voltage, Voc [V]": "Voltage at zero current, representing electronic quality and recombination losses.",
+    "Fill factor [%]": "Ratio of maximum obtainable power to theoretical maximum, indicating overall cell efficiency and resistance losses."
+  }
+}
