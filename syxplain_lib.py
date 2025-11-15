@@ -1,4 +1,4 @@
-import io, base64, json
+import os, io, base64, json
 from typing import Any, TypedDict, List
 import numpy as np
 import pandas as pd
@@ -45,7 +45,7 @@ def data_summary(state: State) -> State:
     # Charts (predictors vs target + top predictor interactions regarding target prediction)
     state["data_visualization"] = []
 
-    def create_and_save_visualization(data: pd.DataFrame, col1: str, col2: str):
+    def create_and_save_visualization(data: pd.DataFrame, col1: str, col2: str, logger=None):
         data.plot(
             x=col1,
             y=col2,
@@ -55,18 +55,26 @@ def data_summary(state: State) -> State:
             title=f"{col1} vs {col2}"
         )
         plt.tight_layout()
+
+        # Save to hard drive
+        if logger is not None:
+            file_path = os.path.join(logger.operator_selection_charts_dir, f"{col}_vs_{state['target_column']}.png")
+            plt.savefig(file_path, format="png", dpi=300)
+
+        # Save to memory (for base64)
         buf = io.BytesIO()
         plt.savefig(buf, format="png")
-        base64_image = base64.b64encode(buf.getvalue()).decode('utf-8')
+        base64_image = base64.b64encode(buf.getvalue()).decode("utf-8")
         state["data_visualization"].append(base64_image)
+
         plt.close()
 
     for col in state["predictor_columns"]:
-        create_and_save_visualization(data, col, state["target_column"])
+        create_and_save_visualization(data, col, state["target_column"], state["logger"])
 
     state["col_interaction_list"] = get_top_feature_interactions(state["data"], state["predictor_columns"], state["target_column"])
     for (col1, col2) in state["col_interaction_list"]:
-        create_and_save_visualization(data, col1, col2)
+        create_and_save_visualization(data, col1, col2, state["logger"])
     state["logger"].log_step("top_column_interactions", state["col_interaction_list"])
 
     return state

@@ -23,6 +23,10 @@ class StepLogger:
         self.run_dir = self.base_dir / f"syxplain_run_{timestamp}"
         self.run_dir.mkdir()
 
+        # Create folder for charts
+        self.operator_selection_charts_dir = self.run_dir / "operator_selection_charts"
+        self.operator_selection_charts_dir.mkdir()
+
         # Step counter
         self.step_num = 1
 
