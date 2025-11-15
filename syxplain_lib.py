@@ -37,10 +37,10 @@ def data_summary(state: State) -> State:
     # Summary
     data = state["data"]
     buffer = io.StringIO()
-    data.describe().to_csv(buffer)
-    summary_csv = buffer.getvalue()
-    state["data_summary"] = summary_csv
-    state["logger"].log_step("data_summary", state["data_summary"].to_json())
+    description = data.describe()
+    description.to_csv(buffer)
+    state["data_summary"] = buffer.getvalue()
+    state["logger"].log_step("data_summary", description.to_json())
 
     # Charts (predictors vs target + top predictor interactions regarding target prediction)
     state["data_visualization"] = []
