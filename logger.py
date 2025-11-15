@@ -20,7 +20,7 @@ class StepLogger:
 
         # Create unique run folder
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.run_dir = self.base_dir / timestamp
+        self.run_dir = self.base_dir / f"syxplain_run_{timestamp}"
         self.run_dir.mkdir()
 
         # Step counter
