@@ -119,7 +119,7 @@ def pysr_with_generated_config(state: State) -> State:
             y_complexity_factor = np.clip(1 + noise_level, 1, 3)
 
         # Final value
-        iters = max(200, int(100 * x_complexity_factor * y_complexity_factor))
+        iters = max(200, int(10 * x_complexity_factor * y_complexity_factor))
         state["logger"].log_step(
             "niters_calculation",
             {
