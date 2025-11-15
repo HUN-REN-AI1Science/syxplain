@@ -40,7 +40,7 @@ def data_summary(state: State) -> State:
     description = data.describe()
     description.to_csv(buffer)
     state["data_summary"] = buffer.getvalue()
-    state["logger"].log_step("data_summary", description.to_json())
+    state["logger"].log_step("data_summary", description.to_dict())
 
     # Charts (predictors vs target + top predictor interactions regarding target prediction)
     state["data_visualization"] = []
@@ -58,7 +58,7 @@ def data_summary(state: State) -> State:
 
         # Save to hard drive
         if logger is not None:
-            file_path = os.path.join(logger.operator_selection_charts_dir, f"{col}_vs_{state['target_column']}.png")
+            file_path = os.path.join(logger.operator_selection_charts_dir, f"{col1}_vs_{col2}.png")
             plt.savefig(file_path, format="png", dpi=300)
 
         # Save to memory (for base64)
