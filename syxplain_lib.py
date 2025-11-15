@@ -1,4 +1,4 @@
-import io, base64, json
+import os, io, base64, json
 from typing import Any, TypedDict, List
 import numpy as np
 import pandas as pd
@@ -11,11 +11,14 @@ from langchain_core.messages import HumanMessage
 from langchain_core.prompts import PromptTemplate
 import matplotlib.pyplot as plt
 import seaborn as sns
-from shap_calc import get_top_feature_interactions
 
+import logger
+from shap_calc import get_top_feature_interactions
+from logger import StepLogger
 
 
 class State(TypedDict, total=False):
+    logger: StepLogger
     data: Any
     problem_description_src: str
     target_column: str
@@ -28,17 +31,21 @@ class State(TypedDict, total=False):
     pysr_model: pysr.sr.PySRRegressor
     
 def data_summary(state: State) -> State:
+    # Setting up logger object
+    state["logger"] = logger.StepLogger()
+
     # Summary
     data = state["data"]
     buffer = io.StringIO()
-    data.describe().to_csv(buffer)
-    summary_csv = buffer.getvalue()
-    state["data_summary"] = summary_csv
+    description = data.describe()
+    description.to_csv(buffer)
+    state["data_summary"] = buffer.getvalue()
+    state["logger"].log_step("data_summary", description.to_dict())
 
     # Charts (predictors vs target + top predictor interactions regarding target prediction)
     state["data_visualization"] = []
 
-    def create_and_save_visualization(data: pd.DataFrame, col1: str, col2: str):
+    def create_and_save_visualization(data: pd.DataFrame, col1: str, col2: str, logger=None):
         data.plot(
             x=col1,
             y=col2,
@@ -48,18 +55,27 @@ def data_summary(state: State) -> State:
             title=f"{col1} vs {col2}"
         )
         plt.tight_layout()
+
+        # Save to hard drive
+        if logger is not None:
+            file_path = os.path.join(logger.operator_selection_charts_dir, f"{col1}_vs_{col2}.png")
+            plt.savefig(file_path, format="png", dpi=300)
+
+        # Save to memory (for base64)
         buf = io.BytesIO()
         plt.savefig(buf, format="png")
-        base64_image = base64.b64encode(buf.getvalue()).decode('utf-8')
+        base64_image = base64.b64encode(buf.getvalue()).decode("utf-8")
         state["data_visualization"].append(base64_image)
+
         plt.close()
 
     for col in state["predictor_columns"]:
-        create_and_save_visualization(data, col, state["target_column"])
+        create_and_save_visualization(data, col, state["target_column"], state["logger"])
 
     state["col_interaction_list"] = get_top_feature_interactions(state["data"], state["predictor_columns"], state["target_column"])
     for (col1, col2) in state["col_interaction_list"]:
-        create_and_save_visualization(data, col1, col2)
+        create_and_save_visualization(data, col1, col2, state["logger"])
+    state["logger"].log_step("top_column_interactions", state["col_interaction_list"])
 
     return state
 
@@ -80,7 +96,12 @@ def llm_pysr_config_generator(state: State) -> State:
     for img_b64 in state["data_visualization"]:
         parts.append({"type": "image_url", "image_url": f"data:image/png;base64,{img_b64}"})
     msg = llm.invoke([HumanMessage(content=parts)])
-    state["pysr_config_json"] = msg.content  
+    state["logger"].log_step("pysr_config_prompt", parts)
+
+    # Save results
+    state["pysr_config_json"] = msg.content
+    state["logger"].log_step("pysr_config_answer", state["pysr_config_json"])
+
     return state
 
 def pysr_with_generated_config(state: State) -> State:
@@ -96,8 +117,20 @@ def pysr_with_generated_config(state: State) -> State:
         else:
             noise_level = np.std(y - np.mean(y)) / np.mean(np.abs(y))
             y_complexity_factor = np.clip(1 + noise_level, 1, 3)
-        
-        return max(200, int(100 * x_complexity_factor * y_complexity_factor))
+
+        # Final value
+        iters = max(200, int(10 * x_complexity_factor * y_complexity_factor))
+        state["logger"].log_step(
+            "niters_calculation",
+            {
+                "sample_nbr": sample_nbr,
+                "feature_dim_nbr": feature_dim_nbr,
+                "x_complexity_factor": x_complexity_factor,
+                "y_complexity_factor": y_complexity_factor,
+                "iters": iters
+            }
+        )
+        return iters
         
     pysr_config = json.loads(state["pysr_config_json"])
     pysr_config["niterations"] = estimate_niterations(state)
@@ -113,6 +146,9 @@ def pysr_with_generated_config(state: State) -> State:
         pysr_config["nested_constraints"]["exp"] = {"exp": 2}
     if "sin" in pysr_config["unary_operators"]:
         pysr_config["nested_constraints"]["sin"] = {"sin": 0}
+    state["logger"].log_step("pysr_config_final", pysr_config)
+
+    # Train symbolic regressor
     pysr = PySRRegressor(**pysr_config)
     pysr.fit(
         X=state["data"][state["predictor_columns"]],
@@ -144,7 +180,11 @@ def explain_pysr_equations(state: State) -> State:
     
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro")
     msg = llm.invoke([HumanMessage(content=parts)],response_mime_type="text/plain")
+    state["logger"].log_step("pysr_explainer_prompt", parts)
+
+    # Save results
     state["pysr_explanations"] = msg.content
+    state["logger"].log_step("pysr_explainer_answer", state["pysr_explanations"])
     return state
 
 def run_syxplain(entry_point):
