@@ -17,5 +17,5 @@ Return STRICT JSON only — no markdown, no code fences, no commentary. Output m
 
 {
     "unary_operators": ["<subset of allowed unary ops>"],
-    "binary_operators": ["<subset of allowed binary ops>"],
+    "binary_operators": ["<subset of allowed binary ops>"]
 }
