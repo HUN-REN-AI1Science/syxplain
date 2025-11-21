@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+python-multipart
+pandas
+numpy
+sympy
+pysr
+langgraph
+langchain
+langchain-openai
+langchain-core
+matplotlib
+seaborn
+shap
+sqlalchemy
+psycopg2-binary
+pyjwt

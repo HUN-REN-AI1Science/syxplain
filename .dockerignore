@@ -1,0 +1,40 @@
+# Version control
+.git
+.gitignore
+
+# Frontend
+frontend/
+node_modules/
+
+# Data and Outputs
+data/
+outputs/
+*.csv
+*.xlsx
+*.json
+*.html
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*

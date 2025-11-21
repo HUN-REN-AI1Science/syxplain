@@ -1,0 +1,81 @@
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, LargeBinary
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+import os
+import uuid
+from datetime import datetime
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://syxplain:syxplain@localhost:5432/syxplain")
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=45,
+    max_overflow=0,
+    pool_pre_ping=True,
+    pool_recycle=300,
+    pool_timeout=30
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+class File(Base):
+    __tablename__ = "files"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    filename = Column(String, nullable=False)
+    content = Column(LargeBinary, nullable=False)
+    media_type = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Run(Base):
+    __tablename__ = "runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    status = Column(String, default="pending")  # pending, running, completed, failed
+    problem_description = Column(JSONB, nullable=False)
+    csv_filename = Column(String, nullable=False) # Store filename for reference
+    error = Column(Text, nullable=True)
+    results = Column(JSONB, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")
+    artifacts = relationship("RunArtifact", back_populates="run", cascade="all, delete-orphan")
+
+class RunStep(Base):
+    __tablename__ = "run_steps"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_id = Column(UUID(as_uuid=True), ForeignKey("runs.id"), nullable=False)
+    step_number = Column(Integer, nullable=False)
+    step_name = Column(String, nullable=False)
+    payload = Column(JSONB, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    run = relationship("Run", back_populates="steps")
+
+class RunArtifact(Base):
+    __tablename__ = "run_artifacts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_id = Column(UUID(as_uuid=True), ForeignKey("runs.id"), nullable=False)
+    filename = Column(String, nullable=False)
+    content = Column(LargeBinary, nullable=False)
+    media_type = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    run = relationship("Run", back_populates="artifacts")
+
+# Create tables
+def init_db():
+    Base.metadata.create_all(bind=engine)

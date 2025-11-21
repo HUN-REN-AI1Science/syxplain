@@ -6,7 +6,7 @@ import sympy
 import pysr
 from pysr import PySRRegressor
 from langgraph.graph import StateGraph, START, END
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import PromptTemplate
 import matplotlib.pyplot as plt
@@ -29,10 +29,11 @@ class State(TypedDict, total=False):
     data_visualization: List[str]
     data_summary: str
     pysr_model: pysr.sr.PySRRegressor
-    
+
 def data_summary(state: State) -> State:
     # Setting up logger object
-    state["logger"] = logger.StepLogger()
+    if "logger" not in state:
+        state["logger"] = logger.StepLogger()
 
     # Summary
     data = state["data"]
@@ -56,15 +57,17 @@ def data_summary(state: State) -> State:
         )
         plt.tight_layout()
 
-        # Save to hard drive
-        if logger is not None:
-            file_path = os.path.join(logger.operator_selection_charts_dir, f"{col1}_vs_{col2}.png")
-            plt.savefig(file_path, format="png", dpi=300)
-
-        # Save to memory (for base64)
+        # Save to memory (for base64 and DB)
         buf = io.BytesIO()
-        plt.savefig(buf, format="png")
-        base64_image = base64.b64encode(buf.getvalue()).decode("utf-8")
+        plt.savefig(buf, format="png", dpi=300)
+        img_bytes = buf.getvalue()
+
+        # Log artifact to DB
+        if logger is not None:
+            logger.log_artifact(f"{col1}_vs_{col2}.png", img_bytes, media_type="image/png")
+
+        # For base64 (frontend preview if needed in state)
+        base64_image = base64.b64encode(img_bytes).decode("utf-8")
         state["data_visualization"].append(base64_image)
 
         plt.close()
@@ -80,7 +83,16 @@ def data_summary(state: State) -> State:
     return state
 
 def llm_pysr_config_generator(state: State) -> State:
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro",response_mime_type="application/json")
+    model_name = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
+    base_url = os.environ.get("OPENAI_API_BASE")
+    api_key = os.environ.get("OPENAI_API_KEY")
+
+    llm = ChatOpenAI(
+        model=model_name,
+        base_url=base_url,
+        api_key=api_key,
+        model_kwargs={"response_format": {"type": "json_object"}}
+    )
     project_description_src = state["problem_description_src"]
     summary_csv_text = state["data_summary"]
 
@@ -109,7 +121,7 @@ def pysr_with_generated_config(state: State) -> State:
         # Input features
         sample_nbr, feature_dim_nbr = state["data"][state["predictor_columns"]].shape
         x_complexity_factor = feature_dim_nbr * np.log10(sample_nbr)
-        
+
         # Target
         y = state["data"][state["target_column"]]
         if np.mean(y) == 0 or len(y) == 0:
@@ -131,7 +143,7 @@ def pysr_with_generated_config(state: State) -> State:
             }
         )
         return iters
-        
+
     pysr_config = json.loads(state["pysr_config_json"])
     pysr_config["niterations"] = estimate_niterations(state)
     pysr_config["extra_sympy_mappings"] = {
@@ -147,6 +159,24 @@ def pysr_with_generated_config(state: State) -> State:
     if "sin" in pysr_config["unary_operators"]:
         pysr_config["nested_constraints"]["sin"] = {"sin": 0}
     state["logger"].log_step("pysr_config_final", pysr_config)
+
+    # Force resource limits and logging
+    cpu_count = os.cpu_count() or 4  # Fallback to 4 if detection fails
+    pysr_config["parallelism"] = "multithreading"  # Use multithreading for parallelization
+    pysr_config["procs"] = cpu_count  # Use all available CPUs
+    pysr_config["verbosity"] = 1 # Log to stdout
+    pysr_config["progress"] = True  # Show progress bar
+
+    # Isolate temp files for parallel execution
+    if "logger" in state and hasattr(state["logger"], "run_id") and state["logger"].run_id:
+        run_id = state["logger"].run_id
+        temp_dir = f"/tmp/pysr_{run_id}"
+        os.makedirs(temp_dir, exist_ok=True)
+        pysr_config["tempdir"] = temp_dir
+        state["logger"].log_step("pysr_tempdir", temp_dir)
+
+    julia_threads = os.environ.get("JULIA_NUM_THREADS", "1")
+    state["logger"].log_step("pysr_cpu_config", {"cpu_count": cpu_count, "parallelism": pysr_config["parallelism"], "julia_threads": julia_threads})
 
     # Train symbolic regressor
     pysr = PySRRegressor(**pysr_config)
@@ -165,21 +195,29 @@ def explain_pysr_equations(state: State) -> State:
         to_explain["equation"].append(row["equation"])
         to_explain["loss"].append(row["loss"])
         to_explain["complexity"].append(row["complexity"])
-    
+
     with open("./templates/pysr_explainer_sys_prompt.txt", "r") as f:
         py_sr_explainer_sys_prompt = f.read()
     with open("./templates/pysr_explainer_usr_prompt.txt", "r") as f:
         pysr_explainer_usr_prompt_template = f.read()
     pysr_explainer_usr_prompt = PromptTemplate(variables=["problem_description", "to_explain"], template=pysr_explainer_usr_prompt_template)
-    
-    
+
+
     parts = [
         { "type": "text", "text": py_sr_explainer_sys_prompt},
         { "type": "text", "text": pysr_explainer_usr_prompt.format(problem_description=state["problem_description_src"], to_explain=json.dumps(to_explain, indent=2))},
     ]
-    
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro")
-    msg = llm.invoke([HumanMessage(content=parts)],response_mime_type="text/plain")
+
+    model_name = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
+    base_url = os.environ.get("OPENAI_API_BASE")
+    api_key = os.environ.get("OPENAI_API_KEY")
+
+    llm = ChatOpenAI(
+        model=model_name,
+        base_url=base_url,
+        api_key=api_key
+    )
+    msg = llm.invoke([HumanMessage(content=parts)])
     state["logger"].log_step("pysr_explainer_prompt", parts)
 
     # Save results
@@ -206,3 +244,11 @@ def run_syxplain(entry_point):
     final = app.invoke(State())
     with open("pysr_explanations.md", "w") as f:
         f.write(final["pysr_explanations"])
+
+    # Save markdown as artifact for download
+    if "logger" in final and final["logger"]:
+        final["logger"].log_artifact(
+            "pysr_explanations.md",
+            final["pysr_explanations"].encode('utf-8'),
+            media_type="text/markdown"
+        )
