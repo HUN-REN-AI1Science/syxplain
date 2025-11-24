@@ -33,4 +33,6 @@ def entry_point(state: State) -> State:
     return state
 
 if __name__ == "__main__":
+    from logger import configure_debug_logging
+    configure_debug_logging()
     run_syxplain(entry_point)

@@ -1,0 +1,40 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_BASE=${OPENAI_API_BASE}
+      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME}
+      - DATABASE_URL=${DATABASE_URL}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - JULIA_NUM_THREADS=${JULIA_NUM_THREADS}
+    deploy:
+      resources:
+        limits:
+          cpus: '10'
+          memory: 8G
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      # Mount source code for dev (optional, remove for prod)
+      # - ./backend:/app/backend
+      # - ./syxplain_lib.py:/app/syxplain_lib.py
+      # - ./logger.py:/app/logger.py
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    environment:
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=${VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+    depends_on:
+      - backend
