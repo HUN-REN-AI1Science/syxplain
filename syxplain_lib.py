@@ -1,4 +1,4 @@
-import os, io, base64, json
+import os, io, base64, json, tempfile
 from typing import Any, TypedDict, List
 import numpy as np
 import pandas as pd
@@ -29,6 +29,14 @@ class State(TypedDict, total=False):
     data_visualization: List[str]
     data_summary: str
     pysr_model: pysr.sr.PySRRegressor
+
+def get_openai_config() -> dict:
+    """Retrieves OpenAI configuration from environment variables."""
+    return {
+        "model": os.environ.get("OPENAI_MODEL_NAME", "gpt-4o"),
+        "base_url": os.environ.get("OPENAI_API_BASE"),
+        "api_key": os.environ.get("OPENAI_API_KEY")
+    }
 
 def data_summary(state: State) -> State:
     # Setting up logger object
@@ -83,14 +91,9 @@ def data_summary(state: State) -> State:
     return state
 
 def llm_pysr_config_generator(state: State) -> State:
-    model_name = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
-    base_url = os.environ.get("OPENAI_API_BASE")
-    api_key = os.environ.get("OPENAI_API_KEY")
-
+    llm_config = get_openai_config()
     llm = ChatOpenAI(
-        model=model_name,
-        base_url=base_url,
-        api_key=api_key,
+        **llm_config,
         model_kwargs={"response_format": {"type": "json_object"}}
     )
     project_description_src = state["problem_description_src"]
@@ -170,7 +173,7 @@ def pysr_with_generated_config(state: State) -> State:
     # Isolate temp files for parallel execution
     if "logger" in state and hasattr(state["logger"], "run_id") and state["logger"].run_id:
         run_id = state["logger"].run_id
-        temp_dir = f"/tmp/pysr_{run_id}"
+        temp_dir = os.path.join(tempfile.gettempdir(), f"pysr_{run_id}")
         os.makedirs(temp_dir, exist_ok=True)
         pysr_config["tempdir"] = temp_dir
         state["logger"].log_step("pysr_tempdir", temp_dir)
@@ -208,15 +211,8 @@ def explain_pysr_equations(state: State) -> State:
         { "type": "text", "text": pysr_explainer_usr_prompt.format(problem_description=state["problem_description_src"], to_explain=json.dumps(to_explain, indent=2))},
     ]
 
-    model_name = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
-    base_url = os.environ.get("OPENAI_API_BASE")
-    api_key = os.environ.get("OPENAI_API_KEY")
-
-    llm = ChatOpenAI(
-        model=model_name,
-        base_url=base_url,
-        api_key=api_key
-    )
+    llm_config = get_openai_config()
+    llm = ChatOpenAI(**llm_config)
     msg = llm.invoke([HumanMessage(content=parts)])
     state["logger"].log_step("pysr_explainer_prompt", parts)
 

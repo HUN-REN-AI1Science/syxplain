@@ -39,7 +39,7 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, onSubmit }) => {
         const parsed = JSON.parse(jsonContent);
         onSubmit(parsed);
       } catch (e) {
-        alert('Invalid JSON format. Please check your file.');
+        alert(`Invalid JSON format: ${(e as Error).message}`);
       }
     } else {
       // Filter out target variable from features

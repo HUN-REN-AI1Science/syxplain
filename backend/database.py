@@ -10,8 +10,8 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://syxplain:syxplain@lo
 
 engine = create_engine(
     DATABASE_URL,
-    pool_size=45,
-    max_overflow=0,
+    pool_size=40,
+    max_overflow=5,
     pool_pre_ping=True,
     pool_recycle=300,
     pool_timeout=30
@@ -56,7 +56,7 @@ class RunStep(Base):
     __tablename__ = "run_steps"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    run_id = Column(UUID(as_uuid=True), ForeignKey("runs.id"), nullable=False)
+    run_id = Column(UUID(as_uuid=True), ForeignKey("runs.id"), nullable=False, index=True)
     step_number = Column(Integer, nullable=False)
     step_name = Column(String, nullable=False)
     payload = Column(JSONB, nullable=True)
@@ -68,7 +68,7 @@ class RunArtifact(Base):
     __tablename__ = "run_artifacts"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    run_id = Column(UUID(as_uuid=True), ForeignKey("runs.id"), nullable=False)
+    run_id = Column(UUID(as_uuid=True), ForeignKey("runs.id"), nullable=False, index=True)
     filename = Column(String, nullable=False)
     content = Column(LargeBinary, nullable=False)
     media_type = Column(String, nullable=True)

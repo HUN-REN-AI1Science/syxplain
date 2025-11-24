@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import api from './api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -6,6 +6,7 @@ import { Button } from 'primereact/button';
 import { Message } from 'primereact/message';
 import { ProgressSpinner } from 'primereact/progressspinner';
 import { MathJax, MathJaxContext } from 'better-react-mathjax';
+import { Toast } from 'primereact/toast';
 
 interface ResultsViewProps {
   runId: string;
@@ -15,6 +16,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId }) => {
   const [status, setStatus] = useState<string>('pending');
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const toast = useRef<Toast>(null);
 
   useEffect(() => {
     if (!runId) return; // Don't poll if runId is not set yet
@@ -57,7 +59,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId }) => {
       link.click();
       link.remove();
     } catch (e) {
-      alert('Failed to download file');
+      toast.current?.show({ severity: 'error', summary: 'Download Failed', detail: 'Failed to download file' });
     }
   };
 
@@ -89,6 +91,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId }) => {
 
   return (
     <div className="p-4">
+      <Toast ref={toast} />
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-4 border-b border-slate-100 gap-4">
         <div>
