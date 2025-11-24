@@ -130,7 +130,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
             <div className="bg-white/90 backdrop-blur-md p-8 rounded-2xl shadow-2xl w-full max-w-md flex flex-col items-center animate-fade-in-up border border-slate-100">
                 <div className="w-full mb-4">
                     <ProgressBar
-                        mode={processing ? "indeterminate" : "indeterminate"}
+                        mode="indeterminate"
                         style={{ height: '8px' }}
                         className="w-full"
                         color="#2563eb"

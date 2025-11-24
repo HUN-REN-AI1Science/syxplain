@@ -2,13 +2,9 @@ import sys
 import os
 import json
 import pandas as pd
-import threading
 import multiprocessing
-import uuid
-import io
 import logging
 from typing import Dict, Any
-from sqlalchemy.orm import Session
 
 # Add parent directory to path to import syxplain modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,10 +14,26 @@ from backend.database import SessionLocal, Run as DbRun, File as DbFile, engine
 
 logger = logging.getLogger(__name__)
 
+# Global registry for active processes
+active_processes: Dict[str, multiprocessing.Process] = {}
+
+def cleanup_processes():
+    """Checks active processes and cleans up finished ones."""
+    finished_run_ids = []
+    for run_id, process in active_processes.items():
+        if not process.is_alive():
+            process.join()  # Ensure resources are released
+            finished_run_ids.append(run_id)
+            logger.info(f"Process for run {run_id} has finished and was joined.")
+
+    for run_id in finished_run_ids:
+        del active_processes[run_id]
+
 def update_run_status(run_id: str, status: str, results: Dict[str, Any] = None, error: str = None):
     """Updates the run status in the database."""
-    db = SessionLocal()
+    db = None
     try:
+        db = SessionLocal()
         run = db.query(DbRun).filter(DbRun.id == run_id).first()
         if run:
             run.status = status
@@ -33,9 +45,10 @@ def update_run_status(run_id: str, status: str, results: Dict[str, Any] = None, 
     except Exception as e:
         logger.error(f"Failed to update run status for {run_id}: {e}")
     finally:
-        db.close()
+        if db:
+            db.close()
 
-def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str, api_key: str, api_base: str, model_name: str):
+def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str):
     from logger import configure_debug_logging, configure_logging
     configure_logging()
     configure_debug_logging()
@@ -50,16 +63,10 @@ def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str, ap
     try:
         update_run_status(run_id, "running")
 
-        # Setup environment
-        os.environ["OPENAI_API_KEY"] = api_key
-        if api_base:
-            os.environ["OPENAI_API_BASE"] = api_base
-        if model_name:
-            os.environ["OPENAI_MODEL_NAME"] = model_name
-
         # Load data from DB
-        db = SessionLocal()
+        db = None
         try:
+            db = SessionLocal()
             db_file = db.query(DbFile).filter(DbFile.filename == csv_filename).order_by(DbFile.created_at.desc()).first()
             if not db_file:
                 raise Exception(f"File {csv_filename} not found in database")
@@ -67,7 +74,8 @@ def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str, ap
             logger.info(f"Loading data for {csv_filename} from DB")
             sample_data = pd.read_csv(io.BytesIO(db_file.content))
         finally:
-            db.close()
+            if db:
+                db.close()
 
         # Prepare state
         problem_description_src = json.dumps(problem_desc, indent=2)
@@ -136,8 +144,9 @@ def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str, ap
 
 def start_run(problem_desc: Dict[str, Any], csv_filename: str, api_key: str, api_base: str = None, model_name: str = None, user_id: str = None) -> str:
     # Create Run record in DB
-    db = SessionLocal()
+    db = None
     try:
+        db = SessionLocal()
         run = DbRun(
             problem_description=problem_desc,
             csv_filename=csv_filename,
@@ -149,18 +158,24 @@ def start_run(problem_desc: Dict[str, Any], csv_filename: str, api_key: str, api
         db.refresh(run)
         run_id = str(run.id)
     finally:
-        db.close()
+        if db:
+            db.close()
 
     logger.info(f"Starting background process for Run ID: {run_id}")
     # Use multiprocessing.Process instead of threading.Thread
-    process = multiprocessing.Process(target=_run_worker, args=(run_id, problem_desc, csv_filename, api_key, api_base, model_name))
+    # Note: API credentials are inherited from parent process environment variables
+    process = multiprocessing.Process(target=_run_worker, args=(run_id, problem_desc, csv_filename))
     process.start()
+
+    # Register process for monitoring
+    active_processes[run_id] = process
 
     return run_id
 
 def get_run_status(run_id: str) -> Dict[str, Any]:
-    db = SessionLocal()
+    db = None
     try:
+        db = SessionLocal()
         run = db.query(DbRun).filter(DbRun.id == run_id).first()
         if run:
             return {
@@ -174,4 +189,5 @@ def get_run_status(run_id: str) -> Dict[str, Any]:
         logger.error(f"Error retrieving run status for {run_id}: {e}")
         return {"status": "error", "error": "Could not retrieve status from database"}
     finally:
-        db.close()
+        if db:
+            db.close()

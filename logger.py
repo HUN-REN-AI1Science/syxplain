@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from backend.database import SessionLocal, RunStep, RunArtifact, Run
+from backend.database import SessionLocal, RunArtifact
 import langchain
 
 
@@ -77,7 +77,7 @@ def configure_logging(log_dir="logs", log_filename="syxplain.log", level=logging
 
 class StepLogger:
     """
-    Logs arbitrary payloads from a multi-step process to the database.
+    Logs arbitrary payloads from a multi-step process to stdio.
     """
 
     def __init__(self, base_dir="outputs", run_id=None):

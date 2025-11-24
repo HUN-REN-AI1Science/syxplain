@@ -1,16 +1,15 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-import shutil
 import os
-import json
 import logging
 import io
-from typing import Dict, Any, List
+from typing import List
 from sqlalchemy.orm import Session
 
 from backend.models import ProblemDescription, RunRequest, RunResponse, RunSummary
-from backend.service import start_run
+import asyncio
+from backend.service import start_run, cleanup_processes
 from backend.database import init_db, get_db, File as DbFile, Run as DbRun, RunArtifact
 from backend.auth import get_current_user, User
 
@@ -31,17 +30,34 @@ logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 app = FastAPI(title="Syxplain API")
 
 # CORS
+# Configure allowed origins from environment variable
+# For development: CORS_ORIGINS="*"
+# For production: CORS_ORIGINS="https://yourdomain.com,https://www.yourdomain.com"
+cors_origins = os.environ.get("CORS_ORIGINS", "*")
+allowed_origins = [origin.strip() for origin in cors_origins.split(",")] if cors_origins != "*" else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For dev, restrict in prod
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 @app.on_event("startup")
-def on_startup():
+async def on_startup():
     init_db()
+
+    # Start background task for process cleanup
+    async def periodic_cleanup():
+        while True:
+            try:
+                cleanup_processes()
+            except Exception as e:
+                logger.error(f"Error in process cleanup task: {e}")
+            await asyncio.sleep(60)  # Check every minute
+
+    asyncio.create_task(periodic_cleanup())
 
 @app.post("/api/upload")
 def upload_file(
@@ -51,7 +67,33 @@ def upload_file(
 ):
     logger.info(f"User {current_user.user_id} uploading file: {file.filename}")
 
-    content = file.file.read()
+    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+    CHUNK_SIZE = 1024 * 1024  # 1 MB
+
+    content = bytearray()
+    while True:
+        chunk = file.file.read(CHUNK_SIZE)
+        if not chunk:
+            break
+        content.extend(chunk)
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail="File too large. Maximum size is 50MB.")
+
+    # Convert to immutable bytes
+    content = bytes(content)
+
+    # Validate CSV content
+    try:
+        import pandas as pd
+        # Try to parse the content as CSV
+        df = pd.read_csv(io.BytesIO(content))
+        columns = df.columns.tolist()
+        if df.empty and len(columns) == 0:
+             raise ValueError("Empty CSV file")
+        logger.info(f"File {file.filename} validated successfully. Columns: {columns}")
+    except Exception as e:
+        logger.error(f"Invalid CSV file {file.filename}: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid CSV file: {str(e)}")
 
     # Store in DB with user_id
     db_file = DbFile(
@@ -63,16 +105,7 @@ def upload_file(
     db.add(db_file)
     db.commit()
 
-    # Try to parse columns to help frontend
-    try:
-        import pandas as pd
-        df = pd.read_csv(io.BytesIO(content))
-        columns = df.columns.tolist()
-        logger.info(f"File {file.filename} uploaded successfully. Columns: {columns}")
-        return {"filename": file.filename, "columns": columns}
-    except Exception as e:
-        logger.error(f"Error processing file {file.filename}: {e}")
-        return {"filename": file.filename, "error": str(e)}
+    return {"filename": file.filename, "columns": columns}
 
 @app.post("/api/run", response_model=RunResponse)
 def run_analysis(
