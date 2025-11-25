@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - ci/push-to-container-registry
   workflow_dispatch:
 
 env:
@@ -36,7 +35,7 @@ jobs:
 
   build-and-push-frontend:
     needs: detect-changes
-    if: true ||needs.detect-changes.outputs.frontend == 'true'
+    if: needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -74,7 +73,7 @@ jobs:
 
   build-and-push-backend:
     needs: detect-changes
-    if: true || needs.detect-changes.outputs.backend == 'true'
+    if: needs.detect-changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -109,3 +108,90 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  deploy-frontend:
+    needs: build-and-push-frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Frontend to Server
+        uses: appleboy/ssh-action@v1.2.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            # Variables
+            IMAGE_BASE=$(echo "${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+            FRONTEND_IMAGE="${IMAGE_BASE}:latest"
+            FRONTEND_CONTAINER="syxplain-frontend"
+
+            echo "🚀 Starting Frontend deployment..."
+            echo "📦 Pulling image: $FRONTEND_IMAGE"
+            docker pull $FRONTEND_IMAGE
+
+            if docker ps -a | grep -q $FRONTEND_CONTAINER; then
+              echo "Stopping existing frontend container..."
+              docker stop $FRONTEND_CONTAINER
+              docker rm $FRONTEND_CONTAINER
+            fi
+
+            echo "Starting new frontend container..."
+            docker run -d \
+              --name $FRONTEND_CONTAINER \
+              --restart unless-stopped \
+              -p 80:80 \
+              -p 443:443 \
+              -v /etc/letsencrypt:/etc/letsencrypt:ro \
+              --add-host backend:host-gateway \
+              $FRONTEND_IMAGE
+
+            echo "✅ Frontend Deployment Complete!"
+
+  deploy-backend:
+    needs: build-and-push-backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Backend to Server
+        uses: appleboy/ssh-action@v1.2.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            # Variables
+            IMAGE_BASE=$(echo "${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+            BACKEND_IMAGE="${IMAGE_BASE}:latest"
+            BACKEND_SERVICE="syxplain-backend"
+            APP_DIR="/opt/syxplain"
+
+            echo "🚀 Starting Backend deployment..."
+            echo "⚙️ Pulling image: $BACKEND_IMAGE"
+            docker pull $BACKEND_IMAGE
+
+            # Create temp container to extract files
+            echo "Extracting backend files..."
+            docker create --name temp_backend $BACKEND_IMAGE
+
+            # Copy files from container to host
+            # We copy the contents of /app to /opt/syxplain
+            docker cp temp_backend:/app/. $APP_DIR/
+
+            # Cleanup temp container
+            docker rm temp_backend
+
+            # Fix permissions (ensure syxplain user owns the files)
+            chown -R $USER:$USER $APP_DIR
+
+            # Install/Update dependencies in the host venv
+            echo "📦 Installing dependencies..."
+            if [ -f "$APP_DIR/venv/bin/pip" ]; then
+                $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt
+            else
+                echo "⚠️ Virtual environment not found at $APP_DIR/venv. Skipping dependency installation."
+            fi
+
+            # Restart Service
+            echo "🔄 Restarting Backend Service..."
+            sudo systemctl restart $BACKEND_SERVICE
+
+            echo "✅ Backend Deployment Complete!"
