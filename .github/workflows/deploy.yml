@@ -182,10 +182,12 @@ jobs:
             # Fix permissions (ensure syxplain user owns the files)
             chown -R $USER:$USER $APP_DIR
 
-            # Install/Update dependencies in the host venv
+            # Install/Update dependencies in the venv
             echo "📦 Installing dependencies..."
             if [ -f "$APP_DIR/venv/bin/pip" ]; then
+                source $APP_DIR/venv/bin/activate
                 $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt
+                $APP_DIR/venv/bin/python -c "import juliapkg; juliapkg.resolve()"
             else
                 echo "⚠️ Virtual environment not found at $APP_DIR/venv. Skipping dependency installation."
             fi
