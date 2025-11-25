@@ -1,5 +1,10 @@
 # Syxplain
 
+[![CI/CD](https://github.com/HUN-REN-AI1Science/syxplain/actions/workflows/deploy.yml/badge.svg)](https://github.com/HUN-REN-AI1Science/syxplain/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/release/python-3100/)
+[![React 18.2.0](https://img.shields.io/badge/react-18.2.0-61dafb.svg)](https://react.dev/)
+
 This is a proof of concept system which uses state of the art symbolic regression models to predict a selected variable in a dataset and explain the predicted equations in natural language using large language models. Setting the hiperparameters of the symbolic regression can be tedious, so here we use an LLM withvision capabilities to analyze the dataset and suggest hiperparameters for the symbolic regression model.
 
 ## Prerequisites
