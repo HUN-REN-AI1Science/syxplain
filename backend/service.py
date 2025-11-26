@@ -4,6 +4,7 @@ import json
 import pandas as pd
 import multiprocessing
 import logging
+import io
 from typing import Dict, Any
 
 # Add parent directory to path to import syxplain modules
