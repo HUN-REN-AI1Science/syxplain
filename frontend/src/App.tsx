@@ -20,14 +20,16 @@ function MainApp() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [filename, setFilename] = useState<string | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
+  const [excludedColumns, setExcludedColumns] = useState<string[]>([]);
   const [runId, setRunId] = useState<string | null>(null);
   const toast = useRef<Toast>(null);
   const nodeRef = useRef(null);
   const { signOut, user } = useAuth();
 
-  const handleUploadComplete = (fname: string, cols: string[]) => {
+  const handleUploadComplete = (fname: string, cols: string[], excludedCols: string[] = []) => {
     setFilename(fname);
     setColumns(cols);
+    setExcludedColumns(excludedCols);
     setActiveIndex(1);
   };
 
@@ -60,6 +62,7 @@ function MainApp() {
     setActiveIndex(0);
     setFilename(null);
     setColumns([]);
+    setExcludedColumns([]);
     setRunId(null);
   };
 
@@ -163,7 +166,7 @@ function MainApp() {
                       >
                         <div ref={nodeRef} className="w-full">
                           {activeIndex === 0 && <FileUpload onUploadComplete={handleUploadComplete} />}
-                          {activeIndex === 1 && <ProblemForm columns={columns} onSubmit={handleStartAnalysis} />}
+                          {activeIndex === 1 && <ProblemForm columns={columns} excludedColumns={excludedColumns} onSubmit={handleStartAnalysis} />}
                           {activeIndex === 2 && runId && <ResultsView runId={runId} />}
                         </div>
                       </CSSTransition>

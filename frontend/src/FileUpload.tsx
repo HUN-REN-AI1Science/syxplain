@@ -5,7 +5,7 @@ import { Message } from 'primereact/message';
 import { Button } from 'primereact/button';
 
 interface FileUploadProps {
-  onUploadComplete: (filename: string, columns: string[]) => void;
+  onUploadComplete: (filename: string, columns: string[], excludedColumns?: string[]) => void;
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
@@ -35,7 +35,17 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
 
         // Add a delay for the "Processing..." UX before transitioning
         setTimeout(() => {
-          onUploadComplete(response.data.filename, response.data.columns);
+          // Filter out non-numeric columns
+          const columnTypes = response.data.column_types || {};
+          const allColumns = response.data.columns;
+          const numericColumns = allColumns.filter((col: string) =>
+            columnTypes[col] === 'numeric'
+          );
+          const excludedColumns = allColumns.filter((col: string) =>
+            columnTypes[col] !== 'numeric'
+          );
+
+          onUploadComplete(response.data.filename, numericColumns, excludedColumns);
         }, 1500);
       }
     } catch (err) {

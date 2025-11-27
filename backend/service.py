@@ -89,7 +89,17 @@ def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str):
             state["data"] = sample_data
             state["problem_description_src"] = problem_description_src
             state["target_column"] = problem_desc["target_variable"]
-            state["predictor_columns"] = list(problem_desc["features"].keys())
+
+            # Filter predictor columns to only include numeric columns
+            all_predictors = list(problem_desc["features"].keys())
+            numeric_predictors = []
+            for col in all_predictors:
+                if col in sample_data.columns and pd.api.types.is_numeric_dtype(sample_data[col]):
+                    numeric_predictors.append(col)
+                else:
+                    logger.warning(f"Excluding non-numeric column from predictors: {col}")
+
+            state["predictor_columns"] = numeric_predictors
             return state
 
         # Run the graph
