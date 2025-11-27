@@ -38,6 +38,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
           // Filter out non-numeric columns
           const columnTypes = response.data.column_types || {};
           const allColumns = response.data.columns;
+
+          // If column_types is empty but we have columns, warn or fall back to treating all as numeric
+          if (allColumns.length > 0 && Object.keys(columnTypes).length === 0) {
+            console.warn('column_types missing from backend response, treating all columns as numeric');
+            allColumns.forEach((col: string) => columnTypes[col] = 'numeric');
+          }
+
           const numericColumns = allColumns.filter((col: string) =>
             columnTypes[col] === 'numeric'
           );

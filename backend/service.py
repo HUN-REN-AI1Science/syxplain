@@ -94,10 +94,12 @@ def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str):
             all_predictors = list(problem_desc["features"].keys())
             numeric_predictors = []
             for col in all_predictors:
-                if col in sample_data.columns and pd.api.types.is_numeric_dtype(sample_data[col]):
-                    numeric_predictors.append(col)
-                else:
+                if col not in sample_data.columns:
+                    logger.warning(f"Excluding column from predictors (not found in data): {col}")
+                elif not pd.api.types.is_numeric_dtype(sample_data[col]):
                     logger.warning(f"Excluding non-numeric column from predictors: {col}")
+                else:
+                    numeric_predictors.append(col)
 
             state["predictor_columns"] = numeric_predictors
             return state

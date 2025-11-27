@@ -36,15 +36,14 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, onS
     }
   };
 
-  const handleExportJson = () => {
-    // Validation
+  const validateAndGetPayload = () => {
     if (!projectDescription.trim()) {
       toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'Project Description is required.' });
-      return;
+      return null;
     }
     if (!targetVariable) {
       toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'Target Variable is required.' });
-      return;
+      return null;
     }
 
     const activeColumns = columns.filter(col =>
@@ -56,20 +55,24 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, onS
 
     if (missingDescriptions.length > 0) {
       toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: `Please provide descriptions for all features. Missing: ${missingDescriptions.join(', ')}` });
-      return;
+      return null;
     }
 
-    // Construct Payload
     const features: Record<string, string> = {};
     activeColumns.forEach(col => {
       features[col] = featureDescriptions[col];
     });
 
-    const payload = {
+    return {
       project_description: projectDescription,
       target_variable: targetVariable,
       features: features
     };
+  };
+
+  const handleExportJson = () => {
+    const payload = validateAndGetPayload();
+    if (!payload) return;
 
     // Export
     const jsonString = JSON.stringify(payload, null, 2);
@@ -81,6 +84,7 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, onS
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleSubmit = () => {
@@ -101,7 +105,7 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, onS
           toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'JSON must contain a valid "target_variable".' });
           return;
         }
-        if (!parsed.features || typeof parsed.features !== 'object' || Object.keys(parsed.features).length === 0) {
+        if (!parsed.features || typeof parsed.features !== 'object' || Array.isArray(parsed.features) || Object.keys(parsed.features).length === 0) {
           toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'JSON must contain "features" object with at least one feature.' });
           return;
         }
@@ -112,39 +116,10 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, onS
       }
     } else {
       // Validation for Form Mode
-      if (!projectDescription.trim()) {
-        toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'Project Description is required.' });
-        return;
+      const payload = validateAndGetPayload();
+      if (payload) {
+        onSubmit(payload);
       }
-      if (!targetVariable) {
-        toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'Target Variable is required.' });
-        return;
-      }
-
-      const activeColumns = columns.filter(col =>
-        col !== targetVariable &&
-        (!excludedColumns || !excludedColumns.includes(col))
-      );
-
-      const missingDescriptions = activeColumns.filter(col => !featureDescriptions[col] || featureDescriptions[col].trim() === '');
-
-      if (missingDescriptions.length > 0) {
-        toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: `Please provide descriptions for all features. Missing: ${missingDescriptions.join(', ')}` });
-        return;
-      }
-
-      // Filter out target variable from features
-      const features: Record<string, string> = {};
-      activeColumns.forEach(col => {
-        features[col] = featureDescriptions[col];
-      });
-
-      const payload = {
-        project_description: projectDescription,
-        target_variable: targetVariable,
-        features: features
-      };
-      onSubmit(payload);
     }
   };
 
