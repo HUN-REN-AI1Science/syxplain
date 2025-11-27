@@ -36,7 +36,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
         // Add a delay for the "Processing..." UX before transitioning
         setTimeout(() => {
           // Filter out non-numeric columns
-          const columnTypes = response.data.column_types || {};
+          const columnTypes: Record<string, string> = { ...(response.data.column_types || {}) };
           const allColumns = response.data.columns;
 
           // If column_types is empty but we have columns, warn or fall back to treating all as numeric
