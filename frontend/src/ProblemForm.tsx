@@ -1,20 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Dropdown } from 'primereact/dropdown';
 import { Button } from 'primereact/button';
 import { SelectButton } from 'primereact/selectbutton';
 import { Dialog } from 'primereact/dialog';
+import { Toast } from 'primereact/toast';
 
 interface ProblemFormProps {
   columns: string[];
+  excludedColumns?: string[];
   onSubmit: (data: any) => void;
 }
 
-const ProblemForm: React.FC<ProblemFormProps> = ({ columns, onSubmit }) => {
+const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, onSubmit }) => {
   const [mode, setMode] = useState<'form' | 'json'>('form');
   const [jsonContent, setJsonContent] = useState('');
   const [showHelp, setShowHelp] = useState(false);
+  const toast = useRef<Toast>(null);
 
   // Form state
   const [projectDescription, setProjectDescription] = useState('');
@@ -33,29 +36,90 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, onSubmit }) => {
     }
   };
 
+  const validateAndGetPayload = () => {
+    if (!projectDescription.trim()) {
+      toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'Project Description is required.' });
+      return null;
+    }
+    if (!targetVariable) {
+      toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'Target Variable is required.' });
+      return null;
+    }
+
+    const activeColumns = columns.filter(col =>
+      col !== targetVariable &&
+      (!excludedColumns || !excludedColumns.includes(col))
+    );
+
+    const missingDescriptions = activeColumns.filter(col => !featureDescriptions[col] || featureDescriptions[col].trim() === '');
+
+    if (missingDescriptions.length > 0) {
+      toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: `Please provide descriptions for all features. Missing: ${missingDescriptions.join(', ')}` });
+      return null;
+    }
+
+    const features: Record<string, string> = {};
+    activeColumns.forEach(col => {
+      features[col] = featureDescriptions[col];
+    });
+
+    return {
+      project_description: projectDescription,
+      target_variable: targetVariable,
+      features: features
+    };
+  };
+
+  const handleExportJson = () => {
+    const payload = validateAndGetPayload();
+    if (!payload) return;
+
+    // Export
+    const jsonString = JSON.stringify(payload, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'problem_config.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleSubmit = () => {
     if (mode === 'json') {
       try {
+        if (!jsonContent.trim()) {
+          toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'JSON content is empty.' });
+          return;
+        }
         const parsed = JSON.parse(jsonContent);
+
+        // Validate JSON structure
+        if (!parsed.project_description || typeof parsed.project_description !== 'string' || !parsed.project_description.trim()) {
+          toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'JSON must contain a valid "project_description".' });
+          return;
+        }
+        if (!parsed.target_variable || typeof parsed.target_variable !== 'string' || !parsed.target_variable.trim()) {
+          toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'JSON must contain a valid "target_variable".' });
+          return;
+        }
+        if (!parsed.features || typeof parsed.features !== 'object' || Array.isArray(parsed.features) || Object.keys(parsed.features).length === 0) {
+          toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'JSON must contain "features" object with at least one feature.' });
+          return;
+        }
+
         onSubmit(parsed);
       } catch (e) {
-        alert(`Invalid JSON format: ${(e as Error).message}`);
+        toast.current?.show({ severity: 'error', summary: 'Invalid JSON', detail: (e as Error).message });
       }
     } else {
-      // Filter out target variable from features
-      const features: Record<string, string> = {};
-      columns.forEach(col => {
-        if (col !== targetVariable && featureDescriptions[col]) {
-          features[col] = featureDescriptions[col];
-        }
-      });
-
-      const payload = {
-        project_description: projectDescription,
-        target_variable: targetVariable,
-        features: features
-      };
-      onSubmit(payload);
+      // Validation for Form Mode
+      const payload = validateAndGetPayload();
+      if (payload) {
+        onSubmit(payload);
+      }
     }
   };
 
@@ -76,6 +140,21 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, onSubmit }) => {
           <SelectButton value={mode} onChange={(e: any) => setMode(e.value)} options={modeOptions} />
         </div>
       </div>
+
+      {excludedColumns && excludedColumns.length > 0 && (
+        <div className="mb-6 animate-fade-in">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start">
+            <i className="pi pi-exclamation-triangle text-yellow-600 text-xl mr-3 mt-0.5"></i>
+            <div>
+              <h4 className="font-semibold text-yellow-800 text-sm">Columns Excluded</h4>
+              <p className="text-sm text-yellow-700 mt-1">
+                The following columns were automatically excluded because they contain non-numeric data:
+                <span className="font-mono ml-1 font-medium">{excludedColumns.join(', ')}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {mode === 'json' ? (
         <div className="space-y-6 animate-fade-in">
@@ -230,7 +309,16 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, onSubmit }) => {
         </div>
       )}
 
-      <div className="mt-10 pt-6 border-t border-slate-100 flex justify-end">
+      <Toast ref={toast} />
+      <div className="mt-10 pt-6 border-t border-slate-100 flex justify-end space-x-4">
+        {mode === 'form' && (
+          <Button
+            label="Export JSON"
+            icon="pi pi-download"
+            onClick={handleExportJson}
+            className="p-button-outlined p-button-secondary font-bold py-3 px-6 text-xl"
+          />
+        )}
         <Button
           label="Start Analysis"
           icon="pi pi-arrow-right"

@@ -105,7 +105,15 @@ def upload_file(
     db.add(db_file)
     db.commit()
 
-    return {"filename": file.filename, "columns": columns}
+    # Identify numeric columns
+    column_types = {}
+    for col in df.columns:
+        if pd.api.types.is_numeric_dtype(df[col]):
+            column_types[col] = "numeric"
+        else:
+            column_types[col] = "object"
+
+    return {"filename": file.filename, "columns": columns, "column_types": column_types}
 
 @app.post("/api/run", response_model=RunResponse)
 def run_analysis(
