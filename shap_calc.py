@@ -5,7 +5,7 @@ import shap
 from typing import List
 
 def train_model(df, predictor_columns, target_column):
-    model = RandomForestRegressor(n_estimators=200)
+    model = RandomForestRegressor(n_estimators=200, n_jobs=-1)
     model.fit(df[predictor_columns], y=df[target_column])
     return model
 
