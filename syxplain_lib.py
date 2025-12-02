@@ -165,7 +165,7 @@ def pysr_with_generated_config(state: State) -> State:
 
     # Force resource limits and logging
     cpu_count = os.cpu_count() or 4  # Fallback to 4 if detection fails
-    pysr_config["parallelism"] = "multithreading"  # Use multithreading for parallelization
+    pysr_config["parallelism"] = "multiprocessing"  # Use multithreading or multiprocessing
     pysr_config["procs"] = cpu_count  # Use all available CPUs
     pysr_config["verbosity"] = 1 # Log to stdout
     pysr_config["progress"] = True  # Show progress bar
