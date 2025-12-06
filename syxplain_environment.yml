@@ -72,6 +72,5 @@ dependencies:
 
   # Agentic
   - langgraph
-  - langchain
-  - langchain-openai
   - langchain-core
+  - dspy
