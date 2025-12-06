@@ -14,6 +14,7 @@ import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { Tooltip } from 'primereact/tooltip';
 import { SwitchTransition, CSSTransition } from 'react-transition-group';
+import syxplainLogo from './assets/syxplain_logo.png';
 
 function MainApp() {
   const [view, setView] = useState<'workflow' | 'history'>('workflow');
@@ -21,15 +22,17 @@ function MainApp() {
   const [filename, setFilename] = useState<string | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
   const [excludedColumns, setExcludedColumns] = useState<string[]>([]);
+  const [nanCounts, setNanCounts] = useState<Record<string, number>>({});
   const [runId, setRunId] = useState<string | null>(null);
   const toast = useRef<Toast>(null);
   const nodeRef = useRef(null);
   const { signOut, user } = useAuth();
 
-  const handleUploadComplete = (fname: string, cols: string[], excludedCols: string[] = []) => {
+  const handleUploadComplete = (fname: string, cols: string[], excludedCols: string[] = [], nanCountsData: Record<string, number> = {}) => {
     setFilename(fname);
     setColumns(cols);
     setExcludedColumns(excludedCols);
+    setNanCounts(nanCountsData);
     setActiveIndex(1);
   };
 
@@ -63,6 +66,7 @@ function MainApp() {
     setFilename(null);
     setColumns([]);
     setExcludedColumns([]);
+    setNanCounts({});
     setRunId(null);
   };
 
@@ -91,8 +95,11 @@ function MainApp() {
             className="flex items-center space-x-3 cursor-pointer transition-opacity"
             onClick={handleReset}
           >
-            <div className="bg-blue-600 p-2 rounded-lg flex-shrink-0">
-              <i className="pi pi-bolt text-white text-lg md:text-xl"></i>
+            <div
+              className="rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden"
+              style={{ backgroundColor: '#0052cc', width: '40px', height: '40px' }}
+            >
+              <img src={syxplainLogo} alt="Syxplain Logo" className="w-7 h-7 object-contain" />
             </div>
             <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
               Syxplain <span className="text-blue-600">AI</span>
@@ -166,7 +173,7 @@ function MainApp() {
                       >
                         <div ref={nodeRef} className="w-full">
                           {activeIndex === 0 && <FileUpload onUploadComplete={handleUploadComplete} />}
-                          {activeIndex === 1 && <ProblemForm columns={columns} excludedColumns={excludedColumns} onSubmit={handleStartAnalysis} />}
+                          {activeIndex === 1 && <ProblemForm columns={columns} excludedColumns={excludedColumns} nanCounts={nanCounts} onSubmit={handleStartAnalysis} />}
                           {activeIndex === 2 && runId && <ResultsView runId={runId} />}
                         </div>
                       </CSSTransition>

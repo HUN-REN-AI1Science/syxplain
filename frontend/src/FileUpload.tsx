@@ -5,7 +5,7 @@ import { Message } from 'primereact/message';
 import { Button } from 'primereact/button';
 
 interface FileUploadProps {
-  onUploadComplete: (filename: string, columns: string[], excludedColumns?: string[]) => void;
+  onUploadComplete: (filename: string, columns: string[], excludedColumns?: string[], nanCounts?: Record<string, number>) => void;
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
@@ -52,7 +52,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
             columnTypes[col] !== 'numeric'
           );
 
-          onUploadComplete(response.data.filename, numericColumns, excludedColumns);
+          onUploadComplete(response.data.filename, numericColumns, excludedColumns, response.data.nan_counts);
         }, 1500);
       }
     } catch (err) {
@@ -150,7 +150,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
                         mode="indeterminate"
                         style={{ height: '8px' }}
                         className="w-full"
-                        color="#2563eb"
+                color="#0052cc"
                     ></ProgressBar>
                 </div>
                 <div className="flex items-center space-x-3">

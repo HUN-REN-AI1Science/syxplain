@@ -58,27 +58,27 @@ body {
   @apply list-decimal list-inside mb-4;
     color: #0f172a !important;
   }
-  
+
   .prose li {
     color: #0f172a !important;
   }
-  
+
   .prose li::marker {
     color: #0f172a !important;
   }
-  
+
   .prose.prose-slate ul,
   .prose.prose-slate ol,
   .prose.prose-slate li {
     color: #0f172a !important;
   }
-  
+
   .prose.prose-slate li::marker,
   .prose.prose-slate ul li::marker,
   .prose.prose-slate ol li::marker {
     color: #0f172a !important;
   }
-  
+
   /* Override all prose-slate text colors */
   .prose.prose-slate p,
   .prose.prose-slate strong,
@@ -99,7 +99,7 @@ body {
     background-color: #1e293b !important;
     color: #e2e8f0 !important;
   }
-  
+
   /* Code inside pre blocks - no background, inherit from pre */
   .prose pre code {
     background-color: transparent !important;
@@ -166,14 +166,24 @@ body {
 }
 
 .custom-steps .p-steps-item.p-highlight:before {
-  border-top: 2px solid #3b82f6 !important;
+  border-top: 2px solid #0052cc !important;
 }
 
-.custom-steps .p-steps-number {
+.custom-steps .p-steps-item.p-highlight .p-steps-number {
+  background: #0052cc !important;
+  border-color: #0052cc !important;
+  color: white !important;
+}
+
+.custom-steps .p-steps-item .p-steps-number {
   font-size: 1.1rem;
   font-weight: 600;
 }
 
+.custom-steps .p-steps-item.p-highlight .p-steps-title {
+  font-weight: 600;
+  color: #0052cc !important;
+}
 .custom-steps .p-steps-title {
   font-weight: 500;
   margin-top: 0.5rem;
@@ -196,4 +206,27 @@ body {
 
 .p-password .p-inputtext {
   padding: 0.875rem 1rem !important;
+}
+
+/* SelectButton Customization */
+.p-selectbutton .p-button.p-highlight {
+  background: #0052cc !important;
+  border-color: #0052cc !important;
+  color: white !important;
+}
+
+.p-selectbutton .p-button.p-highlight:hover {
+  background: #0047b3 !important;
+  border-color: #0047b3 !important;
+}
+
+.p-selectbutton .p-button:not(.p-highlight) {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+.p-selectbutton .p-button:not(.p-highlight):hover {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
 }
