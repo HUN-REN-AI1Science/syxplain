@@ -1,8 +1,63 @@
+import os
+import logging
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 import shap
 from typing import List
+
+logger = logging.getLogger(__name__)
+
+# Environment variables for SHAP subsampling configuration
+# SHAP_SUBSAMPLE_FRACTION: Fraction of data to use (default 0.1 = 10%)
+# SHAP_SUBSAMPLE_MIN: Minimum number of samples (default 1000)
+# SHAP_SUBSAMPLE_MAX: Maximum number of samples (default 5000)
+
+def get_shap_subsample_params():
+    """Get SHAP subsampling parameters from environment variables with defaults."""
+    fraction = float(os.environ.get("SHAP_SUBSAMPLE_FRACTION", "0.1"))
+    min_samples = int(os.environ.get("SHAP_SUBSAMPLE_MIN", "1000"))
+    max_samples = int(os.environ.get("SHAP_SUBSAMPLE_MAX", "5000"))
+    return fraction, min_samples, max_samples
+
+
+def subsample_for_shap(X):
+    """
+    Subsample data for SHAP calculation based on environment variable configuration.
+
+    Parameters:
+    X: numpy array or pandas DataFrame of input data
+
+    Returns:
+    Subsampled data (numpy array or DataFrame, same type as input)
+    """
+    n_samples = X.shape[0]
+    fraction, min_samples, max_samples = get_shap_subsample_params()
+
+    # Calculate target sample size
+    target_size = int(n_samples * fraction)
+
+    # Apply min/max constraints
+    target_size = max(target_size, min_samples)
+    target_size = min(target_size, max_samples)
+
+    # Don't subsample if we already have fewer samples than target
+    if n_samples <= target_size:
+        logger.info(f"SHAP subsampling: Using all {n_samples} samples (below target of {target_size})")
+        return X
+
+    logger.info(f"SHAP subsampling: Reducing from {n_samples} to {target_size} samples "
+                f"(fraction={fraction}, min={min_samples}, max={max_samples})")
+
+    # Random subsampling with fixed seed for reproducibility
+    rng = np.random.default_rng(845506771)
+    indices = rng.choice(n_samples, size=target_size, replace=False)
+
+    if isinstance(X, pd.DataFrame):
+        return X.iloc[indices]
+    else:
+        return X[indices]
+
 
 def train_model(df, predictor_columns, target_column):
     model = RandomForestRegressor(n_estimators=200, n_jobs=-1)
@@ -46,10 +101,13 @@ def rank_interactions_regression(model, X_all, feature_names=None, percent_of_to
     else:
         explainer = shap.Explainer(model) # Default to general Explainer for other models
 
-    print("Analyzing SHAP interaction effects...")
+    logger.info("Analyzing SHAP interaction effects...")
 
-    # Calculate SHAP interaction values
-    shap_interaction_values = explainer.shap_interaction_values(X_all)
+    # Subsample data for faster SHAP computation
+    X_subsampled = subsample_for_shap(X_all)
+
+    # Calculate SHAP interaction values on subsampled data
+    shap_interaction_values = explainer.shap_interaction_values(X_subsampled)
 
     # For regression, shap_interaction_values should be a 3D array (samples, features, features)
     if not isinstance(shap_interaction_values, np.ndarray) or shap_interaction_values.ndim != 3:
@@ -58,7 +116,7 @@ def rank_interactions_regression(model, X_all, feature_names=None, percent_of_to
             f"Got shape: {shap_interaction_values.shape}"
         )
 
-    print(f"SHAP interaction values shape: {shap_interaction_values.shape}")
+    logger.info(f"SHAP interaction values shape: {shap_interaction_values.shape}")
 
     # Calculate mean absolute interaction values
     mean_abs_interaction_matrix = np.mean(np.abs(shap_interaction_values), axis=0)
@@ -79,11 +137,11 @@ def rank_interactions_regression(model, X_all, feature_names=None, percent_of_to
 
     # Calculate total "mass" of interaction effects
     total_interaction_mass = sum(value for _, _, value in interaction_pairs_with_values)
-    print(f"\nTotal sum of mean absolute unique interaction effects: {total_interaction_mass:.4f}")
+    logger.info(f"Total sum of mean absolute unique interaction effects: {total_interaction_mass:.4f}")
 
     # Determine the target mass threshold
     target_mass = total_interaction_mass * (percent_of_total_mass / 100)
-    print(f"Target interaction mass for {percent_of_total_mass}% threshold: {target_mass:.4f}")
+    logger.info(f"Target interaction mass for {percent_of_total_mass}% threshold: {target_mass:.4f}")
 
     # Select top interactions until the target mass is reached
     top_interactions_mass = 0
@@ -95,13 +153,13 @@ def rank_interactions_regression(model, X_all, feature_names=None, percent_of_to
         else:
             break
 
-    print(f"\nSelected {len(top_interaction_list)} top interaction pairs covering "
-          f"{top_interactions_mass / total_interaction_mass * 100:.2f}% of total interaction mass.")
+    logger.info(f"Selected {len(top_interaction_list)} top interaction pairs covering "
+                f"{top_interactions_mass / total_interaction_mass * 100:.2f}% of total interaction mass.")
 
-    print("\nTop Interaction Effects (ranked by mean absolute SHAP interaction value) "
-          f"until {percent_of_total_mass}% of total mass is covered:")
+    logger.info(f"Top Interaction Effects (ranked by mean absolute SHAP interaction value) "
+                f"until {percent_of_total_mass}% of total mass is covered:")
     for idx, (param_i, param_j, value) in enumerate(interaction_pairs_with_values[:len(top_interaction_list)], 1):
-        print(f"{idx}. {param_i} × {param_j}: {value:.4f}")
+        logger.info(f"{idx}. {param_i} × {param_j}: {value:.4f}")
 
     return top_interaction_list
 
