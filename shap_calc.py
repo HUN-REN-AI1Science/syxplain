@@ -54,7 +54,7 @@ def subsample_for_shap(X):
     indices = rng.choice(n_samples, size=target_size, replace=False)
 
     if isinstance(X, pd.DataFrame):
-        return X.iloc[indices]
+        return X.iloc[indices].reset_index(drop=True)
     else:
         return X[indices]
 
