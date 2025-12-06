@@ -1,6 +1,36 @@
 import os
 import dspy
-from typing import List, Optional
+from typing import List
+
+# Initialize Langfuse tracing for DSPy (if configured)
+def _init_langfuse():
+    """Initialize Langfuse OpenInference instrumentation if credentials are available."""
+    public_key = os.environ.get("LANGFUSE_PUBLIC_KEY")
+    secret_key = os.environ.get("LANGFUSE_SECRET_KEY")
+
+    if public_key and secret_key:
+        try:
+            from langfuse import get_client
+            from openinference.instrumentation.dspy import DSPyInstrumentor
+
+            # Verify connection
+            langfuse = get_client()
+            if langfuse.auth_check():
+                # Instrument DSPy
+                DSPyInstrumentor().instrument()
+                print("Langfuse tracing enabled for DSPy.")
+            else:
+                print("Langfuse authentication failed. Tracing disabled.")
+        except ImportError:
+            print("Langfuse or openinference-instrumentation-dspy not installed. Tracing disabled.")
+        except Exception as e:
+            print(f"Failed to initialize Langfuse: {e}. Tracing disabled.")
+    else:
+        print("Langfuse credentials not configured. Tracing disabled.")
+
+# Initialize Langfuse on module load
+_init_langfuse()
+
 
 def get_dspy_lm() -> dspy.LM:
     """Configures and returns a DSPy LM client."""
@@ -8,8 +38,8 @@ def get_dspy_lm() -> dspy.LM:
     api_key = os.environ.get("OPENAI_API_KEY")
     base_url = os.environ.get("OPENAI_API_BASE")
 
-    # Initialize basic dspy LM.
     return dspy.LM(model=f"openai/{model_name}", api_key=api_key, base_url=base_url)
+
 
 class PySrConfigGenerator(dspy.Signature):
     """
@@ -37,10 +67,10 @@ class PySrConfigGenerator(dspy.Signature):
     """
     project_description: str = dspy.InputField(desc="Project description json")
     dataset_statistics: str = dspy.InputField(desc="Dataset statistics")
-    # Using list[dspy.Image] to support multiple images.
     visualizations: List[dspy.Image] = dspy.InputField(desc="Dataset visualizations")
 
     config_json: str = dspy.OutputField(desc="JSON configuration string")
+
 
 class ExplainPySrEquations(dspy.Signature):
     """
@@ -55,7 +85,7 @@ class ExplainPySrEquations(dspy.Signature):
 
     Rules:
     - Parse both JSONs strictly. If a key is missing, say which and stop.
-    - Treat PROJECT_SPEC.features’ keys as canonical feature names.
+    - Treat PROJECT_SPEC.features' keys as canonical feature names.
     - Do NOT guess values that are not present in JSON.
     - When you reference fields, use dot paths like PROJECT_SPEC.target_variable.
     - If DATA_SPEC.action is present, follow it.
@@ -70,12 +100,12 @@ class ExplainPySrEquations(dspy.Signature):
 
     explanation: str = dspy.OutputField(desc="Markdown explanation of the equations")
 
+
 def generate_pysr_config(project_description: str, dataset_statistics: str, visualizations_b64: List[str]) -> str:
     """Generates PySR configuration JSON using LLM."""
     lm = get_dspy_lm()
 
-    # Create dspy.Image objects from base64 strings
-    # DSPy requires format: data:image/png;base64,<content>
+    # Create dspy.Image objects from base64 strings with Data URI format
     visual_inputs = [dspy.Image(f"data:image/png;base64,{img_b64}") for img_b64 in visualizations_b64]
 
     predictor = dspy.Predict(PySrConfigGenerator)
@@ -92,15 +122,16 @@ def generate_pysr_config(project_description: str, dataset_statistics: str, visu
     # Basic cleanup
     cleaned_json = config_json.replace("```json", "").replace("```", "").strip()
     if not (cleaned_json.startswith("{") and cleaned_json.endswith("}")):
-         try:
+        try:
             start = cleaned_json.find("{")
             end = cleaned_json.rfind("}") + 1
             if start >= 0 and end > start:
-                 cleaned_json = cleaned_json[start:end]
-         except:
-             pass
+                cleaned_json = cleaned_json[start:end]
+        except:
+            pass
 
     return cleaned_json
+
 
 def generate_equation_explanation(project_spec_json: str, data_spec_json: str) -> str:
     """Generates explanation for PySR equations."""
