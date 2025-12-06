@@ -5,6 +5,7 @@ import { Password } from 'primereact/password';
 import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
 import { useAuth } from '../contexts/AuthContext';
+import syxplainLogo from '../assets/syxplain_logo.png';
 
 interface SignUpProps {
   onSwitchToLogin: () => void;
@@ -59,8 +60,11 @@ const SignUp: React.FC<SignUpProps> = ({ onSwitchToLogin }) => {
 
       <Card className="w-full max-w-md shadow-xl">
         <div className="flex flex-col items-center mb-6">
-          <div className="bg-blue-600 p-3 rounded-lg mb-4">
-            <i className="pi pi-bolt text-white text-3xl"></i>
+          <div
+            className="rounded-full flex items-center justify-center overflow-hidden mb-4"
+            style={{ backgroundColor: '#0052cc', width: '72px', height: '72px' }}
+          >
+            <img src={syxplainLogo} alt="Syxplain Logo" className="w-12 h-12 object-contain" />
           </div>
           <h1 className="text-3xl font-bold text-slate-900">
             Syxplain <span className="text-blue-600">AI</span>
@@ -125,7 +129,7 @@ const SignUp: React.FC<SignUpProps> = ({ onSwitchToLogin }) => {
             label="Sign Up"
             loading={loading}
             className="w-full mt-4"
-            style={{ backgroundColor: '#2563eb', color: 'white', borderColor: '#2563eb', height: '48px', fontSize: '16px' }}
+            style={{ backgroundColor: '#0052cc', color: 'white', borderColor: '#0052cc', height: '48px', fontSize: '16px' }}
           />
 
           <div className="text-center mt-4">

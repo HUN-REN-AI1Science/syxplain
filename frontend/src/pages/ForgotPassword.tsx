@@ -4,6 +4,7 @@ import { InputText } from 'primereact/inputtext';
 import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
 import { useAuth } from '../contexts/AuthContext';
+import syxplainLogo from '../assets/syxplain_logo.png';
 
 interface ForgotPasswordProps {
   onBackToLogin: () => void;
@@ -47,8 +48,11 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin }) => {
 
       <Card className="w-full max-w-md shadow-xl">
         <div className="flex flex-col items-center mb-6">
-          <div className="bg-blue-600 p-3 rounded-lg mb-4">
-            <i className="pi pi-key text-white text-3xl"></i>
+          <div
+            className="rounded-full flex items-center justify-center overflow-hidden mb-4"
+            style={{ backgroundColor: '#0052cc', width: '72px', height: '72px' }}
+          >
+            <img src={syxplainLogo} alt="Syxplain Logo" className="w-12 h-12 object-contain" />
           </div>
           <h1 className="text-3xl font-bold text-slate-900">
             Forgot Password
@@ -78,7 +82,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin }) => {
             label="Send Reset Link"
             loading={loading}
             className="w-full mt-4"
-            style={{ backgroundColor: '#2563eb', color: 'white', borderColor: '#2563eb', height: '48px', fontSize: '16px' }}
+            style={{ backgroundColor: '#0052cc', color: 'white', borderColor: '#0052cc', height: '48px', fontSize: '16px' }}
             pt={{
                 loadingIcon: { className: 'ml-2' }
             }}
