@@ -230,3 +230,26 @@ body {
   background: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
 }
+
+/* Run Settings Panel */
+.run-settings-panel .p-panel-header {
+  background: transparent !important;
+  border: none !important;
+  padding: 1rem 1.25rem !important;
+}
+
+.run-settings-panel .p-panel-content {
+  padding: 0 1.25rem 1.25rem !important;
+  border: none !important;
+}
+
+.run-settings-panel .p-panel-toggler {
+  background: #f1f5f9 !important;
+  border-radius: 0.5rem !important;
+  width: 2rem !important;
+  height: 2rem !important;
+}
+
+.run-settings-panel .p-panel-toggler:hover {
+  background: #e2e8f0 !important;
+}

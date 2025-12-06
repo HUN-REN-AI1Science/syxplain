@@ -195,6 +195,60 @@ def get_run(
         "results": run.results
     }
 
+@app.get("/api/runs/{run_id}/details")
+def get_run_details(
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get comprehensive run details including CSV metadata for the Run Settings Panel."""
+    import pandas as pd
+
+    run = db.query(DbRun).filter(
+        DbRun.id == run_id,
+        DbRun.user_id == current_user.user_id
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    # Get the associated CSV file
+    db_file = db.query(DbFile).filter(
+        DbFile.filename == run.csv_filename,
+        DbFile.user_id == current_user.user_id
+    ).order_by(DbFile.created_at.desc()).first()
+
+    csv_metadata = None
+    if db_file:
+        try:
+            df = pd.read_csv(io.BytesIO(db_file.content))
+            csv_metadata = {
+                "filename": db_file.filename,
+                "size_bytes": len(db_file.content),
+                "row_count": len(df),
+                "column_count": len(df.columns),
+                "columns": df.columns.tolist()
+            }
+        except Exception as e:
+            logger.warning(f"Failed to parse CSV for run {run_id}: {e}")
+            csv_metadata = {
+                "filename": db_file.filename,
+                "size_bytes": len(db_file.content),
+                "row_count": None,
+                "column_count": None,
+                "columns": []
+            }
+
+    return {
+        "id": str(run.id),
+        "status": run.status,
+        "created_at": run.created_at.isoformat() if run.created_at else None,
+        "problem_description": run.problem_description,
+        "csv_filename": run.csv_filename,
+        "csv_metadata": csv_metadata,
+        "error": run.error
+    }
+
+
 @app.get("/api/runs/{run_id}/download/{filename}")
 def download_file(
     run_id: str,
@@ -219,6 +273,35 @@ def download_file(
         raise HTTPException(status_code=404, detail="File not found")
 
     return Response(content=artifact.content, media_type=artifact.media_type)
+
+@app.get("/api/runs/{run_id}/download-csv")
+def download_csv(
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Download the original CSV file associated with a run."""
+    # Verify run belongs to user
+    run = db.query(DbRun).filter(
+        DbRun.id == run_id,
+        DbRun.user_id == current_user.user_id
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    # Get the CSV file
+    db_file = db.query(DbFile).filter(
+        DbFile.filename == run.csv_filename,
+        DbFile.user_id == current_user.user_id
+    ).order_by(DbFile.created_at.desc()).first()
+    if not db_file:
+        raise HTTPException(status_code=404, detail="CSV file not found")
+
+    return Response(
+        content=db_file.content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={db_file.filename}"}
+    )
 
 if __name__ == "__main__":
     import uvicorn

@@ -121,6 +121,27 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nan
           return;
         }
 
+        // Validate that target_variable exists in columns
+        if (!columns.includes(parsed.target_variable)) {
+          toast.current?.show({
+            severity: 'error',
+            summary: 'Invalid Target Variable',
+            detail: `The target variable "${parsed.target_variable}" does not exist in the uploaded dataset.`
+          });
+          return;
+        }
+
+        // Validate that all feature names exist in columns
+        const invalidFeatures = Object.keys(parsed.features).filter(feature => !columns.includes(feature));
+        if (invalidFeatures.length > 0) {
+          toast.current?.show({
+            severity: 'error',
+            summary: 'Invalid Features',
+            detail: `The following features do not exist in the dataset: ${invalidFeatures.join(', ')}`
+          });
+          return;
+        }
+
         // Check if target variable has NaN values
         if (nanCounts && nanCounts[parsed.target_variable] > 0) {
           toast.current?.show({

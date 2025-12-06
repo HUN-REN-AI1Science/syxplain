@@ -24,6 +24,7 @@ function MainApp() {
   const [excludedColumns, setExcludedColumns] = useState<string[]>([]);
   const [nanCounts, setNanCounts] = useState<Record<string, number>>({});
   const [runId, setRunId] = useState<string | null>(null);
+  const [fromHistory, setFromHistory] = useState<boolean>(false);
   const toast = useRef<Toast>(null);
   const nodeRef = useRef(null);
   const { signOut, user } = useAuth();
@@ -38,6 +39,7 @@ function MainApp() {
 
   const handleStartAnalysis = async (problemData: any) => {
     // Navigate to results page immediately to show loading screen
+    setFromHistory(false); // Reset since this is a new analysis from workflow
     setActiveIndex(2);
 
     try {
@@ -68,10 +70,12 @@ function MainApp() {
     setExcludedColumns([]);
     setNanCounts({});
     setRunId(null);
+    setFromHistory(false);
   };
 
   const handleSelectRun = (selectedRunId: string) => {
     setRunId(selectedRunId);
+    setFromHistory(true); // Mark that navigation came from history
     setView('workflow');
     setActiveIndex(2);
   };
@@ -174,7 +178,7 @@ function MainApp() {
                         <div ref={nodeRef} className="w-full">
                           {activeIndex === 0 && <FileUpload onUploadComplete={handleUploadComplete} />}
                           {activeIndex === 1 && <ProblemForm columns={columns} excludedColumns={excludedColumns} nanCounts={nanCounts} onSubmit={handleStartAnalysis} />}
-                          {activeIndex === 2 && runId && <ResultsView runId={runId} />}
+                          {activeIndex === 2 && runId && <ResultsView runId={runId} fromHistory={fromHistory} />}
                         </div>
                       </CSSTransition>
                     </SwitchTransition>

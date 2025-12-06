@@ -7,12 +7,14 @@ import { Message } from 'primereact/message';
 import { ProgressSpinner } from 'primereact/progressspinner';
 import { MathJax, MathJaxContext } from 'better-react-mathjax';
 import { Toast } from 'primereact/toast';
+import RunSettingsPanel from './RunSettingsPanel';
 
 interface ResultsViewProps {
   runId: string;
+  fromHistory?: boolean;
 }
 
-const ResultsView: React.FC<ResultsViewProps> = ({ runId }) => {
+const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false }) => {
   const [status, setStatus] = useState<string>('pending');
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +117,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId }) => {
           )}
         </div>
       </div>
+
+      {/* Run Settings Panel - shown only when navigating from history */}
+      {fromHistory && (
+        <RunSettingsPanel runId={runId} />
+      )}
 
       <div>
         {error && (
