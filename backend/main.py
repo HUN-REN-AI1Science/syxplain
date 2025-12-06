@@ -105,15 +105,17 @@ def upload_file(
     db.add(db_file)
     db.commit()
 
-    # Identify numeric columns
+    # Identify numeric columns and count NaN values
     column_types = {}
+    nan_counts = {}
     for col in df.columns:
         if pd.api.types.is_numeric_dtype(df[col]):
             column_types[col] = "numeric"
         else:
             column_types[col] = "object"
+        nan_counts[col] = int(df[col].isna().sum())
 
-    return {"filename": file.filename, "columns": columns, "column_types": column_types}
+    return {"filename": file.filename, "columns": columns, "column_types": column_types, "nan_counts": nan_counts}
 
 @app.post("/api/run", response_model=RunResponse)
 def run_analysis(

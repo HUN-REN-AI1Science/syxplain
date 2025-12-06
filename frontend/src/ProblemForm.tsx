@@ -10,10 +10,11 @@ import { Toast } from 'primereact/toast';
 interface ProblemFormProps {
   columns: string[];
   excludedColumns?: string[];
+  nanCounts?: Record<string, number>;
   onSubmit: (data: any) => void;
 }
 
-const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, onSubmit }) => {
+const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nanCounts, onSubmit }) => {
   const [mode, setMode] = useState<'form' | 'json'>('form');
   const [jsonContent, setJsonContent] = useState('');
   const [showHelp, setShowHelp] = useState(false);
@@ -43,6 +44,16 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, onS
     }
     if (!targetVariable) {
       toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'Target Variable is required.' });
+      return null;
+    }
+
+    // Check if target variable has NaN values
+    if (nanCounts && nanCounts[targetVariable] > 0) {
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Invalid Target Variable',
+        detail: `The target variable "${targetVariable}" contains ${nanCounts[targetVariable]} missing (NaN) values. Please clean your data or select a different target.`
+      });
       return null;
     }
 
@@ -107,6 +118,16 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, onS
         }
         if (!parsed.features || typeof parsed.features !== 'object' || Array.isArray(parsed.features) || Object.keys(parsed.features).length === 0) {
           toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'JSON must contain "features" object with at least one feature.' });
+          return;
+        }
+
+        // Check if target variable has NaN values
+        if (nanCounts && nanCounts[parsed.target_variable] > 0) {
+          toast.current?.show({
+            severity: 'error',
+            summary: 'Invalid Target Variable',
+            detail: `The target variable "${parsed.target_variable}" contains missing (NaN) values. Please clean your data or select a different target.`
+          });
           return;
         }
 
@@ -263,6 +284,15 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, onS
                 placeholder="Select Target..."
                 className="w-full bg-slate-50 border-slate-200"
               />
+                    {targetVariable && nanCounts && nanCounts[targetVariable] > 0 && (
+                      <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start animate-fade-in">
+                        <i className="pi pi-exclamation-circle text-red-500 mr-2 mt-0.5"></i>
+                        <div className="text-sm text-red-700">
+                          <strong>Warning:</strong> This column contains missing values.
+                          Analysis cannot proceed with a target containing missing data.
+                        </div>
+                      </div>
+                    )}
                     </div>
                 </div>
             </div>
@@ -325,7 +355,11 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, onS
           iconPos="right"
           onClick={handleSubmit}
           size="large"
-          className="bg-blue-500 hover:bg-blue-600 border-blue-500 text-white font-bold py-3 px-6 text-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5"
+          disabled={mode === 'form' && Boolean(targetVariable && nanCounts && nanCounts[targetVariable] > 0)}
+          className={`font-bold py-3 px-6 text-xl shadow-lg transition-all ${mode === 'form' && targetVariable && nanCounts && nanCounts[targetVariable] > 0
+            ? 'bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed'
+            : 'bg-blue-500 hover:bg-blue-600 border-blue-500 text-white hover:shadow-xl transform hover:-translate-y-0.5'
+            }`}
         />
       </div>
     </div>

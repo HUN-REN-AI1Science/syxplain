@@ -207,3 +207,26 @@ body {
 .p-password .p-inputtext {
   padding: 0.875rem 1rem !important;
 }
+
+/* SelectButton Customization */
+.p-selectbutton .p-button.p-highlight {
+  background: #0052cc !important;
+  border-color: #0052cc !important;
+  color: white !important;
+}
+
+.p-selectbutton .p-button.p-highlight:hover {
+  background: #0047b3 !important;
+  border-color: #0047b3 !important;
+}
+
+.p-selectbutton .p-button:not(.p-highlight) {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+.p-selectbutton .p-button:not(.p-highlight):hover {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
