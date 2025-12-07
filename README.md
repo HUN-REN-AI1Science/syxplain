@@ -46,6 +46,11 @@ cp .env.example .env
 - `VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY`: Supabase publishable key (for frontend).
 - `VITE_SUPABASE_ANON_KEY`: Supabase anon key (for frontend).
 
+**Optional Variables (Performance Tuning):**
+- `SHAP_SUBSAMPLE_FRACTION`: Fraction of data to use for SHAP calculations (default: `0.1` = 10%).
+- `SHAP_SUBSAMPLE_MIN`: Minimum number of samples for SHAP (default: `1000`).
+- `SHAP_SUBSAMPLE_MAX`: Maximum number of samples for SHAP (default: `5000`).
+
 ### Running with Docker Compose (Recommended)
 
 The easiest way to run the full stack is using Docker Compose.
