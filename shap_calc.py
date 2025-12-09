@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
@@ -60,8 +61,11 @@ def subsample_for_shap(X):
 
 
 def train_model(df, predictor_columns, target_column):
+    logger.info("Step 1: Training RandomForest model...")
+    start = time.time()
     model = RandomForestRegressor(n_estimators=200, n_jobs=-1)
     model.fit(df[predictor_columns], y=df[target_column])
+    logger.info(f"Step 1: Model training completed in {time.time() - start:.2f}s")
     return model
 
 
@@ -96,18 +100,25 @@ def rank_interactions_regression(model, X_all, feature_names=None, percent_of_to
     n_features = X_all.shape[1]
 
     # Use the appropriate explainer for the model type
+    logger.info("Step 2: Creating SHAP explainer...")
+    start = time.time()
     if isinstance(model, (RandomForestRegressor)):
         explainer = shap.TreeExplainer(model)
     else:
         explainer = shap.Explainer(model) # Default to general Explainer for other models
+    logger.info(f"Step 2: SHAP explainer created in {time.time() - start:.2f}s")
 
-    logger.info("Analyzing SHAP interaction effects...")
-
+    logger.info("Step 3: Subsampling data for SHAP computation...")
+    start = time.time()
     # Subsample data for faster SHAP computation
     X_subsampled = subsample_for_shap(X_all)
+    logger.info(f"Step 3: Subsampling completed in {time.time() - start:.2f}s")
 
     # Calculate SHAP interaction values on subsampled data
+    logger.info("Step 4: Calculating SHAP interaction values (this may take a while)...")
+    start = time.time()
     shap_interaction_values = explainer.shap_interaction_values(X_subsampled)
+    logger.info(f"Step 4: SHAP interaction values calculated in {time.time() - start:.2f}s")
 
     # For regression, shap_interaction_values should be a 3D array (samples, features, features)
     if not isinstance(shap_interaction_values, np.ndarray) or shap_interaction_values.ndim != 3:
@@ -119,9 +130,14 @@ def rank_interactions_regression(model, X_all, feature_names=None, percent_of_to
     logger.info(f"SHAP interaction values shape: {shap_interaction_values.shape}")
 
     # Calculate mean absolute interaction values
+    logger.info("Step 5: Calculating mean absolute interaction matrix...")
+    start = time.time()
     mean_abs_interaction_matrix = np.mean(np.abs(shap_interaction_values), axis=0)
+    logger.info(f"Step 5: Mean absolute matrix calculated in {time.time() - start:.2f}s")
 
     # Create list of all unique interaction pairs with their mean absolute SHAP values
+    logger.info("Step 6: Creating and sorting interaction pairs...")
+    start = time.time()
     interaction_pairs_with_values = []
     for i in range(n_features):
         for j in range(i + 1, n_features):  # Only consider unique pairs (i,j) where i < j
@@ -134,6 +150,7 @@ def rank_interactions_regression(model, X_all, feature_names=None, percent_of_to
 
     # Sort interaction pairs by magnitude in descending order
     interaction_pairs_with_values.sort(key=lambda x: x[2], reverse=True)
+    logger.info(f"Step 6: Interaction pairs created and sorted in {time.time() - start:.2f}s")
 
     # Calculate total "mass" of interaction effects
     total_interaction_mass = sum(value for _, _, value in interaction_pairs_with_values)
