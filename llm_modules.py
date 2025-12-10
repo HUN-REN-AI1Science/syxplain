@@ -2,34 +2,7 @@ import os
 import dspy
 from typing import List
 
-# Initialize Langfuse tracing for DSPy (if configured)
-def _init_langfuse():
-    """Initialize Langfuse OpenInference instrumentation if credentials are available."""
-    public_key = os.environ.get("LANGFUSE_PUBLIC_KEY")
-    secret_key = os.environ.get("LANGFUSE_SECRET_KEY")
-
-    if public_key and secret_key:
-        try:
-            from langfuse import get_client
-            from openinference.instrumentation.dspy import DSPyInstrumentor
-
-            # Verify connection
-            langfuse = get_client()
-            if langfuse.auth_check():
-                # Instrument DSPy
-                DSPyInstrumentor().instrument()
-                print("Langfuse tracing enabled for DSPy.")
-            else:
-                print("Langfuse authentication failed. Tracing disabled.")
-        except ImportError:
-            print("Langfuse or openinference-instrumentation-dspy not installed. Tracing disabled.")
-        except Exception as e:
-            print(f"Failed to initialize Langfuse: {e}. Tracing disabled.")
-    else:
-        print("Langfuse credentials not configured. Tracing disabled.")
-
-# Initialize Langfuse on module load
-_init_langfuse()
+import langfuse_config
 
 
 def get_dspy_lm() -> dspy.LM:
@@ -130,6 +103,7 @@ def generate_pysr_config(project_description: str, dataset_statistics: str, visu
         except:
             pass
 
+    langfuse_config.flush_traces()
     return cleaned_json
 
 
@@ -144,4 +118,5 @@ def generate_equation_explanation(project_spec_json: str, data_spec_json: str) -
             data_spec=data_spec_json
         )
 
+    langfuse_config.flush_traces()
     return response.explanation
