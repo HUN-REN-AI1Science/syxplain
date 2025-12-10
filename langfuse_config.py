@@ -51,5 +51,28 @@ def flush_traces():
             print(f"Failed to flush Langfuse traces: {e}")
 
 
+def get_prompt(name: str, label: str = "production") -> str:
+    """
+    Fetch a prompt from Langfuse by name.
+
+    Args:
+        name: The name of the prompt in Langfuse
+        label: The label to fetch (default: "production")
+
+    Returns:
+        The prompt text, or None if not found
+    """
+    if _langfuse_client is None:
+        print(f"Langfuse not initialized. Cannot fetch prompt: {name}")
+        return None
+
+    try:
+        prompt = _langfuse_client.get_prompt(name, label=label)
+        return prompt.prompt
+    except Exception as e:
+        print(f"Failed to fetch prompt '{name}' from Langfuse: {e}")
+        return None
+
+
 # Initialize on module load
 init_langfuse()

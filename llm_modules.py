@@ -14,64 +14,39 @@ def get_dspy_lm() -> dspy.LM:
     return dspy.LM(model=f"openai/{model_name}", api_key=api_key, base_url=base_url)
 
 
-class PySrConfigGenerator(dspy.Signature):
-    """
-    You are a senior expert Data Scientist working on a high stakes project.
-
-    Your task is to select symbolic operators to initalize a PySRRegressor. Use ALL inputs:
-       1. **Project description json**: Use the physical context to inform your choices!
-       2. **Dataset statistics**: features and target variable distribution
-       3. **Dataset visualization**: features vs target variable
-    to make your decision!
-
-    ### OPERATOR SELECTION (SUBSET; NO SIMPLICITY BIAS)
-    Select a SUBSET (possibly large or empty) from these allowed operators based on the data evidence:
-    • Allowed unary: ["sin", "exp", "log", "sqrt"]
-    • Allowed binary: ["+", "-", "*", "/", "^"]
-    Do not include operators without plausible support in the CSV/visualization. Do not default to selecting all operators.
-
-    ### REQUIRED OUTPUT SCHEMA
-    Return STRICT JSON only — no markdown, no code fences, no commentary. Output must parse with json.loads(). If unsure about a field, set it to null.
-
-    {
-        "unary_operators": ["<subset of allowed unary ops>"],
-        "binary_operators": ["<subset of allowed binary ops>"]
-    }
-    """
-    project_description: str = dspy.InputField(desc="Project description json")
-    dataset_statistics: str = dspy.InputField(desc="Dataset statistics")
-    visualizations: List[dspy.Image] = dspy.InputField(desc="Dataset visualizations")
-
-    config_json: str = dspy.OutputField(desc="JSON configuration string")
+def _get_prompt(name: str) -> str:
+    """Get prompt from Langfuse. Raises error if not available."""
+    prompt = langfuse_config.get_prompt(name)
+    if prompt is None:
+        raise RuntimeError(f"Required prompt '{name}' not found in Langfuse. Please ensure Langfuse is configured and the prompt exists with 'production' label.")
+    return prompt
 
 
-class ExplainPySrEquations(dspy.Signature):
-    """
-    You are an agent who explains the output of symbolic regression.
+def _create_pysr_config_signature():
+    """Create PySR config signature with prompt from Langfuse."""
+    prompt = _get_prompt("sym_operator_selection")
 
-    You will always receive exactly two JSON objects in the user message:
+    class PySrConfigGenerator(dspy.Signature):
+        __doc__ = prompt
+        project_description: str = dspy.InputField(desc="Project description json")
+        dataset_statistics: str = dspy.InputField(desc="Dataset statistics")
+        visualizations: List[dspy.Image] = dspy.InputField(desc="Dataset visualizations")
+        config_json: str = dspy.OutputField(desc="JSON configuration string")
 
-    1) PROJECT_SPEC: regression context, target, feature dictionary, constraints this will help you understand the problem setup. You should use the scientific understanding of the problem.
-    2) DATA_SPEC: equations, loss, complexity.
+    return PySrConfigGenerator
 
-    Goal: Provide clear, concise explanations of the equations in DATA_SPEC in the context of PROJECT_SPEC. After explaining all the equations please create a summary of the overall findings and selection of the most probable equation not just according to the metrics but more importantly according to the scientific understanding of the problem.
 
-    Rules:
-    - Parse both JSONs strictly. If a key is missing, say which and stop.
-    - Treat PROJECT_SPEC.features' keys as canonical feature names.
-    - Do NOT guess values that are not present in JSON.
-    - When you reference fields, use dot paths like PROJECT_SPEC.target_variable.
-    - If DATA_SPEC.action is present, follow it.
-    - Use the provided feature descriptions in explanations.
-    - If DATA_SPEC asks for code, return code only.
-    - structure your response in markdown with sections for each equation explanation and a final summary. Should look nice after converting to HTML with pandoc.
+def _create_explainer_signature():
+    """Create explainer signature with prompt from Langfuse."""
+    prompt = _get_prompt("pysr_explainer_sys")
 
-    Unless I say otherwise, respond in concise technical English.
-    """
-    project_spec: str = dspy.InputField(desc="JSON string of project specification")
-    data_spec: str = dspy.InputField(desc="JSON string of equations data")
+    class ExplainPySrEquations(dspy.Signature):
+        __doc__ = prompt
+        project_spec: str = dspy.InputField(desc="JSON string of project specification")
+        data_spec: str = dspy.InputField(desc="JSON string of equations data")
+        explanation: str = dspy.OutputField(desc="Markdown explanation of the equations")
 
-    explanation: str = dspy.OutputField(desc="Markdown explanation of the equations")
+    return ExplainPySrEquations
 
 
 def generate_pysr_config(project_description: str, dataset_statistics: str, visualizations_b64: List[str]) -> str:
@@ -81,6 +56,8 @@ def generate_pysr_config(project_description: str, dataset_statistics: str, visu
     # Create dspy.Image objects from base64 strings with Data URI format
     visual_inputs = [dspy.Image(f"data:image/png;base64,{img_b64}") for img_b64 in visualizations_b64]
 
+    # Get signature with prompt from Langfuse
+    PySrConfigGenerator = _create_pysr_config_signature()
     predictor = dspy.Predict(PySrConfigGenerator)
 
     with dspy.settings.context(lm=lm):
@@ -110,6 +87,9 @@ def generate_pysr_config(project_description: str, dataset_statistics: str, visu
 def generate_equation_explanation(project_spec_json: str, data_spec_json: str) -> str:
     """Generates explanation for PySR equations."""
     lm = get_dspy_lm()
+
+    # Get signature with prompt from Langfuse
+    ExplainPySrEquations = _create_explainer_signature()
     predictor = dspy.Predict(ExplainPySrEquations)
 
     with dspy.settings.context(lm=lm):
