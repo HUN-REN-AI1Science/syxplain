@@ -28,10 +28,11 @@ jobs:
             backend:
               - 'backend/**'
               - 'syxplain_lib.py'
+              - 'langfuse_config.py'
+              - 'llm_modules.py'
               - 'logger.py'
               - 'shap_calc.py'
               - 'requirements.txt'
-              - 'templates/**'
 
   build-and-push-frontend:
     needs: detect-changes
