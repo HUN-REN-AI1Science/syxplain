@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 # Re-export observe decorator for convenience
 try:
-    from langfuse import get_client
+    from langfuse import observe, get_client
 except ImportError:
     def observe(*args, **kwargs):
         def decorator(func):
