@@ -5,6 +5,15 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      deploy_frontend:
+        description: 'Deploy frontend'
+        type: boolean
+        default: false
+      deploy_backend:
+        description: 'Deploy backend'
+        type: boolean
+        default: false
 
 env:
   REGISTRY: ghcr.io
@@ -15,8 +24,8 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend == 'true' || github.event.inputs.deploy_frontend == 'true' }}
+      backend: ${{ steps.filter.outputs.backend == 'true' || github.event.inputs.deploy_backend == 'true' }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
