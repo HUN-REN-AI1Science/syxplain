@@ -11,6 +11,8 @@ def get_dspy_lm() -> dspy.LM:
     api_key = os.environ.get("OPENAI_API_KEY")
     base_url = os.environ.get("OPENAI_API_BASE")
 
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable is required but not set or is empty.")
     return dspy.LM(model=f"openai/{model_name}", api_key=api_key, base_url=base_url)
 
 
