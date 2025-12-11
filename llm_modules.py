@@ -1,3 +1,4 @@
+import json
 import os
 import dspy
 from typing import List
@@ -70,8 +71,8 @@ class ExplainPySrEquations(dspy.Signature):
 
     Unless I say otherwise, respond in concise technical English.
     """
-    project_spec: str = dspy.InputField(desc="JSON string of project specification")
-    data_spec: str = dspy.InputField(desc="JSON string of equations data")
+    project_spec_json: str = dspy.InputField(desc="JSON string of project specification")
+    data_spec_json: str = dspy.InputField(desc="JSON string of equations data")
 
     explanation: str = dspy.OutputField(desc="Markdown explanation of the equations")
 
@@ -94,16 +95,22 @@ def generate_pysr_config(project_description: str, dataset_statistics: str, visu
 
     config_json = response.config_json
 
-    # Basic cleanup
+    # Basic cleanup: remove markdown code fences
     cleaned_json = config_json.replace("```json", "").replace("```", "").strip()
+
+    # Try to extract JSON object if not properly bounded
     if not (cleaned_json.startswith("{") and cleaned_json.endswith("}")):
-        try:
-            start = cleaned_json.find("{")
-            end = cleaned_json.rfind("}") + 1
-            if start >= 0 and end > start:
-                cleaned_json = cleaned_json[start:end]
-        except Exception:
-            pass
+        start = cleaned_json.find("{")
+        end = cleaned_json.rfind("}") + 1
+        if start >= 0 and end > start:
+            cleaned_json = cleaned_json[start:end]
+
+    # Validate the cleaned JSON is parseable
+    try:
+        json.loads(cleaned_json)
+    except json.JSONDecodeError as e:
+        langfuse_config.flush_traces()
+        raise ValueError(f"Failed to parse LLM response as valid JSON: {e}. Raw response: {config_json[:500]}")
 
     langfuse_config.flush_traces()
     return cleaned_json

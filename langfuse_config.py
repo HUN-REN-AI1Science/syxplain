@@ -20,7 +20,9 @@ def init_langfuse():
         from langfuse import get_client
         from openinference.instrumentation.dspy import DSPyInstrumentor
 
-        _langfuse_client = get_client()
+        # Support custom Langfuse deployments via LANGFUSE_BASE_URL
+        base_url = os.environ.get("LANGFUSE_BASE_URL")
+        _langfuse_client = get_client(host=base_url) if base_url else get_client()
         if _langfuse_client.auth_check():
             DSPyInstrumentor().instrument()
             _langfuse_enabled = True
