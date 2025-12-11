@@ -3,7 +3,7 @@ import os
 import dspy
 from typing import List
 
-import langfuse_config
+from langfuse_config import observe, report_usage_to_langfuse, flush_traces
 
 
 def get_dspy_lm() -> dspy.LM:
@@ -77,15 +77,13 @@ class ExplainPySrEquations(dspy.Signature):
     explanation: str = dspy.OutputField(desc="Markdown explanation of the equations")
 
 
+@observe(name="generate_pysr_config", as_type="generation")
 def generate_pysr_config(project_description: str, dataset_statistics: str, visualizations_b64: List[str]) -> str:
     """Generates PySR configuration JSON using LLM."""
     lm = get_dspy_lm()
-
-    # Create dspy.Image objects from base64 strings with Data URI format
     visual_inputs = [dspy.Image(f"data:image/png;base64,{img_b64}") for img_b64 in visualizations_b64]
 
     predictor = dspy.Predict(PySrConfigGenerator)
-
     with dspy.settings.context(lm=lm):
         response = predictor(
             project_description=project_description,
@@ -94,28 +92,25 @@ def generate_pysr_config(project_description: str, dataset_statistics: str, visu
         )
 
     config_json = response.config_json
-
-    # Basic cleanup: remove markdown code fences
     cleaned_json = config_json.replace("```json", "").replace("```", "").strip()
 
-    # Try to extract JSON object if not properly bounded
     if not (cleaned_json.startswith("{") and cleaned_json.endswith("}")):
         start = cleaned_json.find("{")
         end = cleaned_json.rfind("}") + 1
         if start >= 0 and end > start:
             cleaned_json = cleaned_json[start:end]
 
-    # Validate the cleaned JSON is parseable
     try:
         json.loads(cleaned_json)
     except json.JSONDecodeError as e:
-        langfuse_config.flush_traces()
+        flush_traces()
         raise ValueError(f"Failed to parse LLM response as valid JSON: {e}. Raw response: {config_json[:500]}")
 
-    langfuse_config.flush_traces()
+    report_usage_to_langfuse(lm)
     return cleaned_json
 
 
+@observe(name="generate_equation_explanation", as_type="generation")
 def generate_equation_explanation(project_spec_json: str, data_spec_json: str) -> str:
     """Generates explanation for PySR equations."""
     lm = get_dspy_lm()
@@ -123,9 +118,9 @@ def generate_equation_explanation(project_spec_json: str, data_spec_json: str) -
 
     with dspy.settings.context(lm=lm):
         response = predictor(
-            project_spec=project_spec_json,
-            data_spec=data_spec_json
+            project_spec_json=project_spec_json,
+            data_spec_json=data_spec_json
         )
 
-    langfuse_config.flush_traces()
+    report_usage_to_langfuse(lm)
     return response.explanation
