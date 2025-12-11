@@ -100,7 +100,7 @@ def generate_pysr_config(project_description: str, dataset_statistics: str, visu
             end = cleaned_json.rfind("}") + 1
             if start >= 0 and end > start:
                 cleaned_json = cleaned_json[start:end]
-        except:
+        except Exception:
             pass
 
     langfuse_config.flush_traces()
