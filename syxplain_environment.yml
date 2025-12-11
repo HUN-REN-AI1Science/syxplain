@@ -74,9 +74,9 @@ dependencies:
   # Agentic
   - langgraph
   - langchain-core
-  - dspy
 
   # LLM Tracing (Langfuse) - pip install required
   - pip:
     - langfuse
     - openinference-instrumentation-dspy
+    - dspy
