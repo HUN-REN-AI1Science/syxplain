@@ -6,6 +6,7 @@ channels:
 dependencies:
   # Core Python
   - python=3.10
+  - pip
 
   # Core ML libraries
   - numpy>=1.21
@@ -72,6 +73,10 @@ dependencies:
 
   # Agentic
   - langgraph
-  - langchain
-  - langchain-openai
   - langchain-core
+
+  # LLM Tracing (Langfuse) - pip install required
+  - pip:
+    - langfuse
+    - openinference-instrumentation-dspy
+    - dspy

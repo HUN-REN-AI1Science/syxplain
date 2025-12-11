@@ -51,6 +51,11 @@ cp .env.example .env
 - `SHAP_SUBSAMPLE_MIN`: Minimum number of samples for SHAP (default: `1000`).
 - `SHAP_SUBSAMPLE_MAX`: Maximum number of samples for SHAP (default: `5000`).
 
+**Optional Variables (LLM Tracing with Langfuse):**
+- `LANGFUSE_PUBLIC_KEY`: Your Langfuse public key for tracing.
+- `LANGFUSE_SECRET_KEY`: Your Langfuse secret key for tracing.
+- `LANGFUSE_BASE_URL`: Langfuse API URL (default: `https://cloud.langfuse.com`).
+
 ### Running with Docker Compose (Recommended)
 
 The easiest way to run the full stack is using Docker Compose.

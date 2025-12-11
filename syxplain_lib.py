@@ -6,15 +6,13 @@ import sympy
 import pysr
 from pysr import PySRRegressor
 from langgraph.graph import StateGraph, START, END
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage
-from langchain_core.prompts import PromptTemplate
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 import logger
 from shap_calc import get_top_feature_interactions
 from logger import StepLogger
+from llm_modules import generate_pysr_config, generate_equation_explanation
 
 
 class State(TypedDict, total=False):
@@ -29,14 +27,6 @@ class State(TypedDict, total=False):
     data_visualization: List[str]
     data_summary: str
     pysr_model: pysr.sr.PySRRegressor
-
-def get_openai_config() -> dict:
-    """Retrieves OpenAI configuration from environment variables."""
-    return {
-        "model": os.environ.get("OPENAI_MODEL_NAME", "gpt-4o"),
-        "base_url": os.environ.get("OPENAI_API_BASE"),
-        "api_key": os.environ.get("OPENAI_API_KEY")
-    }
 
 def data_summary(state: State) -> State:
     # Setting up logger object
@@ -91,30 +81,24 @@ def data_summary(state: State) -> State:
     return state
 
 def llm_pysr_config_generator(state: State) -> State:
-    llm_config = get_openai_config()
-    llm = ChatOpenAI(
-        **llm_config,
-        model_kwargs={"response_format": {"type": "json_object"}}
-    )
     project_description_src = state["problem_description_src"]
     summary_csv_text = state["data_summary"]
+    visualizations = state["data_visualization"]
 
-    with open("./templates/llm_sym_operator_selection_prompt.txt", "r") as f:
-        system_prompt = f.read()
+    config_json = generate_pysr_config(
+        project_description=project_description_src,
+        dataset_statistics=summary_csv_text,
+        visualizations_b64=visualizations
+    )
 
-    parts = [
-        { "type": "text", "text": system_prompt},
-        { "type": "text", "text": f"### Project description json\n{project_description_src}\n\n"},
-        { "type": "text", "text": f"### Dataset statistics\n{summary_csv_text}\n\n"},
-        { "type": "text", "text": "### Dataset visualization"},
-    ]
-    for img_b64 in state["data_visualization"]:
-        parts.append({"type": "image_url", "image_url": f"data:image/png;base64,{img_b64}"})
-    msg = llm.invoke([HumanMessage(content=parts)])
-    state["logger"].log_step("pysr_config_prompt", parts)
+    state["logger"].log_step("pysr_config_prompt", {
+        "project_description": project_description_src,
+        "dataset_statistics": summary_csv_text,
+        "visual_count": len(visualizations)
+    })
 
     # Save results
-    state["pysr_config_json"] = msg.content
+    state["pysr_config_json"] = config_json
     state["logger"].log_step("pysr_config_answer", state["pysr_config_json"])
 
     return state
@@ -199,25 +183,18 @@ def explain_pysr_equations(state: State) -> State:
         to_explain["loss"].append(row["loss"])
         to_explain["complexity"].append(row["complexity"])
 
-    with open("./templates/pysr_explainer_sys_prompt.txt", "r") as f:
-        py_sr_explainer_sys_prompt = f.read()
-    with open("./templates/pysr_explainer_usr_prompt.txt", "r") as f:
-        pysr_explainer_usr_prompt_template = f.read()
-    pysr_explainer_usr_prompt = PromptTemplate(variables=["problem_description", "to_explain"], template=pysr_explainer_usr_prompt_template)
+    project_spec_json = state["problem_description_src"]
+    data_spec_json = json.dumps(to_explain, indent=2)
 
+    explanation = generate_equation_explanation(
+        project_spec_json=project_spec_json,
+        data_spec_json=data_spec_json
+    )
 
-    parts = [
-        { "type": "text", "text": py_sr_explainer_sys_prompt},
-        { "type": "text", "text": pysr_explainer_usr_prompt.format(problem_description=state["problem_description_src"], to_explain=json.dumps(to_explain, indent=2))},
-    ]
-
-    llm_config = get_openai_config()
-    llm = ChatOpenAI(**llm_config)
-    msg = llm.invoke([HumanMessage(content=parts)])
-    state["logger"].log_step("pysr_explainer_prompt", parts)
+    state["logger"].log_step("pysr_explainer_prompt", {"project_spec": project_spec_json, "data_spec": data_spec_json})
 
     # Save results
-    state["pysr_explanations"] = msg.content
+    state["pysr_explanations"] = explanation
     state["logger"].log_step("pysr_explainer_answer", state["pysr_explanations"])
     return state
 
