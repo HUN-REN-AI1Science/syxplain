@@ -20,7 +20,7 @@ class PySrConfigGenerator(dspy.Signature):
     """
     You are a senior expert Data Scientist working on a high stakes project.
 
-    Your task is to select symbolic operators to initalize a PySRRegressor. Use ALL inputs:
+    Your task is to select symbolic operators to initialize a PySRRegressor. Use ALL inputs:
        1. **Project description json**: Use the physical context to inform your choices!
        2. **Dataset statistics**: features and target variable distribution
        3. **Dataset visualization**: features vs target variable
