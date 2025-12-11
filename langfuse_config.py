@@ -12,7 +12,7 @@ except ImportError:
     def observe(*args, **kwargs):
         def decorator(func):
             return func
-        return decorator if not args or callable(args[0]) is False else decorator(args[0])
+        return decorator if not args or not callable(args[0]) else decorator(args[0])
 
     def get_client():
         return None
