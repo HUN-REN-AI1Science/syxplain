@@ -24,11 +24,12 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend == 'true' || github.event.inputs.deploy_frontend == 'true' }}
-      backend: ${{ steps.filter.outputs.backend == 'true' || github.event.inputs.deploy_backend == 'true' }}
+      frontend: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_frontend == 'true' || github.event_name == 'push' && steps.filter.outputs.frontend == 'true' }}
+      backend: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == 'true' || github.event_name == 'push' && steps.filter.outputs.backend == 'true' }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
+        if: github.event_name == 'push'
         id: filter
         with:
           filters: |
