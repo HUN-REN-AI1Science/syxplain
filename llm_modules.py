@@ -115,12 +115,14 @@ def generate_equation_explanation(project_spec_json: str, data_spec_json: str) -
     """Generates explanation for PySR equations."""
     lm = get_dspy_lm()
     predictor = dspy.Predict(ExplainPySrEquations)
-
-    with dspy.settings.context(lm=lm):
-        response = predictor(
-            project_spec_json=project_spec_json,
-            data_spec_json=data_spec_json
-        )
-
-    report_usage_to_langfuse(lm)
-    return response.explanation
+    try:
+        with dspy.settings.context(lm=lm):
+            response = predictor(
+                project_spec_json=project_spec_json,
+                data_spec_json=data_spec_json
+            )
+        report_usage_to_langfuse(lm)
+        return response.explanation
+    except Exception as e:
+        flush_traces()
+        raise
