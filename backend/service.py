@@ -156,12 +156,12 @@ def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str, an
         final_state = app.invoke(initial_state)
         logger.info("Graph execution completed successfully")
 
-        # Save markdown as artifact for download
+        # Save JSON as artifact for download
         if final_state.get("pysr_explanations"):
             run_logger.log_artifact(
-                "pysr_explanations.md",
+                "pysr_explanations.json",
                 final_state["pysr_explanations"].encode('utf-8'),
-                media_type="text/markdown"
+                media_type="application/json"
             )
 
         # Store results

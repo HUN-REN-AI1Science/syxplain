@@ -99,25 +99,58 @@ class ExplainPySrEquations(dspy.Signature):
     - When you reference fields, use dot paths like PROJECT_SPEC.target_variable.
     - If DATA_SPEC.action is present, follow it.
     - Use the provided feature descriptions in explanations.
-    - If DATA_SPEC asks for code, return code only.
-    - structure your response in markdown with sections for each equation explanation and a final summary. Should look nice after converting to HTML with pandoc.
+    - IMPORTANT: Assign equation IDs sequentially starting from 1 (1, 2, 3, ...) in the order they appear in DATA_SPEC.
+
+    ### OUTPUT FORMAT
+    Return STRICT JSON only — no markdown, no code fences, no commentary. Output must parse with json.loads().
+
+    Required schema:
+    {
+        "equations": [
+            {
+                "id": 1,
+                "equation": "string - the exact equation from DATA_SPEC",
+                "loss": 4.04,
+                "complexity": 15,
+                "overview": "string - brief 1-2 sentence description of what this equation models",
+                "term_explanations": [
+                    {
+                        "term": "(-24.26 * Tm_sprsum)",
+                        "explanation": "string describing what this term represents scientifically"
+                    }
+                ]
+            }
+        ],
+        "summary": {
+            "key_drivers": ["list", "of", "most", "important", "variables"],
+            "secondary_drivers": ["list", "of", "secondary", "variables"],
+            "findings": "string - paragraph summarizing overall findings across all equations"
+        },
+        "recommendation": {
+            "equation_id": 1,
+            "rationale": ["reason 1 why this equation is best", "reason 2", "reason 3"]
+        }
+    }
 
     Unless I say otherwise, respond in concise technical English.
     """
     project_spec_json: str = dspy.InputField(desc="JSON string of project specification")
     data_spec_json: str = dspy.InputField(desc="JSON string of equations data")
 
-    explanation: str = dspy.OutputField(desc="Markdown explanation of the equations")
+    explanation_json: str = dspy.OutputField(desc="JSON object with equations, summary, and recommendation")
 
 
 @observe(name="generate_equation_explanation", as_type="generation")
 def generate_equation_explanation(project_spec_json: str, data_spec_json: str, deep_research_context: str = None) -> str:
-    """Generates explanation for PySR equations.
+    """Generates explanation for PySR equations as structured JSON.
 
     Args:
         project_spec_json: JSON string of project specification
         data_spec_json: JSON string of equations data
         deep_research_context: Optional context from deep research step (for deep analysis mode)
+
+    Returns:
+        JSON string with structured equation explanations
     """
     model_name = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -149,7 +182,39 @@ def generate_equation_explanation(project_spec_json: str, data_spec_json: str, d
                 data_spec_json=data_spec_json
             )
         report_usage_to_langfuse(lm)
-        return response.explanation
+
+        # Clean and validate JSON response
+        explanation_json = response.explanation_json
+        cleaned_json = explanation_json.replace("```json", "").replace("```", "").strip()
+
+        # Extract JSON if wrapped in other content
+        if not (cleaned_json.startswith("{") and cleaned_json.endswith("}")):
+            start = cleaned_json.find("{")
+            end = cleaned_json.rfind("}") + 1
+            if start >= 0 and end > start:
+                cleaned_json = cleaned_json[start:end]
+
+        # Validate JSON structure
+        try:
+            parsed = json.loads(cleaned_json)
+            # Ensure required keys exist
+            if "equations" not in parsed:
+                parsed["equations"] = []
+            if "summary" not in parsed:
+                parsed["summary"] = {"key_drivers": [], "secondary_drivers": [], "findings": ""}
+            if "recommendation" not in parsed:
+                parsed["recommendation"] = {"equation_id": 1, "simplified_equation": "", "rationale": []}
+            return json.dumps(parsed, indent=2)
+        except json.JSONDecodeError as e:
+            # Return a fallback structure with raw content
+            fallback = {
+                "equations": [],
+                "summary": {"key_drivers": [], "secondary_drivers": [], "findings": explanation_json},
+                "recommendation": {"equation_id": 0, "simplified_equation": "", "rationale": []},
+                "_parse_error": str(e)
+            }
+            return json.dumps(fallback, indent=2)
+
     except Exception as e:
         flush_traces()
         raise

@@ -44,12 +44,13 @@ function MainApp() {
     setActiveIndex(2);
 
     try {
-      // Extract analysis_type from problemData (it's passed from ProblemForm)
-      const { analysis_type, ...problemDescription } = problemData;
+      // Extract analysis_type and deep_research_model from problemData (passed from ProblemForm)
+      const { analysis_type, deep_research_model, ...problemDescription } = problemData;
       const response = await api.post('/run', {
         problem_description: problemDescription,
         csv_filename: filename,
-        analysis_type: analysis_type || 'quick'
+        analysis_type: analysis_type || 'quick',
+        deep_research_model: deep_research_model || null
       });
       setRunId(response.data.run_id);
     } catch (e) {

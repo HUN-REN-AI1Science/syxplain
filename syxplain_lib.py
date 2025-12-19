@@ -270,13 +270,13 @@ def run_syxplain(entry_point):
 
     app = g.compile()
     final = app.invoke(State())
-    with open("pysr_explanations.md", "w") as f:
+    with open("pysr_explanations.json", "w") as f:
         f.write(final["pysr_explanations"])
 
-    # Save markdown as artifact for download
+    # Save JSON as artifact for download
     if "logger" in final and final["logger"]:
         final["logger"].log_artifact(
-            "pysr_explanations.md",
+            "pysr_explanations.json",
             final["pysr_explanations"].encode('utf-8'),
-            media_type="text/markdown"
+            media_type="application/json"
         )
