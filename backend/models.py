@@ -10,6 +10,7 @@ class RunRequest(BaseModel):
     problem_description: ProblemDescription
     csv_filename: str
     analysis_type: str = "quick"  # "quick" or "deep"
+    deep_research_model: Optional[str] = None  # Required when analysis_type is "deep"
 
 class RunResponse(BaseModel):
     run_id: str

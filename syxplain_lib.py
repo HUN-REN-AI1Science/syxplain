@@ -242,7 +242,9 @@ def deep_research_node(state: State) -> State:
         return state
 
     try:
-        result = deep_research_equations(features_dict)
+        # Get user-selected model from state, if available
+        model_name = state.get("deep_research_model")
+        result = deep_research_equations(features_dict, model_name=model_name)
         state["deep_research_result"] = result
         state["logger"].log_step("deep_research_result", {"result": result[:500] if result else ""})
     except Exception as e:

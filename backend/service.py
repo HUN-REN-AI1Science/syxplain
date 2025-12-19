@@ -59,7 +59,7 @@ def update_run_status(run_id: str, status: str, results: Dict[str, Any] = None, 
         if db:
             db.close()
 
-def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str, analysis_type: str = "quick"):
+def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str, analysis_type: str = "quick", deep_research_model: str = None):
     from logger import configure_debug_logging, configure_logging
     configure_logging()
     configure_debug_logging()
@@ -151,6 +151,7 @@ def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str, an
         initial_state = State()
         initial_state["logger"] = run_logger
         initial_state["analysis_type"] = analysis_type
+        initial_state["deep_research_model"] = deep_research_model
 
         final_state = app.invoke(initial_state)
         logger.info("Graph execution completed successfully")
@@ -177,7 +178,7 @@ def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str, an
         update_run_status(run_id, "failed", error=error_msg)
         logger.error(f"Run {run_id} failed: {e}", exc_info=True)
 
-def start_run(problem_desc: Dict[str, Any], csv_filename: str, api_key: str, api_base: str = None, model_name: str = None, user_id: str = None, analysis_type: str = "quick") -> str:
+def start_run(problem_desc: Dict[str, Any], csv_filename: str, api_key: str, api_base: str = None, model_name: str = None, user_id: str = None, analysis_type: str = "quick", deep_research_model: str = None) -> str:
     # Create Run record in DB
     db = None
     try:
@@ -197,10 +198,10 @@ def start_run(problem_desc: Dict[str, Any], csv_filename: str, api_key: str, api
         if db:
             db.close()
 
-    logger.info(f"Starting background process for Run ID: {run_id} (analysis_type={analysis_type})")
+    logger.info(f"Starting background process for Run ID: {run_id} (analysis_type={analysis_type}, model={deep_research_model})")
     # Use multiprocessing.Process instead of threading.Thread
     # Note: API credentials are inherited from parent process environment variables
-    process = multiprocessing.Process(target=_run_worker, args=(run_id, problem_desc, csv_filename, analysis_type))
+    process = multiprocessing.Process(target=_run_worker, args=(run_id, problem_desc, csv_filename, analysis_type, deep_research_model))
     process.start()
 
     # Register process for monitoring

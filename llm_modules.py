@@ -208,19 +208,27 @@ class DeepResearchEquations(dspy.Signature):
 
 
 @observe(name="deep_research_equations", as_type="generation")
-def deep_research_equations(features_dict: dict) -> str:
+def deep_research_equations(features_dict: dict, model_name: str = None) -> str:
     """Performs deep scientific research to find equations relating features.
 
-    Uses the o4-mini-deep-research model to search scientific literature
+    Uses the specified deep research model to search scientific literature
     and identify physical equations that relate the provided variables.
 
     Args:
         features_dict: Dictionary mapping variable names to descriptions
+        model_name: Name of the deep research model to use (optional, falls back to env var)
 
     Returns:
         Markdown table with Pythonic equations and citation links
     """
-    model_name = os.environ.get("DEEP_RESEARCH_MODEL", "o4-mini-deep-research")
+    # Use provided model_name or fall back to first model from environment variable
+    if not model_name:
+        models_env = os.environ.get("DEEP_RESEARCH_MODEL", "")
+        if models_env:
+            # Environment variable may contain comma-separated list of models
+            model_name = models_env.split(",")[0].strip()
+        else:
+            model_name = "o4-mini-deep-research"
     api_key = os.environ.get("DEEP_RESEARCH_API_KEY")
     api_base = os.environ.get("DEEP_RESEARCH_API_BASE")
 

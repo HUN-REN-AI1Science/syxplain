@@ -124,6 +124,17 @@ def get_progress_config():
     phases, _ = get_cached_progress_config()
     return {"phases": phases}
 
+@app.get("/api/config/deep-research-models")
+def get_deep_research_models():
+    """Returns available deep research models from environment configuration."""
+    models_env = os.environ.get("DEEP_RESEARCH_MODEL", "")
+    if not models_env:
+        return {"models": []}
+
+    # Parse comma-separated model list
+    models = [m.strip() for m in models_env.split(",") if m.strip()]
+    return {"models": models}
+
 @app.get("/api/profile")
 def get_profile(
     db: Session = Depends(get_db),
@@ -205,6 +216,31 @@ def run_analysis(
         logger.error("OPENAI_API_KEY not set on server")
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY not set on server")
 
+    # Validate analysis_type
+    if request.analysis_type not in ["quick", "deep"]:
+        raise HTTPException(status_code=400, detail="Invalid analysis_type. Must be 'quick' or 'deep'.")
+
+    # Deep analysis specific validation
+    if request.analysis_type == "deep":
+        # Validate DEEP_RESEARCH_API_KEY is configured
+        deep_api_key = os.environ.get("DEEP_RESEARCH_API_KEY")
+        if not deep_api_key:
+            logger.error("Deep analysis requested but DEEP_RESEARCH_API_KEY not configured")
+            raise HTTPException(status_code=500, detail="Deep analysis is not configured on this server. DEEP_RESEARCH_API_KEY is missing.")
+
+        # Validate model selection
+        if not request.deep_research_model:
+            raise HTTPException(status_code=400, detail="deep_research_model is required for deep analysis.")
+
+        # Validate model is in allowed list
+        models_env = os.environ.get("DEEP_RESEARCH_MODEL", "")
+        allowed_models = [m.strip() for m in models_env.split(",") if m.strip()]
+        if request.deep_research_model not in allowed_models:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid deep_research_model '{request.deep_research_model}'. Allowed models: {', '.join(allowed_models)}"
+            )
+
     # Verify file exists in DB and belongs to user
     db_file = db.query(DbFile).filter(
         DbFile.filename == request.csv_filename,
@@ -213,6 +249,27 @@ def run_analysis(
     if not db_file:
         raise HTTPException(status_code=404, detail="File not found")
 
+    # Validate problem description fields against actual file columns
+    import pandas as pd
+    df = pd.read_csv(io.BytesIO(db_file.content))
+    file_columns = df.columns.tolist()
+
+    # Validate target variable exists in file
+    target_var = request.problem_description.target_variable
+    if target_var not in file_columns:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Target variable '{target_var}' does not exist in the uploaded file. Available columns: {', '.join(file_columns)}"
+        )
+
+    # Validate all features exist in file
+    invalid_features = [f for f in request.problem_description.features.keys() if f not in file_columns]
+    if invalid_features:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Features do not exist in file: {', '.join(invalid_features)}"
+        )
+
     run_id = start_run(
         request.problem_description.dict(),
         request.csv_filename,
@@ -220,9 +277,10 @@ def run_analysis(
         api_base,
         model_name,
         user_id=current_user.user_id,
-        analysis_type=request.analysis_type
+        analysis_type=request.analysis_type,
+        deep_research_model=request.deep_research_model
     )
-    logger.info(f"Analysis started with Run ID: {run_id} (analysis_type={request.analysis_type})")
+    logger.info(f"Analysis started with Run ID: {run_id} (analysis_type={request.analysis_type}, model={request.deep_research_model})")
     return RunResponse(run_id=run_id, status="pending", message="Analysis started")
 
 @app.get("/api/runs", response_model=List[RunSummary])

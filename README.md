@@ -39,8 +39,8 @@ cp .env.example .env
 - `OPENAI_API_KEY`: Your API key for the LLM service.
 - `OPENAI_API_BASE`: Base URL for the LLM API.
 - `OPENAI_MODEL_NAME`: Name of the model to use.
-- `DEEP_RESEARCH_MODEL`: Name of the deep research model to use (default: `o4-mini-deep-research`).
-- `DEEP_RESEARCH_API_KEY`: API key for the deep research model (used in Deep Analysis mode).
+- `DEEP_RESEARCH_MODEL`: Comma-separated list of deep research models available for selection. Users can choose from these models when running Deep Analysis. Example: `o4-mini-deep-research,perplexity-deep-research,o3-deep-research`. If only one model is configured, it will be auto-selected.
+- `DEEP_RESEARCH_API_KEY`: API key for the deep research model (required for Deep Analysis mode).
 - `DEEP_RESEARCH_API_BASE`: Base URL for the deep research API (used in Deep Analysis mode).
 - `DATABASE_URL`: Connection string for your PostgreSQL database.
 - `SUPABASE_URL`: URL of your Supabase project.
@@ -54,6 +54,7 @@ cp .env.example .env
 - `SHAP_SUBSAMPLE_FRACTION`: Fraction of data to use for SHAP calculations (default: `0.1` = 10%).
 - `SHAP_SUBSAMPLE_MIN`: Minimum number of samples for SHAP (default: `1000`).
 - `SHAP_SUBSAMPLE_MAX`: Maximum number of samples for SHAP (default: `5000`).
+- `ANALYSIS_TIMEOUT_HOURS`: Maximum hours before an analysis is killed with timeout status (default: `24`). Set to `0` to disable.
 
 **Optional Variables (LLM Tracing with Langfuse):**
 - `LANGFUSE_PUBLIC_KEY`: Your Langfuse public key for tracing.
