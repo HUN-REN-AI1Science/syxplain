@@ -124,6 +124,72 @@ def get_progress_config():
     phases, _ = get_cached_progress_config()
     return {"phases": phases}
 
+@app.get("/api/profile")
+def get_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Returns user profile data."""
+    # Count user's runs and files
+    total_runs = db.query(DbRun).filter(DbRun.user_id == current_user.user_id).count()
+    total_files = db.query(DbFile).filter(DbFile.user_id == current_user.user_id).count()
+
+    # Get earliest created_at from runs or files
+    earliest_run = db.query(DbRun).filter(DbRun.user_id == current_user.user_id).order_by(DbRun.created_at.asc()).first()
+    earliest_file = db.query(DbFile).filter(DbFile.user_id == current_user.user_id).order_by(DbFile.created_at.asc()).first()
+
+    created_at = None
+    if earliest_run and earliest_file:
+        created_at = min(earliest_run.created_at, earliest_file.created_at).isoformat()
+    elif earliest_run:
+        created_at = earliest_run.created_at.isoformat()
+    elif earliest_file:
+        created_at = earliest_file.created_at.isoformat()
+
+    return {
+        "email": current_user.email,
+        "created_at": created_at,
+        "total_runs": total_runs,
+        "total_files": total_files
+    }
+
+@app.delete("/api/profile")
+async def delete_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    GDPR-compliant account deletion.
+    Removes all user data from the database and deletes the user from Supabase.
+    """
+    from backend.auth import delete_supabase_user
+
+    user_id = current_user.user_id
+    logger.info(f"Starting GDPR account deletion for user: {user_id}")
+
+    try:
+        # Delete all runs (cascades to run_steps and run_artifacts due to relationship config)
+        runs_deleted = db.query(DbRun).filter(DbRun.user_id == user_id).delete()
+        logger.info(f"Deleted {runs_deleted} runs for user {user_id}")
+
+        # Delete all files
+        files_deleted = db.query(DbFile).filter(DbFile.user_id == user_id).delete()
+        logger.info(f"Deleted {files_deleted} files for user {user_id}")
+
+        db.commit()
+        logger.info(f"Database cleanup completed for user {user_id}")
+
+        # Delete user from Supabase Auth
+        await delete_supabase_user(user_id)
+        logger.info(f"Supabase user deleted: {user_id}")
+
+        return {"message": "Account deleted successfully"}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete account for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete account: {str(e)}")
+
 @app.post("/api/run", response_model=RunResponse)
 def run_analysis(
     request: RunRequest,

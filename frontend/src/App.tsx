@@ -3,6 +3,7 @@ import FileUpload from './FileUpload';
 import ProblemForm from './ProblemForm';
 import ResultsView from './ResultsView';
 import HistoryView from './HistoryView';
+import ProfileView from './ProfileView';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import ForgotPassword from './pages/ForgotPassword';
@@ -17,7 +18,7 @@ import { SwitchTransition, CSSTransition } from 'react-transition-group';
 import syxplainLogo from './assets/syxplain_logo.png';
 
 function MainApp() {
-  const [view, setView] = useState<'workflow' | 'history'>('workflow');
+  const [view, setView] = useState<'workflow' | 'history' | 'profile'>('workflow');
   const [activeIndex, setActiveIndex] = useState(0);
   const [filename, setFilename] = useState<string | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
@@ -125,6 +126,18 @@ function MainApp() {
               onClick={() => setView('history')}
               tooltip="History"
             />
+            <Button
+              label="Profile"
+              icon="pi pi-user"
+              className="p-button-outlined p-button-sm hidden md:flex"
+              onClick={() => setView('profile')}
+            />
+            <Button
+              icon="pi pi-user"
+              className="p-button-outlined p-button-sm md:hidden"
+              onClick={() => setView('profile')}
+              tooltip="Profile"
+            />
             <div className="flex items-center space-x-2">
               <Tooltip target=".logout-button" content={user?.email || ''} position="bottom" />
               <Button
@@ -152,6 +165,10 @@ function MainApp() {
           {view === 'history' ? (
             <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
               <HistoryView onSelectRun={handleSelectRun} />
+            </Card>
+          ) : view === 'profile' ? (
+            <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
+              <ProfileView onBack={() => setView('workflow')} />
             </Card>
           ) : (
             <Card className="shadow-xl border-round-2xl overflow-hidden border-none">

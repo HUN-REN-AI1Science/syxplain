@@ -45,6 +45,7 @@ cp .env.example .env
 - `DATABASE_URL`: Connection string for your PostgreSQL database.
 - `SUPABASE_URL`: URL of your Supabase project.
 - `SUPABASE_JWT_SECRET`: JWT secret for Supabase authentication.
+- `SUPABASE_SERVICE_ROLE_KEY`: Service role key for GDPR account deletion.
 - `VITE_SUPABASE_URL`: Same as `SUPABASE_URL` (for frontend).
 - `VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY`: Supabase publishable key (for frontend).
 - `VITE_SUPABASE_ANON_KEY`: Supabase anon key (for frontend).
