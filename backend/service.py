@@ -1,11 +1,13 @@
 import sys
 import os
 import json
+import time
 import pandas as pd
 import multiprocessing
 import logging
 import io
 from typing import Dict, Any
+from datetime import datetime, timedelta
 
 # Add parent directory to path to import syxplain modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -30,7 +32,7 @@ def cleanup_processes():
     for run_id in finished_run_ids:
         del active_processes[run_id]
 
-def update_run_status(run_id: str, status: str, results: Dict[str, Any] = None, error: str = None):
+def update_run_status(run_id: str, status: str, results: Dict[str, Any] = None, error: str = None, progress: int = None):
     """Updates the run status in the database."""
     db = None
     try:
@@ -42,6 +44,14 @@ def update_run_status(run_id: str, status: str, results: Dict[str, Any] = None, 
                 run.results = results
             if error:
                 run.error = error
+            # Set progress based on status or explicit value
+            if progress is not None:
+                run.progress = progress
+            elif status == "completed":
+                run.progress = 100
+            elif status in ("failed", "timeout"):
+                # Keep current progress for failed/timeout
+                pass
             db.commit()
     except Exception as e:
         logger.error(f"Failed to update run status for {run_id}: {e}")
@@ -86,6 +96,9 @@ def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str, an
 
         def entry_point(state: State) -> State:
             logger.info("Executing entry_point node")
+            state["logger"] = run_logger
+            state["logger"].log_step("initialization", {"status": "Initializing analysis", "rows": len(sample_data), "columns": len(sample_data.columns)})
+
             state["data"] = sample_data
             state["problem_description_src"] = problem_description_src
             state["target_column"] = problem_desc["target_variable"]
@@ -203,14 +216,57 @@ def get_run_status(run_id: str) -> Dict[str, Any]:
         if run:
             return {
                 "status": run.status,
+                "progress": run.progress or 0,
                 "created_at": run.created_at.isoformat() if run.created_at else None,
                 "results": run.results,
                 "error": run.error
             }
-        return {"status": "not_found"}
+        return {"status": "not_found", "progress": 0}
     except Exception as e:
         logger.error(f"Error retrieving run status for {run_id}: {e}")
-        return {"status": "error", "error": "Could not retrieve status from database"}
+        return {"status": "error", "progress": 0, "error": "Could not retrieve status from database"}
+    finally:
+        if db:
+            db.close()
+
+
+def check_timed_out_runs():
+    """Check for runs that have exceeded the timeout and mark them as timed out."""
+    timeout_hours = float(os.environ.get("ANALYSIS_TIMEOUT_HOURS", "24"))
+    if timeout_hours <= 0:
+        return  # Timeout disabled
+
+    db = None
+    try:
+        db = SessionLocal()
+        cutoff_time = datetime.utcnow() - timedelta(hours=timeout_hours)
+
+        # Find running or pending runs that started before cutoff
+        stale_runs = db.query(DbRun).filter(
+            DbRun.status.in_(["running", "pending"]),
+            DbRun.created_at < cutoff_time
+        ).all()
+
+        for run in stale_runs:
+            run_id = str(run.id)
+            logger.warning(f"Run {run_id} has exceeded timeout of {timeout_hours} hours. Marking as timeout.")
+            run.status = "timeout"
+            run.error = f"Analysis exceeded maximum time limit of {timeout_hours} hours"
+
+            # Try to terminate the process if it's still tracked
+            if run_id in active_processes:
+                process = active_processes[run_id]
+                if process.is_alive():
+                    logger.info(f"Terminating process for run {run_id}")
+                    process.terminate()
+                    process.join(timeout=5)
+                    if process.is_alive():
+                        process.kill()
+                del active_processes[run_id]
+
+        db.commit()
+    except Exception as e:
+        logger.error(f"Error checking for timed out runs: {e}")
     finally:
         if db:
             db.close()

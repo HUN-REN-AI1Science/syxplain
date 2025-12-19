@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from 'primereact/button';
 import { Message } from 'primereact/message';
-import { ProgressSpinner } from 'primereact/progressspinner';
+import { ProgressBar } from 'primereact/progressbar';
 import { MathJax, MathJaxContext } from 'better-react-mathjax';
 import { Toast } from 'primereact/toast';
 import RunSettingsPanel from './RunSettingsPanel';
@@ -14,14 +14,92 @@ interface ResultsViewProps {
   fromHistory?: boolean;
 }
 
+interface ProgressPhase {
+  name: string;
+  label: string;
+  progress_end: number;
+  increment_rate: number;
+}
+
 const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false }) => {
   const [status, setStatus] = useState<string>('pending');
+  const [backendProgress, setBackendProgress] = useState<number>(0);
+  const [displayProgress, setDisplayProgress] = useState<number>(0);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progressPhases, setProgressPhases] = useState<ProgressPhase[]>([]);
   const toast = useRef<Toast>(null);
 
+  // Fetch progress config on mount
   useEffect(() => {
-    if (!runId) return; // Don't poll if runId is not set yet
+    const fetchConfig = async () => {
+      try {
+        const response = await api.get('/progress-config');
+        setProgressPhases(response.data.phases || []);
+      } catch (e) {
+        console.error('Failed to fetch progress config:', e);
+      }
+    };
+    fetchConfig();
+  }, []);
+
+  // Smooth progress interpolation - slowly increment display progress
+  useEffect(() => {
+    if (status === 'completed' || status === 'failed' || status === 'timeout') {
+      setDisplayProgress(status === 'completed' ? 100 : backendProgress);
+      return;
+    }
+
+    // Find the current and next phase based on backend progress
+    const getCurrentPhaseInfo = (backendProg: number) => {
+      if (progressPhases.length === 0) {
+        // Fallback defaults if config not loaded
+        return { maxProgress: Math.min(backendProg + 5, 98), incrementRate: 0.2 };
+      }
+
+      // Find the phase that just ended (backend progress >= progress_end)
+      let currentPhase: ProgressPhase | null = null;
+      let nextPhase: ProgressPhase | null = null;
+
+      for (let i = 0; i < progressPhases.length; i++) {
+        if (backendProg >= progressPhases[i].progress_end) {
+          currentPhase = progressPhases[i];
+          nextPhase = progressPhases[i + 1] || null;
+        }
+      }
+
+      // Max progress is the next phase's progress_end - 1, or 98 if at the end
+      const maxProgress = nextPhase ? nextPhase.progress_end - 1 : 98;
+      const incrementRate = currentPhase?.increment_rate || 0.2;
+
+      return { maxProgress, incrementRate };
+    };
+
+    const intervalId = setInterval(() => {
+      setDisplayProgress(current => {
+        const { maxProgress, incrementRate } = getCurrentPhaseInfo(backendProgress);
+
+        // If backend jumped ahead significantly, catch up faster
+        if (backendProgress > current + 5) {
+          return Math.min(current + 2, backendProgress);
+        }
+
+        // If we've reached the max for current phase, hold there
+        if (current >= maxProgress) {
+          return current;
+        }
+
+        // Normal slow increment towards max
+        return Math.min(current + incrementRate, maxProgress);
+      });
+    }, 500);
+
+    return () => clearInterval(intervalId);
+  }, [backendProgress, status, progressPhases]);
+
+  // Poll backend for actual progress
+  useEffect(() => {
+    if (!runId) return;
 
     let intervalId: NodeJS.Timeout;
 
@@ -29,12 +107,14 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
       try {
         const response = await api.get(`/runs/${runId}`);
         setStatus(response.data.status);
+        setBackendProgress(response.data.progress || 0);
 
         if (response.data.status === 'completed') {
           setResult(response.data.results.pysr_explanations);
+          setBackendProgress(100);
           clearInterval(intervalId);
-        } else if (response.data.status === 'failed') {
-          setError(response.data.error || 'Unknown error');
+        } else if (response.data.status === 'failed' || response.data.status === 'timeout') {
+          setError(response.data.error || (response.data.status === 'timeout' ? 'Analysis timed out' : 'Unknown error'));
           clearInterval(intervalId);
         }
       } catch (e) {
@@ -42,7 +122,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
       }
     };
 
-    poll(); // Initial call
+    poll();
     intervalId = setInterval(poll, 2000);
 
     return () => clearInterval(intervalId);
@@ -132,7 +212,10 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
 
         {(!runId || status === 'pending' || status === 'running') && !error && (
           <div className="text-center py-20">
-            <ProgressSpinner style={{ width: '50px', height: '50px' }} strokeWidth="4" animationDuration=".5s" />
+            <div className="max-w-md mx-auto mb-6">
+              <ProgressBar value={displayProgress} showValue={false} style={{ height: '8px' }} className="mb-2" />
+              <p className="text-lg font-semibold text-blue-600">{Math.floor(displayProgress)}% complete</p>
+            </div>
             <h3 className="text-xl font-semibold text-slate-800 mt-4 mb-2">AI is analyzing your data</h3>
             <p className="text-slate-500 max-w-md mx-auto mb-4">
               This process involves symbolic regression and LLM reasoning. It might take a few minutes depending on the dataset size.

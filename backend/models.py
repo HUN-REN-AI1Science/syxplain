@@ -28,3 +28,4 @@ class RunSummary(BaseModel):
     created_at: Any # Pydantic handles datetime serialization
     csv_filename: str
     target_variable: Optional[str] = None
+    progress: int = 0  # 0-100 percentage

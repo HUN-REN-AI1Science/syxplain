@@ -4,6 +4,7 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
+import { Tooltip } from 'primereact/tooltip';
 
 interface RunSummary {
   id: string;
@@ -11,6 +12,7 @@ interface RunSummary {
   created_at: string;
   csv_filename: string;
   target_variable: string | null;
+  progress: number;
 }
 
 interface HistoryViewProps {
@@ -23,6 +25,9 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
 
   useEffect(() => {
     loadRuns();
+    // Poll for updates every 5 seconds to refresh progress
+    const intervalId = setInterval(loadRuns, 5000);
+    return () => clearInterval(intervalId);
   }, []);
 
   const loadRuns = async () => {
@@ -41,10 +46,28 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
       completed: { severity: 'success', label: 'Completed' },
       running: { severity: 'info', label: 'Running' },
       pending: { severity: 'warning', label: 'Pending' },
-      failed: { severity: 'danger', label: 'Failed' }
+      failed: { severity: 'danger', label: 'Failed' },
+      timeout: { severity: 'danger', label: 'Timeout' }
     };
 
     const config = statusMap[rowData.status] || { severity: 'info', label: rowData.status };
+
+    // Show progress tooltip for running/pending status
+    if (rowData.status === 'running' || rowData.status === 'pending') {
+      const tagId = `status-tag-${rowData.id.replace(/-/g, '')}`;
+      return (
+        <>
+          <Tag
+            severity={config.severity}
+            value={config.label}
+            className={tagId}
+            style={{ cursor: 'help' }}
+          />
+          <Tooltip target={`.${tagId}`} content={`${rowData.progress || 0}% complete`} position="top" />
+        </>
+      );
+    }
+
     return <Tag severity={config.severity} value={config.label} />;
   };
 

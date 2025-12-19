@@ -9,12 +9,12 @@ from sqlalchemy.orm import Session
 
 from backend.models import ProblemDescription, RunRequest, RunResponse, RunSummary
 import asyncio
-from backend.service import start_run, cleanup_processes
+from backend.service import start_run, cleanup_processes, check_timed_out_runs
 from backend.database import init_db, get_db, File as DbFile, Run as DbRun, RunArtifact
 from backend.auth import get_current_user, User
 
 # Configure logging
-from logger import configure_logging
+from logger import configure_logging, get_cached_progress_config
 
 # Filter out /api/runs/ polling logs from uvicorn access logger
 class EndpointFilter(logging.Filter):
@@ -48,11 +48,12 @@ app.add_middleware(
 async def on_startup():
     init_db()
 
-    # Start background task for process cleanup
+    # Start background task for process cleanup and timeout checking
     async def periodic_cleanup():
         while True:
             try:
                 cleanup_processes()
+                check_timed_out_runs()
             except Exception as e:
                 logger.error(f"Error in process cleanup task: {e}")
             await asyncio.sleep(60)  # Check every minute
@@ -117,6 +118,12 @@ def upload_file(
 
     return {"filename": file.filename, "columns": columns, "column_types": column_types, "nan_counts": nan_counts}
 
+@app.get("/api/progress-config")
+def get_progress_config():
+    """Returns progress phase configuration for frontend progress bar."""
+    phases, _ = get_cached_progress_config()
+    return {"phases": phases}
+
 @app.post("/api/run", response_model=RunResponse)
 def run_analysis(
     request: RunRequest,
@@ -173,7 +180,8 @@ def list_runs(
             status=run.status,
             created_at=run.created_at,
             csv_filename=run.csv_filename,
-            target_variable=target
+            target_variable=target,
+            progress=run.progress or 0
         ))
     return summary_list
 
@@ -192,6 +200,7 @@ def get_run(
 
     return {
         "status": run.status,
+        "progress": run.progress or 0,
         "error": run.error,
         "results": run.results
     }
