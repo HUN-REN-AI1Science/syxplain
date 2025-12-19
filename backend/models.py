@@ -9,6 +9,7 @@ class ProblemDescription(BaseModel):
 class RunRequest(BaseModel):
     problem_description: ProblemDescription
     csv_filename: str
+    analysis_type: str = "quick"  # "quick" or "deep"
 
 class RunResponse(BaseModel):
     run_id: str

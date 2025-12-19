@@ -12,7 +12,7 @@ import seaborn as sns
 import logger
 from shap_calc import get_top_feature_interactions
 from logger import StepLogger
-from llm_modules import generate_pysr_config, generate_equation_explanation
+from llm_modules import generate_pysr_config, generate_equation_explanation, deep_research_equations
 
 
 class State(TypedDict, total=False):
@@ -27,6 +27,8 @@ class State(TypedDict, total=False):
     data_visualization: List[str]
     data_summary: str
     pysr_model: pysr.sr.PySRRegressor
+    analysis_type: str  # "quick" or "deep"
+    deep_research_result: str  # Result from deep research LLM call
 
 def data_summary(state: State) -> State:
     # Setting up logger object
@@ -186,16 +188,52 @@ def explain_pysr_equations(state: State) -> State:
     project_spec_json = state["problem_description_src"]
     data_spec_json = json.dumps(to_explain, indent=2)
 
+    # Get deep research context if available (for deep analysis mode)
+    deep_research_context = state.get("deep_research_result")
+
     explanation = generate_equation_explanation(
         project_spec_json=project_spec_json,
-        data_spec_json=data_spec_json
+        data_spec_json=data_spec_json,
+        deep_research_context=deep_research_context
     )
 
-    state["logger"].log_step("pysr_explainer_prompt", {"project_spec": project_spec_json, "data_spec": data_spec_json})
+    state["logger"].log_step("pysr_explainer_prompt", {
+        "project_spec": project_spec_json,
+        "data_spec": data_spec_json,
+        "has_deep_research": deep_research_context is not None
+    })
 
     # Save results
     state["pysr_explanations"] = explanation
     state["logger"].log_step("pysr_explainer_answer", state["pysr_explanations"])
+    return state
+
+
+def deep_research_node(state: State) -> State:
+    """Node for deep research step - searches scientific literature for equations.
+
+    This node is only added to the graph for deep analysis mode.
+    It calls the o4-mini-deep-research model to find physically-based equations.
+    """
+    state["logger"].log_step("deep_research_start", {"status": "starting deep research"})
+
+    # Get the features dictionary from the problem description
+    problem_desc = json.loads(state["problem_description_src"])
+    features_dict = problem_desc.get("features", {})
+
+    if not features_dict:
+        state["logger"].log_step("deep_research_skip", {"reason": "no features defined"})
+        state["deep_research_result"] = ""
+        return state
+
+    try:
+        result = deep_research_equations(features_dict)
+        state["deep_research_result"] = result
+        state["logger"].log_step("deep_research_result", {"result": result[:500] if result else ""})
+    except Exception as e:
+        state["logger"].log_step("deep_research_error", {"error": str(e)})
+        state["deep_research_result"] = ""
+
     return state
 
 def run_syxplain(entry_point):

@@ -1,4 +1,21 @@
 services:
+  postgres:
+    image: postgres:18
+    container_name: syxplain-db
+    environment:
+      - POSTGRES_USER=syxplain
+      - POSTGRES_PASSWORD=syxplain
+      - POSTGRES_DB=syxplain
+    ports:
+      - "5432:5432"
+    volumes:
+      - syxplain_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U syxplain"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -13,6 +30,7 @@ services:
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
       - SUPABASE_URL=${SUPABASE_URL}
       - JULIA_NUM_THREADS=${JULIA_NUM_THREADS}
+      - DEEP_RESEARCH_MODEL=${DEEP_RESEARCH_MODEL}
     deploy:
       resources:
         limits:
@@ -25,6 +43,9 @@ services:
       # - ./backend:/app/backend
       # - ./syxplain_lib.py:/app/syxplain_lib.py
       # - ./logger.py:/app/logger.py
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   frontend:
     build:
@@ -38,3 +59,6 @@ services:
       - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
     depends_on:
       - backend
+
+volumes:
+  syxplain_pgdata:

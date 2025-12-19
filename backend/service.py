@@ -49,7 +49,7 @@ def update_run_status(run_id: str, status: str, results: Dict[str, Any] = None, 
         if db:
             db.close()
 
-def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str):
+def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str, analysis_type: str = "quick"):
     from logger import configure_debug_logging, configure_logging
     configure_logging()
     configure_debug_logging()
@@ -105,10 +105,10 @@ def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str):
             return state
 
         # Run the graph
-        from syxplain_lib import data_summary, llm_pysr_config_generator, pysr_with_generated_config, explain_pysr_equations
+        from syxplain_lib import data_summary, llm_pysr_config_generator, pysr_with_generated_config, explain_pysr_equations, deep_research_node
         from langgraph.graph import StateGraph, START, END
 
-        logger.info("Building StateGraph")
+        logger.info(f"Building StateGraph (analysis_type={analysis_type})")
         g = StateGraph(State)
         g.add_node("entry_point", entry_point)
         g.add_node("data_summary", data_summary)
@@ -120,15 +120,24 @@ def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str):
         g.add_edge("entry_point", "data_summary")
         g.add_edge("data_summary", "pysr_config_generator")
         g.add_edge("pysr_config_generator", "pysr_executor")
-        g.add_edge("pysr_executor", "pysr_explainer")
+
+        # Conditionally add deep research step for deep analysis
+        if analysis_type == "deep":
+            g.add_node("deep_research", deep_research_node)
+            g.add_edge("pysr_executor", "deep_research")
+            g.add_edge("deep_research", "pysr_explainer")
+        else:
+            g.add_edge("pysr_executor", "pysr_explainer")
+
         g.add_edge("pysr_explainer", END)
 
         app = g.compile()
         logger.info("Invoking graph execution...")
 
-        # Initialize state with our logger
+        # Initialize state with our logger and analysis type
         initial_state = State()
         initial_state["logger"] = run_logger
+        initial_state["analysis_type"] = analysis_type
 
         final_state = app.invoke(initial_state)
         logger.info("Graph execution completed successfully")
@@ -155,7 +164,7 @@ def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str):
         update_run_status(run_id, "failed", error=error_msg)
         logger.error(f"Run {run_id} failed: {e}", exc_info=True)
 
-def start_run(problem_desc: Dict[str, Any], csv_filename: str, api_key: str, api_base: str = None, model_name: str = None, user_id: str = None) -> str:
+def start_run(problem_desc: Dict[str, Any], csv_filename: str, api_key: str, api_base: str = None, model_name: str = None, user_id: str = None, analysis_type: str = "quick") -> str:
     # Create Run record in DB
     db = None
     try:
@@ -164,7 +173,8 @@ def start_run(problem_desc: Dict[str, Any], csv_filename: str, api_key: str, api
             problem_description=problem_desc,
             csv_filename=csv_filename,
             status="pending",
-            user_id=user_id
+            user_id=user_id,
+            analysis_type=analysis_type
         )
         db.add(run)
         db.commit()
@@ -174,10 +184,10 @@ def start_run(problem_desc: Dict[str, Any], csv_filename: str, api_key: str, api
         if db:
             db.close()
 
-    logger.info(f"Starting background process for Run ID: {run_id}")
+    logger.info(f"Starting background process for Run ID: {run_id} (analysis_type={analysis_type})")
     # Use multiprocessing.Process instead of threading.Thread
     # Note: API credentials are inherited from parent process environment variables
-    process = multiprocessing.Process(target=_run_worker, args=(run_id, problem_desc, csv_filename))
+    process = multiprocessing.Process(target=_run_worker, args=(run_id, problem_desc, csv_filename, analysis_type))
     process.start()
 
     # Register process for monitoring

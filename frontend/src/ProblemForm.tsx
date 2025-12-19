@@ -6,6 +6,7 @@ import { Button } from 'primereact/button';
 import { SelectButton } from 'primereact/selectbutton';
 import { Dialog } from 'primereact/dialog';
 import { Toast } from 'primereact/toast';
+import { Menu } from 'primereact/menu';
 
 interface ProblemFormProps {
   columns: string[];
@@ -19,6 +20,10 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nan
   const [jsonContent, setJsonContent] = useState('');
   const [showHelp, setShowHelp] = useState(false);
   const toast = useRef<Toast>(null);
+  const analysisMenuRef = useRef<Menu>(null);
+
+  // Analysis type state
+  const [analysisType, setAnalysisType] = useState<'quick' | 'deep'>('quick');
 
   // Form state
   const [projectDescription, setProjectDescription] = useState('');
@@ -152,7 +157,7 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nan
           return;
         }
 
-        onSubmit(parsed);
+        onSubmit({ ...parsed, analysis_type: analysisType });
       } catch (e) {
         toast.current?.show({ severity: 'error', summary: 'Invalid JSON', detail: (e as Error).message });
       }
@@ -160,7 +165,7 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nan
       // Validation for Form Mode
       const payload = validateAndGetPayload();
       if (payload) {
-        onSubmit(payload);
+        onSubmit({ ...payload, analysis_type: analysisType });
       }
     }
   };
@@ -361,7 +366,8 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nan
       )}
 
       <Toast ref={toast} />
-      <div className="mt-10 pt-6 border-t border-slate-100 flex justify-end space-x-4">
+
+      <div className="mt-6 pt-4 flex justify-end space-x-4">
         {mode === 'form' && (
           <Button
             label="Export JSON"
@@ -370,19 +376,70 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nan
             className="p-button-outlined p-button-secondary font-bold py-3 px-6 text-xl"
           />
         )}
-        <Button
-          label="Start Analysis"
-          icon="pi pi-arrow-right"
-          iconPos="right"
-          onClick={handleSubmit}
-          size="large"
-          disabled={mode === 'form' && Boolean(targetVariable && nanCounts && nanCounts[targetVariable] > 0)}
-          className={`font-bold py-3 px-6 text-xl shadow-lg transition-all ${mode === 'form' && targetVariable && nanCounts && nanCounts[targetVariable] > 0
-            ? 'bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed'
-            : 'bg-blue-500 hover:bg-blue-600 border-blue-500 text-white hover:shadow-xl transform hover:-translate-y-0.5'
-            }`}
+
+        {/* Analysis Menu */}
+        <Menu
+          ref={analysisMenuRef}
+          popup
+          model={[
+            {
+              label: 'Quick Analysis',
+              icon: 'pi pi-bolt',
+              command: () => setAnalysisType('quick'),
+              className: analysisType === 'quick' ? 'bg-blue-50' : ''
+            },
+            {
+              label: 'Deep Analysis',
+              icon: 'pi pi-search',
+              command: () => setAnalysisType('deep'),
+              className: analysisType === 'deep' ? 'bg-blue-50' : ''
+            }
+          ]}
         />
+
+        {/* Split Button for Analysis Type Selection */}
+        <div className="flex">
+          <Button
+            label={analysisType === 'quick' ? 'Quick Analysis' : 'Deep Analysis'}
+            icon={analysisType === 'quick' ? 'pi pi-bolt' : 'pi pi-search'}
+            iconPos="left"
+            onClick={handleSubmit}
+            size="large"
+            disabled={mode === 'form' && Boolean(targetVariable && nanCounts && nanCounts[targetVariable] > 0)}
+            className={`font-bold py-3 px-6 text-xl shadow-lg transition-all rounded-r-none ${mode === 'form' && targetVariable && nanCounts && nanCounts[targetVariable] > 0
+              ? 'bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed'
+              : 'bg-blue-500 hover:bg-blue-600 border-blue-500 text-white hover:shadow-xl'
+              }`}
+          />
+          <Button
+            icon="pi pi-chevron-down"
+            onClick={(e) => analysisMenuRef.current?.toggle(e)}
+            size="large"
+            disabled={mode === 'form' && Boolean(targetVariable && nanCounts && nanCounts[targetVariable] > 0)}
+            className={`font-bold py-3 px-3 text-xl shadow-lg transition-all rounded-l-none border-l-0 ${mode === 'form' && targetVariable && nanCounts && nanCounts[targetVariable] > 0
+              ? 'bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700 border-blue-500 text-white'
+              }`}
+          />
+        </div>
       </div>
+
+      {/* Deep Analysis Pricing Warning - shown at bottom */}
+      {analysisType === 'deep' && (
+        <div className="mt-4 animate-fade-in">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start">
+            <i className="pi pi-exclamation-triangle text-amber-600 text-xl mr-3 mt-0.5"></i>
+            <div>
+              <h4 className="font-semibold text-amber-800 text-sm">Deep Analysis Notice</h4>
+              <p className="text-sm text-amber-700 mt-1">
+                Deep Analysis is more expensive to run as it performs additional scientific literature research.
+                This system is currently in <strong>experimental mode</strong> and is open for use,
+                but this feature may be behind a paywall in the future.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

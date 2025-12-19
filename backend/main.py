@@ -146,9 +146,10 @@ def run_analysis(
         api_key,
         api_base,
         model_name,
-        user_id=current_user.user_id
+        user_id=current_user.user_id,
+        analysis_type=request.analysis_type
     )
-    logger.info(f"Analysis started with Run ID: {run_id}")
+    logger.info(f"Analysis started with Run ID: {run_id} (analysis_type={request.analysis_type})")
     return RunResponse(run_id=run_id, status="pending", message="Analysis started")
 
 @app.get("/api/runs", response_model=List[RunSummary])
@@ -245,6 +246,7 @@ def get_run_details(
         "problem_description": run.problem_description,
         "csv_filename": run.csv_filename,
         "csv_metadata": csv_metadata,
+        "analysis_type": run.analysis_type or "quick",
         "error": run.error
     }
 

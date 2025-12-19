@@ -12,6 +12,7 @@ seaborn
 shap
 sqlalchemy
 psycopg2-binary
+alembic
 pyjwt
 dspy
 langfuse

@@ -43,9 +43,12 @@ function MainApp() {
     setActiveIndex(2);
 
     try {
+      // Extract analysis_type from problemData (it's passed from ProblemForm)
+      const { analysis_type, ...problemDescription } = problemData;
       const response = await api.post('/run', {
-        problem_description: problemData,
-        csv_filename: filename
+        problem_description: problemDescription,
+        csv_filename: filename,
+        analysis_type: analysis_type || 'quick'
       });
       setRunId(response.data.run_id);
     } catch (e) {

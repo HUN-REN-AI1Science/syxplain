@@ -39,6 +39,9 @@ cp .env.example .env
 - `OPENAI_API_KEY`: Your API key for the LLM service.
 - `OPENAI_API_BASE`: Base URL for the LLM API.
 - `OPENAI_MODEL_NAME`: Name of the model to use.
+- `DEEP_RESEARCH_MODEL`: Name of the deep research model to use (default: `o4-mini-deep-research`).
+- `DEEP_RESEARCH_API_KEY`: API key for the deep research model (used in Deep Analysis mode).
+- `DEEP_RESEARCH_API_BASE`: Base URL for the deep research API (used in Deep Analysis mode).
 - `DATABASE_URL`: Connection string for your PostgreSQL database.
 - `SUPABASE_URL`: URL of your Supabase project.
 - `SUPABASE_JWT_SECRET`: JWT secret for Supabase authentication.
@@ -125,6 +128,19 @@ To run the backend as a systemd service using a Python virtual environment:
 ### Local Development
 
 For development, you can run the backend and frontend separately.
+
+**Database:**
+
+Start only the PostgreSQL database from docker-compose:
+
+```bash
+docker-compose up -d postgres
+```
+
+This will start PostgreSQL 18 on `localhost:5432` with:
+- User: `syxplain`
+- Password: `syxplain`
+- Database: `syxplain`
 
 **Backend:**
 
