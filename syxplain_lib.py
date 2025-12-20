@@ -194,12 +194,50 @@ def explain_pysr_equations(state: State) -> State:
     model = state["pysr_model"]
     to_explain = dict(equation=list(), loss=list(), complexity=list())
     selected_equations = (model.equations_[model.equations_["loss"] < float(model.equations_["loss"].tail(1).iloc[0])*1.5]).copy()
-    for _, row in selected_equations.iterrows():
+
+    # Store indices for scatter plot generation
+    equation_indices = []
+    for idx, row in selected_equations.iterrows():
         to_explain["equation"].append(row["equation"])
         to_explain["loss"].append(row["loss"])
         to_explain["complexity"].append(row["complexity"])
+        equation_indices.append(idx)
 
     state["logger"].log_step("equations_selected", {"count": len(to_explain["equation"])})
+
+    # Generate scatter plot data for each selected equation (raw data for frontend Chart.js)
+    state["logger"].log_step("scatter_data_start", {"status": "Generating scatter plot data"})
+    scatter_data_list = []
+    X = state["data"][state["predictor_columns"]]
+    y_actual = state["data"][state["target_column"]].values
+
+    # Subsample if too many points (for frontend performance)
+    max_points = 500
+    if len(y_actual) > max_points:
+        indices = np.random.choice(len(y_actual), max_points, replace=False)
+        indices = np.sort(indices)
+        X_sample = X.iloc[indices]
+        y_actual_sample = y_actual[indices]
+    else:
+        X_sample = X
+        y_actual_sample = y_actual
+
+    for i, eq_idx in enumerate(equation_indices):
+        try:
+            # Predict using this specific equation
+            y_pred = model.predict(X_sample, index=eq_idx)
+
+            # Store raw data as lists for JSON serialization
+            scatter_data = {
+                "measured": y_actual_sample.tolist(),
+                "predicted": y_pred.tolist()
+            }
+            scatter_data_list.append(scatter_data)
+        except Exception as e:
+            state["logger"].log_step("scatter_data_error", {"equation_index": i, "error": str(e)})
+            scatter_data_list.append(None)
+
+    state["logger"].log_step("scatter_data_complete", {"count": len(scatter_data_list)})
 
     project_spec_json = state["problem_description_src"]
     data_spec_json = json.dumps(to_explain, indent=2)
@@ -217,6 +255,17 @@ def explain_pysr_equations(state: State) -> State:
         data_spec_json=data_spec_json,
         deep_research_context=deep_research_context
     )
+
+    # Merge scatter data into the explanation JSON
+    try:
+        explanation_data = json.loads(explanation)
+        if "equations" in explanation_data:
+            for i, eq in enumerate(explanation_data["equations"]):
+                if i < len(scatter_data_list) and scatter_data_list[i]:
+                    eq["scatter_data"] = scatter_data_list[i]
+        explanation = json.dumps(explanation_data, indent=2)
+    except json.JSONDecodeError as e:
+        state["logger"].log_step("scatter_data_merge_error", {"error": str(e)})
 
     # Save results
     state["pysr_explanations"] = explanation

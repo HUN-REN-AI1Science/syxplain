@@ -89,7 +89,7 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
     return (
       <div className="flex items-center justify-between w-full pr-2">
         <div className="flex items-center">
-          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3">
+          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg flex items-center justify-center mr-3">
             <i className="pi pi-cog text-white text-lg"></i>
           </div>
           <span className="text-lg font-bold text-slate-800">Run Configuration</span>
@@ -217,11 +217,11 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
             </div>
 
             {/* Analysis Mode - Compact */}
-            <div className={`rounded-xl p-4 border ${runDetails.analysis_type === 'deep' ? 'bg-gradient-to-br from-purple-50 to-fuchsia-100 border-purple-200' : 'bg-gradient-to-br from-orange-50 to-amber-100 border-orange-200'}`}>
+            <div className={`rounded-xl p-4 border ${runDetails.analysis_type === 'deep' ? 'bg-gradient-to-br from-blue-50 to-cyan-100 border-blue-200' : 'bg-gradient-to-br from-orange-50 to-amber-100 border-orange-200'}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-3 flex-shrink-0 ${runDetails.analysis_type === 'deep' ? 'bg-purple-100' : 'bg-orange-100'}`}>
-                    <i className={`pi ${runDetails.analysis_type === 'deep' ? 'pi-search text-purple-600' : 'pi-bolt text-orange-600'} text-lg`}></i>
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-3 flex-shrink-0 ${runDetails.analysis_type === 'deep' ? 'bg-blue-100' : 'bg-orange-100'}`}>
+                    <i className={`pi ${runDetails.analysis_type === 'deep' ? 'pi-search text-blue-600' : 'pi-bolt text-orange-600'} text-lg`}></i>
                   </div>
                   <div>
                     <h4 className="font-bold text-slate-800">Analysis Mode</h4>
@@ -239,10 +239,10 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
             </div>
 
             {/* Project Description */}
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-5 border border-indigo-100">
+            <div className="bg-gradient-to-br from-blue-50 to-slate-50 rounded-xl p-5 border border-blue-100">
               <div className="flex items-center mb-3">
-                <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
-                  <i className="pi pi-info-circle text-indigo-600 text-lg"></i>
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
+                  <i className="pi pi-info-circle text-blue-600 text-lg"></i>
                 </div>
                 <h4 className="font-bold text-slate-800">Project Description</h4>
               </div>
@@ -253,10 +253,10 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
 
             {/* Features - Table Layout */}
             {featureEntries.length > 0 && (
-              <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border border-purple-100">
+              <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl p-5 border border-slate-200">
                 <div className="flex items-center mb-4">
-                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
-                    <i className="pi pi-list text-purple-600 text-lg"></i>
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
+                    <i className="pi pi-list text-blue-600 text-lg"></i>
                   </div>
                   <div>
                     <h4 className="font-bold text-slate-800">Feature Descriptions</h4>
@@ -265,13 +265,13 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
                 </div>
 
                 {/* Table-like feature list */}
-                <div className="bg-white rounded-lg border border-purple-100 overflow-hidden">
+                <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
                   {/* Table Header */}
-                  <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-purple-50 border-b border-purple-100">
-                    <div className="col-span-4 text-xs font-semibold text-purple-700 uppercase tracking-wider">
+                  <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-slate-50 border-b border-slate-200">
+                    <div className="col-span-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">
                       Feature Name
                     </div>
-                    <div className="col-span-8 text-xs font-semibold text-purple-700 uppercase tracking-wider">
+                    <div className="col-span-8 text-xs font-semibold text-slate-600 uppercase tracking-wider">
                       Description
                     </div>
                   </div>
@@ -281,14 +281,14 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
                     {featureEntries.map(([featureName, description], index) => (
                       <div
                         key={featureName}
-                        className={`grid grid-cols-12 gap-4 px-4 py-3 items-center hover:bg-purple-25 transition-colors ${index !== featureEntries.length - 1 ? 'border-b border-purple-50' : ''
+                        className={`grid grid-cols-12 gap-4 px-4 py-3 items-center hover:bg-blue-50 transition-colors ${index !== featureEntries.length - 1 ? 'border-b border-slate-100' : ''
                           }`}
                       >
                         <div className="col-span-4 flex items-center min-w-0">
                           <div className="w-6 h-6 bg-slate-100 rounded flex items-center justify-center mr-2 flex-shrink-0">
                             <i className="pi pi-database text-slate-400 text-xs"></i>
                           </div>
-                          <code className="text-sm font-semibold text-purple-700 truncate" title={featureName}>
+                          <code className="text-sm font-semibold text-blue-700 truncate" title={featureName}>
                             {featureName}
                           </code>
                         </div>

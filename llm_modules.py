@@ -143,6 +143,73 @@ class ExplainPySrEquations(dspy.Signature):
     explanation_json: str = dspy.OutputField(desc="JSON object with equations, summary, and recommendation")
 
 
+class ExplainPySrEquationsDeep(dspy.Signature):
+    """
+    You are an agent who explains the output of symbolic regression with deep scientific research context.
+
+    You will always receive exactly two JSON objects in the user message:
+
+    1) PROJECT_SPEC: regression context, target, feature dictionary, constraints, AND deep_research_equations from scientific literature search.
+    2) DATA_SPEC: equations, loss, complexity.
+
+    Goal: Provide clear, concise explanations of the equations in DATA_SPEC in the context of PROJECT_SPEC. After explaining all the equations please create a summary of the overall findings and selection of the most probable equation not just according to the metrics but more importantly according to the scientific understanding of the problem.
+
+    Rules:
+    - Parse both JSONs strictly. If a key is missing, say which and stop.
+    - Treat PROJECT_SPEC.features' keys as canonical feature names.
+    - Do NOT guess values that are not present in JSON.
+    - When you reference fields, use dot paths like PROJECT_SPEC.target_variable.
+    - If DATA_SPEC.action is present, follow it.
+    - Use the provided feature descriptions in explanations.
+    - IMPORTANT: Assign equation IDs sequentially starting from 1 (1, 2, 3, ...) in the order they appear in DATA_SPEC.
+
+    ### CITATIONS (Deep Analysis)
+    PROJECT_SPEC contains "deep_research_equations" - equations found in scientific literature with their citation URLs.
+    For each equation you explain, check if any of the deep research equations are scientifically related or similar.
+    If so, include the citations from those related deep research equations in the "citations" field.
+    Only include citations that are genuinely relevant to the equation being explained.
+    If no related citations exist, set "citations" to an empty array [].
+
+    ### OUTPUT FORMAT
+    Return STRICT JSON only — no markdown, no code fences, no commentary. Output must parse with json.loads().
+
+    Required schema:
+    {
+        "equations": [
+            {
+                "id": 1,
+                "equation": "string - the exact equation from DATA_SPEC",
+                "loss": 4.04,
+                "complexity": 15,
+                "overview": "string - brief 1-2 sentence description of what this equation models",
+                "term_explanations": [
+                    {
+                        "term": "(-24.26 * Tm_sprsum)",
+                        "explanation": "string describing what this term represents scientifically"
+                    }
+                ],
+                "citations": ["https://doi.org/... - array of citation URLs from deep research equations that are relevant, empty [] if none"]
+            }
+        ],
+        "summary": {
+            "key_drivers": ["list", "of", "most", "important", "variables"],
+            "secondary_drivers": ["list", "of", "secondary", "variables"],
+            "findings": "string - paragraph summarizing overall findings across all equations"
+        },
+        "recommendation": {
+            "equation_id": 1,
+            "rationale": ["reason 1 why this equation is best", "reason 2", "reason 3"]
+        }
+    }
+
+    Unless I say otherwise, respond in concise technical English.
+    """
+    project_spec_json: str = dspy.InputField(desc="JSON string of project specification with deep research equations")
+    data_spec_json: str = dspy.InputField(desc="JSON string of equations data")
+
+    explanation_json: str = dspy.OutputField(desc="JSON object with equations (including citations), summary, and recommendation")
+
+
 @observe(name="generate_equation_explanation", as_type="generation")
 def generate_equation_explanation(project_spec_json: str, data_spec_json: str, deep_research_context: dict = None) -> str:
     """Generates explanation for PySR equations as structured JSON.
@@ -159,27 +226,30 @@ def generate_equation_explanation(project_spec_json: str, data_spec_json: str, d
     api_key = os.environ.get("OPENAI_API_KEY")
     api_base = os.environ.get("OPENAI_API_BASE")
 
-    # Enable web search for deep analysis mode (when deep_research_context is provided)
+    is_deep_analysis = deep_research_context and deep_research_context.get("equations")
+
+    # Enable web search for deep analysis mode
     lm_kwargs = dict(
         model=f"openai/{model_name}",
         api_key=api_key,
         api_base=api_base,
     )
 
-    if deep_research_context and deep_research_context.get("equations"):
+    if is_deep_analysis:
         lm_kwargs["web_search_options"] = {"search_context_size": "high"}
 
     lm = dspy.LM(**lm_kwargs)
 
-    # If deep research context is provided, append it to the project spec
-    if deep_research_context and deep_research_context.get("equations"):
+    # If deep research context is provided, append it to the project spec and use deep signature
+    if is_deep_analysis:
         enhanced_project_spec = json.loads(project_spec_json)
         enhanced_project_spec["deep_research_equations"] = deep_research_context.get("equations", [])
         project_spec_json = json.dumps(enhanced_project_spec, indent=2)
+        predictor = dspy.Predict(ExplainPySrEquationsDeep)
+    else:
+        predictor = dspy.Predict(ExplainPySrEquations)
 
     logger.info(f"project_spec_json: {project_spec_json}")
-
-    predictor = dspy.Predict(ExplainPySrEquations)
     try:
         with dspy.settings.context(lm=lm):
             response = predictor(
@@ -209,6 +279,23 @@ def generate_equation_explanation(project_spec_json: str, data_spec_json: str, d
                 parsed["summary"] = {"key_drivers": [], "secondary_drivers": [], "findings": ""}
             if "recommendation" not in parsed:
                 parsed["recommendation"] = {"equation_id": 1, "simplified_equation": "", "rationale": []}
+
+            # Post-process: Renumber equation IDs sequentially (1, 2, 3, ...)
+            # This fixes non-sequential IDs that may come from PySR
+            if parsed["equations"]:
+                old_to_new_id = {}
+                for new_id, eq in enumerate(parsed["equations"], start=1):
+                    old_id = eq.get("id")
+                    if old_id is not None:
+                        old_to_new_id[old_id] = new_id
+                    eq["id"] = new_id
+
+                # Update recommendation.equation_id to point to the new sequential ID
+                if "recommendation" in parsed and parsed["recommendation"].get("equation_id"):
+                    old_rec_id = parsed["recommendation"]["equation_id"]
+                    if old_rec_id in old_to_new_id:
+                        parsed["recommendation"]["equation_id"] = old_to_new_id[old_rec_id]
+
             return json.dumps(parsed, indent=2)
         except json.JSONDecodeError as e:
             # Return a fallback structure with raw content
