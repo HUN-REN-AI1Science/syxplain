@@ -75,7 +75,7 @@ export const runsService = {
   },
 
   getById: (id: string) =>
-    api.get<{ status: string; progress: number; results?: { pysr_explanations: string }; error?: string }>(`/runs/${id}`),
+    api.get<{ status: string; progress: number; results?: { pysr_explanations: string }; error?: string; public_share_token?: string | null }>(`/runs/${id}`),
 
   getDetails: (id: string) =>
     api.get<RunDetails>(`/runs/${id}/details`),
@@ -122,5 +122,63 @@ export const profileService = {
   delete: () => api.delete('/profile'),
 };
 
+// ============================================================================
+// Sharing Service
+// ============================================================================
+
+export interface ShareResponse {
+  share_token: string;
+  share_url: string;
+}
+
+export interface SharedRunInfo {
+  id: string;
+  target_variable: string | null;
+  csv_filename: string;
+  analysis_type: string;
+  created_at: string | null;
+  share_token: string;
+  share_url: string;
+}
+
+export const sharingService = {
+  createShareLink: (runId: string) =>
+    api.post<ShareResponse>(`/runs/${runId}/share`),
+
+  revokeShareLink: (runId: string) =>
+    api.delete(`/runs/${runId}/share`),
+
+  getSharedRuns: () =>
+    api.get<{ items: SharedRunInfo[] }>('/runs/shared'),
+};
+
+// ============================================================================
+// Public Service (No Auth)
+// ============================================================================
+
+// Create a separate axios instance for public endpoints (no auth token)
+const publicApi = axios.create({
+  baseURL: '/api',
+});
+
+export interface PublicRunData {
+  status: string;
+  progress: number;
+  results: { pysr_explanations: string } | null;
+  share_token: string;
+}
+
+export const publicService = {
+  getResults: (token: string) =>
+    publicApi.get<PublicRunData>(`/public/${token}`),
+
+  getDetails: (token: string) =>
+    publicApi.get<RunDetails>(`/public/${token}/details`),
+
+  downloadCsv: (token: string) =>
+    publicApi.get(`/public/${token}/download-csv`, { responseType: 'blob' }),
+};
+
 // Default export for backwards compatibility
 export default api;
+

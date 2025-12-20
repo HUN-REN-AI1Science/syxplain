@@ -4,6 +4,7 @@ from fastapi.responses import Response
 import os
 import logging
 import io
+import secrets
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -362,6 +363,35 @@ def list_runs(
         total_pages=total_pages
     )
 
+@app.get("/api/runs/shared")
+def get_shared_runs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all runs shared by the current user."""
+    runs = db.query(DbRun).filter(
+        DbRun.user_id == current_user.user_id,
+        DbRun.public_share_token.isnot(None)
+    ).order_by(DbRun.created_at.desc()).all()
+
+    result = []
+    for run in runs:
+        target = None
+        if run.problem_description and isinstance(run.problem_description, dict):
+            target = run.problem_description.get("target_variable")
+
+        result.append({
+            "id": str(run.id),
+            "target_variable": target,
+            "csv_filename": run.csv_filename,
+            "analysis_type": run.analysis_type or "quick",
+            "created_at": run.created_at.isoformat() if run.created_at else None,
+            "share_token": run.public_share_token,
+            "share_url": f"/share/{run.public_share_token}"
+        })
+
+    return {"items": result}
+
 @app.get("/api/runs/{run_id}")
 def get_run(
     run_id: str,
@@ -379,7 +409,8 @@ def get_run(
         "status": run.status,
         "progress": run.progress or 0,
         "error": run.error,
-        "results": run.results
+        "results": run.results,
+        "public_share_token": run.public_share_token
     }
 
 @app.get("/api/runs/{run_id}/details")
@@ -481,6 +512,165 @@ def download_csv(
     db_file = db.query(DbFile).filter(
         DbFile.filename == run.csv_filename,
         DbFile.user_id == current_user.user_id
+    ).order_by(DbFile.created_at.desc()).first()
+    if not db_file:
+        raise HTTPException(status_code=404, detail="CSV file not found")
+
+    return Response(
+        content=db_file.content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={db_file.filename}"}
+    )
+
+# ============================================================================
+# Sharing Endpoints (Authenticated)
+# ============================================================================
+
+@app.post("/api/runs/{run_id}/share")
+def create_share_link(
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Generate a public share link for a run."""
+    run = db.query(DbRun).filter(
+        DbRun.id == run_id,
+        DbRun.user_id == current_user.user_id
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    # If already shared, return existing token
+    if run.public_share_token:
+        return {
+            "share_token": run.public_share_token,
+            "share_url": f"/share/{run.public_share_token}"
+        }
+
+    # Generate new token (32 characters, URL-safe)
+    token = secrets.token_urlsafe(24)
+    run.public_share_token = token
+    db.commit()
+
+    logger.info(f"User {current_user.user_id} created share link for run {run_id}")
+
+    return {
+        "share_token": token,
+        "share_url": f"/share/{token}"
+    }
+
+@app.delete("/api/runs/{run_id}/share")
+def revoke_share_link(
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Revoke a public share link for a run."""
+    run = db.query(DbRun).filter(
+        DbRun.id == run_id,
+        DbRun.user_id == current_user.user_id
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    run.public_share_token = None
+    db.commit()
+
+    logger.info(f"User {current_user.user_id} revoked share link for run {run_id}")
+
+    return {"message": "Share link revoked"}
+
+# ============================================================================
+# Public Endpoints (No Authentication)
+# ============================================================================
+
+@app.get("/api/public/{share_token}")
+def get_public_run(
+    share_token: str,
+    db: Session = Depends(get_db)
+):
+    """Get public run results by share token (no auth required)."""
+    run = db.query(DbRun).filter(
+        DbRun.public_share_token == share_token
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Shared run not found")
+
+    return {
+        "status": run.status,
+        "progress": run.progress or 0,
+        "results": run.results,
+        "share_token": run.public_share_token
+    }
+
+@app.get("/api/public/{share_token}/details")
+def get_public_run_details(
+    share_token: str,
+    db: Session = Depends(get_db)
+):
+    """Get public run details by share token (no auth required)."""
+    import pandas as pd
+
+    run = db.query(DbRun).filter(
+        DbRun.public_share_token == share_token
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Shared run not found")
+
+    # Get the associated CSV file (need to find by filename and user_id)
+    db_file = db.query(DbFile).filter(
+        DbFile.filename == run.csv_filename,
+        DbFile.user_id == run.user_id
+    ).order_by(DbFile.created_at.desc()).first()
+
+    csv_metadata = None
+    if db_file:
+        try:
+            df = pd.read_csv(io.BytesIO(db_file.content))
+            csv_metadata = {
+                "filename": db_file.filename,
+                "size_bytes": len(db_file.content),
+                "row_count": len(df),
+                "column_count": len(df.columns),
+                "columns": df.columns.tolist()
+            }
+        except Exception as e:
+            logger.warning(f"Failed to parse CSV for public run: {e}")
+            csv_metadata = {
+                "filename": db_file.filename,
+                "size_bytes": len(db_file.content),
+                "row_count": None,
+                "column_count": None,
+                "columns": []
+            }
+
+    return {
+        "id": str(run.id),
+        "status": run.status,
+        "created_at": run.created_at.isoformat() if run.created_at else None,
+        "problem_description": run.problem_description,
+        "csv_filename": run.csv_filename,
+        "csv_metadata": csv_metadata,
+        "analysis_type": run.analysis_type or "quick",
+        "error": run.error
+    }
+
+@app.get("/api/public/{share_token}/download-csv")
+def download_public_csv(
+    share_token: str,
+    db: Session = Depends(get_db)
+):
+    """Download the CSV file for a public run (no auth required)."""
+    run = db.query(DbRun).filter(
+        DbRun.public_share_token == share_token
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Shared run not found")
+
+    # Get the CSV file using run's user_id
+    db_file = db.query(DbFile).filter(
+        DbFile.filename == run.csv_filename,
+        DbFile.user_id == run.user_id
     ).order_by(DbFile.created_at.desc()).first()
     if not db_file:
         raise HTTPException(status_code=404, detail="CSV file not found")

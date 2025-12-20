@@ -49,6 +49,7 @@ class Run(Base):
     csv_filename = Column(String, nullable=False) # Store filename for reference
     error = Column(Text, nullable=True)
     results = Column(JSONB, nullable=True)
+    public_share_token = Column(String(32), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")

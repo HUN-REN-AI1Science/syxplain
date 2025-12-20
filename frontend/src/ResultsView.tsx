@@ -10,6 +10,7 @@ import { ProgressBar } from 'primereact/progressbar';
 import { Toast } from 'primereact/toast';
 import RunSettingsPanel from './RunSettingsPanel';
 import EquationResultsView from './EquationResultsView';
+import ShareDialog from './components/ShareDialog';
 import { runsService, configService } from './services/api';
 import { useProgressInterpolation } from './hooks/useProgressInterpolation';
 // PDF export is dynamically imported when needed to reduce initial bundle size
@@ -36,6 +37,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   const [error, setError] = useState<string | null>(null);
   const [progressPhases, setProgressPhases] = useState<ProgressPhase[]>([]);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
 
   // Refs
   const toast = useRef<Toast>(null);
@@ -76,6 +79,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
         if (response.data.status === 'completed') {
           setResult(response.data.results?.pysr_explanations || null);
           setBackendProgress(100);
+          setShareToken(response.data.public_share_token || null);
           clearInterval(intervalId);
         } else if (response.data.status === 'failed' || response.data.status === 'timeout') {
           setError(response.data.error || (response.data.status === 'timeout' ? 'Analysis timed out' : 'Unknown error'));
@@ -138,15 +142,25 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           ) : isCompleted ? (
             <>
               {result && (
-                <Button
-                  icon={exportingPdf ? "pi pi-spin pi-spinner" : "pi pi-file-pdf"}
-                  onClick={handleExportPdf}
-                  disabled={exportingPdf}
-                  size="large"
-                  className="!bg-red-600 hover:!bg-red-700 !border-red-600 !text-white font-semibold px-3 py-2 shadow-sm"
-                  tooltip="Export to PDF"
-                  tooltipOptions={{ position: 'bottom' }}
-                />
+                  <>
+                    <Button
+                      icon={shareToken ? "pi pi-link" : "pi pi-share-alt"}
+                      onClick={() => setShowShareDialog(true)}
+                      size="large"
+                      className={`${shareToken ? '!bg-green-600 hover:!bg-green-700 !border-green-600' : '!bg-blue-600 hover:!bg-blue-700 !border-blue-600'} !text-white font-semibold px-3 py-2 shadow-sm`}
+                      tooltip={shareToken ? "Shared - Manage Link" : "Share Results"}
+                      tooltipOptions={{ position: 'bottom' }}
+                    />
+                    <Button
+                      icon={exportingPdf ? "pi pi-spin pi-spinner" : "pi pi-file-pdf"}
+                      onClick={handleExportPdf}
+                      disabled={exportingPdf}
+                      size="large"
+                      className="!bg-red-600 hover:!bg-red-700 !border-red-600 !text-white font-semibold px-3 py-2 shadow-sm"
+                      tooltip="Export to PDF"
+                      tooltipOptions={{ position: 'bottom' }}
+                    />
+                  </>
               )}
               <Message severity="success" text="Completed" className="w-full md:w-auto" />
               </>
@@ -179,6 +193,15 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           </div>
         )}
       </div>
+
+      {/* Share Dialog */}
+      <ShareDialog
+        visible={showShareDialog}
+        onHide={() => setShowShareDialog(false)}
+        runId={runId}
+        currentShareToken={shareToken}
+        onShareStatusChange={setShareToken}
+      />
     </div>
   );
 };
