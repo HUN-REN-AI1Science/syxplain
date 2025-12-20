@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import yaml
 from datetime import datetime
 from pathlib import Path
