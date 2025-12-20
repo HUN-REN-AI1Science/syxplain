@@ -85,6 +85,9 @@ export const runsService = {
 
   downloadCsv: (id: string) =>
     api.get(`/runs/${id}/download-csv`, { responseType: 'blob' }),
+
+  delete: (id: string) =>
+    api.delete<{ message: string }>(`/runs/${id}`),
 };
 
 // ============================================================================

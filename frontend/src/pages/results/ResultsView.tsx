@@ -8,6 +8,7 @@ import { Button } from 'primereact/button';
 import { Message } from 'primereact/message';
 import { ProgressBar } from 'primereact/progressbar';
 import { Toast } from 'primereact/toast';
+import { Dialog } from 'primereact/dialog';
 import RunSettingsPanel from '@components/RunSettings/RunSettingsPanel';
 import EquationResultsView from '@components/EquationResults/EquationResultsView';
 import ShareDialog from '@components/common/ShareDialog';
@@ -39,6 +40,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   const [exportingPdf, setExportingPdf] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [initialFetchDone, setInitialFetchDone] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Refs
   const toast = useRef<Toast>(null);
@@ -87,6 +91,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
         }
       } catch (e) {
         console.error(e);
+      } finally {
+        setInitialFetchDone(true);
       }
     };
 
@@ -115,8 +121,26 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     }
   };
 
-  // Derived state
-  const isLoading = !runId || status === 'pending' || status === 'running';
+  // Handle run deletion
+  const handleDeleteRun = async () => {
+    setDeleting(true);
+    try {
+      await runsService.delete(runId);
+      toast.current?.show({ severity: 'success', summary: 'Run Deleted', detail: 'The run has been permanently deleted' });
+      // Navigate to history after short delay
+      setTimeout(() => {
+        window.location.href = '/history';
+      }, 1500);
+    } catch (e) {
+      console.error('Failed to delete run:', e);
+      toast.current?.show({ severity: 'error', summary: 'Delete Failed', detail: 'Failed to delete the run' });
+      setDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  };
+
+  // Derived state - only show loading state after initial fetch to prevent flash
+  const isLoading = initialFetchDone && (!runId || status === 'pending' || status === 'running');
   const isCompleted = status === 'completed';
 
   return (
@@ -202,6 +226,71 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
         currentShareToken={shareToken}
         onShareStatusChange={setShareToken}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        visible={showDeleteDialog}
+        onHide={() => !deleting && setShowDeleteDialog(false)}
+        header={
+          <div className="flex items-center gap-2 text-red-600">
+            <i className="pi pi-exclamation-triangle text-xl"></i>
+            <span>Delete Run Permanently</span>
+          </div>
+        }
+        className="w-full max-w-md"
+        closable={!deleting}
+        footer={
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              label="Cancel"
+              icon="pi pi-times"
+              onClick={() => setShowDeleteDialog(false)}
+              disabled={deleting}
+              className="!bg-slate-100 hover:!bg-slate-200 !border-slate-200 !text-slate-700 font-medium px-4 py-2"
+            />
+            <Button
+              label={deleting ? 'Deleting...' : 'Delete Permanently'}
+              icon={deleting ? 'pi pi-spin pi-spinner' : 'pi pi-trash'}
+              onClick={handleDeleteRun}
+              disabled={deleting}
+              className="!bg-red-600 hover:!bg-red-700 !border-red-600 !text-white font-semibold px-4 py-2 shadow-sm"
+            />
+          </div>
+        }
+      >
+        <div className="py-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <p className="text-red-700 font-medium mb-2">
+              <i className="pi pi-info-circle mr-2"></i>
+              This action cannot be undone.
+            </p>
+            <p className="text-red-600 text-sm">
+              All data related to this analysis run will be permanently removed, including results, configurations, and any shared links.
+            </p>
+          </div>
+          <p className="text-slate-600">
+            Are you sure you want to delete this run?
+          </p>
+        </div>
+      </Dialog>
+
+      {/* Danger Zone - Delete Button */}
+      {isCompleted && (
+        <div className="mt-12 pt-6 border-t border-slate-200">
+          <div className="flex items-start justify-between">
+            <div>
+              <h4 className="text-sm font-semibold text-red-600 mb-1">Danger Zone</h4>
+              <p className="text-sm text-slate-500">Permanently delete this run and all associated data</p>
+            </div>
+            <Button
+              label="Delete Run"
+              icon="pi pi-trash"
+              onClick={() => setShowDeleteDialog(true)}
+              className="!bg-red-600 hover:!bg-red-700 !border-red-600 !text-white font-semibold px-4 py-2 shadow-sm"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

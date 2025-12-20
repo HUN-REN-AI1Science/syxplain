@@ -447,6 +447,36 @@ def get_run(
         "public_share_token": run.public_share_token
     }
 
+@app.delete("/api/runs/{run_id}")
+def delete_run(
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Permanently delete a run and all associated data."""
+    run = db.query(DbRun).filter(
+        DbRun.id == run_id,
+        DbRun.user_id == current_user.user_id
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    try:
+        # Delete associated artifacts (cascade should handle this, but be explicit)
+        db.query(RunArtifact).filter(RunArtifact.run_id == run_id).delete()
+
+        # Delete the run itself
+        db.delete(run)
+        db.commit()
+
+        logger.info(f"User {current_user.user_id} deleted run {run_id}")
+
+        return {"message": "Run deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete run {run_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete run: {str(e)}")
+
 @app.get("/api/runs/{run_id}/details")
 def get_run_details(
     run_id: str,

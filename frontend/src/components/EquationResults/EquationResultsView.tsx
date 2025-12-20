@@ -229,7 +229,7 @@ const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = (
                   {equation.scatter_data && (
                     <div>
                       <h5 className="text-sm font-semibold text-slate-700 flex items-center gap-2 mb-3">
-                        <i className="pi pi-chart-scatter text-blue-500"></i>
+                        <i className="pi pi-chart-line text-blue-500"></i>
                         Predicted vs. Measured
                       </h5>
                       <div className="bg-white rounded-lg p-4 border border-slate-200">
