@@ -4,10 +4,12 @@ from fastapi.responses import Response
 import os
 import logging
 import io
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query
 
-from backend.models import ProblemDescription, RunRequest, RunResponse, RunSummary
+from backend.models import ProblemDescription, RunRequest, RunResponse, RunSummary, PaginatedRunsResponse
 import asyncio
 from backend.service import start_run, cleanup_processes, check_timed_out_runs
 from backend.database import init_db, get_db, File as DbFile, Run as DbRun, RunArtifact
@@ -283,16 +285,57 @@ def run_analysis(
     logger.info(f"Analysis started with Run ID: {run_id} (analysis_type={request.analysis_type}, model={request.deep_research_model})")
     return RunResponse(run_id=run_id, status="pending", message="Analysis started")
 
-@app.get("/api/runs", response_model=List[RunSummary])
+@app.get("/api/runs", response_model=PaginatedRunsResponse)
 def list_runs(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+    sort_field: str = Query("created_at", description="Field to sort by"),
+    sort_order: str = Query("desc", description="Sort order: asc or desc"),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    analysis_type: Optional[str] = Query(None, description="Filter by analysis type"),
+    search: Optional[str] = Query(None, description="Search in filename and target variable"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Only return runs belonging to the current user
-    runs = db.query(DbRun).filter(
-        DbRun.user_id == current_user.user_id
-    ).order_by(DbRun.created_at.desc()).all()
+    # Start with base query for current user
+    query = db.query(DbRun).filter(DbRun.user_id == current_user.user_id)
 
+    # Apply filters
+    if status:
+        query = query.filter(DbRun.status == status)
+    if analysis_type:
+        query = query.filter(DbRun.analysis_type == analysis_type)
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            or_(
+                DbRun.csv_filename.ilike(search_pattern),
+                DbRun.problem_description["target_variable"].astext.ilike(search_pattern)
+            )
+        )
+
+    # Get total count before pagination
+    total = query.count()
+
+    # Apply sorting
+    valid_sort_fields = {
+        "created_at": DbRun.created_at,
+        "csv_filename": DbRun.csv_filename,
+        "status": DbRun.status,
+        "analysis_type": DbRun.analysis_type,
+        "target_variable": DbRun.problem_description["target_variable"].astext
+    }
+    sort_column = valid_sort_fields.get(sort_field, DbRun.created_at)
+    if sort_order == "asc":
+        query = query.order_by(sort_column.asc())
+    else:
+        query = query.order_by(sort_column.desc())
+
+    # Apply pagination
+    offset = (page - 1) * page_size
+    runs = query.offset(offset).limit(page_size).all()
+
+    # Build response
     summary_list = []
     for run in runs:
         target = None
@@ -305,9 +348,19 @@ def list_runs(
             created_at=run.created_at,
             csv_filename=run.csv_filename,
             target_variable=target,
-            progress=run.progress or 0
+            progress=run.progress or 0,
+            analysis_type=run.analysis_type or "quick"
         ))
-    return summary_list
+
+    total_pages = (total + page_size - 1) // page_size  # Ceiling division
+
+    return PaginatedRunsResponse(
+        items=summary_list,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages
+    )
 
 @app.get("/api/runs/{run_id}")
 def get_run(

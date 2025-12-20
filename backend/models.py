@@ -30,3 +30,11 @@ class RunSummary(BaseModel):
     csv_filename: str
     target_variable: Optional[str] = None
     progress: int = 0  # 0-100 percentage
+    analysis_type: str = "quick"  # "quick" or "deep"
+
+class PaginatedRunsResponse(BaseModel):
+    items: List[RunSummary]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
