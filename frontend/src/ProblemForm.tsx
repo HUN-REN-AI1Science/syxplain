@@ -1,5 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+/**
+ * ProblemForm Component
+ * Form for defining the problem description, target variable, and features
+ */
 
+import React, { useState, useRef, useEffect } from 'react';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Dropdown } from 'primereact/dropdown';
 import { Button } from 'primereact/button';
@@ -7,7 +11,7 @@ import { SelectButton } from 'primereact/selectbutton';
 import { Dialog } from 'primereact/dialog';
 import { Toast } from 'primereact/toast';
 import { Menu } from 'primereact/menu';
-import api from './api';
+import { configService } from './services/api';
 
 interface ProblemFormProps {
   columns: string[];
@@ -39,7 +43,7 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nan
   useEffect(() => {
     const fetchModels = async () => {
       try {
-        const response = await api.get('/config/deep-research-models');
+        const response = await configService.getDeepResearchModels();
         const models = response.data.models || [];
         setDeepResearchModels(models);
         // Auto-select first model if available

@@ -1,30 +1,16 @@
+/**
+ * RunSettingsPanel Component
+ * Displays expandable run configuration details
+ */
+
 import React, { useState } from 'react';
 import { Panel } from 'primereact/panel';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
 import { ProgressBar } from 'primereact/progressbar';
-import api from './api';
-
-interface RunDetails {
-  id: string;
-  status: string;
-  created_at: string | null;
-  problem_description: {
-    project_description: string;
-    target_variable: string;
-    features: Record<string, string>;
-  };
-  csv_filename: string;
-  csv_metadata: {
-    filename: string;
-    size_bytes: number;
-    row_count: number | null;
-    column_count: number | null;
-    columns: string[];
-  } | null;
-  analysis_type: string | null;
-  error: string | null;
-}
+import { runsService } from './services/api';
+import { formatFileSize } from './utils/formatting';
+import type { RunDetails } from './types';
 
 interface RunSettingsPanelProps {
   runId: string;
@@ -37,17 +23,9 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
   const [error, setError] = useState<string | null>(null);
   const [hasFetched, setHasFetched] = useState(false);
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  };
-
   const handleDownloadCsv = async () => {
     try {
-      const response = await api.get(`/runs/${runId}/download-csv`, {
-        responseType: 'blob',
-      });
+      const response = await runsService.downloadCsv(runId);
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -71,7 +49,7 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
       setError(null);
 
       try {
-        const response = await api.get(`/runs/${runId}/details`);
+        const response = await runsService.getDetails(runId);
         setRunDetails(response.data);
         setHasFetched(true);
       } catch (err) {

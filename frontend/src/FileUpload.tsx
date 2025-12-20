@@ -1,8 +1,13 @@
+/**
+ * FileUpload Component
+ * Handles CSV file upload with drag & drop support
+ */
+
 import React, { useState } from 'react';
-import api from './api';
 import { ProgressBar } from 'primereact/progressbar';
 import { Message } from 'primereact/message';
 import { Button } from 'primereact/button';
+import { uploadService } from './services/api';
 
 interface FileUploadProps {
   onUploadComplete: (filename: string, columns: string[], excludedColumns?: string[], nanCounts?: Record<string, number>) => void;
@@ -22,9 +27,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
     formData.append('file', file);
 
     try {
-      const response = await api.post('/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const response = await uploadService.uploadFile(file);
 
       if (response.data.error) {
         setError(response.data.error);

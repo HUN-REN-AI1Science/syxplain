@@ -1,20 +1,19 @@
+/**
+ * ProfileView Component
+ * Displays user profile and account management options
+ */
+
 import React, { useEffect, useState } from 'react';
 import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
 import { Message } from 'primereact/message';
 import { ProgressSpinner } from 'primereact/progressspinner';
 import { useAuth } from './contexts/AuthContext';
-import api from './api';
+import { profileService } from './services/api';
+import type { ProfileData } from './types';
 
 interface ProfileViewProps {
   onBack: () => void;
-}
-
-interface ProfileData {
-  email: string;
-  created_at: string | null;
-  total_runs: number;
-  total_files: number;
 }
 
 const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
@@ -28,7 +27,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await api.get('/profile');
+        const response = await profileService.get();
         setProfile(response.data);
       } catch (e) {
         console.error('Failed to fetch profile:', e);
@@ -44,7 +43,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack }) => {
     setDeleting(true);
     setShowDeleteDialog(false);
     try {
-      await api.delete('/profile');
+      await profileService.delete();
       await signOut();
     } catch (e: any) {
       console.error('Failed to delete account:', e);

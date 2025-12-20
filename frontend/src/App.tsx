@@ -8,7 +8,7 @@ import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import ForgotPassword from './pages/ForgotPassword';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import api from './api';
+import { runsService } from './services/api';
 import { Steps } from 'primereact/steps';
 import { Toast } from 'primereact/toast';
 import { Card } from 'primereact/card';
@@ -46,11 +46,11 @@ function MainApp() {
     try {
       // Extract analysis_type and deep_research_model from problemData (passed from ProblemForm)
       const { analysis_type, deep_research_model, ...problemDescription } = problemData;
-      const response = await api.post('/run', {
+      const response = await runsService.create({
         problem_description: problemDescription,
-        csv_filename: filename,
+        csv_filename: filename!,
         analysis_type: analysis_type || 'quick',
-        deep_research_model: deep_research_model || null
+        deep_research_model: deep_research_model || null,
       });
       setRunId(response.data.run_id);
     } catch (e) {

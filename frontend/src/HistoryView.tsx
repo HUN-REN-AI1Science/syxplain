@@ -1,5 +1,9 @@
+/**
+ * HistoryView Component
+ * Displays paginated, sortable, and filterable run history
+ */
+
 import { useState, useEffect, useCallback } from 'react';
-import api from './api';
 import { DataTable, DataTablePageEvent, DataTableSortEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
@@ -7,30 +11,50 @@ import { Tag } from 'primereact/tag';
 import { Tooltip } from 'primereact/tooltip';
 import { Dropdown } from 'primereact/dropdown';
 import { InputText } from 'primereact/inputtext';
+import { runsService } from './services/api';
+import type { RunSummary } from './types';
 
-interface RunSummary {
-  id: string;
-  status: string;
-  created_at: string;
-  csv_filename: string;
-  target_variable: string | null;
-  progress: number;
-  analysis_type: string;
-}
-
-interface PaginatedResponse {
-  items: RunSummary[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
-}
+// ============================================================================
+// Types
+// ============================================================================
 
 interface HistoryViewProps {
   onSelectRun: (runId: string) => void;
 }
 
+// ============================================================================
+// Constants
+// ============================================================================
+
+const STATUS_OPTIONS = [
+  { label: 'All Statuses', value: '' },
+  { label: 'Completed', value: 'completed' },
+  { label: 'Running', value: 'running' },
+  { label: 'Pending', value: 'pending' },
+  { label: 'Failed', value: 'failed' },
+  { label: 'Timeout', value: 'timeout' },
+];
+
+const ANALYSIS_TYPE_OPTIONS = [
+  { label: 'All Types', value: '' },
+  { label: 'Quick', value: 'quick' },
+  { label: 'Deep', value: 'deep' },
+];
+
+const STATUS_CONFIG: Record<string, { severity: 'success' | 'info' | 'warning' | 'danger'; label: string }> = {
+  completed: { severity: 'success', label: 'Completed' },
+  running: { severity: 'info', label: 'Running' },
+  pending: { severity: 'warning', label: 'Pending' },
+  failed: { severity: 'danger', label: 'Failed' },
+  timeout: { severity: 'danger', label: 'Timeout' },
+};
+
+// ============================================================================
+// Component
+// ============================================================================
+
 const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
+  // Data state
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalRecords, setTotalRecords] = useState(0);
@@ -41,7 +65,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
 
   // Sorting state
   const [sortField, setSortField] = useState('created_at');
-  const [sortOrder, setSortOrder] = useState<1 | -1 | 0>(-1); // -1 = desc, 1 = asc
+  const [sortOrder, setSortOrder] = useState<1 | -1 | 0>(-1);
 
   // Filter state
   const [statusFilter, setStatusFilter] = useState('');
@@ -53,26 +77,24 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
-      setPage(1); // Reset to first page on search
+      setPage(1);
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Load runs data
   const loadRuns = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        page_size: pageSize.toString(),
+      const response = await runsService.getAll({
+        page,
+        page_size: pageSize,
         sort_field: sortField,
-        sort_order: sortOrder === 1 ? 'asc' : 'desc'
+        sort_order: sortOrder === 1 ? 'asc' : 'desc',
+        status: statusFilter || undefined,
+        analysis_type: analysisTypeFilter || undefined,
+        search: debouncedSearch || undefined,
       });
-
-      if (statusFilter) params.append('status', statusFilter);
-      if (analysisTypeFilter) params.append('analysis_type', analysisTypeFilter);
-      if (debouncedSearch) params.append('search', debouncedSearch);
-
-      const response = await api.get<PaginatedResponse>(`/runs?${params.toString()}`);
       setRuns(response.data.items);
       setTotalRecords(response.data.total);
     } catch (error) {
@@ -86,8 +108,9 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
     loadRuns();
   }, [loadRuns]);
 
+  // Event handlers
   const onPageChange = (event: DataTablePageEvent) => {
-    setPage((event.page ?? 0) + 1); // DataTable uses 0-indexed pages
+    setPage((event.page ?? 0) + 1);
   };
 
   const onSort = (event: DataTableSortEvent) => {
@@ -95,28 +118,25 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
     setSortOrder(event.sortOrder as 1 | -1 | 0);
   };
 
+  const clearFilters = () => {
+    setStatusFilter('');
+    setAnalysisTypeFilter('');
+    setSearchQuery('');
+    setPage(1);
+  };
+
+  // Computed values
+  const hasActiveFilters = statusFilter || analysisTypeFilter || searchQuery;
+
+  // Column templates
   const statusTemplate = (rowData: RunSummary) => {
-    const statusMap: Record<string, { severity: 'success' | 'info' | 'warning' | 'danger', label: string }> = {
-      completed: { severity: 'success', label: 'Completed' },
-      running: { severity: 'info', label: 'Running' },
-      pending: { severity: 'warning', label: 'Pending' },
-      failed: { severity: 'danger', label: 'Failed' },
-      timeout: { severity: 'danger', label: 'Timeout' }
-    };
+    const config = STATUS_CONFIG[rowData.status] || { severity: 'info', label: rowData.status };
 
-    const config = statusMap[rowData.status] || { severity: 'info', label: rowData.status };
-
-    // Show progress tooltip for running/pending status
     if (rowData.status === 'running' || rowData.status === 'pending') {
       const tagId = `status-tag-${rowData.id.replace(/-/g, '')}`;
       return (
         <>
-          <Tag
-            severity={config.severity}
-            value={config.label}
-            className={tagId}
-            style={{ cursor: 'help' }}
-          />
+          <Tag severity={config.severity} value={config.label} className={tagId} style={{ cursor: 'help' }} />
           <Tooltip target={`.${tagId}`} content={`${rowData.progress || 0}% complete`} position="top" />
         </>
       );
@@ -140,44 +160,19 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
     );
   };
 
-  const actionTemplate = (rowData: RunSummary) => {
-    return (
-      <Button
-        label="View"
-        icon="pi pi-eye"
-        size="small"
-        onClick={() => onSelectRun(rowData.id)}
-        disabled={rowData.status !== 'completed'}
-      />
-    );
-  };
-
-  const statusOptions = [
-    { label: 'All Statuses', value: '' },
-    { label: 'Completed', value: 'completed' },
-    { label: 'Running', value: 'running' },
-    { label: 'Pending', value: 'pending' },
-    { label: 'Failed', value: 'failed' },
-    { label: 'Timeout', value: 'timeout' }
-  ];
-
-  const analysisTypeOptions = [
-    { label: 'All Types', value: '' },
-    { label: 'Quick', value: 'quick' },
-    { label: 'Deep', value: 'deep' }
-  ];
-
-  const clearFilters = () => {
-    setStatusFilter('');
-    setAnalysisTypeFilter('');
-    setSearchQuery('');
-    setPage(1);
-  };
-
-  const hasActiveFilters = statusFilter || analysisTypeFilter || searchQuery;
+  const actionTemplate = (rowData: RunSummary) => (
+    <Button
+      label="View"
+      icon="pi pi-eye"
+      size="small"
+      onClick={() => onSelectRun(rowData.id)}
+      disabled={rowData.status !== 'completed'}
+    />
+  );
 
   return (
     <div className="p-4 sm:p-6">
+      {/* Header */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Run History</h2>
         <p className="text-slate-500">View your past analysis runs</p>
@@ -202,7 +197,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
           {/* Analysis Type Filter */}
           <Dropdown
             value={analysisTypeFilter}
-            options={analysisTypeOptions}
+            options={ANALYSIS_TYPE_OPTIONS}
             optionLabel="label"
             optionValue="value"
             onChange={(e) => { setAnalysisTypeFilter(e.value); setPage(1); }}
@@ -213,7 +208,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
           {/* Status Filter */}
           <Dropdown
             value={statusFilter}
-            options={statusOptions}
+            options={STATUS_OPTIONS}
             optionLabel="label"
             optionValue="value"
             onChange={(e) => { setStatusFilter(e.value); setPage(1); }}
@@ -221,7 +216,6 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
             className="w-full sm:w-[170px]"
           />
 
-          {/* Clear Filters */}
           {/* Actions */}
           <div className="flex gap-2 sm:ml-auto">
             {hasActiveFilters && (
@@ -234,7 +228,6 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
                 onClick={clearFilters}
               />
             )}
-
             <Button
               icon="pi pi-refresh"
               severity="secondary"
@@ -248,9 +241,8 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
         </div>
       </div>
 
-      <div
-        className={`overflow-x-auto transition-opacity duration-200 ${loading ? 'opacity-60' : 'opacity-100'}`}
-      >
+      {/* Data Table */}
+      <div className={`overflow-x-auto transition-opacity duration-200 ${loading ? 'opacity-60' : 'opacity-100'}`}>
         <DataTable
           value={runs}
           lazy

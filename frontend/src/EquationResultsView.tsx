@@ -1,3 +1,8 @@
+/**
+ * EquationResultsView Component
+ * Displays equation analysis results with MathJax rendering and interactive charts
+ */
+
 import React, { useState, useMemo } from 'react';
 import { Tag } from 'primereact/tag';
 import { Button } from 'primereact/button';
@@ -11,48 +16,11 @@ import {
   Legend,
 } from 'chart.js';
 import { Scatter } from 'react-chartjs-2';
+import { escapeForAsciiMath } from './utils/formatting';
+import type { Equation, ScatterData, EquationResults } from './types';
 
 // Register Chart.js components
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
-
-interface TermExplanation {
-  term: string;
-  explanation: string;
-}
-
-interface ScatterData {
-  measured: number[];
-  predicted: number[];
-}
-
-interface Equation {
-  id: number;
-  equation: string;
-  loss: number;
-  complexity: number;
-  overview: string;
-  term_explanations: TermExplanation[];
-  citations?: string[];
-  scatter_data?: ScatterData;
-}
-
-interface Summary {
-  key_drivers: string[];
-  secondary_drivers: string[];
-  findings: string;
-}
-
-interface Recommendation {
-  equation_id: number;
-  rationale: string[];
-}
-
-interface EquationResults {
-  equations: Equation[];
-  summary: Summary;
-  recommendation: Recommendation;
-  _parse_error?: string;
-}
 
 interface EquationResultsViewProps {
   data: EquationResults;
@@ -65,11 +33,6 @@ const mathJaxConfig = {
     inlineMath: [['$', '$'], ['\\(', '\\)']],
     displayMath: [['$$', '$$'], ['\\[', '\\]']]
   }
-};
-
-// Helper to escape special characters for AsciiMath rendering
-const escapeForAsciiMath = (text: string): string => {
-  return text.replace(/([a-zA-Z][a-zA-Z0-9]*(?:_[a-zA-Z0-9]+)+)/g, '"$1"');
 };
 
 // Interactive Scatter Plot Component
