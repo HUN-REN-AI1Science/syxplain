@@ -352,7 +352,7 @@ def deep_research_equations(features_dict: dict, model_name: str = None) -> dict
     try:
         with dspy.settings.context(lm=lm):
             response = predictor(features_json=features_json)
-        report_usage_to_langfuse(lm)
+        report_usage_to_langfuse(lm, model_name=model_name)
 
         # Parse and validate JSON response
         equations_str = response.equations

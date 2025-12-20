@@ -92,8 +92,13 @@ def _count_tokens_manually(messages: list, outputs: list) -> tuple[int, int]:
     return prompt_tokens, completion_tokens
 
 
-def report_usage_to_langfuse(lm: "dspy.LM") -> None:
-    """Extract token usage from DSPy LM history and report to Langfuse."""
+def report_usage_to_langfuse(lm: "dspy.LM", model_name: str = None) -> None:
+    """Extract token usage from DSPy LM history and report to Langfuse.
+
+    Args:
+        lm: The DSPy LM instance with history to extract usage from
+        model_name: Optional model name override (defaults to OPENAI_MODEL_NAME env var)
+    """
     if not is_langfuse_enabled() or not lm.history:
         return
 
@@ -116,9 +121,9 @@ def report_usage_to_langfuse(lm: "dspy.LM") -> None:
     total_tokens = prompt_tokens + completion_tokens
 
     if total_tokens > 0:
-        model_name = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
+        effective_model = model_name or os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
         langfuse.update_current_generation(
-            model=model_name,
+            model=effective_model,
             usage_details={
                 "input": prompt_tokens,
                 "output": completion_tokens,
