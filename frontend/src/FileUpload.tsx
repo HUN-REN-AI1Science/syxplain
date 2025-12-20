@@ -1,6 +1,6 @@
 /**
  * FileUpload Component
- * Handles CSV file upload with drag & drop support
+ * Handles CSV and Excel file upload with drag & drop support
  */
 
 import React, { useState } from 'react';
@@ -96,7 +96,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
       <div className={`transition-all duration-500 ease-in-out w-full max-w-2xl flex flex-col items-center ${processing ? 'opacity-20 blur-sm scale-95 pointer-events-none' : 'opacity-100'}`}>
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-slate-800 mb-2">Upload your Dataset</h2>
-            <p className="text-slate-500">Supported format: .csv</p>
+          <p className="text-slate-500">Supported formats: .csv, .xlsx, .xls</p>
           </div>
 
           <div
@@ -112,7 +112,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
           >
             <input
               type="file"
-              accept=".csv"
+            accept=".csv,.xlsx,.xls"
               onChange={handleChange}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
               id="csv-upload"
@@ -126,7 +126,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
 
               <div className="space-y-2">
                 <p className="text-xl font-semibold text-slate-700">
-                  {uploading ? 'Uploading...' : 'Drag & Drop your CSV file here'}
+                {uploading ? 'Uploading...' : 'Drag & Drop your file here'}
                 </p>
                 <p className="text-sm text-slate-500">
                   or click to browse from your computer

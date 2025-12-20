@@ -18,3 +18,4 @@ pyjwt
 dspy
 langfuse
 openinference-instrumentation-dspy
+openpyxl

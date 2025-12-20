@@ -82,7 +82,13 @@ def _run_worker(run_id: str, problem_desc: Dict[str, Any], csv_filename: str, an
                 raise Exception(f"File {csv_filename} not found in database")
 
             logger.info(f"Loading data for {csv_filename} from DB")
-            sample_data = pd.read_csv(io.BytesIO(db_file.content))
+            # Detect file type and use appropriate reader
+            filename_lower = csv_filename.lower()
+            if filename_lower.endswith('.xlsx') or filename_lower.endswith('.xls'):
+                engine = 'openpyxl' if filename_lower.endswith('.xlsx') else 'xlrd'
+                sample_data = pd.read_excel(io.BytesIO(db_file.content), engine=engine)
+            else:
+                sample_data = pd.read_csv(io.BytesIO(db_file.content))
         finally:
             if db:
                 db.close()

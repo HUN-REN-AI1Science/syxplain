@@ -74,6 +74,11 @@ def upload_file(
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
     CHUNK_SIZE = 1024 * 1024  # 1 MB
 
+    # Validate file extension
+    filename_lower = file.filename.lower() if file.filename else ""
+    if not (filename_lower.endswith('.csv') or filename_lower.endswith('.xlsx') or filename_lower.endswith('.xls')):
+        raise HTTPException(status_code=400, detail="Unsupported file format. Please upload a CSV or Excel (.xlsx, .xls) file.")
+
     content = bytearray()
     while True:
         chunk = file.file.read(CHUNK_SIZE)
@@ -86,24 +91,53 @@ def upload_file(
     # Convert to immutable bytes
     content = bytes(content)
 
-    # Validate CSV content
+    # Detect file type and validate content
     try:
         import pandas as pd
-        # Try to parse the content as CSV
-        df = pd.read_csv(io.BytesIO(content))
+
+        is_excel = filename_lower.endswith('.xlsx') or filename_lower.endswith('.xls')
+
+        if is_excel:
+            # Parse Excel file
+            try:
+                # Use openpyxl for .xlsx files
+                engine = 'openpyxl' if filename_lower.endswith('.xlsx') else 'xlrd'
+                df = pd.read_excel(io.BytesIO(content), engine=engine)
+            except Exception as excel_err:
+                logger.error(f"Failed to parse Excel file {file.filename}: {excel_err}")
+                raise HTTPException(status_code=400, detail=f"Invalid Excel file: Could not parse the file. Please ensure it's a valid Excel workbook.")
+        else:
+            # Parse CSV file
+            df = pd.read_csv(io.BytesIO(content))
+
         columns = df.columns.tolist()
         if df.empty and len(columns) == 0:
-             raise ValueError("Empty CSV file")
+            raise ValueError("Empty file - no data found")
+        if len(columns) == 0:
+            raise ValueError("No columns detected in the file")
+
         logger.info(f"File {file.filename} validated successfully. Columns: {columns}")
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Invalid CSV file {file.filename}: {e}")
-        raise HTTPException(status_code=400, detail=f"Invalid CSV file: {str(e)}")
+        file_type = "Excel" if is_excel else "CSV"
+        logger.error(f"Invalid {file_type} file {file.filename}: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid {file_type} file: {str(e)}")
+
+    # Determine appropriate media type
+    if filename_lower.endswith('.xlsx'):
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    elif filename_lower.endswith('.xls'):
+        media_type = "application/vnd.ms-excel"
+    else:
+        media_type = "text/csv"
 
     # Store in DB with user_id
     db_file = DbFile(
         filename=file.filename,
         content=content,
-        media_type=file.content_type,
+        media_type=media_type,
         user_id=current_user.user_id
     )
     db.add(db_file)
@@ -438,7 +472,13 @@ def get_run_details(
     csv_metadata = None
     if db_file:
         try:
-            df = pd.read_csv(io.BytesIO(db_file.content))
+            # Detect file type and use appropriate reader
+            filename_lower = db_file.filename.lower()
+            if filename_lower.endswith('.xlsx') or filename_lower.endswith('.xls'):
+                engine = 'openpyxl' if filename_lower.endswith('.xlsx') else 'xlrd'
+                df = pd.read_excel(io.BytesIO(db_file.content), engine=engine)
+            else:
+                df = pd.read_csv(io.BytesIO(db_file.content))
             csv_metadata = {
                 "filename": db_file.filename,
                 "size_bytes": len(db_file.content),
@@ -626,7 +666,13 @@ def get_public_run_details(
     csv_metadata = None
     if db_file:
         try:
-            df = pd.read_csv(io.BytesIO(db_file.content))
+            # Detect file type and use appropriate reader
+            filename_lower = db_file.filename.lower()
+            if filename_lower.endswith('.xlsx') or filename_lower.endswith('.xls'):
+                engine = 'openpyxl' if filename_lower.endswith('.xlsx') else 'xlrd'
+                df = pd.read_excel(io.BytesIO(db_file.content), engine=engine)
+            else:
+                df = pd.read_csv(io.BytesIO(db_file.content))
             csv_metadata = {
                 "filename": db_file.filename,
                 "size_bytes": len(db_file.content),
