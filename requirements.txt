@@ -5,6 +5,7 @@ pandas
 numpy
 sympy
 pysr
+langchain
 langgraph
 langchain-core
 matplotlib
