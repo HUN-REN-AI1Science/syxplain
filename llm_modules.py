@@ -301,7 +301,7 @@ class DeepResearchEquations(dspy.Signature):
     """
     features_json: str = dspy.InputField(desc="JSON string of feature dictionary mapping variable names to descriptions")
 
-    equations_json: str = dspy.OutputField(desc="JSON object with equations array containing equation, citations")
+    equations: str = dspy.OutputField(desc="JSON object with equations array containing equation, citations")
 
 
 @observe(name="deep_research_equations", as_type="generation")
@@ -355,8 +355,8 @@ def deep_research_equations(features_dict: dict, model_name: str = None) -> dict
         report_usage_to_langfuse(lm)
 
         # Parse and validate JSON response
-        equations_json = response.equations_json
-        cleaned_json = equations_json.replace("```json", "").replace("```", "").strip()
+        equations_str = response.equations
+        cleaned_json = equations_str.replace("```json", "").replace("```", "").strip()
 
         # Extract JSON if wrapped in other content
         if not (cleaned_json.startswith("{") and cleaned_json.endswith("}")):
@@ -372,7 +372,7 @@ def deep_research_equations(features_dict: dict, model_name: str = None) -> dict
                 parsed = {"equations": []}
             return parsed
         except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse deep research JSON: {e}. Raw: {equations_json[:500]}")
+            logger.warning(f"Failed to parse deep research JSON: {e}. Raw: {equations_str[:500]}")
             return {"equations": [], "_parse_error": str(e)}
     except Exception as e:
         flush_traces()
