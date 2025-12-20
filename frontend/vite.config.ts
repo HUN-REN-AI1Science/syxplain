@@ -11,5 +11,42 @@ export default defineConfig({
         changeOrigin: true,
       }
     }
+  },
+  build: {
+    // PrimeReact (~525kB) and jsPDF (~616kB) are unavoidably large
+    chunkSizeWarningLimit: 650,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Split large vendor libraries into separate chunks
+          if (id.includes('node_modules')) {
+            // MathJax is huge - separate chunk
+            if (id.includes('mathjax') || id.includes('better-react-mathjax')) {
+              return 'vendor-mathjax';
+            }
+            // jsPDF
+            if (id.includes('jspdf') || id.includes('html2canvas')) {
+              return 'vendor-pdf';
+            }
+            // Chart.js
+            if (id.includes('chart.js') || id.includes('react-chartjs-2')) {
+              return 'vendor-charts';
+            }
+            // Supabase
+            if (id.includes('@supabase')) {
+              return 'vendor-supabase';
+            }
+            // PrimeReact (but not all in one chunk to avoid quill issues)
+            if (id.includes('primereact') && !id.includes('.all.')) {
+              return 'vendor-primereact';
+            }
+            // React core
+            if (id.includes('react-dom') || id.includes('/react/')) {
+              return 'vendor-react';
+            }
+          }
+        }
+      }
+    }
   }
 })

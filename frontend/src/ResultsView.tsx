@@ -12,7 +12,7 @@ import RunSettingsPanel from './RunSettingsPanel';
 import EquationResultsView from './EquationResultsView';
 import { runsService, configService } from './services/api';
 import { useProgressInterpolation } from './hooks/useProgressInterpolation';
-import { generateResultsPdf } from './utils/pdfExport';
+// PDF export is dynamically imported when needed to reduce initial bundle size
 import type { ProgressPhase, EquationResults } from './types';
 
 // ============================================================================
@@ -92,13 +92,15 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     return () => clearInterval(intervalId);
   }, [runId]);
 
-  // Handle PDF export
+  // Handle PDF export (lazy loads the PDF library)
   const handleExportPdf = async () => {
     if (!result) return;
 
     setExportingPdf(true);
     try {
       const parsedData: EquationResults = JSON.parse(result);
+      // Dynamic import to reduce initial bundle size
+      const { generateResultsPdf } = await import('./utils/pdfExport');
       await generateResultsPdf(parsedData, runId);
       toast.current?.show({ severity: 'success', summary: 'Export Complete', detail: 'PDF saved successfully' });
     } catch (e) {
