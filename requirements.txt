@@ -19,3 +19,5 @@ dspy
 langfuse
 openinference-instrumentation-dspy
 openpyxl
+rich
+httpx

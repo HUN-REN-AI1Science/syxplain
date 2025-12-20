@@ -13,6 +13,7 @@ from backend.core.config import get_settings
 from backend.core.exceptions import ExternalServiceError
 from backend.repositories.run_repository import RunRepository
 from backend.repositories.file_repository import FileRepository
+from backend.utils import parse_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class ProfileService:
         Returns:
             Profile data dictionary
         """
-        user_uuid = UUID(user_id)
+        user_uuid = parse_uuid(user_id)
 
         total_runs = self.run_repo.count_for_user(user_uuid)
         total_files = self.file_repo.count_for_user(user_uuid)
@@ -89,7 +90,7 @@ class ProfileService:
         Raises:
             ExternalServiceError: If Supabase deletion fails
         """
-        user_uuid = UUID(user_id)
+        user_uuid = parse_uuid(user_id)
 
         logger.info(f"Starting GDPR account deletion for user: {user_id}")
 

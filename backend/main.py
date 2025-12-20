@@ -7,39 +7,22 @@ moved to the service layer for cleaner separation of concerns.
 """
 import asyncio
 import logging
-import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.config import get_settings
 from backend.core.exceptions import register_exception_handlers
+from backend.core.logging import configure_logging, configure_uvicorn_logging
 from backend.infrastructure.database.connection import init_db
 from backend.workers.analysis_worker import cleanup_processes, check_timed_out_runs
 
 # Import routers
 from backend.api.routers import config, files, profile, runs, sharing
 
-# Configure logging
-from logger import configure_logging
-
+# Configure logging FIRST
 configure_logging()
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Logging Filter
-# ============================================================================
-
-class EndpointFilter(logging.Filter):
-    """Filter out /api/runs/ polling logs from uvicorn access logger."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        return record.getMessage().find("GET /api/runs/") == -1
-
-
-# Apply filter to uvicorn access logs
-logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
 
 # ============================================================================
@@ -73,17 +56,23 @@ def create_app() -> FastAPI:
     # Register exception handlers
     register_exception_handlers(app)
 
-    # Register routers
+    # Register routers (Order matters! Specific paths before parameterized ones)
     app.include_router(config.router)
     app.include_router(files.router)
     app.include_router(profile.router)
+    app.include_router(sharing.router)  # Sharing before Runs to capture /api/runs/shared
     app.include_router(runs.router)
-    app.include_router(sharing.router)
 
     # Register lifecycle events
     @app.on_event("startup")
     async def on_startup():
         """Initialize database and start background tasks."""
+        logger.info("Starting Syxplain API...")
+
+        # Apply uvicorn access log filtering
+        configure_uvicorn_logging()
+
+        # Initialize database
         init_db()
 
         # Start background task for process cleanup and timeout checking
@@ -97,6 +86,7 @@ def create_app() -> FastAPI:
                 await asyncio.sleep(60)  # Check every minute
 
         asyncio.create_task(periodic_cleanup())
+        logger.info("Syxplain API started successfully")
 
     return app
 

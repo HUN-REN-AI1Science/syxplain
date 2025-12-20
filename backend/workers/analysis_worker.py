@@ -104,9 +104,9 @@ def _run_worker(
         deep_research_model: Model for deep analysis
     """
     # Configure logging for this process
-    from logger import configure_debug_logging, configure_logging
+    from backend.core.logging import configure_logging, configure_debug_mode
     configure_logging()
-    configure_debug_logging()
+    configure_debug_mode()
 
     # Import syxplain_lib here to ensure Julia is initialized ONLY in this worker process
     from syxplain_lib import State, run_syxplain
@@ -136,15 +136,14 @@ def _run_worker(
         # Prepare state
         problem_description_src = json.dumps(problem_desc, indent=2)
 
-        # Initialize custom logger with run_id
-        from logger import StepLogger
-        run_logger = StepLogger(run_id=run_id)
+        # Initialize progress tracker with run_id
+        from backend.services.progress_service import ProgressTracker
+        progress = ProgressTracker(run_id=run_id)
 
         def entry_point(state: State) -> State:
             logger.info("Executing entry_point node")
-            state["logger"] = run_logger
-            state["logger"].log_step("initialization", {
-                "status": "Initializing analysis",
+            state["logger"] = progress
+            progress.update_progress("initialization", status="Initializing analysis", details={
                 "rows": len(sample_data),
                 "columns": len(sample_data.columns)
             })
@@ -205,7 +204,7 @@ def _run_worker(
 
         # Initialize state with our logger and analysis type
         initial_state = State()
-        initial_state["logger"] = run_logger
+        initial_state["logger"] = progress
         initial_state["analysis_type"] = analysis_type
         initial_state["deep_research_model"] = deep_research_model
 
@@ -214,7 +213,7 @@ def _run_worker(
 
         # Save JSON as artifact for download
         if final_state.get("pysr_explanations"):
-            run_logger.log_artifact(
+            progress.save_artifact(
                 "pysr_explanations.json",
                 final_state["pysr_explanations"].encode('utf-8'),
                 media_type="application/json"

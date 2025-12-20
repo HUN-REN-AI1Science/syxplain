@@ -5,6 +5,7 @@ from backend.services.file_service import FileService, FileMetadata, get_file_se
 from backend.services.run_service import RunService
 from backend.services.share_service import ShareService
 from backend.services.profile_service import ProfileService
+from backend.services.progress_service import ProgressTracker, get_progress_phases, get_progress_weights
 
 __all__ = [
     "FileService",
@@ -13,4 +14,7 @@ __all__ = [
     "RunService",
     "ShareService",
     "ProfileService",
+    "ProgressTracker",
+    "get_progress_phases",
+    "get_progress_weights",
 ]

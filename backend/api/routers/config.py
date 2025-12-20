@@ -10,9 +10,7 @@ from fastapi import APIRouter
 
 from backend.core.config import get_settings
 from backend.schemas.responses import DeepResearchModelsResponse
-
-# Import progress config loading from logger module
-from logger import get_cached_progress_config
+from backend.services.progress_service import get_progress_phases
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +25,7 @@ def get_progress_config():
     Returns:
         Dictionary with 'phases' list containing phase configuration
     """
-    phases, _ = get_cached_progress_config()
+    phases = get_progress_phases()
     return {"phases": phases}
 
 

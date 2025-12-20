@@ -9,11 +9,12 @@ import secrets
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from backend.core.exceptions import EntityNotFoundError
+from backend.core.exceptions import EntityNotFoundError, ValidationError
 from backend.repositories.run_repository import RunRepository
 from backend.repositories.file_repository import FileRepository
 from backend.services.file_service import FileService, get_file_service
 from backend.infrastructure.database.models import Run
+from backend.utils import parse_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ class ShareService:
 
         # Generate new token
         token = secrets.token_urlsafe(self.SHARE_TOKEN_LENGTH)
-        self.run_repo.set_share_token(UUID(run_id), token)
+        self.run_repo.set_share_token(parse_uuid(run_id), token)
 
         logger.info(f"User {user_id} created share link for run {run_id}")
 
@@ -95,11 +96,11 @@ class ShareService:
         Raises:
             EntityNotFoundError: If run not found or not owned by user
         """
-        run = self.run_repo.get_by_id_for_user(UUID(run_id), UUID(user_id))
+        run = self.run_repo.get_by_id_for_user(parse_uuid(run_id), parse_uuid(user_id))
         if not run:
             raise EntityNotFoundError("Run", run_id)
 
-        self.run_repo.revoke_share_token(UUID(run_id))
+        self.run_repo.revoke_share_token(parse_uuid(run_id))
 
         logger.info(f"User {user_id} revoked share link for run {run_id}")
 
@@ -116,7 +117,7 @@ class ShareService:
         Returns:
             List of shared run summaries
         """
-        runs = self.run_repo.get_shared_runs(UUID(user_id))
+        runs = self.run_repo.get_shared_runs(parse_uuid(user_id))
 
         result = []
         for run in runs:

@@ -25,6 +25,7 @@ from backend.repositories.file_repository import FileRepository
 from backend.repositories.artifact_repository import ArtifactRepository
 from backend.services.file_service import FileService, get_file_service
 from backend.infrastructure.database.models import Run
+from backend.utils import parse_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ class RunService:
         Raises:
             EntityNotFoundError: If run not found or not owned by user
         """
-        run = self.run_repo.get_by_id_for_user(UUID(run_id), UUID(user_id))
+        run = self.run_repo.get_by_id_for_user(parse_uuid(run_id), parse_uuid(user_id))
         if not run:
             raise EntityNotFoundError("Run", run_id)
         return run
@@ -136,7 +137,7 @@ class RunService:
             sort_order=sort_order
         )
 
-        return self.run_repo.get_user_runs(UUID(user_id), filters, pagination)
+        return self.run_repo.get_user_runs(parse_uuid(user_id), filters, pagination)
 
     def get_run_details(
         self,
@@ -234,7 +235,7 @@ class RunService:
                 )
 
         # Verify file exists and belongs to user
-        db_file = self.file_repo.get_latest_by_filename(csv_filename, UUID(user_id))
+        db_file = self.file_repo.get_latest_by_filename(csv_filename, parse_uuid(user_id))
         if not db_file:
             raise EntityNotFoundError("File", csv_filename)
 
@@ -260,7 +261,7 @@ class RunService:
         run = self.get_run_for_user(run_id, user_id)
 
         # Delete artifacts first (cascade should handle this, but be explicit)
-        self.artifact_repo.delete_for_run(UUID(run_id))
+        self.artifact_repo.delete_for_run(parse_uuid(run_id))
 
         # Delete the run
         self.run_repo.delete_entity(run)
@@ -290,7 +291,7 @@ class RunService:
         # Verify run belongs to user
         self.get_run_for_user(run_id, user_id)
 
-        artifact = self.artifact_repo.get_by_run_and_filename(UUID(run_id), filename)
+        artifact = self.artifact_repo.get_by_run_and_filename(parse_uuid(run_id), filename)
         if not artifact:
             raise EntityNotFoundError("File", filename)
 
@@ -318,7 +319,7 @@ class RunService:
 
         db_file = self.file_repo.get_latest_by_filename(
             run.csv_filename,
-            UUID(user_id)
+            parse_uuid(user_id)
         )
         if not db_file:
             raise EntityNotFoundError("CSV file", run.csv_filename)

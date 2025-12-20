@@ -33,6 +33,12 @@ from backend.core.security import (
     get_optional_user,
     verify_user_owns_resource,
 )
+from backend.core.logging import (
+    configure_logging,
+    configure_debug_mode,
+    configure_uvicorn_logging,
+    get_logger,
+)
 
 __all__ = [
     # Config
@@ -64,4 +70,9 @@ __all__ = [
     "get_current_user",
     "get_optional_user",
     "verify_user_owns_resource",
+    # Logging
+    "configure_logging",
+    "configure_debug_mode",
+    "configure_uvicorn_logging",
+    "get_logger",
 ]
