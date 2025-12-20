@@ -181,7 +181,8 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nan
         }
 
         // Validate deep research model selection
-        if (analysisType === 'deep' && !selectedDeepModel) {
+        const deepModel = selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null);
+        if (analysisType === 'deep' && !deepModel) {
           toast.current?.show({
             severity: 'error',
             summary: 'Model Required',
@@ -193,7 +194,7 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nan
         onSubmit({
           ...parsed,
           analysis_type: analysisType,
-          deep_research_model: analysisType === 'deep' ? selectedDeepModel : null
+          deep_research_model: analysisType === 'deep' ? deepModel : null
         });
       } catch (e) {
         toast.current?.show({ severity: 'error', summary: 'Invalid JSON', detail: (e as Error).message });
@@ -203,7 +204,8 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nan
       const payload = validateAndGetPayload();
       if (payload) {
         // Validate deep research model selection
-        if (analysisType === 'deep' && !selectedDeepModel) {
+        const deepModel = selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null);
+        if (analysisType === 'deep' && !deepModel) {
           toast.current?.show({
             severity: 'error',
             summary: 'Model Required',
@@ -215,7 +217,7 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nan
         onSubmit({
           ...payload,
           analysis_type: analysisType,
-          deep_research_model: analysisType === 'deep' ? selectedDeepModel : null
+          deep_research_model: analysisType === 'deep' ? deepModel : null
         });
       }
     }

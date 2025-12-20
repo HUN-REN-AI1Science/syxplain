@@ -1,9 +1,12 @@
+import logging
 import json
 import os
 import dspy
 from typing import List
 
 from langfuse_config import observe, report_usage_to_langfuse, flush_traces
+
+logger = logging.getLogger(__name__)
 
 
 def get_dspy_lm() -> dspy.LM:
@@ -141,13 +144,13 @@ class ExplainPySrEquations(dspy.Signature):
 
 
 @observe(name="generate_equation_explanation", as_type="generation")
-def generate_equation_explanation(project_spec_json: str, data_spec_json: str, deep_research_context: str = None) -> str:
+def generate_equation_explanation(project_spec_json: str, data_spec_json: str, deep_research_context: dict = None) -> str:
     """Generates explanation for PySR equations as structured JSON.
 
     Args:
         project_spec_json: JSON string of project specification
         data_spec_json: JSON string of equations data
-        deep_research_context: Optional context from deep research step (for deep analysis mode)
+        deep_research_context: Optional dict from deep research step (for deep analysis mode)
 
     Returns:
         JSON string with structured equation explanations
@@ -163,16 +166,18 @@ def generate_equation_explanation(project_spec_json: str, data_spec_json: str, d
         api_base=api_base,
     )
 
-    if deep_research_context:
+    if deep_research_context and deep_research_context.get("equations"):
         lm_kwargs["web_search_options"] = {"search_context_size": "high"}
 
     lm = dspy.LM(**lm_kwargs)
 
     # If deep research context is provided, append it to the project spec
-    if deep_research_context:
+    if deep_research_context and deep_research_context.get("equations"):
         enhanced_project_spec = json.loads(project_spec_json)
-        enhanced_project_spec["deep_research_equations"] = deep_research_context
+        enhanced_project_spec["deep_research_equations"] = deep_research_context.get("equations", [])
         project_spec_json = json.dumps(enhanced_project_spec, indent=2)
+
+    logger.info(f"project_spec_json: {project_spec_json}")
 
     predictor = dspy.Predict(ExplainPySrEquations)
     try:
@@ -231,11 +236,22 @@ class DeepResearchEquations(dspy.Signature):
     3. For each relationship:
        - Write a Pythonic equation using the keys from the feature list exactly as variable names.
        - You may introduce constants or parameters (e.g. kappa, g, cp, alpha, Pmax, A, B).
-       - Provide clickable citation links (DOI, journal URLs, textbook links) supporting the equation.
-    4. Output must be a two-column table only:
-       - Column 1: Pythonic Equation
-       - Column 2: Citation Link(s)
-    5. Do not include explanations, extra text, or commentary — only the table.
+       - Provide citation links (DOI, journal URLs, textbook links) supporting the equation.
+       - Optionally provide a brief description of the equation's physical meaning.
+    4. Do not include explanations, extra text, or commentary — only the json.
+
+    ### REQUIRED OUTPUT SCHEMA
+    Return STRICT JSON only — no markdown, no code fences, no commentary. Output must parse with json.loads().
+    Each equation must contain only a pythonic equation and citation link(s).
+
+    {
+        "equations": [
+            {
+                "equation": "ustar = (mflux / rho)**0.5",
+                "citations": ["https://doi.org/10.1007/978-94-007-2351-1_4"]
+            }
+        ]
+    }
 
     ---
 
@@ -244,11 +260,19 @@ class DeepResearchEquations(dspy.Signature):
     #### Example Input Feature Dictionary
     {"ustar": "friction velocity", "mflux": "momentum flux", "rho": "air density", "GR": "global radiation", "PAR": "photosynthetically active radiation"}
 
-    #### Example Output Table
-    | Pythonic Equation | Citation |
-    |------------------|----------|
-    | `ustar = (mflux / rho)**0.5` | https://doi.org/10.1007/978-94-007-2351-1_4 |
-    | `PAR = 0.45 * GR` | https://doi.org/10.1016/j.agrformet.2004.03.009 |
+    #### Example Output JSON
+    {
+        "equations": [
+            {
+                "equation": "ustar = (mflux / rho)**0.5",
+                "citations": ["https://doi.org/10.1007/978-94-007-2351-1_4"]
+            },
+            {
+                "equation": "PAR = 0.45 * GR",
+                "citations": ["https://doi.org/10.1016/j.agrformet.2004.03.009"]
+            }
+        ]
+    }
 
     ---
 
@@ -257,23 +281,31 @@ class DeepResearchEquations(dspy.Signature):
     #### Example Input Feature Dictionary
     {"CO2_flux": "net CO2 exchange", "PAR": "photosynthetically active radiation", "Tair": "air temperature"}
 
-    #### Example Output Table
-    | Pythonic Equation | Citation |
-    |------------------|----------|
-    | `CO2_flux = -(alpha * PAR * Pmax) / (alpha * PAR + Pmax) + R` | https://doi.org/10.1111/j.1365-2486.2004.00891.x |
-    | `respiration = R0 * exp(E0 * (1/T0 - 1/Tair))` | https://doi.org/10.1029/1999GB900014 |
+    #### Example Output JSON
+    {
+        "equations": [
+            {
+                "equation": "CO2_flux = -(alpha * PAR * Pmax) / (alpha * PAR + Pmax) + R",
+                "citations": ["https://doi.org/10.1111/j.1365-2486.2004.00891.x"]
+            },
+            {
+                "equation": "respiration = R0 * exp(E0 * (1/T0 - 1/Tair))",
+                "citations": ["https://doi.org/10.1029/1999GB900014"]
+            }
+        ]
+    }
 
     ---
 
-    Your final output must be a table with two columns only, containing Pythonic symbolic equations relating the variables and supporting citation links. No narrative text, no explanations, no reasoning — only the table.
+    Your final output must be valid JSON with an "equations" array. No narrative text, no explanations outside the JSON structure.
     """
     features_json: str = dspy.InputField(desc="JSON string of feature dictionary mapping variable names to descriptions")
 
-    equations_table: str = dspy.OutputField(desc="Markdown table with Pythonic equations and citation links")
+    equations_json: str = dspy.OutputField(desc="JSON object with equations array containing equation, citations")
 
 
 @observe(name="deep_research_equations", as_type="generation")
-def deep_research_equations(features_dict: dict, model_name: str = None) -> str:
+def deep_research_equations(features_dict: dict, model_name: str = None) -> dict:
     """Performs deep scientific research to find equations relating features.
 
     Uses the specified deep research model to search scientific literature
@@ -284,7 +316,7 @@ def deep_research_equations(features_dict: dict, model_name: str = None) -> str:
         model_name: Name of the deep research model to use (optional, falls back to env var)
 
     Returns:
-        Markdown table with Pythonic equations and citation links
+        Dictionary with 'equations' list containing equation objects
     """
     # Use provided model_name or fall back to first model from environment variable
     if not model_name:
@@ -321,7 +353,27 @@ def deep_research_equations(features_dict: dict, model_name: str = None) -> str:
         with dspy.settings.context(lm=lm):
             response = predictor(features_json=features_json)
         report_usage_to_langfuse(lm)
-        return response.equations_table
+
+        # Parse and validate JSON response
+        equations_json = response.equations_json
+        cleaned_json = equations_json.replace("```json", "").replace("```", "").strip()
+
+        # Extract JSON if wrapped in other content
+        if not (cleaned_json.startswith("{") and cleaned_json.endswith("}")):
+            start = cleaned_json.find("{")
+            end = cleaned_json.rfind("}") + 1
+            if start >= 0 and end > start:
+                cleaned_json = cleaned_json[start:end]
+
+        try:
+            parsed = json.loads(cleaned_json)
+            # Ensure required structure exists
+            if "equations" not in parsed:
+                parsed = {"equations": []}
+            return parsed
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse deep research JSON: {e}. Raw: {equations_json[:500]}")
+            return {"equations": [], "_parse_error": str(e)}
     except Exception as e:
         flush_traces()
         raise

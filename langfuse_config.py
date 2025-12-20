@@ -6,9 +6,16 @@ if TYPE_CHECKING:
     import dspy
 
 # Re-export observe decorator for convenience
-try:
-    from langfuse import observe, get_client
-except ImportError:
+_public_key = os.environ.get("LANGFUSE_PUBLIC_KEY")
+_secret_key = os.environ.get("LANGFUSE_SECRET_KEY")
+
+if _public_key and _secret_key:
+    try:
+        from langfuse import observe, get_client
+    except ImportError:
+        _public_key = None  # Force usage of dummy implementation below
+
+if not _public_key or not _secret_key:
     def observe(*args, **kwargs):
         def decorator(func):
             return func

@@ -28,7 +28,8 @@ class State(TypedDict, total=False):
     data_summary: str
     pysr_model: pysr.sr.PySRRegressor
     analysis_type: str  # "quick" or "deep"
-    deep_research_result: str  # Result from deep research LLM call
+    deep_research_model: str  # Model to use for deep research (e.g., "o4-mini-deep-research")
+    deep_research_result: dict  # Result from deep research LLM call (dict with 'equations' list)
 
 def data_summary(state: State) -> State:
     # Setting up logger object
@@ -238,7 +239,7 @@ def deep_research_node(state: State) -> State:
 
     if not features_dict:
         state["logger"].log_step("deep_research_skip", {"reason": "no features defined"})
-        state["deep_research_result"] = ""
+        state["deep_research_result"] = {"equations": []}
         return state
 
     try:
@@ -246,10 +247,12 @@ def deep_research_node(state: State) -> State:
         model_name = state.get("deep_research_model")
         result = deep_research_equations(features_dict, model_name=model_name)
         state["deep_research_result"] = result
-        state["logger"].log_step("deep_research_result", {"result": result[:500] if result else ""})
+        # Log summary for debugging
+        equations_count = len(result.get("equations", []))
+        state["logger"].log_step("deep_research_result", {"equations_count": equations_count, "result": json.dumps(result)[:500]})
     except Exception as e:
         state["logger"].log_step("deep_research_error", {"error": str(e)})
-        state["deep_research_result"] = ""
+        state["deep_research_result"] = {"equations": []}
 
     return state
 
