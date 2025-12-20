@@ -4,7 +4,7 @@
  */
 
 import axios, { AxiosInstance } from 'axios';
-import { supabase } from '../supabaseClient';
+import { supabase } from '@services/supabaseClient';
 import type {
   PaginatedResponse,
   RunSummary,
@@ -12,7 +12,7 @@ import type {
   UploadResponse,
   ProfileData,
   ProgressPhase,
-} from '../types';
+} from '@/types';
 
 // ============================================================================
 // Base API Instance

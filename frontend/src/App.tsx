@@ -1,23 +1,23 @@
 import { useState, useRef } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import FileUpload from './FileUpload';
-import ProblemForm from './ProblemForm';
-import ResultsView from './ResultsView';
-import HistoryView from './HistoryView';
-import ProfileView from './ProfileView';
-import Login from './pages/Login';
-import SignUp from './pages/SignUp';
-import ForgotPassword from './pages/ForgotPassword';
-import PublicResultsView from './pages/PublicResultsView';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { runsService } from './services/api';
+import FileUpload from '@components/FileUpload/FileUpload';
+import ProblemForm from '@components/ProblemForm/ProblemForm';
+import ResultsView from '@pages/results/ResultsView';
+import HistoryView from '@pages/HistoryView';
+import ProfileView from '@pages/ProfileView';
+import Login from '@pages/auth/Login';
+import SignUp from '@pages/auth/SignUp';
+import ForgotPassword from '@pages/auth/ForgotPassword';
+import PublicResultsView from '@pages/results/PublicResultsView';
+import { AuthProvider, useAuth } from '@contexts/AuthContext';
+import { runsService } from '@services/api';
 import { Steps } from 'primereact/steps';
 import { Toast } from 'primereact/toast';
 import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { Tooltip } from 'primereact/tooltip';
 import { SwitchTransition, CSSTransition } from 'react-transition-group';
-import syxplainLogo from './assets/syxplain_logo.png';
+import syxplainLogo from '@assets/syxplain_logo.png';
 
 function MainApp() {
   const [view, setView] = useState<'workflow' | 'history' | 'profile'>('workflow');

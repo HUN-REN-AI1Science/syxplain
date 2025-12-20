@@ -3,8 +3,8 @@ import { Card } from 'primereact/card';
 import { InputText } from 'primereact/inputtext';
 import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
-import { useAuth } from '../contexts/AuthContext';
-import syxplainLogo from '../assets/syxplain_logo.png';
+import { useAuth } from '@contexts/AuthContext';
+import syxplainLogo from '@assets/syxplain_logo.png';
 
 interface ForgotPasswordProps {
   onBackToLogin: () => void;
@@ -84,7 +84,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin }) => {
             className="w-full mt-4"
             style={{ backgroundColor: '#0052cc', color: 'white', borderColor: '#0052cc', height: '48px', fontSize: '16px' }}
             pt={{
-                loadingIcon: { className: 'ml-2' }
+              loadingIcon: { className: 'ml-2' }
             }}
           />
 

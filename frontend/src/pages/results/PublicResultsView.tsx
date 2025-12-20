@@ -8,11 +8,11 @@ import { useParams } from 'react-router-dom';
 import { Card } from 'primereact/card';
 import { Message } from 'primereact/message';
 import { ProgressSpinner } from 'primereact/progressspinner';
-import PublicHeader from '../components/PublicHeader';
-import EquationResultsView from '../EquationResultsView';
-import PublicRunSettingsPanel from '../components/PublicRunSettingsPanel';
-import { publicService, type PublicRunData } from '../services/api';
-import type { EquationResults } from '../types';
+import PublicHeader from '@components/common/PublicHeader';
+import EquationResultsView from '@components/EquationResults/EquationResultsView';
+import PublicRunSettingsPanel from '@components/RunSettings/PublicRunSettingsPanel';
+import { publicService, type PublicRunData } from '@services/api';
+import type { EquationResults } from '@/types';
 
 const PublicResultsView: React.FC = () => {
   const { token } = useParams<{ token: string }>();

@@ -11,8 +11,8 @@ import { Tag } from 'primereact/tag';
 import { Tooltip } from 'primereact/tooltip';
 import { Dropdown } from 'primereact/dropdown';
 import { InputText } from 'primereact/inputtext';
-import { runsService } from './services/api';
-import type { RunSummary } from './types';
+import { runsService } from '@services/api';
+import type { RunSummary } from '@/types';
 
 // ============================================================================
 // Types

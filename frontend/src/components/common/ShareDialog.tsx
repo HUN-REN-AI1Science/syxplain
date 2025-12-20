@@ -8,7 +8,7 @@ import { Dialog } from 'primereact/dialog';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { Toast } from 'primereact/toast';
-import { sharingService } from '../services/api';
+import { sharingService } from '@services/api';
 
 interface ShareDialogProps {
   visible: boolean;

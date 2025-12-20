@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import type { ProgressPhase } from '../types';
+import type { ProgressPhase } from '@/types';
 
 export interface UseProgressInterpolationOptions {
   /** Progress phases configuration */

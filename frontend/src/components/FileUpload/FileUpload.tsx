@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { ProgressBar } from 'primereact/progressbar';
 import { Message } from 'primereact/message';
 import { Button } from 'primereact/button';
-import { uploadService } from './services/api';
+import { uploadService } from '@services/api';
 
 interface FileUploadProps {
   onUploadComplete: (filename: string, columns: string[], excludedColumns?: string[], nanCounts?: Record<string, number>) => void;
@@ -94,81 +94,80 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete }) => {
   return (
     <div className="flex flex-col items-center justify-center p-6 relative min-h-[400px]">
       <div className={`transition-all duration-500 ease-in-out w-full max-w-2xl flex flex-col items-center ${processing ? 'opacity-20 blur-sm scale-95 pointer-events-none' : 'opacity-100'}`}>
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">Upload your Dataset</h2>
+        <div className="text-center mb-6">
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">Upload your Dataset</h2>
           <p className="text-slate-500">Supported formats: .csv, .xlsx, .xls</p>
-          </div>
+        </div>
 
-          <div
-          className={`w-full relative border-2 border-dashed rounded-2xl p-6 md:p-12 text-center transition-all duration-300 ease-in-out group ${
-              dragActive
-                ? 'border-blue-500 bg-blue-50 scale-[1.01] shadow-inner'
-                : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50'
+        <div
+          className={`w-full relative border-2 border-dashed rounded-2xl p-6 md:p-12 text-center transition-all duration-300 ease-in-out group ${dragActive
+            ? 'border-blue-500 bg-blue-50 scale-[1.01] shadow-inner'
+            : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50'
             }`}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-          >
-            <input
-              type="file"
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+        >
+          <input
+            type="file"
             accept=".csv,.xlsx,.xls"
-              onChange={handleChange}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-              id="csv-upload"
-              disabled={uploading || processing}
-            />
+            onChange={handleChange}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+            id="csv-upload"
+            disabled={uploading || processing}
+          />
 
-            <div className="flex flex-col items-center justify-center space-y-6 pointer-events-none">
-              <div className={`p-6 rounded-full transition-colors duration-300 ${dragActive ? 'bg-blue-100' : 'bg-slate-100 group-hover:bg-white group-hover:shadow-md'}`}>
-                  <i className={`pi pi-cloud-upload text-5xl ${dragActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-500'} transition-colors duration-300`}></i>
-              </div>
+          <div className="flex flex-col items-center justify-center space-y-6 pointer-events-none">
+            <div className={`p-6 rounded-full transition-colors duration-300 ${dragActive ? 'bg-blue-100' : 'bg-slate-100 group-hover:bg-white group-hover:shadow-md'}`}>
+              <i className={`pi pi-cloud-upload text-5xl ${dragActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-500'} transition-colors duration-300`}></i>
+            </div>
 
-              <div className="space-y-2">
-                <p className="text-xl font-semibold text-slate-700">
+            <div className="space-y-2">
+              <p className="text-xl font-semibold text-slate-700">
                 {uploading ? 'Uploading...' : 'Drag & Drop your file here'}
-                </p>
-                <p className="text-sm text-slate-500">
-                  or click to browse from your computer
-                </p>
-              </div>
-
-              <div className="pt-2">
-                  <Button label="Browse Files" icon="pi pi-folder-open" className="p-button-outlined p-button-rounded" />
-              </div>
-
-              <p className="text-xs text-slate-400 mt-4">
-                  Maximum file size: 50MB
+              </p>
+              <p className="text-sm text-slate-500">
+                or click to browse from your computer
               </p>
             </div>
+
+            <div className="pt-2">
+              <Button label="Browse Files" icon="pi pi-folder-open" className="p-button-outlined p-button-rounded" />
+            </div>
+
+            <p className="text-xs text-slate-400 mt-4">
+              Maximum file size: 50MB
+            </p>
           </div>
+        </div>
       </div>
 
       {/* Overlay for Uploading / Processing */}
       {(uploading || processing) && (
         <div className="absolute inset-0 flex items-center justify-center z-20">
-            <div className="bg-white/90 backdrop-blur-md p-8 rounded-2xl shadow-2xl w-full max-w-md flex flex-col items-center animate-fade-in-up border border-slate-100">
-                <div className="w-full mb-4">
-                    <ProgressBar
-                        mode="indeterminate"
-                        style={{ height: '8px' }}
-                        className="w-full"
-                    ></ProgressBar>
-                </div>
-                <div className="flex items-center space-x-3">
-                    {processing ? (
-                        <i className="pi pi-cog pi-spin text-blue-600 text-xl"></i>
-                    ) : (
-                        <i className="pi pi-upload text-blue-600 text-xl"></i>
-                    )}
-                    <span className="text-slate-700 font-semibold text-lg">
-                        {processing ? 'Processing file...' : 'Uploading...'}
-                    </span>
-                </div>
-                <p className="text-slate-500 text-sm mt-2">
-                    {processing ? 'Analyzing columns and structure' : 'Please wait while we upload your data'}
-                </p>
+          <div className="bg-white/90 backdrop-blur-md p-8 rounded-2xl shadow-2xl w-full max-w-md flex flex-col items-center animate-fade-in-up border border-slate-100">
+            <div className="w-full mb-4">
+              <ProgressBar
+                mode="indeterminate"
+                style={{ height: '8px' }}
+                className="w-full"
+              ></ProgressBar>
             </div>
+            <div className="flex items-center space-x-3">
+              {processing ? (
+                <i className="pi pi-cog pi-spin text-blue-600 text-xl"></i>
+              ) : (
+                <i className="pi pi-upload text-blue-600 text-xl"></i>
+              )}
+              <span className="text-slate-700 font-semibold text-lg">
+                {processing ? 'Processing file...' : 'Uploading...'}
+              </span>
+            </div>
+            <p className="text-slate-500 text-sm mt-2">
+              {processing ? 'Analyzing columns and structure' : 'Please wait while we upload your data'}
+            </p>
+          </div>
         </div>
       )}
 

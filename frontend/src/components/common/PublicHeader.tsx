@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import syxplainLogo from '../assets/syxplain_logo.png';
+import syxplainLogo from '@assets/syxplain_logo.png';
 
 const PublicHeader: React.FC = () => {
   return (

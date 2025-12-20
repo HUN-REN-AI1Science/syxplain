@@ -3,7 +3,7 @@
  * Form and data validation functions
  */
 
-import type { ProblemDescription } from '../types';
+import type { ProblemDescription } from '@/types';
 
 export interface ValidationResult {
   isValid: boolean;

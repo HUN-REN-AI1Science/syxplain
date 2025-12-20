@@ -11,7 +11,7 @@ import { SelectButton } from 'primereact/selectbutton';
 import { Dialog } from 'primereact/dialog';
 import { Toast } from 'primereact/toast';
 import { Menu } from 'primereact/menu';
-import { configService } from './services/api';
+import { configService } from '@services/api';
 
 interface ProblemFormProps {
   columns: string[];
@@ -265,7 +265,7 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nan
           <div className="border-2 border-dashed border-slate-300 rounded-2xl p-12 text-center hover:border-blue-400 hover:bg-slate-50 transition-colors cursor-pointer relative group">
             <input type="file" accept=".json" onChange={handleJsonUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" id="json-upload" />
             <div className="bg-slate-100 p-4 rounded-full inline-block mb-4 group-hover:bg-white group-hover:shadow-sm transition-all">
-                <i className="pi pi-file text-4xl text-slate-400 group-hover:text-blue-500 transition-colors"></i>
+              <i className="pi pi-file text-4xl text-slate-400 group-hover:text-blue-500 transition-colors"></i>
             </div>
             <p className="text-lg font-semibold text-slate-700">Click to upload JSON configuration</p>
             <p className="text-sm text-slate-500 mt-1">or drag and drop here</p>
@@ -323,100 +323,100 @@ const ProblemForm: React.FC<ProblemFormProps> = ({ columns, excludedColumns, nan
           {/* Project Details Group */}
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
             <div className="flex items-center mb-4">
-                <div className="bg-blue-100 p-2 rounded-lg mr-3 flex-shrink-0">
-                    <i className="pi pi-info-circle text-blue-600 text-lg"></i>
-                </div>
-                <div>
-                    <h3 className="text-lg font-bold text-slate-800">Project Details</h3>
-                    <p className="text-sm text-slate-500">Provide context for the AI to generate better explanations.</p>
-                </div>
+              <div className="bg-blue-100 p-2 rounded-lg mr-3 flex-shrink-0">
+                <i className="pi pi-info-circle text-blue-600 text-lg"></i>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Project Details</h3>
+                <p className="text-sm text-slate-500">Provide context for the AI to generate better explanations.</p>
+              </div>
             </div>
 
             <div className="pl-0 md:pl-12">
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Project Description</label>
-                <InputTextarea
-                  className="w-full bg-slate-50 border-slate-200 focus:border-blue-500 focus:ring-blue-500 resize-none h-30"
-                  rows={6}
-                  value={projectDescription}
-                  onChange={(e) => setProjectDescription(e.target.value)}
-                  placeholder="e.g., We want to predict soil phosphorus content based on chemical properties..."
-                />
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Project Description</label>
+              <InputTextarea
+                className="w-full bg-slate-50 border-slate-200 focus:border-blue-500 focus:ring-blue-500 resize-none h-30"
+                rows={6}
+                value={projectDescription}
+                onChange={(e) => setProjectDescription(e.target.value)}
+                placeholder="e.g., We want to predict soil phosphorus content based on chemical properties..."
+              />
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Target Variable Group */}
             <div className="lg:col-span-1">
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-full">
-                    <div className="flex items-center mb-4">
-                    <div className="bg-green-100 p-2 rounded-lg mr-3 flex-shrink-0">
-                            <i className="pi pi-compass text-green-600 text-lg"></i>
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-bold text-slate-800">Target</h3>
-                            <p className="text-sm text-slate-500">What to predict?</p>
-                        </div>
-                    </div>
-
-                    <div className="mt-4">
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Target Variable</label>
-                        <Dropdown
-                value={targetVariable}
-                onChange={(e: any) => setTargetVariable(e.value)}
-                options={columns.map(col => ({ label: col, value: col }))}
-                placeholder="Select Target..."
-                className="w-full bg-slate-50 border-slate-200"
-              />
-                    {targetVariable && nanCounts && nanCounts[targetVariable] > 0 && (
-                      <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start animate-fade-in">
-                        <i className="pi pi-exclamation-circle text-red-500 mr-2 mt-0.5"></i>
-                        <div className="text-sm text-red-700">
-                          <strong>Warning:</strong> This column contains missing values.
-                          Analysis cannot proceed with a target containing missing data.
-                        </div>
-                      </div>
-                    )}
-                    </div>
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-full">
+                <div className="flex items-center mb-4">
+                  <div className="bg-green-100 p-2 rounded-lg mr-3 flex-shrink-0">
+                    <i className="pi pi-compass text-green-600 text-lg"></i>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">Target</h3>
+                    <p className="text-sm text-slate-500">What to predict?</p>
+                  </div>
                 </div>
+
+                <div className="mt-4">
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Target Variable</label>
+                  <Dropdown
+                    value={targetVariable}
+                    onChange={(e: any) => setTargetVariable(e.value)}
+                    options={columns.map(col => ({ label: col, value: col }))}
+                    placeholder="Select Target..."
+                    className="w-full bg-slate-50 border-slate-200"
+                  />
+                  {targetVariable && nanCounts && nanCounts[targetVariable] > 0 && (
+                    <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start animate-fade-in">
+                      <i className="pi pi-exclamation-circle text-red-500 mr-2 mt-0.5"></i>
+                      <div className="text-sm text-red-700">
+                        <strong>Warning:</strong> This column contains missing values.
+                        Analysis cannot proceed with a target containing missing data.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Features Group */}
             <div className="lg:col-span-2">
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-full">
-                    <div className="flex items-center mb-4">
-                    <div className="bg-purple-100 p-2 rounded-lg mr-3 flex-shrink-0">
-                            <i className="pi pi-list text-purple-600 text-lg"></i>
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-bold text-slate-800">Features</h3>
-                            <p className="text-sm text-slate-500">Describe your data columns.</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                        {columns.map(col => (
-                        col !== targetVariable && (
-                            <div key={col} className="flex flex-col sm:flex-row sm:items-start space-y-2 sm:space-y-0 sm:space-x-4 p-3 bg-slate-50 rounded-lg border border-slate-100 hover:border-blue-200 transition-colors">
-                                <div className="w-full sm:w-1/3 flex items-center sm:self-center">
-                                <div key={`${col}-icon`} className="bg-slate-100 p-2 rounded-lg mr-3 flex-shrink-0 w-8 h-8 flex items-center justify-center">
-                                  <i className="pi pi-database text-slate-400 text-sm"></i>
-                                </div>
-                                    <span className="text-sm font-mono font-semibold text-slate-700 truncate" title={col}>{col}</span>
-                                </div>
-                                <div className="w-full sm:w-2/3">
-                                    <InputTextarea
-                                  className="w-full p-inputtext-sm bg-white border-slate-200 resize-none"
-                                        placeholder={`Description for ${col}`}
-                                        value={featureDescriptions[col] || ''}
-                                        onChange={(e) => setFeatureDescriptions({ ...featureDescriptions, [col]: e.target.value })}
-                                  rows={2}
-                                    />
-                                </div>
-                            </div>
-                        )
-                        ))}
-                    </div>
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-full">
+                <div className="flex items-center mb-4">
+                  <div className="bg-purple-100 p-2 rounded-lg mr-3 flex-shrink-0">
+                    <i className="pi pi-list text-purple-600 text-lg"></i>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">Features</h3>
+                    <p className="text-sm text-slate-500">Describe your data columns.</p>
+                  </div>
                 </div>
+
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                  {columns.map(col => (
+                    col !== targetVariable && (
+                      <div key={col} className="flex flex-col sm:flex-row sm:items-start space-y-2 sm:space-y-0 sm:space-x-4 p-3 bg-slate-50 rounded-lg border border-slate-100 hover:border-blue-200 transition-colors">
+                        <div className="w-full sm:w-1/3 flex items-center sm:self-center">
+                          <div key={`${col}-icon`} className="bg-slate-100 p-2 rounded-lg mr-3 flex-shrink-0 w-8 h-8 flex items-center justify-center">
+                            <i className="pi pi-database text-slate-400 text-sm"></i>
+                          </div>
+                          <span className="text-sm font-mono font-semibold text-slate-700 truncate" title={col}>{col}</span>
+                        </div>
+                        <div className="w-full sm:w-2/3">
+                          <InputTextarea
+                            className="w-full p-inputtext-sm bg-white border-slate-200 resize-none"
+                            placeholder={`Description for ${col}`}
+                            value={featureDescriptions[col] || ''}
+                            onChange={(e) => setFeatureDescriptions({ ...featureDescriptions, [col]: e.target.value })}
+                            rows={2}
+                          />
+                        </div>
+                      </div>
+                    )
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>

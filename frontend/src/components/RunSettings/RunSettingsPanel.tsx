@@ -8,9 +8,9 @@ import { Panel } from 'primereact/panel';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
 import { ProgressBar } from 'primereact/progressbar';
-import { runsService } from './services/api';
-import { formatFileSize } from './utils/formatting';
-import type { RunDetails } from './types';
+import { runsService } from '@services/api';
+import { formatFileSize } from '@utils/formatting';
+import type { RunDetails } from '@/types';
 
 interface RunSettingsPanelProps {
   runId: string;

@@ -8,13 +8,13 @@ import { Button } from 'primereact/button';
 import { Message } from 'primereact/message';
 import { ProgressBar } from 'primereact/progressbar';
 import { Toast } from 'primereact/toast';
-import RunSettingsPanel from './RunSettingsPanel';
-import EquationResultsView from './EquationResultsView';
-import ShareDialog from './components/ShareDialog';
-import { runsService, configService } from './services/api';
-import { useProgressInterpolation } from './hooks/useProgressInterpolation';
+import RunSettingsPanel from '@components/RunSettings/RunSettingsPanel';
+import EquationResultsView from '@components/EquationResults/EquationResultsView';
+import ShareDialog from '@components/common/ShareDialog';
+import { runsService, configService } from '@services/api';
+import { useProgressInterpolation } from '@hooks/useProgressInterpolation';
 // PDF export is dynamically imported when needed to reduce initial bundle size
-import type { ProgressPhase, EquationResults } from './types';
+import type { ProgressPhase, EquationResults } from '@/types';
 
 // ============================================================================
 // Types
@@ -104,7 +104,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     try {
       const parsedData: EquationResults = JSON.parse(result);
       // Dynamic import to reduce initial bundle size
-      const { generateResultsPdf } = await import('./utils/pdfExport');
+      const { generateResultsPdf } = await import('@utils/pdfExport');
       await generateResultsPdf(parsedData, runId);
       toast.current?.show({ severity: 'success', summary: 'Export Complete', detail: 'PDF saved successfully' });
     } catch (e) {
@@ -142,30 +142,30 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           ) : isCompleted ? (
             <>
               {result && (
-                  <>
-                    <Button
-                      icon={shareToken ? "pi pi-link" : "pi pi-share-alt"}
-                      onClick={() => setShowShareDialog(true)}
-                      size="large"
-                      className={`${shareToken ? '!bg-green-600 hover:!bg-green-700 !border-green-600' : '!bg-blue-600 hover:!bg-blue-700 !border-blue-600'} !text-white font-semibold px-3 py-2 shadow-sm`}
-                      tooltip={shareToken ? "Shared - Manage Link" : "Share Results"}
-                      tooltipOptions={{ position: 'bottom' }}
-                    />
-                    <Button
-                      icon={exportingPdf ? "pi pi-spin pi-spinner" : "pi pi-file-pdf"}
-                      onClick={handleExportPdf}
-                      disabled={exportingPdf}
-                      size="large"
-                      className="!bg-red-600 hover:!bg-red-700 !border-red-600 !text-white font-semibold px-3 py-2 shadow-sm"
-                      tooltip="Export to PDF"
-                      tooltipOptions={{ position: 'bottom' }}
-                    />
-                  </>
+                <>
+                  <Button
+                    icon={shareToken ? "pi pi-link" : "pi pi-share-alt"}
+                    onClick={() => setShowShareDialog(true)}
+                    size="large"
+                    className={`${shareToken ? '!bg-green-600 hover:!bg-green-700 !border-green-600' : '!bg-blue-600 hover:!bg-blue-700 !border-blue-600'} !text-white font-semibold px-3 py-2 shadow-sm`}
+                    tooltip={shareToken ? "Shared - Manage Link" : "Share Results"}
+                    tooltipOptions={{ position: 'bottom' }}
+                  />
+                  <Button
+                    icon={exportingPdf ? "pi pi-spin pi-spinner" : "pi pi-file-pdf"}
+                    onClick={handleExportPdf}
+                    disabled={exportingPdf}
+                    size="large"
+                    className="!bg-red-600 hover:!bg-red-700 !border-red-600 !text-white font-semibold px-3 py-2 shadow-sm"
+                    tooltip="Export to PDF"
+                    tooltipOptions={{ position: 'bottom' }}
+                  />
+                </>
               )}
               <Message severity="success" text="Completed" className="w-full md:w-auto" />
-              </>
+            </>
           ) : (
-                <Message severity="error" text="Failed" className="w-full md:w-auto" />
+            <Message severity="error" text="Failed" className="w-full md:w-auto" />
           )}
         </div>
       </div>

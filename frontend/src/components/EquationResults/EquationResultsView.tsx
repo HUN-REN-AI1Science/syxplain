@@ -16,8 +16,8 @@ import {
   Legend,
 } from 'chart.js';
 import { Scatter } from 'react-chartjs-2';
-import { escapeForAsciiMath } from './utils/formatting';
-import type { Equation, ScatterData, EquationResults } from './types';
+import { escapeForAsciiMath } from '@utils/formatting';
+import type { Equation, ScatterData, EquationResults } from '@/types';
 
 // Register Chart.js components
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);

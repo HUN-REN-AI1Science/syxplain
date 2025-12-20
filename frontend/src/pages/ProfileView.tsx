@@ -9,9 +9,9 @@ import { Dialog } from 'primereact/dialog';
 import { Message } from 'primereact/message';
 import { ProgressSpinner } from 'primereact/progressspinner';
 import { Toast } from 'primereact/toast';
-import { useAuth } from './contexts/AuthContext';
-import { profileService, sharingService, type SharedRunInfo } from './services/api';
-import type { ProfileData } from './types';
+import { useAuth } from '@contexts/AuthContext';
+import { profileService, sharingService, type SharedRunInfo } from '@services/api';
+import type { ProfileData } from '@/types';
 
 interface ProfileViewProps {
   onBack: () => void;
