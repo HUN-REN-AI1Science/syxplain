@@ -82,56 +82,23 @@ class RunArtifact(Base):
 def init_db():
     """Run Alembic migrations to ensure database schema is up to date.
 
-    Handles three cases:
-    1. Empty database: Runs all migrations from scratch
-    2. Pre-Alembic database (tables exist but no alembic_version): Stamps to head
-    3. Normal case: Applies any pending migrations
+    Simply checks alembic_version table and applies any pending migrations.
     """
     import logging
     from alembic.config import Config
     from alembic import command
-    from alembic.script import ScriptDirectory
-    from alembic.runtime.migration import MigrationContext
-    from sqlalchemy import inspect
 
     logger = logging.getLogger(__name__)
-
-    # Suppress noisy Alembic logs - only show WARNING and above
-    logging.getLogger('alembic').setLevel(logging.WARNING)
-    logging.getLogger('alembic.runtime.migration').setLevel(logging.WARNING)
 
     try:
         alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "alembic.ini"))
         alembic_cfg.set_main_option("script_location", os.path.join(os.path.dirname(__file__), "alembic"))
         alembic_cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
 
-        script = ScriptDirectory.from_config(alembic_cfg)
-        head_rev = script.get_current_head()
-
-        with engine.connect() as conn:
-            context = MigrationContext.configure(conn)
-            current_rev = context.get_current_revision()
-
-            # Check if tables exist but alembic_version doesn't (pre-Alembic database)
-            inspector = inspect(conn)
-            tables_exist = 'runs' in inspector.get_table_names()
-            alembic_exists = 'alembic_version' in inspector.get_table_names()
-
-        if current_rev is None and tables_exist and not alembic_exists:
-            # Case 2: Tables were created by SQLAlchemy before Alembic was added
-            logger.info("Existing database detected. Stamping as current version...")
-            command.stamp(alembic_cfg, "head")
-            logger.info("Database stamped successfully.")
-        elif current_rev != head_rev:
-            # Case 1 (empty db) or Case 3 (pending migrations)
-            if current_rev is None:
-                logger.info("Empty database. Creating schema via migrations...")
-            else:
-                logger.info(f"Applying migrations ({current_rev} -> {head_rev})...")
-            command.upgrade(alembic_cfg, "head")
-            logger.info("Database migrations completed successfully.")
-        # If current_rev == head_rev: already up to date, silent
+        logger.info("Running database migrations...")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations completed successfully.")
 
     except Exception as e:
         logger.error(f"Database migration failed: {e}")
-        raise  # Don't fall back to create_all, let Alembic handle it
+        raise
