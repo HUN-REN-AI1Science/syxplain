@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query
 
-from backend.models import ProblemDescription, RunRequest, RunResponse, RunSummary, PaginatedRunsResponse
+from backend.models import RunRequest, RunResponse, RunSummary, PaginatedRunsResponse
 import asyncio
 from backend.service import start_run, cleanup_processes, check_timed_out_runs
 from backend.database import init_db, get_db, File as DbFile, Run as DbRun, RunArtifact
