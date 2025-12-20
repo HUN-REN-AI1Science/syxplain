@@ -24,7 +24,7 @@ export default defineConfig({
             if (id.includes('mathjax') || id.includes('better-react-mathjax')) {
               return 'vendor-mathjax';
             }
-            // jsPDF
+            // jsPDF and html2canvas for PDF export
             if (id.includes('jspdf') || id.includes('html2canvas')) {
               return 'vendor-pdf';
             }
@@ -36,14 +36,11 @@ export default defineConfig({
             if (id.includes('@supabase')) {
               return 'vendor-supabase';
             }
-            // PrimeReact (but not all in one chunk to avoid quill issues)
-            if (id.includes('primereact') && !id.includes('.all.')) {
-              return 'vendor-primereact';
-            }
             // React core
-            if (id.includes('react-dom') || id.includes('/react/')) {
+            if (id.includes('react-dom')) {
               return 'vendor-react';
             }
+            // Do NOT split primereact - causes circular dependency issues
           }
         }
       }
