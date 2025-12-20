@@ -56,6 +56,10 @@ cp .env.example .env
 - `SHAP_SUBSAMPLE_MIN`: Minimum number of samples for SHAP (default: `1000`).
 - `SHAP_SUBSAMPLE_MAX`: Maximum number of samples for SHAP (default: `5000`).
 - `ANALYSIS_TIMEOUT_HOURS`: Maximum hours before an analysis is killed with timeout status (default: `24`). Set to `0` to disable.
+- `MAX_FILE_SIZE_MB`: Maximum file upload size in megabytes (default: `50`).
+- `CORS_ORIGINS`: Comma-separated list of allowed CORS origins (default: `*`).
+- `DB_POOL_SIZE`: Database connection pool size (default: `40`).
+- `DB_MAX_OVERFLOW`: Max overflow connections for database (default: `5`).
 
 **Optional Variables (LLM Tracing with Langfuse):**
 - `LANGFUSE_PUBLIC_KEY`: Your Langfuse public key for tracing.
