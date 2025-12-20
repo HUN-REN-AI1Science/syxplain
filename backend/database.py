@@ -88,6 +88,8 @@ def init_db():
     import logging
     from alembic.config import Config
     from alembic import command
+    from alembic.script import ScriptDirectory
+    from alembic.runtime.migration import MigrationContext
 
     logger = logging.getLogger(__name__)
 
@@ -96,10 +98,22 @@ def init_db():
         alembic_cfg.set_main_option("script_location", os.path.join(os.path.dirname(__file__), "alembic"))
         alembic_cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
 
-        logger.info("Running database migrations...")
-        command.upgrade(alembic_cfg, "head")
-        logger.info("Database migrations completed successfully.")
+        # Get current revision and head revision for logging
+        script = ScriptDirectory.from_config(alembic_cfg)
+        with engine.connect() as connection:
+            context = MigrationContext.configure(connection)
+            current_rev = context.get_current_revision()
+
+        head_rev = script.get_current_head()
+
+        if current_rev == head_rev:
+            logger.info(f"Database schema is up to date (revision: {current_rev})")
+        else:
+            logger.info(f"Running database migrations from {current_rev} to {head_rev}...")
+            command.upgrade(alembic_cfg, "head")
+            logger.info(f"Database migrations completed successfully. Now at revision: {head_rev}")
 
     except Exception as e:
         logger.error(f"Database migration failed: {e}")
+        logger.exception("Full migration error traceback:")
         raise
