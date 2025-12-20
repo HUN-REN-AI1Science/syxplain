@@ -3,7 +3,8 @@ import logging
 import yaml
 from datetime import datetime
 from pathlib import Path
-from backend.database import SessionLocal, RunArtifact
+from backend.infrastructure.database.connection import get_session_factory
+from backend.infrastructure.database.models import RunArtifact
 import langchain
 
 
@@ -149,7 +150,8 @@ class StepLogger:
         progress = min(99, max(0, progress))
         self.current_progress = progress
 
-        from backend.database import Run as DbRun
+        from backend.infrastructure.database.models import Run as DbRun
+        SessionLocal = get_session_factory()
         db = SessionLocal()
         try:
             run = db.query(DbRun).filter(DbRun.id == self.run_id).first()
@@ -181,7 +183,8 @@ class StepLogger:
         progress = min(99, progress)
         self.current_progress = progress
 
-        from backend.database import Run as DbRun
+        from backend.infrastructure.database.models import Run as DbRun
+        SessionLocal = get_session_factory()
         db = SessionLocal()
         try:
             run = db.query(DbRun).filter(DbRun.id == self.run_id).first()
@@ -234,6 +237,7 @@ class StepLogger:
         if not self.run_id:
             return
 
+        SessionLocal = get_session_factory()
         db = SessionLocal()
         try:
             artifact = RunArtifact(
