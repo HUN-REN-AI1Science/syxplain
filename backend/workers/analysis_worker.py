@@ -108,6 +108,10 @@ def _run_worker(
     configure_logging()
     configure_debug_mode()
 
+    # Initialize Langfuse tracing
+    from backend.infrastructure.monitoring import init_langfuse
+    init_langfuse()
+
     # Import syxplain_lib here to ensure Julia is initialized ONLY in this worker process
     from syxplain_lib import State, run_syxplain
 

@@ -85,6 +85,15 @@ class SHAPSettings:
 
 
 @dataclass
+class LangfuseSettings:
+    """Langfuse tracing settings."""
+    public_key: str = field(default_factory=lambda: os.environ.get("LANGFUSE_PUBLIC_KEY", ""))
+    secret_key: str = field(default_factory=lambda: os.environ.get("LANGFUSE_SECRET_KEY", ""))
+    base_url: str = field(default_factory=lambda: os.environ.get("LANGFUSE_BASE_URL", "https://cloud.langfuse.com"))
+    enabled: bool = field(default_factory=lambda: os.environ.get("LANGFUSE_ENABLED", "true").lower() == "true")
+
+
+@dataclass
 class Settings:
     """
     Main settings class that aggregates all configuration groups.
@@ -100,6 +109,7 @@ class Settings:
     cors: CORSSettings = field(default_factory=CORSSettings)
     analysis: AnalysisSettings = field(default_factory=AnalysisSettings)
     shap: SHAPSettings = field(default_factory=SHAPSettings)
+    langfuse: LangfuseSettings = field(default_factory=LangfuseSettings)
 
 
 # Cached settings instance
@@ -139,3 +149,8 @@ def get_auth_settings() -> AuthSettings:
 def get_llm_settings() -> LLMSettings:
     """Get LLM settings for dependency injection."""
     return get_settings().llm
+
+
+def get_langfuse_settings() -> LangfuseSettings:
+    """Get Langfuse settings for dependency injection."""
+    return get_settings().langfuse

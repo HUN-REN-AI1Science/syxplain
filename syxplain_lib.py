@@ -11,7 +11,7 @@ import seaborn as sns
 
 from shap_calc import get_top_feature_interactions
 from backend.services.progress_service import ProgressTracker
-from llm_modules import generate_pysr_config, generate_equation_explanation, deep_research_equations
+from backend.services.llm_service import generate_pysr_config, generate_equation_explanation, deep_research_equations
 
 
 class State(TypedDict, total=False):

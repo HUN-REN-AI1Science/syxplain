@@ -1,23 +1,8 @@
-import logging
-import json
-import os
-import dspy
+"""
+DSPy Signatures for LLM interactions.
+"""
 from typing import List
-
-from langfuse_config import observe, report_usage_to_langfuse, flush_traces
-
-logger = logging.getLogger(__name__)
-
-
-def get_dspy_lm() -> dspy.LM:
-    """Configures and returns a DSPy LM client."""
-    model_name = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
-    api_key = os.environ.get("OPENAI_API_KEY")
-    api_base = os.environ.get("OPENAI_API_BASE")
-
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable is required but not set or is empty.")
-    return dspy.LM(model=f"openai/{model_name}", api_key=api_key, api_base=api_base)
+import dspy
 
 
 class PySrConfigGenerator(dspy.Signature):
@@ -49,39 +34,6 @@ class PySrConfigGenerator(dspy.Signature):
     visualizations: List[dspy.Image] = dspy.InputField(desc="Dataset visualizations")
 
     config_json: str = dspy.OutputField(desc="JSON configuration string")
-
-
-@observe(name="generate_pysr_config", as_type="generation")
-def generate_pysr_config(project_description: str, dataset_statistics: str, visualizations_b64: List[str]) -> str:
-    """Generates PySR configuration JSON using LLM."""
-    lm = get_dspy_lm()
-    visual_inputs = [dspy.Image(f"data:image/png;base64,{img_b64}") for img_b64 in visualizations_b64]
-
-    predictor = dspy.Predict(PySrConfigGenerator)
-    with dspy.settings.context(lm=lm):
-        response = predictor(
-            project_description=project_description,
-            dataset_statistics=dataset_statistics,
-            visualizations=visual_inputs
-        )
-
-    config_json = response.config_json
-    cleaned_json = config_json.replace("```json", "").replace("```", "").strip()
-
-    if not (cleaned_json.startswith("{") and cleaned_json.endswith("}")):
-        start = cleaned_json.find("{")
-        end = cleaned_json.rfind("}") + 1
-        if start >= 0 and end > start:
-            cleaned_json = cleaned_json[start:end]
-
-    try:
-        json.loads(cleaned_json)
-    except json.JSONDecodeError as e:
-        flush_traces()
-        raise ValueError(f"Failed to parse LLM response as valid JSON: {e}. Raw response: {config_json[:500]}")
-
-    report_usage_to_langfuse(lm)
-    return cleaned_json
 
 
 class ExplainPySrEquations(dspy.Signature):
@@ -210,108 +162,6 @@ class ExplainPySrEquationsDeep(dspy.Signature):
     explanation_json: str = dspy.OutputField(desc="JSON object with equations (including citations), summary, and recommendation")
 
 
-@observe(name="generate_equation_explanation", as_type="generation")
-def generate_equation_explanation(project_spec_json: str, data_spec_json: str, deep_research_context: dict = None) -> str:
-    """Generates explanation for PySR equations as structured JSON.
-
-    Args:
-        project_spec_json: JSON string of project specification
-        data_spec_json: JSON string of equations data
-        deep_research_context: Optional dict from deep research step (for deep analysis mode)
-
-    Returns:
-        JSON string with structured equation explanations
-    """
-    model_name = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
-    api_key = os.environ.get("OPENAI_API_KEY")
-    api_base = os.environ.get("OPENAI_API_BASE")
-
-    is_deep_analysis = deep_research_context and deep_research_context.get("equations")
-
-    # Enable web search for deep analysis mode
-    lm_kwargs = dict(
-        model=f"openai/{model_name}",
-        api_key=api_key,
-        api_base=api_base,
-    )
-
-    if is_deep_analysis:
-        lm_kwargs["web_search_options"] = {"search_context_size": "high"}
-
-    lm = dspy.LM(**lm_kwargs)
-
-    # If deep research context is provided, append it to the project spec and use deep signature
-    if is_deep_analysis:
-        enhanced_project_spec = json.loads(project_spec_json)
-        enhanced_project_spec["deep_research_equations"] = deep_research_context.get("equations", [])
-        project_spec_json = json.dumps(enhanced_project_spec, indent=2)
-        predictor = dspy.Predict(ExplainPySrEquationsDeep)
-    else:
-        predictor = dspy.Predict(ExplainPySrEquations)
-
-    logger.info(f"project_spec_json: {project_spec_json}")
-    try:
-        with dspy.settings.context(lm=lm):
-            response = predictor(
-                project_spec_json=project_spec_json,
-                data_spec_json=data_spec_json
-            )
-        report_usage_to_langfuse(lm)
-
-        # Clean and validate JSON response
-        explanation_json = response.explanation_json
-        cleaned_json = explanation_json.replace("```json", "").replace("```", "").strip()
-
-        # Extract JSON if wrapped in other content
-        if not (cleaned_json.startswith("{") and cleaned_json.endswith("}")):
-            start = cleaned_json.find("{")
-            end = cleaned_json.rfind("}") + 1
-            if start >= 0 and end > start:
-                cleaned_json = cleaned_json[start:end]
-
-        # Validate JSON structure
-        try:
-            parsed = json.loads(cleaned_json)
-            # Ensure required keys exist
-            if "equations" not in parsed:
-                parsed["equations"] = []
-            if "summary" not in parsed:
-                parsed["summary"] = {"key_drivers": [], "secondary_drivers": [], "findings": ""}
-            if "recommendation" not in parsed:
-                parsed["recommendation"] = {"equation_id": 1, "simplified_equation": "", "rationale": []}
-
-            # Post-process: Renumber equation IDs sequentially (1, 2, 3, ...)
-            # This fixes non-sequential IDs that may come from PySR
-            if parsed["equations"]:
-                old_to_new_id = {}
-                for new_id, eq in enumerate(parsed["equations"], start=1):
-                    old_id = eq.get("id")
-                    if old_id is not None:
-                        old_to_new_id[old_id] = new_id
-                    eq["id"] = new_id
-
-                # Update recommendation.equation_id to point to the new sequential ID
-                if "recommendation" in parsed and parsed["recommendation"].get("equation_id"):
-                    old_rec_id = parsed["recommendation"]["equation_id"]
-                    if old_rec_id in old_to_new_id:
-                        parsed["recommendation"]["equation_id"] = old_to_new_id[old_rec_id]
-
-            return json.dumps(parsed, indent=2)
-        except json.JSONDecodeError as e:
-            # Return a fallback structure with raw content
-            fallback = {
-                "equations": [],
-                "summary": {"key_drivers": [], "secondary_drivers": [], "findings": explanation_json},
-                "recommendation": {"equation_id": 0, "simplified_equation": "", "rationale": []},
-                "_parse_error": str(e)
-            }
-            return json.dumps(fallback, indent=2)
-
-    except Exception as e:
-        flush_traces()
-        raise
-
-
 class DeepResearchEquations(dspy.Signature):
     """
     You are an expert scientific research agent. Your task is to take as input a dictionary of features in the form of key–value pairs, where the key is the variable name to be used in equations and the value is a short description of its meaning. Using this feature list, perform deep scientific research to identify physically based, semi-empirical, or empirical equations that relate two or more of the provided variables.
@@ -389,78 +239,3 @@ class DeepResearchEquations(dspy.Signature):
     features_json: str = dspy.InputField(desc="JSON string of feature dictionary mapping variable names to descriptions")
 
     equations: str = dspy.OutputField(desc="JSON object with equations array containing equation, citations")
-
-
-@observe(name="deep_research_equations", as_type="generation")
-def deep_research_equations(features_dict: dict, model_name: str = None) -> dict:
-    """Performs deep scientific research to find equations relating features.
-
-    Uses the specified deep research model to search scientific literature
-    and identify physical equations that relate the provided variables.
-
-    Args:
-        features_dict: Dictionary mapping variable names to descriptions
-        model_name: Name of the deep research model to use (optional, falls back to env var)
-
-    Returns:
-        Dictionary with 'equations' list containing equation objects
-    """
-    # Use provided model_name or fall back to first model from environment variable
-    if not model_name:
-        models_env = os.environ.get("DEEP_RESEARCH_MODEL", "")
-        if models_env:
-            # Environment variable may contain comma-separated list of models
-            model_name = models_env.split(",")[0].strip()
-        else:
-            model_name = "o4-mini-deep-research"
-    api_key = os.environ.get("DEEP_RESEARCH_API_KEY")
-    api_base = os.environ.get("DEEP_RESEARCH_API_BASE")
-
-    if not api_key:
-        raise ValueError("DEEP_RESEARCH_API_KEY environment variable is required but not set.")
-
-    lm = dspy.LM(
-        model=f"openai/{model_name}",
-        api_key=api_key,
-        api_base=api_base,
-        extra_body={
-            "tools": [
-                {
-                    "type": "web_search_preview",
-                    "search_context_size": "medium"
-                }
-            ]
-        }
-    )
-
-    features_json = json.dumps(features_dict, indent=2)
-    predictor = dspy.Predict(DeepResearchEquations)
-
-    try:
-        with dspy.settings.context(lm=lm):
-            response = predictor(features_json=features_json)
-        report_usage_to_langfuse(lm, model_name=model_name)
-
-        # Parse and validate JSON response
-        equations_str = response.equations
-        cleaned_json = equations_str.replace("```json", "").replace("```", "").strip()
-
-        # Extract JSON if wrapped in other content
-        if not (cleaned_json.startswith("{") and cleaned_json.endswith("}")):
-            start = cleaned_json.find("{")
-            end = cleaned_json.rfind("}") + 1
-            if start >= 0 and end > start:
-                cleaned_json = cleaned_json[start:end]
-
-        try:
-            parsed = json.loads(cleaned_json)
-            # Ensure required structure exists
-            if "equations" not in parsed:
-                parsed = {"equations": []}
-            return parsed
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse deep research JSON: {e}. Raw: {equations_str[:500]}")
-            return {"equations": [], "_parse_error": str(e)}
-    except Exception as e:
-        flush_traces()
-        raise
