@@ -1,7 +1,6 @@
 import sys
 import os
 import json
-import time
 import pandas as pd
 import multiprocessing
 import logging
