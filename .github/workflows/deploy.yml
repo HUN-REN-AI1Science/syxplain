@@ -200,8 +200,8 @@ jobs:
             echo "📦 Installing dependencies..."
             if [ -f "$APP_DIR/venv/bin/pip" ]; then
                 source $APP_DIR/venv/bin/activate
-                $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt
-                $APP_DIR/venv/bin/python -c "import juliapkg; juliapkg.resolve()"
+                uv pip install -r $APP_DIR/requirements.txt
+                python -c "import juliapkg; juliapkg.resolve()"
             else
                 echo "⚠️ Virtual environment not found at $APP_DIR/venv. Skipping dependency installation."
             fi
