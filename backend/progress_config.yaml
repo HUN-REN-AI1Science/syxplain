@@ -1,0 +1,138 @@
+# Progress Configuration
+# This file defines the pipeline stages and their progress percentages.
+# Both backend (logger.py) and frontend (via API) use this config.
+
+# Each phase has:
+#   - name: Internal identifier used in log_step calls
+#   - label: Human-readable label for UI
+#   - progress_end: The progress percentage when this phase completes
+#   - increment_rate: How fast the frontend fake-increments during this phase (% per 500ms)
+
+phases:
+  # Initialization and data loading
+  - name: initialization
+    label: "Initializing"
+    progress_end: 2
+    increment_rate: 0.5
+
+  - name: phase_data_analysis
+    label: "Data Analysis"
+    progress_end: 3
+    increment_rate: 0.5
+
+  - name: data_summary_computed
+    label: "Computing Summary"
+    progress_end: 5
+    increment_rate: 0.5
+
+  # Visualization creation
+  - name: visualization_start
+    label: "Creating Visualizations"
+    progress_end: 6
+    increment_rate: 0.5
+
+  - name: visualization_progress
+    label: "Generating Charts"
+    progress_end: 8
+    increment_rate: 0.5
+
+  # SHAP analysis
+  - name: shap_analysis_start
+    label: "SHAP Analysis"
+    progress_end: 9
+    increment_rate: 0.4
+
+  - name: shap_analysis_complete
+    label: "SHAP Complete"
+    progress_end: 12
+    increment_rate: 0.4
+
+  # Interaction visualizations
+  - name: interaction_viz_start
+    label: "Interaction Plots"
+    progress_end: 13
+    increment_rate: 0.5
+
+  - name: interaction_viz_complete
+    label: "Plots Complete"
+    progress_end: 15
+    increment_rate: 0.5
+
+  # LLM Config Generation
+  - name: phase_config_generation
+    label: "Config Generation"
+    progress_end: 16
+    increment_rate: 0.5
+
+  - name: llm_config_request
+    label: "Requesting Config"
+    progress_end: 17
+    increment_rate: 0.5
+
+  - name: llm_config_received
+    label: "Config Received"
+    progress_end: 18
+    increment_rate: 0.5
+
+  # PySR Symbolic Regression (longest phase ~60% of time)
+  - name: phase_symbolic_regression
+    label: "Symbolic Regression"
+    progress_end: 19
+    increment_rate: 0.15
+
+  - name: pysr_config_computed
+    label: "PySR Config Ready"
+    progress_end: 20
+    increment_rate: 0.15
+
+  - name: pysr_training_start
+    label: "Training Equations"
+    progress_end: 22
+    increment_rate: 0.15
+
+  - name: pysr_training_complete
+    label: "Training Complete"
+    progress_end: 75
+    increment_rate: 0.15
+
+  # Deep Research (optional, for deep analysis mode)
+  - name: deep_research_start
+    label: "Deep Research"
+    progress_end: 78
+    increment_rate: 0.25
+
+  - name: deep_research_result
+    label: "Research Complete"
+    progress_end: 82
+    increment_rate: 0.25
+
+  - name: deep_research_error
+    label: "Research Error"
+    progress_end: 82
+    increment_rate: 0.25
+
+  - name: deep_research_skip
+    label: "Research Skipped"
+    progress_end: 82
+    increment_rate: 0.25
+
+  # Equation Explanation
+  - name: phase_explanation
+    label: "Generating Explanation"
+    progress_end: 83
+    increment_rate: 0.25
+
+  - name: equations_selected
+    label: "Equations Selected"
+    progress_end: 85
+    increment_rate: 0.25
+
+  - name: llm_explanation_request
+    label: "Requesting Explanation"
+    progress_end: 87
+    increment_rate: 0.25
+
+  - name: llm_explanation_complete
+    label: "Explanation Complete"
+    progress_end: 99
+    increment_rate: 0.25

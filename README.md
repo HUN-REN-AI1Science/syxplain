@@ -3,7 +3,8 @@
 [![CI/CD](https://github.com/HUN-REN-AI1Science/syxplain/actions/workflows/deploy.yml/badge.svg)](https://github.com/HUN-REN-AI1Science/syxplain/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/release/python-3100/)
-[![React 18.2.0](https://img.shields.io/badge/react-18.2.0-61dafb.svg)](https://react.dev/)
+[![Node.js 24.12.0](https://img.shields.io/badge/node.js-24.12.0_LTS-339933.svg)](https://nodejs.org/)
+[![React 18.3.1](https://img.shields.io/badge/react-18.3.1-61dafb.svg)](https://react.dev/)
 
 This is a proof of concept system which uses state of the art symbolic regression models to predict a selected variable in a dataset and explain the predicted equations in natural language using large language models. Setting the hiperparameters of the symbolic regression can be tedious, so here we use an LLM withvision capabilities to analyze the dataset and suggest hiperparameters for the symbolic regression model.
 
@@ -39,9 +40,13 @@ cp .env.example .env
 - `OPENAI_API_KEY`: Your API key for the LLM service.
 - `OPENAI_API_BASE`: Base URL for the LLM API.
 - `OPENAI_MODEL_NAME`: Name of the model to use.
+- `DEEP_RESEARCH_MODEL`: Comma-separated list of deep research models available for selection. Users can choose from these models when running Deep Analysis. Example: `o4-mini-deep-research,perplexity-deep-research,o3-deep-research`. If only one model is configured, it will be auto-selected.
+- `DEEP_RESEARCH_API_KEY`: API key for the deep research model (required for Deep Analysis mode).
+- `DEEP_RESEARCH_API_BASE`: Base URL for the deep research API (used in Deep Analysis mode).
 - `DATABASE_URL`: Connection string for your PostgreSQL database.
 - `SUPABASE_URL`: URL of your Supabase project.
 - `SUPABASE_JWT_SECRET`: JWT secret for Supabase authentication.
+- `SUPABASE_SERVICE_ROLE_KEY`: Service role key for GDPR account deletion.
 - `VITE_SUPABASE_URL`: Same as `SUPABASE_URL` (for frontend).
 - `VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY`: Supabase publishable key (for frontend).
 - `VITE_SUPABASE_ANON_KEY`: Supabase anon key (for frontend).
@@ -50,6 +55,7 @@ cp .env.example .env
 - `SHAP_SUBSAMPLE_FRACTION`: Fraction of data to use for SHAP calculations (default: `0.1` = 10%).
 - `SHAP_SUBSAMPLE_MIN`: Minimum number of samples for SHAP (default: `1000`).
 - `SHAP_SUBSAMPLE_MAX`: Maximum number of samples for SHAP (default: `5000`).
+- `ANALYSIS_TIMEOUT_HOURS`: Maximum hours before an analysis is killed with timeout status (default: `24`). Set to `0` to disable.
 
 **Optional Variables (LLM Tracing with Langfuse):**
 - `LANGFUSE_PUBLIC_KEY`: Your Langfuse public key for tracing.
@@ -125,6 +131,19 @@ To run the backend as a systemd service using a Python virtual environment:
 ### Local Development
 
 For development, you can run the backend and frontend separately.
+
+**Database:**
+
+Start only the PostgreSQL database from docker-compose:
+
+```bash
+docker-compose up -d postgres
+```
+
+This will start PostgreSQL 18 on `localhost:5432` with:
+- User: `syxplain`
+- Password: `syxplain`
+- Database: `syxplain`
 
 **Backend:**
 

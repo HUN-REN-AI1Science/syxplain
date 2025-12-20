@@ -12,7 +12,7 @@ import seaborn as sns
 import logger
 from shap_calc import get_top_feature_interactions
 from logger import StepLogger
-from llm_modules import generate_pysr_config, generate_equation_explanation
+from llm_modules import generate_pysr_config, generate_equation_explanation, deep_research_equations
 
 
 class State(TypedDict, total=False):
@@ -27,11 +27,16 @@ class State(TypedDict, total=False):
     data_visualization: List[str]
     data_summary: str
     pysr_model: pysr.sr.PySRRegressor
+    analysis_type: str  # "quick" or "deep"
+    deep_research_model: str  # Model to use for deep research (e.g., "o4-mini-deep-research")
+    deep_research_result: dict  # Result from deep research LLM call (dict with 'equations' list)
 
 def data_summary(state: State) -> State:
     # Setting up logger object
     if "logger" not in state:
         state["logger"] = logger.StepLogger()
+
+    state["logger"].log_step("phase_data_analysis", {"status": "Starting data analysis phase"})
 
     # Summary
     data = state["data"]
@@ -39,7 +44,7 @@ def data_summary(state: State) -> State:
     description = data.describe()
     description.to_csv(buffer)
     state["data_summary"] = buffer.getvalue()
-    state["logger"].log_step("data_summary", description.to_dict())
+    state["logger"].log_step("data_summary_computed", description.to_dict())
 
     # Charts (predictors vs target + top predictor interactions regarding target prediction)
     state["data_visualization"] = []
@@ -70,20 +75,38 @@ def data_summary(state: State) -> State:
 
         plt.close()
 
-    for col in state["predictor_columns"]:
+    # Create visualizations for each predictor
+    state["logger"].log_step("visualization_start", {"status": "Creating feature visualizations", "count": len(state["predictor_columns"])})
+    for idx, col in enumerate(state["predictor_columns"]):
         create_and_save_visualization(data, col, state["target_column"], state["logger"])
+        # Log progress periodically (every 3 features)
+        if (idx + 1) % 3 == 0 or idx == len(state["predictor_columns"]) - 1:
+            state["logger"].log_step("visualization_progress", {"completed": idx + 1, "total": len(state["predictor_columns"])})
 
+    # SHAP feature interaction analysis
+    state["logger"].log_step("shap_analysis_start", {"status": "Starting SHAP interaction analysis"})
     state["col_interaction_list"] = get_top_feature_interactions(state["data"], state["predictor_columns"], state["target_column"])
+    state["logger"].log_step("shap_analysis_complete", {"top_interactions": len(state["col_interaction_list"])})
+
+    # Create interaction visualizations
+    state["logger"].log_step("interaction_viz_start", {"status": "Creating interaction visualizations"})
     for (col1, col2) in state["col_interaction_list"]:
         create_and_save_visualization(data, col1, col2, state["logger"])
-    state["logger"].log_step("top_column_interactions", state["col_interaction_list"])
+    state["logger"].log_step("interaction_viz_complete", state["col_interaction_list"])
 
     return state
 
 def llm_pysr_config_generator(state: State) -> State:
+    state["logger"].log_step("phase_config_generation", {"status": "Starting LLM config generation"})
+
     project_description_src = state["problem_description_src"]
     summary_csv_text = state["data_summary"]
     visualizations = state["data_visualization"]
+
+    state["logger"].log_step("llm_config_request", {
+        "project_description": project_description_src[:200] + "..." if len(project_description_src) > 200 else project_description_src,
+        "visual_count": len(visualizations)
+    })
 
     config_json = generate_pysr_config(
         project_description=project_description_src,
@@ -91,19 +114,15 @@ def llm_pysr_config_generator(state: State) -> State:
         visualizations_b64=visualizations
     )
 
-    state["logger"].log_step("pysr_config_prompt", {
-        "project_description": project_description_src,
-        "dataset_statistics": summary_csv_text,
-        "visual_count": len(visualizations)
-    })
-
     # Save results
     state["pysr_config_json"] = config_json
-    state["logger"].log_step("pysr_config_answer", state["pysr_config_json"])
+    state["logger"].log_step("llm_config_received", {"config_length": len(config_json)})
 
     return state
 
 def pysr_with_generated_config(state: State) -> State:
+    state["logger"].log_step("phase_symbolic_regression", {"status": "Starting symbolic regression phase"})
+
     def estimate_niterations(state):
         # Input features
         sample_nbr, feature_dim_nbr = state["data"][state["predictor_columns"]].shape
@@ -119,24 +138,19 @@ def pysr_with_generated_config(state: State) -> State:
 
         # Final value
         iters = max(200, int(10 * x_complexity_factor * y_complexity_factor))
-        state["logger"].log_step(
-            "niters_calculation",
-            {
-                "sample_nbr": sample_nbr,
-                "feature_dim_nbr": feature_dim_nbr,
-                "x_complexity_factor": x_complexity_factor,
-                "y_complexity_factor": y_complexity_factor,
-                "iters": iters
-            }
-        )
-        return iters
+        return iters, sample_nbr, feature_dim_nbr
 
     pysr_config = json.loads(state["pysr_config_json"])
-    pysr_config["niterations"] = estimate_niterations(state)
-    pysr_config["extra_sympy_mappings"] = {
-        # "gaussian": lambda x: sympy.exp(-x*x),
-        # "sigmoid": lambda x: 1 / (1 + sympy.exp(-x)),
-    }
+    niterations, sample_nbr, feature_dim_nbr = estimate_niterations(state)
+    pysr_config["niterations"] = niterations
+
+    state["logger"].log_step("pysr_config_computed", {
+        "niterations": niterations,
+        "samples": sample_nbr,
+        "features": feature_dim_nbr
+    })
+
+    pysr_config["extra_sympy_mappings"] = {}
     pysr_config["constraints"] = {}
     if "^" in pysr_config["binary_operators"]:
         pysr_config["constraints"]["^"] = (-1, 1)
@@ -145,7 +159,6 @@ def pysr_with_generated_config(state: State) -> State:
         pysr_config["nested_constraints"]["exp"] = {"exp": 2}
     if "sin" in pysr_config["unary_operators"]:
         pysr_config["nested_constraints"]["sin"] = {"sin": 0}
-    state["logger"].log_step("pysr_config_final", pysr_config)
 
     # Force resource limits and logging
     cpu_count = os.cpu_count() or 4  # Fallback to 4 if detection fails
@@ -160,10 +173,8 @@ def pysr_with_generated_config(state: State) -> State:
         temp_dir = os.path.join(tempfile.gettempdir(), f"pysr_{run_id}")
         os.makedirs(temp_dir, exist_ok=True)
         pysr_config["tempdir"] = temp_dir
-        state["logger"].log_step("pysr_tempdir", temp_dir)
 
-    julia_threads = os.environ.get("JULIA_NUM_THREADS", "1")
-    state["logger"].log_step("pysr_cpu_config", {"cpu_count": cpu_count, "parallelism": pysr_config["parallelism"], "julia_threads": julia_threads})
+    state["logger"].log_step("pysr_training_start", {"cpu_count": cpu_count, "niterations": niterations})
 
     # Train symbolic regressor
     pysr = PySRRegressor(**pysr_config)
@@ -171,31 +182,78 @@ def pysr_with_generated_config(state: State) -> State:
         X=state["data"][state["predictor_columns"]],
         y=state["data"][state["target_column"]]
     )
+
     state["pysr_model"] = pysr
+    state["logger"].log_step("pysr_training_complete", {"equations_found": len(pysr.equations_) if hasattr(pysr, 'equations_') else 0})
+
     return state
 
 def explain_pysr_equations(state: State) -> State:
+    state["logger"].log_step("phase_explanation", {"status": "Starting equation explanation phase"})
+
     model = state["pysr_model"]
-    to_explain =dict(equation=list(), loss=list(), complexity=list())
+    to_explain = dict(equation=list(), loss=list(), complexity=list())
     selected_equations = (model.equations_[model.equations_["loss"] < float(model.equations_["loss"].tail(1).iloc[0])*1.5]).copy()
     for _, row in selected_equations.iterrows():
         to_explain["equation"].append(row["equation"])
         to_explain["loss"].append(row["loss"])
         to_explain["complexity"].append(row["complexity"])
 
+    state["logger"].log_step("equations_selected", {"count": len(to_explain["equation"])})
+
     project_spec_json = state["problem_description_src"]
     data_spec_json = json.dumps(to_explain, indent=2)
 
+    # Get deep research context if available (for deep analysis mode)
+    deep_research_context = state.get("deep_research_result")
+
+    state["logger"].log_step("llm_explanation_request", {
+        "equations_count": len(to_explain["equation"]),
+        "has_deep_research": deep_research_context is not None
+    })
+
     explanation = generate_equation_explanation(
         project_spec_json=project_spec_json,
-        data_spec_json=data_spec_json
+        data_spec_json=data_spec_json,
+        deep_research_context=deep_research_context
     )
-
-    state["logger"].log_step("pysr_explainer_prompt", {"project_spec": project_spec_json, "data_spec": data_spec_json})
 
     # Save results
     state["pysr_explanations"] = explanation
-    state["logger"].log_step("pysr_explainer_answer", state["pysr_explanations"])
+    state["logger"].log_step("llm_explanation_complete", {"explanation_length": len(explanation)})
+
+    return state
+
+
+def deep_research_node(state: State) -> State:
+    """Node for deep research step - searches scientific literature for equations.
+
+    This node is only added to the graph for deep analysis mode.
+    It calls the o4-mini-deep-research model to find physically-based equations.
+    """
+    state["logger"].log_step("deep_research_start", {"status": "starting deep research"})
+
+    # Get the features dictionary from the problem description
+    problem_desc = json.loads(state["problem_description_src"])
+    features_dict = problem_desc.get("features", {})
+
+    if not features_dict:
+        state["logger"].log_step("deep_research_skip", {"reason": "no features defined"})
+        state["deep_research_result"] = {"equations": []}
+        return state
+
+    try:
+        # Get user-selected model from state, if available
+        model_name = state.get("deep_research_model")
+        result = deep_research_equations(features_dict, model_name=model_name)
+        state["deep_research_result"] = result
+        # Log summary for debugging
+        equations_count = len(result.get("equations", []))
+        state["logger"].log_step("deep_research_result", {"equations_count": equations_count, "result": json.dumps(result)[:500]})
+    except Exception as e:
+        state["logger"].log_step("deep_research_error", {"error": str(e)})
+        state["deep_research_result"] = {"equations": []}
+
     return state
 
 def run_syxplain(entry_point):
@@ -215,13 +273,13 @@ def run_syxplain(entry_point):
 
     app = g.compile()
     final = app.invoke(State())
-    with open("pysr_explanations.md", "w") as f:
+    with open("pysr_explanations.json", "w") as f:
         f.write(final["pysr_explanations"])
 
-    # Save markdown as artifact for download
+    # Save JSON as artifact for download
     if "logger" in final and final["logger"]:
         final["logger"].log_artifact(
-            "pysr_explanations.md",
+            "pysr_explanations.json",
             final["pysr_explanations"].encode('utf-8'),
-            media_type="text/markdown"
+            media_type="application/json"
         )

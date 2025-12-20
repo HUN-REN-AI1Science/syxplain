@@ -9,6 +9,8 @@ class ProblemDescription(BaseModel):
 class RunRequest(BaseModel):
     problem_description: ProblemDescription
     csv_filename: str
+    analysis_type: str = "quick"  # "quick" or "deep"
+    deep_research_model: Optional[str] = None  # Required when analysis_type is "deep"
 
 class RunResponse(BaseModel):
     run_id: str
@@ -27,3 +29,12 @@ class RunSummary(BaseModel):
     created_at: Any # Pydantic handles datetime serialization
     csv_filename: str
     target_variable: Optional[str] = None
+    progress: int = 0  # 0-100 percentage
+    analysis_type: str = "quick"  # "quick" or "deep"
+
+class PaginatedRunsResponse(BaseModel):
+    items: List[RunSummary]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int

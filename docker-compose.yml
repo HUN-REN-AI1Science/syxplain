@@ -1,4 +1,21 @@
 services:
+  postgres:
+    image: postgres:18
+    container_name: syxplain-db
+    environment:
+      - POSTGRES_USER=syxplain
+      - POSTGRES_PASSWORD=syxplain
+      - POSTGRES_DB=syxplain
+    ports:
+      - "5432:5432"
+    volumes:
+      - syxplain_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U syxplain"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -12,7 +29,19 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
       - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - JULIA_NUM_THREADS=${JULIA_NUM_THREADS}
+      - DEEP_RESEARCH_MODEL=${DEEP_RESEARCH_MODEL}
+      - DEEP_RESEARCH_API_KEY=${DEEP_RESEARCH_API_KEY}
+      - DEEP_RESEARCH_API_BASE=${DEEP_RESEARCH_API_BASE}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - SHAP_SUBSAMPLE_FRACTION=${SHAP_SUBSAMPLE_FRACTION}
+      - SHAP_SUBSAMPLE_MIN=${SHAP_SUBSAMPLE_MIN}
+      - SHAP_SUBSAMPLE_MAX=${SHAP_SUBSAMPLE_MAX}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL}
+      - ANALYSIS_TIMEOUT_HOURS=${ANALYSIS_TIMEOUT_HOURS}
     deploy:
       resources:
         limits:
@@ -25,6 +54,9 @@ services:
       # - ./backend:/app/backend
       # - ./syxplain_lib.py:/app/syxplain_lib.py
       # - ./logger.py:/app/logger.py
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   frontend:
     build:
@@ -38,3 +70,6 @@ services:
       - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
     depends_on:
       - backend
+
+volumes:
+  syxplain_pgdata:

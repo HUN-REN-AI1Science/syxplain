@@ -67,3 +67,47 @@ async def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] 
         return await get_current_user(credentials)
     except HTTPException:
         return None
+
+async def delete_supabase_user(user_id: str) -> None:
+    """
+    Deletes a user from Supabase Auth using the Admin API.
+    Requires SUPABASE_SERVICE_ROLE_KEY environment variable.
+    """
+    import httpx
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+
+    if not service_role_key:
+        logger.warning("SUPABASE_SERVICE_ROLE_KEY not set, skipping Supabase user deletion")
+        return
+
+    if not SUPABASE_URL:
+        logger.warning("SUPABASE_URL not set, skipping Supabase user deletion")
+        return
+
+    # Supabase Admin API endpoint for user deletion
+    url = f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}"
+
+    headers = {
+        "apikey": service_role_key,
+        "Authorization": f"Bearer {service_role_key}",
+        "Content-Type": "application/json"
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.delete(url, headers=headers)
+
+        if response.status_code == 200 or response.status_code == 204:
+            logger.info(f"Successfully deleted Supabase user: {user_id}")
+        elif response.status_code == 404:
+            logger.warning(f"Supabase user not found (may already be deleted): {user_id}")
+        else:
+            error_detail = response.text
+            logger.error(f"Failed to delete Supabase user {user_id}: {response.status_code} - {error_detail}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to delete user from authentication provider: {error_detail}"
+            )

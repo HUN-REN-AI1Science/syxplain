@@ -22,6 +22,7 @@ interface RunDetails {
     column_count: number | null;
     columns: string[];
   } | null;
+  analysis_type: string | null;
   error: string | null;
 }
 
@@ -212,6 +213,28 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
                 <p className="text-center text-sm text-slate-500 mt-2">
                   The variable being predicted
                 </p>
+              </div>
+            </div>
+
+            {/* Analysis Mode - Compact */}
+            <div className={`rounded-xl p-4 border ${runDetails.analysis_type === 'deep' ? 'bg-gradient-to-br from-purple-50 to-fuchsia-100 border-purple-200' : 'bg-gradient-to-br from-orange-50 to-amber-100 border-orange-200'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-3 flex-shrink-0 ${runDetails.analysis_type === 'deep' ? 'bg-purple-100' : 'bg-orange-100'}`}>
+                    <i className={`pi ${runDetails.analysis_type === 'deep' ? 'pi-search text-purple-600' : 'pi-bolt text-orange-600'} text-lg`}></i>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-800">Analysis Mode</h4>
+                    <p className="text-sm text-slate-500">
+                      {runDetails.analysis_type === 'deep' ? 'Enhanced with scientific literature research' : 'Standard analysis workflow'}
+                    </p>
+                  </div>
+                </div>
+                <Tag
+                  value={runDetails.analysis_type === 'deep' ? 'Deep Analysis' : 'Quick Analysis'}
+                  severity={runDetails.analysis_type === 'deep' ? 'warning' : 'info'}
+                  className="text-base px-3 py-1"
+                />
               </div>
             </div>
 
