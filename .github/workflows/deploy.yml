@@ -179,6 +179,10 @@ jobs:
             APP_DIR="/opt/syxplain"
 
             echo "🚀 Starting Backend deployment..."
+
+            # Ensure uv is in PATH
+            export PATH="$HOME/.local/bin:$PATH"
+
             echo "⚙️ Pulling image: $BACKEND_IMAGE"
             docker pull $BACKEND_IMAGE
 
