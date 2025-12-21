@@ -4,8 +4,8 @@ Profile service for user profile management.
 Encapsulates business logic for profile data and GDPR deletion.
 """
 import logging
-from typing import Any, Dict, Optional
-from uuid import UUID
+from typing import Any, Dict
+
 
 import httpx
 

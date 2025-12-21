@@ -9,12 +9,12 @@ Provides:
 - Request correlation IDs for tracing
 """
 import logging
-import os
+
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+
 
 # Try to use Rich for beautiful console output, fallback to standard if not available
 try:

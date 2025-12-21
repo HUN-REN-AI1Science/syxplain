@@ -2,7 +2,7 @@
 DSPy Client Factory.
 """
 import dspy
-from typing import Optional, Dict, Any
+
 
 from backend.core.config import get_settings
 

@@ -4,7 +4,7 @@ Repository for File entity data access.
 Provides specialized queries for file management
 including user-scoped lookups and statistics.
 """
-from datetime import datetime
+
 from typing import List, Optional
 from uuid import UUID
 

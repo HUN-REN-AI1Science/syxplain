@@ -4,7 +4,7 @@ FastAPI dependency injection configuration.
 Provides factory functions for injecting repositories and services
 into route handlers, enabling loose coupling and testability.
 """
-from typing import Generator
+
 
 from fastapi import Depends
 from sqlalchemy.orm import Session

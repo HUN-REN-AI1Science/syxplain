@@ -12,7 +12,7 @@ from uuid import UUID
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from backend.infrastructure.database.models import Run, RunArtifact
+from backend.infrastructure.database.models import Run
 from backend.repositories.base import BaseRepository
 
 

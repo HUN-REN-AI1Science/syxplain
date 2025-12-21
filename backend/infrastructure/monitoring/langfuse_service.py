@@ -5,8 +5,8 @@ Handles initialization, decoration, and usage reporting for Langfuse tracing.
 Integrates with DSPy.
 """
 import logging
-import os
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
+
+from typing import TYPE_CHECKING, Optional
 
 from backend.core.config import get_settings
 

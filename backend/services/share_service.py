@@ -9,11 +9,11 @@ import secrets
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from backend.core.exceptions import EntityNotFoundError, ValidationError
+from backend.core.exceptions import EntityNotFoundError
 from backend.repositories.run_repository import RunRepository
 from backend.repositories.file_repository import FileRepository
 from backend.services.file_service import FileService, get_file_service
-from backend.infrastructure.database.models import Run
+
 from backend.utils import parse_uuid
 
 logger = logging.getLogger(__name__)

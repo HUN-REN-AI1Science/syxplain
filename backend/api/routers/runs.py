@@ -20,7 +20,6 @@ from backend.services.run_service import RunService
 from backend.schemas.requests import RunRequest
 from backend.schemas.responses import (
     PaginatedRunsResponse,
-    RunDetailsResponse,
     RunResponse,
     RunStatusResponse,
     RunSummary,

@@ -282,15 +282,13 @@ class FileService:
 
         if target_variable not in file_columns:
             raise FileValidationError(
-                message=f"Target variable '{target_variable}' does not exist in the uploaded file. Available columns: {', '.join(file_columns)}",
-                field="target_variable"
+                message=f"Target variable '{target_variable}' does not exist in the uploaded file. Available columns: {', '.join(file_columns)}"
             )
 
         invalid_features = [f for f in features.keys() if f not in file_columns]
         if invalid_features:
             raise FileValidationError(
-                message=f"Features do not exist in file: {', '.join(invalid_features)}",
-                field="features"
+                message=f"Features do not exist in file: {', '.join(invalid_features)}"
             )
 
     def get_csv_metadata(

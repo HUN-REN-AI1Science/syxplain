@@ -9,7 +9,7 @@ additional dependencies. Environment variables are loaded at module import.
 """
 import os
 from dataclasses import dataclass, field
-from functools import lru_cache
+
 from typing import List, Optional
 
 

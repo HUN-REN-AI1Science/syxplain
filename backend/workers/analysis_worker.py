@@ -4,19 +4,19 @@ Analysis worker for background processing.
 Manages the lifecycle of analysis runs including process spawning,
 status updates, and timeout handling.
 """
-import io
+
 import json
 import logging
 import multiprocessing
-import os
+
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
-from uuid import UUID
+
 
 import pandas as pd
 
 from backend.core.config import get_settings
-from backend.infrastructure.database.connection import get_db_session, get_engine, dispose_engine
+from backend.infrastructure.database.connection import get_db_session, dispose_engine
 from backend.infrastructure.database.models import Run, File as DbFile
 from backend.services.file_service import FileService
 

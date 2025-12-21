@@ -4,7 +4,7 @@ Base repository providing common CRUD operations.
 Implements the Repository Pattern for abstracting data access,
 enabling easier testing and separation of concerns.
 """
-from typing import Any, Generic, List, Optional, Type, TypeVar
+from typing import Generic, List, Optional, Type, TypeVar
 from uuid import UUID
 
 from sqlalchemy.orm import Session
