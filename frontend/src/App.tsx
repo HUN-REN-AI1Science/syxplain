@@ -1,21 +1,23 @@
 import { useState, useRef } from 'react';
-import FileUpload from './FileUpload';
-import ProblemForm from './ProblemForm';
-import ResultsView from './ResultsView';
-import HistoryView from './HistoryView';
-import ProfileView from './ProfileView';
-import Login from './pages/Login';
-import SignUp from './pages/SignUp';
-import ForgotPassword from './pages/ForgotPassword';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { runsService } from './services/api';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import FileUpload from '@components/FileUpload/FileUpload';
+import ProblemForm from '@components/ProblemForm/ProblemForm';
+import ResultsView from '@pages/results/ResultsView';
+import HistoryView from '@pages/HistoryView';
+import ProfileView from '@pages/ProfileView';
+import Login from '@pages/auth/Login';
+import SignUp from '@pages/auth/SignUp';
+import ForgotPassword from '@pages/auth/ForgotPassword';
+import PublicResultsView from '@pages/results/PublicResultsView';
+import { AuthProvider, useAuth } from '@contexts/AuthContext';
+import { runsService } from '@services/api';
 import { Steps } from 'primereact/steps';
 import { Toast } from 'primereact/toast';
 import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { Tooltip } from 'primereact/tooltip';
 import { SwitchTransition, CSSTransition } from 'react-transition-group';
-import syxplainLogo from './assets/syxplain_logo.png';
+import syxplainLogo from '@assets/syxplain_logo.png';
 
 function MainApp() {
   const [view, setView] = useState<'workflow' | 'history' | 'profile'>('workflow');
@@ -169,7 +171,7 @@ function MainApp() {
             </Card>
           ) : view === 'profile' ? (
             <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
-              <ProfileView onBack={() => setView('workflow')} />
+                <ProfileView onBack={() => setView('workflow')} onSelectRun={handleSelectRun} />
             </Card>
           ) : (
             <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
@@ -221,9 +223,18 @@ function MainApp() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AuthGate />
-    </AuthProvider>
+    <BrowserRouter>
+      <Routes>
+        {/* Public share route - no auth required */}
+        <Route path="/share/:token" element={<PublicResultsView />} />
+        {/* All other routes go through auth */}
+        <Route path="*" element={
+          <AuthProvider>
+            <AuthGate />
+          </AuthProvider>
+        } />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

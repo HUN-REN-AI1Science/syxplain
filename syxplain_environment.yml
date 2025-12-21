@@ -75,8 +75,9 @@ dependencies:
   - langgraph
   - langchain-core
 
-  # LLM Tracing (Langfuse) - pip install required
   - pip:
     - langfuse
     - openinference-instrumentation-dspy
     - dspy
+    - rich
+    - httpx

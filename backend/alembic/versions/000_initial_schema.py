@@ -60,8 +60,9 @@ def upgrade() -> None:
         'run_steps',
         sa.Column('id', UUID(as_uuid=True), primary_key=True),
         sa.Column('run_id', UUID(as_uuid=True), sa.ForeignKey('runs.id', ondelete='CASCADE'), nullable=False, index=True),
+        sa.Column('step_number', sa.Integer(), nullable=False),
         sa.Column('step_name', sa.String(), nullable=False),
-        sa.Column('step_data', JSONB(), nullable=True),
+        sa.Column('payload', JSONB(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=True),
     )
 

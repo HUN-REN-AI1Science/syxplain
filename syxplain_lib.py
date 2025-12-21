@@ -9,14 +9,13 @@ from langgraph.graph import StateGraph, START, END
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-import logger
 from shap_calc import get_top_feature_interactions
-from logger import StepLogger
-from llm_modules import generate_pysr_config, generate_equation_explanation, deep_research_equations
+from backend.services.progress_service import ProgressTracker
+from backend.services.llm_service import generate_pysr_config, generate_equation_explanation, deep_research_equations
 
 
 class State(TypedDict, total=False):
-    logger: StepLogger
+    logger: ProgressTracker
     data: Any
     problem_description_src: str
     target_column: str

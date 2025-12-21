@@ -4,7 +4,7 @@
  */
 
 import jsPDF from 'jspdf';
-import type { EquationResults, Equation } from '../types';
+import type { EquationResults, Equation } from '@/types';
 
 // ============================================================================
 // Constants
