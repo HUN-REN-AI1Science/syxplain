@@ -194,19 +194,18 @@ def explain_pysr_equations(state: State) -> State:
     to_explain = dict(equation=list(), loss=list(), complexity=list())
     selected_equations = (model.equations_[model.equations_["loss"] < float(model.equations_["loss"].tail(1).iloc[0])*1.5]).copy()
 
-    # Store indices for scatter plot generation
-    equation_indices = []
+    # Build the data structure for the LLM explanation
     for idx, row in selected_equations.iterrows():
         to_explain["equation"].append(row["equation"])
         to_explain["loss"].append(row["loss"])
         to_explain["complexity"].append(row["complexity"])
-        equation_indices.append(idx)
 
     state["logger"].log_step("equations_selected", {"count": len(to_explain["equation"])})
 
     # Generate scatter plot data for each selected equation (raw data for frontend Chart.js)
+    # Create a mapping from equation string to scatter data (to handle LLM reordering)
     state["logger"].log_step("scatter_data_start", {"status": "Generating scatter plot data"})
-    scatter_data_list = []
+    scatter_data_by_equation = {}  # Maps equation string -> scatter data
     X = state["data"][state["predictor_columns"]]
     y_actual = state["data"][state["target_column"]].values
 
@@ -221,22 +220,46 @@ def explain_pysr_equations(state: State) -> State:
         X_sample = X
         y_actual_sample = y_actual
 
-    for i, eq_idx in enumerate(equation_indices):
+    # Convert X_sample to numpy array for lambda_format callables
+    X_sample_np = X_sample.values
+
+    # Iterate over selected_equations directly to get both the equation string and lambda
+    for i, (idx, row) in enumerate(selected_equations.iterrows()):
         try:
-            # Predict using this specific equation
-            y_pred = model.predict(X_sample, index=eq_idx)
+            eq_string = row["equation"]
 
-            # Store raw data as lists for JSON serialization
-            scatter_data = {
+            # Use lambda_format directly - this is guaranteed to be the correct equation
+            # The lambda_format column contains callable functions for each equation
+            if "lambda_format" in row and row["lambda_format"] is not None:
+                lambda_fn = row["lambda_format"]
+                y_pred = lambda_fn(X_sample_np)
+            else:
+                # Fallback to model.predict with the original DataFrame index
+                y_pred = model.predict(X_sample, index=idx)
+
+            # Ensure y_pred is a numpy array
+            if hasattr(y_pred, 'values'):
+                y_pred = y_pred.values
+
+            # Store raw data as lists for JSON serialization, keyed by equation string
+            scatter_data_by_equation[eq_string] = {
                 "measured": y_actual_sample.tolist(),
-                "predicted": y_pred.tolist()
+                "predicted": y_pred.tolist() if hasattr(y_pred, 'tolist') else list(y_pred)
             }
-            scatter_data_list.append(scatter_data)
-        except Exception as e:
-            state["logger"].log_step("scatter_data_error", {"equation_index": i, "error": str(e)})
-            scatter_data_list.append(None)
 
-    state["logger"].log_step("scatter_data_complete", {"count": len(scatter_data_list)})
+            state["logger"].log_step("scatter_data_equation", {
+                "equation_index": i,
+                "eq_string_preview": eq_string[:50] if len(eq_string) > 50 else eq_string,
+                "predicted_sample": float(y_pred[0]) if len(y_pred) > 0 else None
+            })
+        except Exception as e:
+            state["logger"].log_step("scatter_data_error", {
+                "equation_index": i,
+                "equation": row.get("equation", "unknown")[:50],
+                "error": str(e)
+            })
+
+    state["logger"].log_step("scatter_data_complete", {"count": len(scatter_data_by_equation)})
 
     project_spec_json = state["problem_description_src"]
     data_spec_json = json.dumps(to_explain, indent=2)
@@ -255,13 +278,21 @@ def explain_pysr_equations(state: State) -> State:
         deep_research_context=deep_research_context
     )
 
-    # Merge scatter data into the explanation JSON
+    # Merge scatter data into the explanation JSON by matching equation strings
     try:
         explanation_data = json.loads(explanation)
         if "equations" in explanation_data:
-            for i, eq in enumerate(explanation_data["equations"]):
-                if i < len(scatter_data_list) and scatter_data_list[i]:
-                    eq["scatter_data"] = scatter_data_list[i]
+            matched_count = 0
+            for eq in explanation_data["equations"]:
+                # Try to match by the equation string
+                eq_str = eq.get("equation", "")
+                if eq_str in scatter_data_by_equation:
+                    eq["scatter_data"] = scatter_data_by_equation[eq_str]
+                    matched_count += 1
+            state["logger"].log_step("scatter_data_merged", {
+                "total_equations": len(explanation_data["equations"]),
+                "matched": matched_count
+            })
         explanation = json.dumps(explanation_data, indent=2)
     except json.JSONDecodeError as e:
         state["logger"].log_step("scatter_data_merge_error", {"error": str(e)})
