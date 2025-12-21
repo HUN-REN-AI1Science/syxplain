@@ -108,22 +108,6 @@ def generate_equation_explanation(
 
     # Select appropriate model and signature
     if is_deep_analysis:
-        # Use deep research model configuration (search enabled)
-        # Actually, deep_research_equations uses the search model.
-        # This function explains EXISTING equations. It might use search to verify?
-        # The original code checked `is_deep_analysis` and set `web_search_options` if so.
-        # We should replicate that.
-
-        # Original: if is_deep_analysis: lm_kwargs["web_search_options"] = ...
-        # But it used the STANDARD model `OPENAI_MODEL_NAME`, not the DEEP_RESEARCH_MODEL.
-        # It just ENABLED search on the standard model?
-        # `model=f"openai/{model_name}"` where model_name is from OPENAI_MODEL_NAME env.
-        # So it uses the main model but asks it to search?
-        # Wait, if main model (gpt-4o) doesn't support search via `tools` parameter directly unless it's configured...
-        # The code assumes `openai` provider in dspy supports `extra_body`.
-
-        # I'll use `create_dspy_model` with extra kwargs.
-
         lm = create_dspy_model(
             extra_body={
                 "tools": [

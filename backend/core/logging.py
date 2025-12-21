@@ -219,7 +219,8 @@ def configure_logging(
             show_path=True,
             rich_tracebacks=True,
             tracebacks_show_locals=True,
-            markup=True
+            markup=True,
+            omit_repeated_times=False
         )
         console_handler.setLevel(level)
     else:

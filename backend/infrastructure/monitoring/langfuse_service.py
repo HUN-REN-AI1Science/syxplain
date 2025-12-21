@@ -153,21 +153,7 @@ def report_usage(lm: "dspy.LM", model_name: str = None) -> None:
 
         if total_tokens > 0:
             effective_model = model_name or get_settings().llm.openai_model_name
-
-            # Using update_current_generation from langfuse decorator context
-            # or the client? The original code used `langfuse.update_current_generation`.
-            # This requires being inside an @observe context context or similar context manager.
-            # Assuming this is called within an observed function.
             try:
-                # We need to import observe to get the context context
-                # But actually, client methods usually operate on a specific trace ID.
-                # The original code did `langfuse.update_current_generation` which implies `langfuse` module or client?
-                # Original: `langfuse = get_client(); langfuse.update_current_generation(...)`
-                # But `langfuse` variable in original code came from `from langfuse import get_client`.
-                # So it was the MODULE-level function? No, `get_client()` returns the client instance.
-                # Let's check if the client instance has `update_current_generation`.
-                # It does if the decorator context is active.
-
                 _client.update_current_generation(
                     model=effective_model,
                     usage_details={
