@@ -302,3 +302,46 @@ body {
   text-decoration: underline;
   color: #0047b3;
 }
+
+/* Data Export SplitButton Styling */
+.data-export-button .p-button {
+  background: #059669 !important;
+  border-color: #059669 !important;
+  color: white !important;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.data-export-button .p-button:hover {
+  background: #047857 !important;
+  border-color: #047857 !important;
+}
+
+.data-export-button .p-button:focus {
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2) !important;
+}
+
+.data-export-button .p-splitbutton-menubutton {
+  border-left-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Per-Equation Export Button - Smaller variant */
+.equation-export-button .p-button {
+  background: #059669 !important;
+  border-color: #059669 !important;
+  color: white !important;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.equation-export-button .p-button:hover {
+  background: #047857 !important;
+  border-color: #047857 !important;
+}
+
+.equation-export-button .p-splitbutton-menubutton {
+  border-left-color: rgba(255, 255, 255, 0.3) !important;
+  padding: 0.25rem 0.35rem;
+}

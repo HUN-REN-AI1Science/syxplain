@@ -86,6 +86,16 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
   const features = problem_description?.features || {};
   const featureEntries = Object.entries(features);
 
+  // Determine file type from filename for dynamic button label
+  const getFileTypeLabel = () => {
+    const filename = csv_metadata?.filename || runDetails?.csv_filename || '';
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (ext === 'xlsx' || ext === 'xls') {
+      return 'Download Excel';
+    }
+    return 'Download CSV';
+  };
+
   return (
     <div className="mb-6 animate-fade-in">
       <Panel
@@ -144,7 +154,7 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
                     </div>
                   </div>
                   <Button
-                    label="Download CSV"
+                    label={getFileTypeLabel()}
                     icon="pi pi-download"
                     size="small"
                     className="p-button-outlined flex-shrink-0 ml-4"

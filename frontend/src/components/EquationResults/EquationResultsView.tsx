@@ -6,6 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { Tag } from 'primereact/tag';
 import { Button } from 'primereact/button';
+import { SplitButton } from 'primereact/splitbutton';
 import { MathJax, MathJaxContext } from 'better-react-mathjax';
 import {
   Chart as ChartJS,
@@ -17,6 +18,7 @@ import {
 } from 'chart.js';
 import { Scatter } from 'react-chartjs-2';
 import { escapeForAsciiMath } from '@utils/formatting';
+import { exportToCSV, exportToExcel } from '@utils/dataExport';
 import CitationText from './CitationText';
 import type { Equation, ScatterData, EquationResults } from '@/types';
 
@@ -231,10 +233,28 @@ const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = (
                   {/* Scatter Plot */}
                   {equation.scatter_data && (
                     <div>
-                      <h5 className="text-sm font-semibold text-slate-700 flex items-center gap-2 mb-3">
-                        <i className="pi pi-chart-line text-blue-500"></i>
-                        Predicted vs. Measured
-                      </h5>
+                      <div className="flex items-center justify-between mb-3">
+                        <h5 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                          <i className="pi pi-chart-line text-blue-500"></i>
+                          Predicted vs. Measured
+                        </h5>
+                        <SplitButton
+                          label="Export Data"
+                          icon="pi pi-table"
+                          onClick={() => {
+                            exportToCSV([equation], `eq${equation.id}`);
+                          }}
+                          model={[
+                            {
+                              label: 'Excel (.xlsx)',
+                              icon: 'pi pi-file-excel',
+                              command: () => exportToExcel([equation], `eq${equation.id}`)
+                            }
+                          ]}
+                          className="equation-export-button"
+                          size="small"
+                        />
+                      </div>
                       <div className="bg-white rounded-lg p-4 border border-slate-200">
                         <ScatterPlot data={equation.scatter_data} />
                       </div>
