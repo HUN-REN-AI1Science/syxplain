@@ -14,6 +14,7 @@ import EquationResultsView from '@components/EquationResults/EquationResultsView
 import ShareDialog from '@components/common/ShareDialog';
 import { runsService, configService } from '@services/api';
 import { useProgressInterpolation } from '@hooks/useProgressInterpolation';
+import { usePysrStream } from '@hooks/usePysrStream';
 // PDF export is dynamically imported when needed to reduce initial bundle size
 import type { ProgressPhase, EquationResults } from '@/types';
 
@@ -49,10 +50,18 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   const resultsRef = useRef<HTMLDivElement>(null);
 
   // Custom hook for smooth progress interpolation and step description
-  const { displayProgress, currentStepDescription } = useProgressInterpolation({
+  const { displayProgress, currentStepDescription, currentStepLabel } = useProgressInterpolation({
     phases: progressPhases,
     backendProgress,
     status,
+  });
+
+  // Stream live PySR equations during training step
+  const isPysrTraining = currentStepLabel === 'Training Equations' ||
+    currentStepLabel === 'Training Complete';
+  const { equations: liveEquations } = usePysrStream({
+    runId,
+    enabled: isPysrTraining && status === 'running',
   });
 
   // Fetch progress config on mount
@@ -210,6 +219,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           <LoadingState
             displayProgress={displayProgress}
             stepDescription={currentStepDescription}
+            liveEquations={liveEquations}
+            showEquations={isPysrTraining}
           />
         )}
 
@@ -305,9 +316,16 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
 interface LoadingStateProps {
   displayProgress: number;
   stepDescription: string;
+  liveEquations?: string;
+  showEquations?: boolean;
 }
 
-const LoadingState: React.FC<LoadingStateProps> = ({ displayProgress, stepDescription }) => (
+const LoadingState: React.FC<LoadingStateProps> = ({
+  displayProgress,
+  stepDescription,
+  liveEquations,
+  showEquations = false,
+}) => (
   <div className="text-center py-20">
     <div className="max-w-md mx-auto mb-6">
       <ProgressBar value={displayProgress} showValue={false} style={{ height: '8px' }} className="mb-2" />
@@ -323,6 +341,15 @@ const LoadingState: React.FC<LoadingStateProps> = ({ displayProgress, stepDescri
         {stepDescription}
       </p>
     </div>
+
+    {/* Live Equations Display */}
+    {showEquations && liveEquations && (
+      <div className="max-w-2xl mx-auto mb-6">
+        <pre className="live-equations-block text-left text-xs bg-slate-900 text-slate-300 p-4 rounded-lg overflow-x-auto">
+          <code>{liveEquations}</code>
+        </pre>
+      </div>
+    )}
 
     {/* Subtle Separator */}
     <hr className="max-w-md mx-auto border-slate-200 mb-6" />

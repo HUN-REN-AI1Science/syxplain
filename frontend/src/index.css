@@ -362,3 +362,41 @@ body {
 .step-description-animate {
   animation: stepDescriptionEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
+
+/* Live Equations Block Animation */
+@keyframes liveEquationsGlow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+
+  50% {
+    box-shadow: 0 0 20px 2px rgba(59, 130, 246, 0.15);
+  }
+}
+
+@keyframes codeFlicker {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.live-equations-block {
+  animation: liveEquationsGlow 2s ease-in-out infinite;
+  transition: all 0.3s ease;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  line-height: 1.5;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.live-equations-block code {
+  animation: codeFlicker 3s ease-in-out infinite;
+}

@@ -42,6 +42,12 @@ def cleanup_processes() -> None:
 
     for run_id in finished_run_ids:
         del active_processes[run_id]
+        # Clean up streaming registry
+        try:
+            from backend.services.pysr_streaming import unregister_stream
+            unregister_stream(run_id)
+        except Exception:
+            pass
 
 
 def update_run_status(
@@ -83,12 +89,23 @@ def update_run_status(
         logger.error(f"Failed to update run status for {run_id}: {e}")
 
 
+# Global manager for shared IPC objects
+_manager = None
+
+def get_manager():
+    """Get or create global multiprocessing manager."""
+    global _manager
+    if _manager is None:
+        _manager = multiprocessing.Manager()
+    return _manager
+
 def _run_worker(
     run_id: str,
     problem_desc: Dict[str, Any],
     csv_filename: str,
     analysis_type: str = "quick",
-    deep_research_model: Optional[str] = None
+    deep_research_model: Optional[str] = None,
+    stream_dict: Optional[Dict[str, Any]] = None
 ) -> None:
     """
     Worker function that runs in a separate process.
@@ -102,6 +119,7 @@ def _run_worker(
         csv_filename: Name of the file to analyze
         analysis_type: 'quick' or 'deep'
         deep_research_model: Model for deep analysis
+        stream_dict: Shared dictionary for live streaming (optional)
     """
     # Configure logging for this process
     from backend.core.logging import configure_logging, configure_debug_mode
@@ -155,6 +173,10 @@ def _run_worker(
             state["data"] = sample_data
             state["problem_description_src"] = problem_description_src
             state["target_column"] = problem_desc["target_variable"]
+
+            # Pass shared stream dict for live streaming
+            if stream_dict is not None:
+                state["stream_dict"] = stream_dict
 
             # Filter predictor columns to only include numeric columns
             all_predictors = list(problem_desc["features"].keys())
@@ -275,10 +297,21 @@ def start_analysis_run(
         f"(analysis_type={analysis_type}, model={deep_research_model})"
     )
 
+    # Initialize shared memory stream for this run
+    try:
+        from backend.services.pysr_streaming import register_stream
+        manager = get_manager()
+        stream_dict = manager.dict()
+        stream_dict['content'] = ""
+        register_stream(run_id, stream_dict)
+    except Exception as e:
+        logger.error(f"Failed to initialize streaming for run {run_id}: {e}")
+        stream_dict = None
+
     # Start worker process
     process = multiprocessing.Process(
         target=_run_worker,
-        args=(run_id, problem_desc, csv_filename, analysis_type, deep_research_model)
+        args=(run_id, problem_desc, csv_filename, analysis_type, deep_research_model, stream_dict)
     )
     process.start()
 

@@ -18,7 +18,7 @@ from backend.infrastructure.database.connection import init_db
 from backend.workers.analysis_worker import cleanup_processes, check_timed_out_runs
 
 # Import routers
-from backend.api.routers import config, files, profile, runs, sharing
+from backend.api.routers import config, files, profile, runs, sharing, websocket
 
 # Configure logging FIRST
 configure_logging()
@@ -62,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(profile.router)
     app.include_router(sharing.router)  # Sharing before Runs to capture /api/runs/shared
     app.include_router(runs.router)
+    app.include_router(websocket.router)
 
     # Register lifecycle events
     @app.on_event("startup")

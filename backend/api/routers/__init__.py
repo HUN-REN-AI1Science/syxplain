@@ -1,7 +1,7 @@
 # API Routers
 # Re-export for convenient imports
 
-from backend.api.routers import config, files, profile, runs, sharing
+from backend.api.routers import config, files, profile, runs, sharing, websocket
 
 __all__ = [
     "config",
@@ -9,4 +9,6 @@ __all__ = [
     "profile",
     "runs",
     "sharing",
+    "websocket",
 ]
+

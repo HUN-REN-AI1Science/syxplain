@@ -1,5 +1,5 @@
 import os, io, base64, json, tempfile
-from typing import Any, TypedDict, List
+from typing import Any, TypedDict, List, Dict
 import numpy as np
 import pandas as pd
 import sympy
@@ -12,6 +12,7 @@ import seaborn as sns
 from shap_calc import get_top_feature_interactions
 from backend.services.progress_service import ProgressTracker
 from backend.services.llm_service import generate_pysr_config, generate_equation_explanation, deep_research_equations
+from backend.services.pysr_streaming import PySROutputCapture
 
 
 class State(TypedDict, total=False):
@@ -29,6 +30,7 @@ class State(TypedDict, total=False):
     analysis_type: str  # "quick" or "deep"
     deep_research_model: str  # Model to use for deep research (e.g., "o4-mini-deep-research")
     deep_research_result: dict  # Result from deep research LLM call (dict with 'equations' list)
+    stream_dict: Dict[str, Any]  # Shared dictionary for live stdout streaming
 
 def data_summary(state: State) -> State:
     # Setting up logger object
@@ -175,12 +177,24 @@ def pysr_with_generated_config(state: State) -> State:
 
     state["logger"].log_step("pysr_training_start", {"cpu_count": cpu_count, "niterations": niterations})
 
-    # Train symbolic regressor
+    # Get stream dict for live streaming (if available)
+    stream_dict = state.get("stream_dict")
+    state["logger"].log_step("pysr_debug_stream", {"stream_dict_present": stream_dict is not None})
+
+    # Train symbolic regressor with stdout capture for live streaming
     pysr = PySRRegressor(**pysr_config)
-    pysr.fit(
-        X=state["data"][state["predictor_columns"]],
-        y=state["data"][state["target_column"]]
-    )
+
+    if stream_dict is not None:
+        with PySROutputCapture(stream_dict):
+            pysr.fit(
+                X=state["data"][state["predictor_columns"]],
+                y=state["data"][state["target_column"]]
+            )
+    else:
+        pysr.fit(
+            X=state["data"][state["predictor_columns"]],
+            y=state["data"][state["target_column"]]
+        )
 
     state["pysr_model"] = pysr
     state["logger"].log_step("pysr_training_complete", {"equations_found": len(pysr.equations_) if hasattr(pysr, 'equations_') else 0})
