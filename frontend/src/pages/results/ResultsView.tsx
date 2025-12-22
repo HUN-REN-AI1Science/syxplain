@@ -156,6 +156,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   const isLoading = initialFetchDone && (!runId || status === 'pending' || status === 'running');
   const isCompleted = status === 'completed';
 
+  // Check if result is in the new EquationResults format (not legacy markdown)
+  const isNewFormat = result !== null && typeof result === 'object' && 'equations' in result;
+
   return (
     <div className="p-4">
       <Toast ref={toast} />
@@ -178,7 +181,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
             <Message severity="info" text="Processing Data..." className="w-full md:w-auto" />
           ) : isCompleted ? (
             <>
-              {result && (
+                {isNewFormat && (
                 <>
                   <Button
                     icon={shareToken ? "pi pi-link" : "pi pi-share-alt"}
