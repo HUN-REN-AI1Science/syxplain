@@ -5,6 +5,7 @@
 # Each phase has:
 #   - name: Internal identifier used in log_step calls
 #   - label: Human-readable label for UI
+#   - description: User-friendly explanation of what's happening
 #   - progress_end: The progress percentage when this phase completes
 #   - increment_rate: How fast the frontend fake-increments during this phase (% per 500ms)
 
@@ -12,127 +13,152 @@ phases:
   # Initialization and data loading
   - name: initialization
     label: "Initializing"
+    description: "Setting up your analysis environment..."
     progress_end: 2
     increment_rate: 0.5
 
   - name: phase_data_analysis
     label: "Data Analysis"
+    description: "Analyzing your dataset structure and patterns..."
     progress_end: 3
     increment_rate: 0.5
 
   - name: data_summary_computed
     label: "Computing Summary"
+    description: "Calculating statistical summaries of your data..."
     progress_end: 5
     increment_rate: 0.5
 
   # Visualization creation
   - name: visualization_start
     label: "Creating Visualizations"
+    description: "Generating initial data visualizations..."
     progress_end: 6
     increment_rate: 0.5
 
   - name: visualization_progress
     label: "Generating Charts"
+    description: "Creating charts to understand variable relationships..."
     progress_end: 8
     increment_rate: 0.5
 
   # SHAP analysis
   - name: shap_analysis_start
     label: "SHAP Analysis"
+    description: "Running machine learning to identify important features..."
     progress_end: 9
     increment_rate: 0.4
 
   - name: shap_analysis_complete
     label: "SHAP Complete"
+    description: "Processing feature importance results..."
     progress_end: 12
     increment_rate: 0.4
 
   # Interaction visualizations
   - name: interaction_viz_start
     label: "Interaction Plots"
+    description: "Analyzing how variables interact with each other..."
     progress_end: 13
     increment_rate: 0.5
 
   - name: interaction_viz_complete
     label: "Plots Complete"
+    description: "Building interaction visualizations..."
     progress_end: 15
     increment_rate: 0.5
 
   # LLM Config Generation
   - name: phase_config_generation
     label: "Config Generation"
+    description: "AI is analyzing your data to find the best approach..."
     progress_end: 16
     increment_rate: 0.5
 
   - name: llm_config_request
     label: "Requesting Config"
+    description: "Consulting AI for optimal analysis parameters..."
     progress_end: 17
     increment_rate: 0.5
 
   - name: llm_config_received
     label: "Config Received"
+    description: "Preparing symbolic regression model..."
     progress_end: 18
     increment_rate: 0.5
 
   # PySR Symbolic Regression (longest phase ~60% of time)
   - name: phase_symbolic_regression
     label: "Symbolic Regression"
+    description: "Starting equation discovery process..."
     progress_end: 19
     increment_rate: 0.15
 
   - name: pysr_config_computed
     label: "PySR Config Ready"
+    description: "Configuring symbolic regression model..."
     progress_end: 20
     increment_rate: 0.15
 
   - name: pysr_training_start
     label: "Training Equations"
+    description: "Discovering mathematical equations that fit your data... This may take a few minutes."
     progress_end: 22
     increment_rate: 0.15
 
   - name: pysr_training_complete
     label: "Training Complete"
+    description: "Evaluating discovered equations..."
     progress_end: 75
     increment_rate: 0.15
 
   # Deep Research (optional, for deep analysis mode)
   - name: deep_research_start
     label: "Deep Research"
+    description: "Researching scientific literature to understand your equations..."
     progress_end: 78
     increment_rate: 0.25
 
   - name: deep_research_result
     label: "Research Complete"
+    description: "Integrating scientific context into analysis..."
     progress_end: 82
     increment_rate: 0.25
 
   - name: deep_research_error
     label: "Research Error"
+    description: "Continuing without deep research context..."
     progress_end: 82
     increment_rate: 0.25
 
   - name: deep_research_skip
     label: "Research Skipped"
+    description: "Proceeding with standard analysis..."
     progress_end: 82
     increment_rate: 0.25
 
   # Equation Explanation
   - name: phase_explanation
     label: "Generating Explanation"
+    description: "AI is preparing to explain your equations..."
     progress_end: 83
     increment_rate: 0.25
 
   - name: equations_selected
     label: "Equations Selected"
+    description: "Best equations identified, generating explanations..."
     progress_end: 85
     increment_rate: 0.25
 
   - name: llm_explanation_request
     label: "Requesting Explanation"
+    description: "AI is interpreting your equations and generating insights..."
     progress_end: 87
     increment_rate: 0.25
 
   - name: llm_explanation_complete
     label: "Explanation Complete"
+    description: "Preparing your final results..."
     progress_end: 99
     increment_rate: 0.25
+

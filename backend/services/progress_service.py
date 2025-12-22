@@ -22,14 +22,15 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 _progress_cache: Optional[Dict[str, int]] = None
+_description_cache: Optional[Dict[str, str]] = None
 
 
-def _load_progress_config() -> Dict[str, int]:
+def _load_progress_config() -> tuple[Dict[str, int], Dict[str, str]]:
     """
-    Load progress phase weights from YAML configuration.
+    Load progress phase weights and descriptions from YAML configuration.
 
     Returns:
-        Dictionary mapping step names to progress percentages
+        Tuple of (weights dict, descriptions dict)
     """
     config_paths = [
         Path(__file__).parent.parent / "progress_config.yaml",
@@ -42,20 +43,30 @@ def _load_progress_config() -> Dict[str, int]:
                 with open(config_path, 'r') as f:
                     config = yaml.safe_load(f)
                     phases = config.get('phases', [])
-                    return {p['name']: p['progress_end'] for p in phases}
+                    weights = {p['name']: p['progress_end'] for p in phases}
+                    descriptions = {p['name']: p.get('description', p.get('label', '')) for p in phases}
+                    return weights, descriptions
             except Exception as e:
                 logger.warning(f"Failed to load progress_config.yaml: {e}")
 
     logger.warning("No progress_config.yaml found, using empty weights")
-    return {}
+    return {}, {}
 
 
 def get_progress_weights() -> Dict[str, int]:
     """Get cached progress weights."""
-    global _progress_cache
+    global _progress_cache, _description_cache
     if _progress_cache is None:
-        _progress_cache = _load_progress_config()
+        _progress_cache, _description_cache = _load_progress_config()
     return _progress_cache
+
+
+def get_step_description(step_name: str) -> str:
+    """Get the user-friendly description for a step."""
+    global _progress_cache, _description_cache
+    if _description_cache is None:
+        _progress_cache, _description_cache = _load_progress_config()
+    return _description_cache.get(step_name, "Processing...")
 
 
 def get_progress_phases():

@@ -48,8 +48,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   const toast = useRef<Toast>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Custom hook for smooth progress interpolation
-  const { displayProgress } = useProgressInterpolation({
+  // Custom hook for smooth progress interpolation and step description
+  const { displayProgress, currentStepDescription } = useProgressInterpolation({
     phases: progressPhases,
     backendProgress,
     status,
@@ -207,7 +207,10 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
 
         {/* Loading State */}
         {isLoading && !error && (
-          <LoadingState displayProgress={displayProgress} />
+          <LoadingState
+            displayProgress={displayProgress}
+            stepDescription={currentStepDescription}
+          />
         )}
 
         {/* Results */}
@@ -301,14 +304,29 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
 
 interface LoadingStateProps {
   displayProgress: number;
+  stepDescription: string;
 }
 
-const LoadingState: React.FC<LoadingStateProps> = ({ displayProgress }) => (
+const LoadingState: React.FC<LoadingStateProps> = ({ displayProgress, stepDescription }) => (
   <div className="text-center py-20">
     <div className="max-w-md mx-auto mb-6">
       <ProgressBar value={displayProgress} showValue={false} style={{ height: '8px' }} className="mb-2" />
       <p className="text-lg font-semibold text-blue-600">{Math.floor(displayProgress)}% complete</p>
     </div>
+
+    {/* Animated Step Description */}
+    <div className="h-8 mb-4">
+      <p
+        key={stepDescription}
+        className="step-description-animate text-base font-medium text-slate-400"
+      >
+        {stepDescription}
+      </p>
+    </div>
+
+    {/* Subtle Separator */}
+    <hr className="max-w-md mx-auto border-slate-200 mb-6" />
+
     <h3 className="text-xl font-semibold text-slate-800 mt-4 mb-2">AI is analyzing your data</h3>
     <p className="text-slate-500 max-w-md mx-auto mb-4">
       This process involves symbolic regression and LLM reasoning. It might take a few minutes depending on the dataset size.

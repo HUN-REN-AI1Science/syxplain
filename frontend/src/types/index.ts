@@ -107,6 +107,7 @@ export interface EquationResults {
 export interface ProgressPhase {
   name: string;
   label: string;
+  description?: string;
   progress_end: number;
   increment_rate: number;
 }

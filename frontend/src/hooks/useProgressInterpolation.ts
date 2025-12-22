@@ -3,7 +3,7 @@
  * Smoothly interpolates progress values for better UX
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { ProgressPhase } from '@/types';
 
 export interface UseProgressInterpolationOptions {
@@ -20,6 +20,10 @@ export interface UseProgressInterpolationOptions {
 export interface UseProgressInterpolationResult {
   /** Smoothly interpolated display progress */
   displayProgress: number;
+  /** Current step description based on backend progress */
+  currentStepDescription: string;
+  /** Current step label (shorter) */
+  currentStepLabel: string;
 }
 
 /**
@@ -27,7 +31,7 @@ export interface UseProgressInterpolationResult {
  * Creates a better UX by slowly incrementing progress between backend updates
  *
  * @example
- * const { displayProgress } = useProgressInterpolation({
+ * const { displayProgress, currentStepDescription } = useProgressInterpolation({
  *   phases: progressPhases,
  *   backendProgress: 45,
  *   status: 'running',
@@ -50,6 +54,53 @@ export function useProgressInterpolation(
   useEffect(() => {
     phasesRef.current = phases;
   }, [phases]);
+
+  // Compute current step description based on backend progress
+  const { currentStepDescription, currentStepLabel } = useMemo(() => {
+    if (status === 'completed') {
+      return {
+        currentStepDescription: 'Analysis complete!',
+        currentStepLabel: 'Complete'
+      };
+    }
+    if (status === 'failed' || status === 'timeout') {
+      return {
+        currentStepDescription: 'Analysis stopped',
+        currentStepLabel: status === 'timeout' ? 'Timeout' : 'Failed'
+      };
+    }
+    if (phases.length === 0) {
+      return {
+        currentStepDescription: 'Processing...',
+        currentStepLabel: 'Processing'
+      };
+    }
+
+    // Find the current phase based on backend progress
+    // The current phase is the one whose progress_end we haven't reached yet
+    let currentPhase: ProgressPhase | null = null;
+
+    for (let i = 0; i < phases.length; i++) {
+      if (backendProgress < phases[i].progress_end) {
+        currentPhase = phases[i];
+        break;
+      }
+      // If we've passed this phase's progress_end, continue to next
+      currentPhase = phases[i];
+    }
+
+    if (currentPhase) {
+      return {
+        currentStepDescription: currentPhase.description || currentPhase.label,
+        currentStepLabel: currentPhase.label,
+      };
+    }
+
+    return {
+      currentStepDescription: 'Finalizing...',
+      currentStepLabel: 'Finalizing'
+    };
+  }, [backendProgress, phases, status]);
 
   useEffect(() => {
     // If completed, show 100%
@@ -110,5 +161,6 @@ export function useProgressInterpolation(
     return () => clearInterval(intervalId);
   }, [backendProgress, status, updateInterval]);
 
-  return { displayProgress };
+  return { displayProgress, currentStepDescription, currentStepLabel };
 }
+
