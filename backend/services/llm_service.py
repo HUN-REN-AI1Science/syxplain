@@ -20,22 +20,9 @@ from backend.infrastructure.llm.signatures import (
 )
 from backend.infrastructure.llm.client import create_dspy_model, create_deep_research_model
 from backend.infrastructure.monitoring.langfuse_service import observe, report_usage, flush_traces
+from backend.utils.json_utils import clean_and_fix_json_string
 
 logger = logging.getLogger(__name__)
-
-
-def _clean_json_string(text: str) -> str:
-    """Clean markdown code blocks from JSON string."""
-    cleaned = text.replace("```json", "").replace("```", "").strip()
-
-    # Extract JSON if wrapped in other content
-    if not (cleaned.startswith("{") and cleaned.endswith("}")):
-        start = cleaned.find("{")
-        end = cleaned.rfind("}") + 1
-        if start >= 0 and end > start:
-            cleaned = cleaned[start:end]
-
-    return cleaned
 
 
 @observe(name="generate_pysr_config", as_type="generation")
@@ -69,7 +56,7 @@ def generate_pysr_config(
             )
 
         config_json = response.config_json
-        cleaned_json = _clean_json_string(config_json)
+        cleaned_json = clean_and_fix_json_string(config_json)
 
         try:
             json.loads(cleaned_json)
@@ -83,6 +70,51 @@ def generate_pysr_config(
 
     except Exception as e:
         logger.error(f"Error in generate_pysr_config: {e}")
+        flush_traces()
+        raise
+
+
+@observe(name="deep_research_equations", as_type="generation")
+def deep_research_equations(features_dict: Dict[str, str], model_name: str = None) -> Dict[str, Any]:
+    """
+    Performs deep scientific research to find equations relating features.
+
+    Args:
+        features_dict: Dictionary mapping variable names to descriptions
+        model_name: Optional override for model name
+
+    Returns:
+        Dictionary with 'equations' list
+    """
+    try:
+        lm = create_deep_research_model(model_name)
+
+        features_json = json.dumps(features_dict, indent=2)
+        predictor = dspy.Predict(DeepResearchEquations)
+
+        with dspy.settings.context(lm=lm):
+            response = predictor(features_json=features_json)
+
+        report_usage(lm, model_name=model_name)
+
+        equations_str = response.equations
+        logger.debug(f"Deep Research Output: {equations_str}")
+        cleaned_json = clean_and_fix_json_string(equations_str)
+
+        try:
+            parsed = json.loads(cleaned_json)
+            # If model returned a bare array, wrap it in an object
+            if isinstance(parsed, list):
+                parsed = {"equations": parsed}
+            else:
+                parsed.setdefault("equations", [])
+            return parsed
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse deep research JSON: {e}. Raw: {cleaned_json[:200]}")
+            return {"equations": [], "_parse_error": str(e)}
+
+    except Exception as e:
+        logger.error(f"Error in deep_research_equations: {e}")
         flush_traces()
         raise
 
@@ -137,6 +169,9 @@ def generate_equation_explanation(
 
     try:
         with dspy.settings.context(lm=lm):
+            logger.debug(f"Explain Equations Input - Project Spec: {project_spec_json}")
+            logger.debug(f"Explain Equations Input - Data Spec: {data_spec_json}")
+
             response = predictor(
                 project_spec_json=project_spec_json,
                 data_spec_json=data_spec_json
@@ -144,7 +179,10 @@ def generate_equation_explanation(
         report_usage(lm)
 
         explanation_json = response.explanation_json
-        cleaned_json = _clean_json_string(explanation_json)
+        logger.debug(f"Explain Equations Output: {explanation_json}")
+
+        cleaned_json = clean_and_fix_json_string(explanation_json)
+        logger.debug(f"Explain Equations Cleaned Output: {cleaned_json}")
 
         # Validation Logic (adapted from original)
         try:
@@ -185,45 +223,5 @@ def generate_equation_explanation(
 
     except Exception as e:
         logger.error(f"Error in generate_equation_explanation: {e}")
-        flush_traces()
-        raise
-
-
-@observe(name="deep_research_equations", as_type="generation")
-def deep_research_equations(features_dict: Dict[str, str], model_name: str = None) -> Dict[str, Any]:
-    """
-    Performs deep scientific research to find equations relating features.
-
-    Args:
-        features_dict: Dictionary mapping variable names to descriptions
-        model_name: Optional override for model name
-
-    Returns:
-        Dictionary with 'equations' list
-    """
-    try:
-        lm = create_deep_research_model(model_name)
-
-        features_json = json.dumps(features_dict, indent=2)
-        predictor = dspy.Predict(DeepResearchEquations)
-
-        with dspy.settings.context(lm=lm):
-            response = predictor(features_json=features_json)
-
-        report_usage(lm, model_name=model_name)
-
-        equations_str = response.equations
-        cleaned_json = _clean_json_string(equations_str)
-
-        try:
-            parsed = json.loads(cleaned_json)
-            parsed.setdefault("equations", [])
-            return parsed
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse deep research JSON: {e}")
-            return {"equations": [], "_parse_error": str(e)}
-
-    except Exception as e:
-        logger.error(f"Error in deep_research_equations: {e}")
         flush_traces()
         raise

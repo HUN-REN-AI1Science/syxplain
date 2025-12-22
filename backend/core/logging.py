@@ -248,6 +248,7 @@ def configure_logging(
     logging.getLogger("langchain").setLevel(logging.INFO)
     logging.getLogger("langgraph").setLevel(logging.INFO)
     logging.getLogger("dspy").setLevel(logging.INFO)
+    logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
 
     _configured = True
 
