@@ -320,8 +320,7 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data }) => {
   }
 
   return (
-    <MathJaxContext config={mathJaxConfig}>
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Summary Section */}
         {summary && (
           <div className="bg-gradient-to-br from-blue-50 to-slate-50 rounded-xl border border-blue-200 p-6">
@@ -386,9 +385,11 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data }) => {
                   <h3 className="text-lg font-bold text-green-800">Recommended: Equation {recommendation.equation_id}</h3>
                   {recommendedEquation && (
                     <div className="mt-3 bg-white rounded-lg p-3 border border-green-200 overflow-x-auto">
-                      <MathJax inline dynamic>
-                        {`\`${escapeForAsciiMath(recommendedEquation.equation)}\``}
-                      </MathJax>
+                      <MathJaxContext config={mathJaxConfig}>
+                        <MathJax inline dynamic>
+                          {`\`${escapeForAsciiMath(recommendedEquation.equation)}\``}
+                        </MathJax>
+                      </MathJaxContext>
                     </div>
                   )}
                   {recommendation.rationale && recommendation.rationale.length > 0 && (
@@ -425,8 +426,7 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data }) => {
             </div>
           </div>
         )}
-      </div>
-    </MathJaxContext>
+    </div>
   );
 };
 
