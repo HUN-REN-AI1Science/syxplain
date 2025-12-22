@@ -140,7 +140,6 @@ const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = (
   const hasDetails = detailsCount > 0;
 
   return (
-    <MathJaxContext config={mathJaxConfig}>
       <div className={`rounded-xl border overflow-hidden transition-all duration-300 ${isRecommended
         ? 'border-green-300 bg-gradient-to-br from-green-50 to-emerald-50 ring-2 ring-green-200'
         : 'border-slate-200 bg-white hover:border-slate-300'
@@ -181,9 +180,11 @@ const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = (
         {/* Equation Display with MathJax */}
         <div className="px-5 py-4">
           <div className="bg-slate-50 rounded-lg p-4 overflow-x-auto border border-slate-200">
+          <MathJaxContext config={mathJaxConfig}>
             <MathJax inline dynamic>
               {`\`${escapeForAsciiMath(equation.equation)}\``}
             </MathJax>
+          </MathJaxContext>
           </div>
 
           {/* Overview */}
@@ -291,8 +292,7 @@ const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = (
             </div>
           )}
         </div>
-      </div>
-    </MathJaxContext>
+    </div>
   );
 };
 
