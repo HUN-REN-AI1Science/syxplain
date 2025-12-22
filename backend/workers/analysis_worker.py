@@ -223,10 +223,7 @@ def _run_worker(
                 media_type="application/json"
             )
 
-        # Store results
-        results = {
-            "pysr_explanations": final_state.get("pysr_explanations"),
-        }
+        results = json.loads(final_state.get("pysr_explanations")) if final_state.get("pysr_explanations") else None
         update_run_status(run_id, "completed", results=results)
         logger.info(f"Run {run_id} completed. Results stored.")
 

@@ -12,6 +12,7 @@ import type {
   UploadResponse,
   ProfileData,
   ProgressPhase,
+  EquationResults,
 } from '@/types';
 
 // ============================================================================
@@ -75,7 +76,7 @@ export const runsService = {
   },
 
   getById: (id: string) =>
-    api.get<{ status: string; progress: number; results?: { pysr_explanations: string }; error?: string; public_share_token?: string | null }>(`/runs/${id}`),
+    api.get<{ status: string; progress: number; results?: EquationResults | { pysr_explanations: string }; error?: string; public_share_token?: string | null }>(`/runs/${id}`),
 
   getDetails: (id: string) =>
     api.get<RunDetails>(`/runs/${id}/details`),
@@ -167,7 +168,7 @@ const publicApi = axios.create({
 export interface PublicRunData {
   status: string;
   progress: number;
-  results: { pysr_explanations: string } | null;
+  results: EquationResults | { pysr_explanations: string } | null;
   share_token: string;
 }
 

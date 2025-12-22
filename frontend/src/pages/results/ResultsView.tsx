@@ -34,7 +34,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   // State
   const [status, setStatus] = useState<string>('pending');
   const [backendProgress, setBackendProgress] = useState<number>(0);
-  const [result, setResult] = useState<string | null>(null);
+  const [result, setResult] = useState<EquationResults | string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progressPhases, setProgressPhases] = useState<ProgressPhase[]>([]);
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -81,7 +81,17 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
         setBackendProgress(response.data.progress || 0);
 
         if (response.data.status === 'completed') {
-          setResult(response.data.results?.pysr_explanations || null);
+          // Handle both new direct format and old wrapper format
+          const results = response.data.results;
+          if (results) {
+            if ('equations' in results) {
+              // New format: results is the EquationResults object directly
+              setResult(results as EquationResults);
+            } else if ('pysr_explanations' in results) {
+              // Old format: results has pysr_explanations wrapper (string)
+              setResult(results.pysr_explanations);
+            }
+          }
           setBackendProgress(100);
           setShareToken(response.data.public_share_token || null);
           clearInterval(intervalId);
@@ -108,7 +118,10 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
 
     setExportingPdf(true);
     try {
-      const parsedData: EquationResults = JSON.parse(result);
+      // Handle both object (new format) and string (old format)
+      const parsedData: EquationResults = typeof result === 'object'
+        ? result
+        : JSON.parse(result);
       // Dynamic import to reduce initial bundle size
       const { generateResultsPdf } = await import('@utils/pdfExport');
       await generateResultsPdf(parsedData, runId);
@@ -338,11 +351,21 @@ const LoadingState: React.FC<LoadingStateProps> = ({ displayProgress, stepDescri
 );
 
 interface ResultsContentProps {
-  result: string;
+  result: EquationResults | string;
   resultsRef: React.RefObject<HTMLDivElement>;
 }
 
 const ResultsContent: React.FC<ResultsContentProps> = ({ result, resultsRef }) => {
+  // Handle object (new format) directly
+  if (typeof result === 'object' && 'equations' in result) {
+    return (
+      <div ref={resultsRef}>
+        <EquationResultsView data={result} />
+      </div>
+    );
+  }
+
+  // Handle string (old format or legacy markdown)
   try {
     const parsedData: EquationResults = JSON.parse(result);
     return (

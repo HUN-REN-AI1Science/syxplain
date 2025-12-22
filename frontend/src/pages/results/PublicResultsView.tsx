@@ -51,15 +51,23 @@ const PublicResultsView: React.FC = () => {
     fetchPublicRun();
   }, [token]);
 
-  // Parse results
+  // Parse results - handle both new direct format and old wrapper format
   let parsedResults: EquationResults | null = null;
-  let parseError: string | null = null;
+  let legacyMarkdown: string | null = null;
 
-  if (runData?.results?.pysr_explanations) {
-    try {
-      parsedResults = JSON.parse(runData.results.pysr_explanations);
-    } catch (e) {
-      parseError = 'Failed to parse results';
+  if (runData?.results) {
+    const results = runData.results;
+    if ('equations' in results) {
+      // New format: results is the EquationResults object directly
+      parsedResults = results as EquationResults;
+    } else if ('pysr_explanations' in results) {
+      // Old format: try to parse JSON, fall back to legacy markdown
+      try {
+        parsedResults = JSON.parse(results.pysr_explanations);
+      } catch {
+        // Legacy markdown format
+        legacyMarkdown = results.pysr_explanations;
+      }
     }
   }
 
@@ -110,11 +118,36 @@ const PublicResultsView: React.FC = () => {
                 {token && <PublicRunSettingsPanel shareToken={token} />}
 
                 {/* Results Content */}
-                {parseError ? (
-                  <Message severity="error" text={parseError} className="w-full" />
-                ) : parsedResults ? (
+                {parsedResults ? (
                   <div className="space-y-8 animate-fade-in">
                     <EquationResultsView data={parsedResults} />
+                  </div>
+                ) : legacyMarkdown ? (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
+                    <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <i className="pi pi-history text-amber-600 text-2xl"></i>
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800 mb-2">Legacy Run Format</h3>
+                    <p className="text-slate-600 max-w-md mx-auto mb-6">
+                      This analysis was generated using an older format. You can download the results as a Markdown file.
+                    </p>
+                    <button
+                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg"
+                      onClick={() => {
+                        const blob = new Blob([legacyMarkdown], { type: 'text/markdown' });
+                        const url = window.URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.setAttribute('download', 'pysr_explanations.md');
+                        document.body.appendChild(link);
+                        link.click();
+                        link.remove();
+                        window.URL.revokeObjectURL(url);
+                      }}
+                    >
+                      <i className="pi pi-download mr-2"></i>
+                      Download Results (Markdown)
+                    </button>
                   </div>
                 ) : (
                   <Message severity="warn" text="No results available" className="w-full" />

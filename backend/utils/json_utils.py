@@ -1,5 +1,9 @@
 """JSON utility functions for handling LLM output."""
+import json
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 
 def clean_and_fix_json_string(text: str) -> str:
@@ -8,7 +12,7 @@ def clean_and_fix_json_string(text: str) -> str:
     Handles:
     - Markdown code blocks
     - JSON objects and arrays
-    - Single quotes instead of double quotes
+    - Single quotes instead of double quotes (only if initial parse fails)
     """
     cleaned = text.replace("```json", "").replace("```", "").strip()
 
@@ -31,11 +35,27 @@ def clean_and_fix_json_string(text: str) -> str:
         elif arr_start >= 0 and arr_end > arr_start:
             cleaned = cleaned[arr_start:arr_end]
 
+    # First, try to parse as-is (most LLMs output valid JSON)
+    try:
+        json.loads(cleaned)
+        return cleaned  # Already valid, no fixes needed
+    except json.JSONDecodeError as initial_error:
+        logger.debug(f"Initial JSON parse failed: {initial_error}. Attempting quote fixes.")
+
+    # Only apply aggressive quote fixes if initial parse failed
     # Fix single quotes to double quotes (common LLM issue)
     # Use regex to replace single quotes used as JSON string delimiters
     # This handles: {'key': 'value'} -> {"key": "value"}
-    cleaned = re.sub(r"(?<=[{\[:,])\s*'", ' "', cleaned)  # Opening quotes
-    cleaned = re.sub(r"'\s*(?=[}\]:,])", '"', cleaned)     # Closing quotes
-    cleaned = re.sub(r"(?<=\[)'", '"', cleaned)            # Opening quote after [
-    cleaned = re.sub(r"'(?=\])", '"', cleaned)             # Closing quote before ]
-    return cleaned
+    fixed = re.sub(r"(?<=[{\[:,])\s*'", ' "', cleaned)  # Opening quotes
+    fixed = re.sub(r"'\s*(?=[}\]:,])", '"', fixed)     # Closing quotes
+    fixed = re.sub(r"(?<=\[)'", '"', fixed)            # Opening quote after [
+    fixed = re.sub(r"'(?=\])", '"', fixed)             # Closing quote before ]
+
+    # Verify the fix worked
+    try:
+        json.loads(fixed)
+        return fixed
+    except json.JSONDecodeError as fix_error:
+        logger.warning(f"Quote fix didn't help. Original error: {initial_error}, After fix: {fix_error}")
+        # Return the cleaned version without quote fixes (let caller handle the error)
+        return cleaned

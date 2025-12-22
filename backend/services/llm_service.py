@@ -211,7 +211,15 @@ def generate_equation_explanation(
             return json.dumps(parsed, indent=2)
 
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse explanation JSON: {e}")
+            # Log detailed error information for debugging
+            error_pos = e.pos if hasattr(e, 'pos') else 'unknown'
+            context_start = max(0, error_pos - 50) if isinstance(error_pos, int) else 0
+            context_end = min(len(cleaned_json), error_pos + 50) if isinstance(error_pos, int) else 100
+            context = cleaned_json[context_start:context_end] if isinstance(error_pos, int) else cleaned_json[:100]
+            logger.error(
+                f"Failed to parse explanation JSON: {e}. "
+                f"Error at position {error_pos}. Context around error: ...{context}..."
+            )
             # Fallback
             fallback = {
                 "equations": [],
