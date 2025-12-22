@@ -212,9 +212,10 @@ class ExplainPySrEquationsDeep(dspy.Signature):
     1. **Systematic Comparison**: You MUST compare EVERY equation in DATA_SPEC against the "deep_research_equations".
     2. **Enrich Explanations**: Use the knowledge from these deep research equations to write the "overview" and "term_explanations". Explain how the generated equation relates to known scientific laws or empirical relationships found in the research.
     3. **Check Compatibility**: Evaluate how compatible each equation is with the deep research equations. Does it share similar functional forms or variable interactions?
-    4. **Citations (REQUIRED)**:
+    4. **Citations (REQUIRED FOR EQUATION DESCRIPTIONS ONLY)**:
        - If an equation is scientifically related, similar, OR if the variables involved are discussed in the deep research equations, you MUST include the relevant citations in the "citations" field.
        - **IMPORTANT**: When you use the knowledge from a citation in the "overview" or "term_explanations", you MUST add a reference number in the text like [1], [2], etc., corresponding to the position of that citation URLs in the "citations" array (1-based index).
+       - **DO NOT include citation numbers [1], [2], etc. in the "summary" or "recommendation" sections.** These sections should be written in plain text without any citation references.
        - If you find NO link to the deep research, explicitly state "No direct match in provided deep research" in the overview, but this should be rare.
 
     ### RECOMMENDATION CRITERIA

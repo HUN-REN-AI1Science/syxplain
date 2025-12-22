@@ -17,6 +17,7 @@ import {
 } from 'chart.js';
 import { Scatter } from 'react-chartjs-2';
 import { escapeForAsciiMath } from '@utils/formatting';
+import CitationText from './CitationText';
 import type { Equation, ScatterData, EquationResults } from '@/types';
 
 // Register Chart.js components
@@ -185,7 +186,7 @@ const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = (
 
           {/* Overview */}
           <p className="mt-4 text-slate-600 leading-relaxed">
-            {equation.overview}
+            <CitationText text={equation.overview} citations={equation.citations} />
           </p>
 
           {/* Foldable Details Section */}
@@ -218,7 +219,9 @@ const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = (
                             <code className="text-blue-600 font-mono text-sm bg-blue-50 px-2 py-1 rounded">
                               {term.term}
                             </code>
-                            <p className="mt-2 text-sm text-slate-600">{term.explanation}</p>
+                            <p className="mt-2 text-sm text-slate-600">
+                              <CitationText text={term.explanation} citations={equation.citations} />
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -253,10 +256,9 @@ const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = (
                                 href={citation}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 break-all"
+                                className="text-blue-600 hover:text-blue-800 hover:underline break-all"
                               >
-                                <i className="pi pi-external-link text-xs flex-shrink-0"></i>
-                                <span>{citation}</span>
+                                <span className="citation-link">[{idx + 1}]</span> {citation}
                               </a>
                             </li>
                           ))}

@@ -289,3 +289,16 @@ body {
     right: -90%;
   }
 }
+
+/* Citation Reference Links */
+.citation-link {
+  color: #0052cc;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.citation-link:hover {
+  text-decoration: underline;
+  color: #0047b3;
+}
