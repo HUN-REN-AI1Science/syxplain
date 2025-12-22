@@ -278,28 +278,23 @@ def explain_pysr_equations(state: State) -> State:
         deep_research_context=deep_research_context
     )
 
-    # Merge scatter data into the explanation JSON by matching equation strings
-    try:
-        explanation_data = json.loads(explanation)
-        if "equations" in explanation_data:
-            matched_count = 0
-            for eq in explanation_data["equations"]:
-                # Try to match by the equation string
-                eq_str = eq.get("equation", "")
-                if eq_str in scatter_data_by_equation:
-                    eq["scatter_data"] = scatter_data_by_equation[eq_str]
-                    matched_count += 1
-            state["logger"].log_step("scatter_data_merged", {
-                "total_equations": len(explanation_data["equations"]),
-                "matched": matched_count
-            })
-        explanation = json.dumps(explanation_data, indent=2)
-    except json.JSONDecodeError as e:
-        state["logger"].log_step("scatter_data_merge_error", {"error": str(e)})
+    # Merge scatter data into the explanation by matching equation strings
+    if "equations" in explanation and len(explanation["equations"]) > 0:
+        matched_count = 0
+        for eq in explanation["equations"]:
+            # Try to match by the equation string
+            eq_str = eq.get("equation", "")
+            if eq_str in scatter_data_by_equation:
+                eq["scatter_data"] = scatter_data_by_equation[eq_str]
+                matched_count += 1
+        state["logger"].log_step("scatter_data_merged", {
+            "total_equations": len(explanation["equations"]),
+            "matched": matched_count
+        })
 
     # Save results
     state["pysr_explanations"] = explanation
-    state["logger"].log_step("llm_explanation_complete", {"explanation_length": len(explanation)})
+    state["logger"].log_step("llm_explanation_complete", {"equations_count": len(explanation.get("equations", []))})
 
     return state
 

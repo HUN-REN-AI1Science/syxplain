@@ -215,16 +215,17 @@ def _run_worker(
         final_state = app.invoke(initial_state)
         logger.info("Graph execution completed successfully")
 
-        # Save JSON as artifact for download
-        if final_state.get("pysr_explanations"):
+        # Save JSON as artifact for download (need to stringify for file output)
+        pysr_explanations = final_state.get("pysr_explanations")
+        if pysr_explanations:
             progress.save_artifact(
                 "pysr_explanations.json",
-                final_state["pysr_explanations"].encode('utf-8'),
+                json.dumps(pysr_explanations).encode('utf-8'),
                 media_type="application/json"
             )
 
-        results = json.loads(final_state.get("pysr_explanations")) if final_state.get("pysr_explanations") else None
-        update_run_status(run_id, "completed", results=results)
+        # Store results - pysr_explanations is already a dict
+        update_run_status(run_id, "completed", results=pysr_explanations)
         logger.info(f"Run {run_id} completed. Results stored.")
 
     except Exception as e:

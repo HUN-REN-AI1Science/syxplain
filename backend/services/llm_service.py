@@ -124,7 +124,7 @@ def generate_equation_explanation(
     project_spec_json: str,
     data_spec_json: str,
     deep_research_context: Optional[Dict[str, Any]] = None
-) -> str:
+) -> Dict[str, Any]:
     """
     Generates explanation for PySR equations as structured JSON.
 
@@ -208,7 +208,7 @@ def generate_equation_explanation(
                 if old_rec_id in old_to_new_id:
                     rec["equation_id"] = old_to_new_id[old_rec_id]
 
-            return json.dumps(parsed, indent=2)
+            return parsed
 
         except json.JSONDecodeError as e:
             # Log detailed error information for debugging
@@ -227,7 +227,7 @@ def generate_equation_explanation(
                 "recommendation": {"equation_id": 0, "simplified_equation": "", "rationale": []},
                 "_parse_error": str(e)
             }
-            return json.dumps(fallback, indent=2)
+            return fallback
 
     except Exception as e:
         logger.error(f"Error in generate_equation_explanation: {e}")
