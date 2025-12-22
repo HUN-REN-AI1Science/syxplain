@@ -152,9 +152,14 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     }
   };
 
-  // Derived state - only show loading state after initial fetch to prevent flash
-  const isLoading = initialFetchDone && (!runId || status === 'pending' || status === 'running');
+  // Derived state
   const isCompleted = status === 'completed';
+
+  // Actively processing (pending/running) - shows progress bar
+  const isProcessing = initialFetchDone && (!runId || status === 'pending' || status === 'running');
+
+  // Loading a completed run from history (fetching data but run is already complete)
+  const isFetchingCompletedRun = !initialFetchDone && fromHistory;
 
   // Check if result is in the new EquationResults format (not legacy markdown)
   const isNewFormat = result !== null && typeof result === 'object' && 'equations' in result;
@@ -177,8 +182,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
         </div>
 
         <div className="flex items-center space-x-3 w-full md:w-auto">
-          {isLoading && !error ? (
-            <Message severity="info" text="Processing Data..." className="w-full md:w-auto" />
+          {(isProcessing || isFetchingCompletedRun) && !error ? (
+            <Message severity="info" text={isFetchingCompletedRun ? "Loading Results..." : "Processing Data..."} className="w-full md:w-auto" />
           ) : isCompleted ? (
             <>
                 {isNewFormat && (
@@ -221,12 +226,20 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           </div>
         )}
 
-        {/* Loading State */}
-        {isLoading && !error && (
+        {/* Loading State - Progress bar for active processing */}
+        {isProcessing && !error && (
           <LoadingState
             displayProgress={displayProgress}
             stepDescription={currentStepDescription}
           />
+        )}
+
+        {/* Loading State - Simple spinner for fetching completed runs */}
+        {isFetchingCompletedRun && !error && (
+          <div className="flex flex-col items-center justify-center py-20">
+            <i className="pi pi-spin pi-spinner text-4xl text-blue-500 mb-4"></i>
+            <p className="text-slate-600">Loading results...</p>
+          </div>
         )}
 
         {/* Results */}
