@@ -6,15 +6,19 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Button } from 'primereact/button';
 import { Message } from 'primereact/message';
-import { ProgressBar } from 'primereact/progressbar';
 import { Toast } from 'primereact/toast';
 import { Dialog } from 'primereact/dialog';
-import RunSettingsPanel from '@components/RunSettings/RunSettingsPanel';
-import EquationResultsView from '@components/EquationResults/EquationResultsView';
-import ShareDialog from '@components/common/ShareDialog';
+import {
+  RunSettingsPanel,
+  ShareDialog,
+  AnalysisProgressView,
+  ResultsHeader,
+  ResultContent,
+  LoadingSpinner,
+} from '@components/Results';
+import type { ResultsStatus } from '@components/Results';
 import { runsService, configService } from '@services/api';
 import { useProgressInterpolation } from '@hooks/useProgressInterpolation';
-// PDF export is dynamically imported when needed to reduce initial bundle size
 import type { ProgressPhase, EquationResults } from '@/types';
 
 // ============================================================================
@@ -164,56 +168,56 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   // Check if result is in the new EquationResults format (not legacy markdown)
   const isNewFormat = result !== null && typeof result === 'object' && 'equations' in result;
 
+  // Determine header status
+  const getHeaderStatus = (): ResultsStatus => {
+    if (isFetchingCompletedRun) return 'loading';
+    if (isProcessing && !error) return 'processing';
+    if (isCompleted) return 'completed';
+    return 'failed';
+  };
+
+  // Header action buttons
+  const renderHeaderActions = () => {
+    if (!isCompleted || !isNewFormat) return null;
+
+    return (
+      <>
+        <Button
+          icon={shareToken ? "pi pi-link" : "pi pi-share-alt"}
+          onClick={() => setShowShareDialog(true)}
+          size="large"
+          className={`${shareToken ? '!bg-green-600 hover:!bg-green-700 !border-green-600' : '!bg-blue-600 hover:!bg-blue-700 !border-blue-600'} !text-white font-semibold px-3 py-2 shadow-sm`}
+          tooltip={shareToken ? "Shared - Manage Link" : "Share Results"}
+          tooltipOptions={{ position: 'bottom' }}
+        />
+        <Button
+          icon={exportingPdf ? "pi pi-spin pi-spinner" : "pi pi-file-pdf"}
+          onClick={handleExportPdf}
+          disabled={exportingPdf}
+          size="large"
+          className="!bg-red-600 hover:!bg-red-700 !border-red-600 !text-white font-semibold px-3 py-2 shadow-sm"
+          tooltip="Export to PDF"
+          tooltipOptions={{ position: 'bottom' }}
+        />
+      </>
+    );
+  };
+
   return (
     <div className="p-4">
       <Toast ref={toast} />
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-4 border-b border-slate-100 gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">Analysis Results</h2>
-          <p className="text-sm text-slate-500">
-            {runId ? (
-              <>Run ID: <span className="font-mono">{runId.slice(0, 8)}...</span></>
-            ) : (
-              <>Starting analysis...</>
-            )}
-          </p>
-        </div>
-
-        <div className="flex items-center space-x-3 w-full md:w-auto">
-          {(isProcessing || isFetchingCompletedRun) && !error ? (
-            <Message severity="info" text={isFetchingCompletedRun ? "Loading Results..." : "Processing Data..."} className="w-full md:w-auto" />
-          ) : isCompleted ? (
-            <>
-                {isNewFormat && (
-                <>
-                  <Button
-                    icon={shareToken ? "pi pi-link" : "pi pi-share-alt"}
-                    onClick={() => setShowShareDialog(true)}
-                    size="large"
-                    className={`${shareToken ? '!bg-green-600 hover:!bg-green-700 !border-green-600' : '!bg-blue-600 hover:!bg-blue-700 !border-blue-600'} !text-white font-semibold px-3 py-2 shadow-sm`}
-                    tooltip={shareToken ? "Shared - Manage Link" : "Share Results"}
-                    tooltipOptions={{ position: 'bottom' }}
-                  />
-                  <Button
-                    icon={exportingPdf ? "pi pi-spin pi-spinner" : "pi pi-file-pdf"}
-                    onClick={handleExportPdf}
-                    disabled={exportingPdf}
-                    size="large"
-                    className="!bg-red-600 hover:!bg-red-700 !border-red-600 !text-white font-semibold px-3 py-2 shadow-sm"
-                    tooltip="Export to PDF"
-                    tooltipOptions={{ position: 'bottom' }}
-                  />
-                </>
-              )}
-              <Message severity="success" text="Completed" className="w-full md:w-auto" />
-            </>
-          ) : (
-            <Message severity="error" text="Failed" className="w-full md:w-auto" />
-          )}
-        </div>
-      </div>
+      <ResultsHeader
+        title="Analysis Results"
+        subtitle={runId ? (
+          <>Run ID: <span className="font-mono">{runId.slice(0, 8)}...</span></>
+        ) : (
+          <>Starting analysis...</>
+        )}
+        status={getHeaderStatus()}
+        actions={renderHeaderActions()}
+      />
 
       {/* Run Settings Panel - shown only when navigating from history */}
       {fromHistory && <RunSettingsPanel runId={runId} />}
@@ -228,7 +232,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
 
         {/* Loading State - Progress bar for active processing */}
         {isProcessing && !error && (
-          <LoadingState
+          <AnalysisProgressView
             displayProgress={displayProgress}
             stepDescription={currentStepDescription}
           />
@@ -236,17 +240,15 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
 
         {/* Loading State - Simple spinner for fetching completed runs */}
         {isFetchingCompletedRun && !error && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <i className="pi pi-spin pi-spinner text-4xl text-blue-500 mb-4"></i>
-            <p className="text-slate-600">Loading results...</p>
-          </div>
+          <LoadingSpinner
+            message="Loading results..."
+            className="py-20"
+          />
         )}
 
         {/* Results */}
         {result && (
-          <div className="space-y-8 animate-fade-in">
-            <ResultsContent result={result} resultsRef={resultsRef} />
-          </div>
+          <ResultContent result={result} resultsRef={resultsRef} />
         )}
       </div>
 
@@ -326,107 +328,5 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     </div>
   );
 };
-
-// ============================================================================
-// Sub-components
-// ============================================================================
-
-interface LoadingStateProps {
-  displayProgress: number;
-  stepDescription: string;
-}
-
-const LoadingState: React.FC<LoadingStateProps> = ({ displayProgress, stepDescription }) => (
-  <div className="text-center py-20">
-    <div className="max-w-md mx-auto mb-6">
-      <ProgressBar value={displayProgress} showValue={false} style={{ height: '8px' }} className="mb-2" />
-      <p className="text-lg font-semibold text-blue-600">{Math.floor(displayProgress)}% complete</p>
-    </div>
-
-    {/* Animated Step Description */}
-    <div className="h-8 mb-4">
-      <p
-        key={stepDescription}
-        className="step-description-animate text-base font-medium text-slate-400"
-      >
-        {stepDescription}
-      </p>
-    </div>
-
-    {/* Subtle Separator */}
-    <hr className="max-w-md mx-auto border-slate-200 mb-6" />
-
-    <h3 className="text-xl font-semibold text-slate-800 mt-4 mb-2">AI is analyzing your data</h3>
-    <p className="text-slate-500 max-w-md mx-auto mb-4">
-      This process involves symbolic regression and LLM reasoning. It might take a few minutes depending on the dataset size.
-    </p>
-    <p className="text-slate-600 text-sm max-w-md mx-auto">
-      You can safely leave this page. Your results will be available in the <span className="font-semibold">History</span> menu once completed.
-    </p>
-  </div>
-);
-
-interface ResultsContentProps {
-  result: EquationResults | string;
-  resultsRef: React.RefObject<HTMLDivElement>;
-}
-
-const ResultsContent: React.FC<ResultsContentProps> = ({ result, resultsRef }) => {
-  // Handle object (new format) directly
-  if (typeof result === 'object' && 'equations' in result) {
-    return (
-      <div ref={resultsRef}>
-        <EquationResultsView data={result} />
-      </div>
-    );
-  }
-
-  // Handle string (old format or legacy markdown)
-  try {
-    const parsedData: EquationResults = JSON.parse(result);
-    return (
-      <div ref={resultsRef}>
-        <EquationResultsView data={parsedData} />
-      </div>
-    );
-  } catch {
-    // Fallback for legacy markdown format
-    return <LegacyResultsFallback result={result} />;
-  }
-};
-
-interface LegacyResultsFallbackProps {
-  result: string;
-}
-
-const LegacyResultsFallback: React.FC<LegacyResultsFallbackProps> = ({ result }) => (
-  <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
-    <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-      <i className="pi pi-history text-amber-600 text-2xl"></i>
-    </div>
-    <h3 className="text-xl font-bold text-slate-800 mb-2">Legacy Run Format</h3>
-    <p className="text-slate-600 max-w-md mx-auto mb-6">
-      This analysis was generated using an older format that is no longer displayed in the application.
-      You can download the original results as a Markdown file.
-    </p>
-    <Button
-      label="Download Results (Markdown)"
-      icon="pi pi-download"
-      size="large"
-      className="!bg-blue-600 hover:!bg-blue-700 !border-blue-600 !text-white font-semibold px-6 py-3 shadow-lg"
-      onClick={() => {
-        const blob = new Blob([result], { type: 'text/markdown' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'pysr_explanations.md');
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-      }}
-    />
-  </div>
-);
 
 export default ResultsView;

@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import FileUpload from '@components/FileUpload/FileUpload';
-import ProblemForm from '@components/ProblemForm/ProblemForm';
+import UploadView from '@pages/UploadView';
+import ProblemView from '@pages/ProblemView';
 import ResultsView from '@pages/results/ResultsView';
 import HistoryView from '@pages/HistoryView';
 import ProfileView from '@pages/ProfileView';
@@ -11,13 +11,18 @@ import ForgotPassword from '@pages/auth/ForgotPassword';
 import PublicResultsView from '@pages/results/PublicResultsView';
 import { AuthProvider, useAuth } from '@contexts/AuthContext';
 import { runsService } from '@services/api';
-import { Steps } from 'primereact/steps';
 import { Toast } from 'primereact/toast';
 import { Card } from 'primereact/card';
-import { Button } from 'primereact/button';
-import { Tooltip } from 'primereact/tooltip';
 import { SwitchTransition, CSSTransition } from 'react-transition-group';
-import syxplainLogo from '@assets/syxplain_logo.png';
+import AppHeader from '@components/AppHeader';
+import AppFooter from '@components/AppFooter';
+import WorkflowSteps from '@components/WorkflowSteps';
+
+const WORKFLOW_STEPS = [
+  { label: 'Upload Data' },
+  { label: 'Define Problem' },
+  { label: 'Analysis Results' }
+];
 
 function MainApp() {
   const [view, setView] = useState<'workflow' | 'history' | 'profile'>('workflow');
@@ -41,12 +46,10 @@ function MainApp() {
   };
 
   const handleStartAnalysis = async (problemData: any) => {
-    // Navigate to results page immediately to show loading screen
-    setFromHistory(false); // Reset since this is a new analysis from workflow
+    setFromHistory(false);
     setActiveIndex(2);
 
     try {
-      // Extract analysis_type and deep_research_model from problemData (passed from ProblemForm)
       const { analysis_type, deep_research_model, ...problemDescription } = problemData;
       const response = await runsService.create({
         problem_description: problemDescription,
@@ -58,16 +61,9 @@ function MainApp() {
     } catch (e) {
       toast.current?.show({ severity: 'error', summary: 'Error', detail: 'Failed to start analysis' });
       console.error(e);
-      // Go back to problem form on error
       setActiveIndex(1);
     }
   };
-
-  const items = [
-    { label: 'Upload Data' },
-    { label: 'Define Problem' },
-    { label: 'Analysis Results' }
-  ];
 
   const handleReset = () => {
     setView('workflow');
@@ -82,7 +78,7 @@ function MainApp() {
 
   const handleSelectRun = (selectedRunId: string) => {
     setRunId(selectedRunId);
-    setFromHistory(true); // Mark that navigation came from history
+    setFromHistory(true);
     setView('workflow');
     setActiveIndex(2);
   };
@@ -99,69 +95,13 @@ function MainApp() {
     <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
       <Toast ref={toast} />
 
-      {/* Modern Header */}
-      <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div
-            className="flex items-center space-x-3 cursor-pointer transition-opacity"
-            onClick={handleReset}
-          >
-            <div
-              className="rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden"
-              style={{ backgroundColor: '#0052cc', width: '40px', height: '40px' }}
-            >
-              <img src={syxplainLogo} alt="Syxplain Logo" className="w-7 h-7 object-contain" />
-            </div>
-            <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
-              Syxplain <span className="text-blue-600">AI</span>
-            </h1>
-          </div>
-          <div className="flex items-center space-x-2 md:space-x-4">
-            <Button
-              label="History"
-              icon="pi pi-history"
-              className="p-button-outlined p-button-sm hidden md:flex"
-              onClick={() => setView('history')}
-            />
-            <Button
-              icon="pi pi-history"
-              className="p-button-outlined p-button-sm md:hidden"
-              onClick={() => setView('history')}
-              tooltip="History"
-            />
-            <Button
-              label="Profile"
-              icon="pi pi-user"
-              className="p-button-outlined p-button-sm hidden md:flex"
-              onClick={() => setView('profile')}
-            />
-            <Button
-              icon="pi pi-user"
-              className="p-button-outlined p-button-sm md:hidden"
-              onClick={() => setView('profile')}
-              tooltip="Profile"
-            />
-            <div className="flex items-center space-x-2">
-              <Tooltip target=".logout-button" content={user?.email || ''} position="bottom" />
-              <Button
-                label="Logout"
-                icon="pi pi-sign-out"
-                className="p-button-outlined p-button-sm p-button-danger logout-button hidden md:flex"
-                onClick={handleLogout}
-              />
-              <Button
-                icon="pi pi-sign-out"
-                className="p-button-outlined p-button-sm p-button-danger logout-button md:hidden"
-                onClick={handleLogout}
-                tooltip="Logout"
-              />
-            </div>
-            <div className="text-sm text-slate-500 font-medium hidden lg:block">
-              Automated Symbolic Regression
-            </div>
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        userEmail={user?.email}
+        onLogoClick={handleReset}
+        onHistoryClick={() => setView('history')}
+        onProfileClick={() => setView('profile')}
+        onLogout={handleLogout}
+      />
 
       <main className="flex-grow py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto">
@@ -175,48 +115,33 @@ function MainApp() {
             </Card>
           ) : (
             <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
-                <div className="flex flex-col">
-                  <div className="px-4 pt-4">
-                    <div className="hidden md:block">
-                      <Steps model={items} activeIndex={activeIndex} onSelect={(e: any) => setActiveIndex(e.index)} readOnly={true} className="mb-8 custom-steps" />
-                    </div>
-                    <div className="md:hidden mb-6 text-center">
-                      <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider">Step {activeIndex + 1} of {items.length}</span>
-                      <h2 className="text-xl font-bold text-slate-800 mt-1">{items[activeIndex].label}</h2>
-                      <div className="w-full bg-slate-200 h-1.5 mt-3 rounded-full overflow-hidden">
-                        <div className="bg-blue-600 h-full transition-all duration-300" style={{ width: `${((activeIndex + 1) / items.length) * 100}%` }}></div>
-                      </div>
-                    </div>
-                  </div>
+                  <div className="flex flex-col">
+                    <WorkflowSteps activeIndex={activeIndex} items={WORKFLOW_STEPS} />
 
-                  <div className="mt-6 min-h-[400px] relative overflow-hidden">
-                    <SwitchTransition mode="out-in">
-                      <CSSTransition
-                        key={activeIndex}
-                        nodeRef={nodeRef}
-                        timeout={300}
-                        classNames="fade"
-                        unmountOnExit
-                      >
-                        <div ref={nodeRef} className="w-full">
-                          {activeIndex === 0 && <FileUpload onUploadComplete={handleUploadComplete} />}
-                          {activeIndex === 1 && <ProblemForm columns={columns} excludedColumns={excludedColumns} nanCounts={nanCounts} onSubmit={handleStartAnalysis} />}
-                          {activeIndex === 2 && runId && <ResultsView runId={runId} fromHistory={fromHistory} />}
-                        </div>
-                      </CSSTransition>
-                    </SwitchTransition>
+                    <div className="mt-6 min-h-[400px] relative overflow-hidden">
+                      <SwitchTransition mode="out-in">
+                        <CSSTransition
+                          key={activeIndex}
+                          nodeRef={nodeRef}
+                          timeout={300}
+                          classNames="fade"
+                          unmountOnExit
+                        >
+                          <div ref={nodeRef} className="w-full">
+                            {activeIndex === 0 && <UploadView onUploadComplete={handleUploadComplete} />}
+                            {activeIndex === 1 && <ProblemView columns={columns} excludedColumns={excludedColumns} nanCounts={nanCounts} onSubmit={handleStartAnalysis} />}
+                            {activeIndex === 2 && runId && <ResultsView runId={runId} fromHistory={fromHistory} />}
+                          </div>
+                        </CSSTransition>
+                      </SwitchTransition>
+                    </div>
                   </div>
-                </div>
             </Card>
           )}
         </div>
       </main>
 
-      <footer className="bg-white border-t border-slate-200 py-6 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 text-center text-slate-400 text-sm">
-          &copy; {new Date().getFullYear()} Syxplain AI. All rights reserved.
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }
@@ -225,9 +150,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public share route - no auth required */}
         <Route path="/share/:token" element={<PublicResultsView />} />
-        {/* All other routes go through auth */}
         <Route path="*" element={
           <AuthProvider>
             <AuthGate />

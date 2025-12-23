@@ -7,10 +7,13 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card } from 'primereact/card';
 import { Message } from 'primereact/message';
-import { ProgressSpinner } from 'primereact/progressspinner';
-import PublicHeader from '@components/common/PublicHeader';
-import EquationResultsView from '@components/EquationResults/EquationResultsView';
-import PublicRunSettingsPanel from '@components/RunSettings/PublicRunSettingsPanel';
+import {
+  PublicRunSettingsPanel,
+  PublicHeader,
+  LoadingSpinner,
+  ResultsHeader,
+  ResultContent
+} from '@components/Results';
 import { publicService, type PublicRunData } from '@services/api';
 import type { EquationResults } from '@/types';
 
@@ -52,8 +55,7 @@ const PublicResultsView: React.FC = () => {
   }, [token]);
 
   // Parse results - handle both new direct format and old wrapper format
-  let parsedResults: EquationResults | null = null;
-  let legacyMarkdown: string | null = null;
+  let parsedResults: EquationResults | string | null = null;
 
   if (runData?.results) {
     const results = runData.results;
@@ -61,13 +63,8 @@ const PublicResultsView: React.FC = () => {
       // New format: results is the EquationResults object directly
       parsedResults = results as EquationResults;
     } else if ('pysr_explanations' in results) {
-      // Old format: try to parse JSON, fall back to legacy markdown
-      try {
-        parsedResults = JSON.parse(results.pysr_explanations);
-      } catch {
-        // Legacy markdown format
-        legacyMarkdown = results.pysr_explanations;
-      }
+      // Old format: pass through to ResultContent for parsing
+      parsedResults = results.pysr_explanations;
     }
   }
 
@@ -80,10 +77,10 @@ const PublicResultsView: React.FC = () => {
           <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
             {/* Loading State */}
             {loading && (
-              <div className="flex flex-col items-center justify-center p-6 min-h-[400px]">
-                <ProgressSpinner style={{ width: '50px', height: '50px' }} />
-                <p className="mt-4 text-slate-500">Loading shared results...</p>
-              </div>
+              <LoadingSpinner
+                message="Loading shared results..."
+                className="min-h-[400px] p-6"
+              />
             )}
 
             {/* Error State */}
@@ -104,51 +101,18 @@ const PublicResultsView: React.FC = () => {
             {!loading && !error && runData && (
               <div className="p-4">
                 {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-4 border-b border-slate-100 gap-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-800">Shared Analysis Results</h2>
-                    <p className="text-sm text-slate-500">
-                      These results have been shared publicly by the owner.
-                    </p>
-                  </div>
-                  <Message severity="success" text="Completed" className="w-full md:w-auto" />
-                </div>
+                <ResultsHeader
+                  title="Shared Analysis Results"
+                  subtitle="These results have been shared publicly by the owner."
+                  status="completed"
+                />
 
                 {/* Run Settings Panel (Public Mode) */}
                 {token && <PublicRunSettingsPanel shareToken={token} />}
 
                 {/* Results Content */}
                 {parsedResults ? (
-                  <div className="space-y-8 animate-fade-in">
-                    <EquationResultsView data={parsedResults} />
-                  </div>
-                ) : legacyMarkdown ? (
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
-                    <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <i className="pi pi-history text-amber-600 text-2xl"></i>
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-2">Legacy Run Format</h3>
-                    <p className="text-slate-600 max-w-md mx-auto mb-6">
-                      This analysis was generated using an older format. You can download the results as a Markdown file.
-                    </p>
-                    <button
-                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg"
-                      onClick={() => {
-                        const blob = new Blob([legacyMarkdown], { type: 'text/markdown' });
-                        const url = window.URL.createObjectURL(blob);
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.setAttribute('download', 'pysr_explanations.md');
-                        document.body.appendChild(link);
-                        link.click();
-                        link.remove();
-                        window.URL.revokeObjectURL(url);
-                      }}
-                    >
-                      <i className="pi pi-download mr-2"></i>
-                      Download Results (Markdown)
-                    </button>
-                  </div>
+                  <ResultContent result={parsedResults} />
                 ) : (
                   <Message severity="warn" text="No results available" className="w-full" />
                 )}

@@ -9,37 +9,17 @@ import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
 import { Tooltip } from 'primereact/tooltip';
-import { Dropdown } from 'primereact/dropdown';
-import { InputText } from 'primereact/inputtext';
 import { runsService } from '@services/api';
+import { HistoryFilterBar } from '@components/History';
 import type { RunSummary } from '@/types';
 
 // ============================================================================
-// Types
+// Types & Constants
 // ============================================================================
 
 interface HistoryViewProps {
   onSelectRun: (runId: string) => void;
 }
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-const STATUS_OPTIONS = [
-  { label: 'All Statuses', value: '' },
-  { label: 'Completed', value: 'completed' },
-  { label: 'Running', value: 'running' },
-  { label: 'Pending', value: 'pending' },
-  { label: 'Failed', value: 'failed' },
-  { label: 'Timeout', value: 'timeout' },
-];
-
-const ANALYSIS_TYPE_OPTIONS = [
-  { label: 'All Types', value: '' },
-  { label: 'Quick', value: 'quick' },
-  { label: 'Deep', value: 'deep' },
-];
 
 const STATUS_CONFIG: Record<string, { severity: 'success' | 'info' | 'warning' | 'danger'; label: string }> = {
   completed: { severity: 'success', label: 'Completed' },
@@ -126,7 +106,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
   };
 
   // Computed values
-  const hasActiveFilters = statusFilter || analysisTypeFilter || searchQuery;
+  const hasActiveFilters = !!(statusFilter || analysisTypeFilter || searchQuery);
 
   // Column templates
   const statusTemplate = (rowData: RunSummary) => {
@@ -179,67 +159,17 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
       </div>
 
       {/* Filter Bar */}
-      <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200 w-full">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full">
-          {/* Search */}
-          <div className="p-inputgroup w-full sm:flex-1 sm:min-w-[200px]">
-            <span className="p-inputgroup-addon">
-              <i className="pi pi-search" />
-            </span>
-            <InputText
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by filename or target..."
-              className="w-full"
-            />
-          </div>
-
-          {/* Analysis Type Filter */}
-          <Dropdown
-            value={analysisTypeFilter}
-            options={ANALYSIS_TYPE_OPTIONS}
-            optionLabel="label"
-            optionValue="value"
-            onChange={(e) => { setAnalysisTypeFilter(e.value); setPage(1); }}
-            placeholder="Type"
-            className="w-full sm:w-[160px]"
-          />
-
-          {/* Status Filter */}
-          <Dropdown
-            value={statusFilter}
-            options={STATUS_OPTIONS}
-            optionLabel="label"
-            optionValue="value"
-            onChange={(e) => { setStatusFilter(e.value); setPage(1); }}
-            placeholder="Status"
-            className="w-full sm:w-[170px]"
-          />
-
-          {/* Actions */}
-          <div className="flex gap-2 sm:ml-auto">
-            {hasActiveFilters && (
-              <Button
-                label="Clear"
-                icon="pi pi-times"
-                severity="secondary"
-                outlined
-                size="small"
-                onClick={clearFilters}
-              />
-            )}
-            <Button
-              icon="pi pi-refresh"
-              severity="secondary"
-              outlined
-              size="small"
-              onClick={loadRuns}
-              tooltip="Refresh"
-              tooltipOptions={{ position: 'top' }}
-            />
-          </div>
-        </div>
-      </div>
+      <HistoryFilterBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        statusFilter={statusFilter}
+        onStatusChange={(value) => { setStatusFilter(value); setPage(1); }}
+        analysisTypeFilter={analysisTypeFilter}
+        onAnalysisTypeChange={(value) => { setAnalysisTypeFilter(value); setPage(1); }}
+        onClearFilters={clearFilters}
+        onRefresh={loadRuns}
+        hasActiveFilters={hasActiveFilters}
+      />
 
       {/* Data Table */}
       <div className={`overflow-x-auto transition-opacity duration-200 ${loading ? 'opacity-60' : 'opacity-100'}`}>
