@@ -64,7 +64,7 @@ const CitationText: React.FC<CitationTextProps> = ({ text, citations = [], class
       if (citationIndex >= 0 && citationIndex < citations.length) {
         const citationUrl = citations[citationIndex];
         parts.push(
-          <span key={`citation-group-${match.index}`} className="citation-group">
+          <span key={`citation-group-${match.index}`} className="citation-group text-blue-600">
             [
             {createCitationLink(citationNumber, citationUrl, `citation-${match.index}`)}
             ]
@@ -101,7 +101,7 @@ const CitationText: React.FC<CitationTextProps> = ({ text, citations = [], class
       citationElements.push(']');
 
       parts.push(
-        <span key={`citation-group-${match.index}`} className="citation-group">
+        <span key={`citation-group-${match.index}`} className="citation-group text-blue-600">
           {citationElements}
         </span>
       );
