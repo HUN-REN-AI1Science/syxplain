@@ -30,11 +30,18 @@ interface EquationResultsViewProps {
 }
 
 const mathJaxConfig = {
-  loader: { load: ['input/asciimath', 'input/tex', 'output/chtml'] },
-  asciimath: { displaystyle: true, delimiters: [['`', '`']] },
-  tex: {
-    inlineMath: [['$', '$'], ['\\(', '\\)']],
-    displayMath: [['$$', '$$'], ['\\[', '\\]']]
+  loader: { load: ['input/asciimath', 'output/chtml'] },
+  asciimath: {
+    displaystyle: true,
+    delimiters: [['`', '`']]
+  },
+  options: {
+    // Disable automatic typesetting on page load
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code', 'annotation', 'annotation-xml'],
+  },
+  startup: {
+    // Disable automatic document typesetting - critical to prevent processing description text
+    typeset: false
   }
 };
 
@@ -179,7 +186,7 @@ const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = (
 
         {/* Equation Display with MathJax */}
         <div className="px-5 py-4">
-          <div className="bg-slate-50 rounded-lg p-4 overflow-x-auto border border-slate-200">
+        <div className="bg-slate-50 rounded-lg p-4 overflow-x-auto border border-slate-200 mathjax-equation">
           <MathJaxContext config={mathJaxConfig}>
             <MathJax inline dynamic>
               {`\`${escapeForAsciiMath(equation.equation)}\``}
@@ -384,7 +391,7 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data }) => {
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-bold text-green-800">Recommended: Equation {recommendation.equation_id}</h3>
                   {recommendedEquation && (
-                    <div className="mt-3 bg-white rounded-lg p-3 border border-green-200 overflow-x-auto">
+                    <div className="mt-3 bg-white rounded-lg p-3 border border-green-200 overflow-x-auto mathjax-equation">
                       <MathJaxContext config={mathJaxConfig}>
                         <MathJax inline dynamic>
                           {`\`${escapeForAsciiMath(recommendedEquation.equation)}\``}
