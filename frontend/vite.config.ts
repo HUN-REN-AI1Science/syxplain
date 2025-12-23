@@ -26,14 +26,14 @@ export default defineConfig({
     }
   },
   build: {
-    // PrimeReact (~525kB) and jsPDF (~616kB) are unavoidably large
-    chunkSizeWarningLimit: 650,
+    // Increase limit since PrimeReact is unavoidably large
+    chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
         manualChunks(id) {
           // Split large vendor libraries into separate chunks
           if (id.includes('node_modules')) {
-            // MathJax is huge - separate chunk
+            // MathJax - separate chunk (loaded only on results page)
             if (id.includes('mathjax') || id.includes('better-react-mathjax')) {
               return 'vendor-mathjax';
             }
@@ -49,11 +49,18 @@ export default defineConfig({
             if (id.includes('@supabase')) {
               return 'vendor-supabase';
             }
+            // PrimeReact - split into its own chunk
+            if (id.includes('primereact') || id.includes('primeicons')) {
+              return 'vendor-primereact';
+            }
             // React core
-            if (id.includes('react-dom')) {
+            if (id.includes('react-dom') || id.includes('react-router')) {
               return 'vendor-react';
             }
-            // Do NOT split primereact - causes circular dependency issues
+            // DOMPurify
+            if (id.includes('dompurify')) {
+              return 'vendor-purify';
+            }
           }
         }
       }

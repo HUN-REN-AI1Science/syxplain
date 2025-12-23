@@ -76,6 +76,7 @@ dependencies:
   - langchain-core
 
   - pip:
+    - alembic
     - langfuse
     - openinference-instrumentation-dspy
     - dspy
