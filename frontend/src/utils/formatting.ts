@@ -41,9 +41,32 @@ export function formatDateTime(date: string | Date): string {
 /**
  * Escape special characters for AsciiMath rendering
  * Wraps variable names with underscores in quotes for proper rendering
+ * Also escapes AsciiMath reserved keywords (gt, lt, ge, le, etc.) that would
+ * otherwise be converted to relational symbols using text() function
  */
 export function escapeForAsciiMath(text: string): string {
-  return text.replace(/([a-zA-Z][a-zA-Z0-9]*(?:_[a-zA-Z0-9]+)+)/g, '"$1"');
+  // AsciiMath reserved keywords that get converted to symbols
+  // These need to be wrapped in text() when used as variable names
+  const reservedKeywords = [
+    'gt', 'lt', 'ge', 'le', 'gte', 'lte', 'ne', 'eq',
+    'and', 'or', 'not', 'mod', 'if', 'in'
+  ];
+
+  let result = text;
+
+  // First, escape variable names with underscores using quotes
+  result = result.replace(/([a-zA-Z][a-zA-Z0-9]*(?:_[a-zA-Z0-9]+)+)/g, '"$1"');
+
+  // Then, escape reserved keywords when they appear as standalone words
+  // using text() which is the documented AsciiMath way to render literal text
+  for (const keyword of reservedKeywords) {
+    // Match the keyword as a standalone word (not part of a larger identifier)
+    // and not already within quotes or text()
+    const regex = new RegExp(`(?<![a-zA-Z0-9_"(])\\b(${keyword})\\b(?![a-zA-Z0-9_"])`, 'gi');
+    result = result.replace(regex, 'text($1)');
+  }
+
+  return result;
 }
 
 /**
