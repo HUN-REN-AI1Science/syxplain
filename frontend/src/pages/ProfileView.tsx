@@ -18,6 +18,7 @@ import {
   DeleteAccountDialog,
   RevokeShareDialog,
 } from '@components/Profile';
+import HelpButton from '@components/HelpButton';
 import type { ProfileData } from '@/types';
 
 interface ProfileViewProps {
@@ -133,7 +134,28 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">Profile</h2>
+            <div className="flex items-center gap-2 mb-2">
+              <h2 className="text-2xl font-bold text-slate-800">Profile</h2>
+              <HelpButton title="Your Profile">
+                <h4>Usage Statistics</h4>
+                <p>
+                  Track your analysis activity including total runs, quick vs deep analysis
+                  distribution, and account creation date.
+                </p>
+
+                <h4>Shared Runs</h4>
+                <p>
+                  Manage your publicly shared analysis results. You can copy share links
+                  or revoke access at any time.
+                </p>
+
+                <h4>Danger Zone</h4>
+                <p>
+                  <strong>Delete Account</strong> permanently removes your account and all
+                  associated data including runs and shared links. This action cannot be undone.
+                </p>
+              </HelpButton>
+            </div>
             <p className="text-slate-500">Manage your account settings</p>
           </div>
           <Button

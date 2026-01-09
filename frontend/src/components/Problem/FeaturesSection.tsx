@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { InputTextarea } from 'primereact/inputtextarea';
+import HelpButton from '@components/HelpButton';
 
 interface FeaturesSectionProps {
   columns: string[];
@@ -24,8 +25,31 @@ export const FeaturesSection: React.FC<FeaturesSectionProps> = ({
       <div className="bg-purple-100 p-2 rounded-lg mr-3 flex-shrink-0">
         <i className="pi pi-list text-purple-600 text-lg"></i>
       </div>
-      <div>
-        <h3 className="text-lg font-bold text-slate-800">Features</h3>
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-bold text-slate-800">Features</h3>
+          <HelpButton title="Feature Descriptions">
+            <h4>Why provide descriptions?</h4>
+            <p>
+              Feature descriptions help the AI understand the <strong>scientific meaning</strong> of each
+              column in your data. This enables more accurate and interpretable equation explanations.
+            </p>
+
+            <h4>Writing Good Descriptions</h4>
+            <ul>
+              <li>Include the <strong>physical units</strong> (e.g., "mg/kg", "°C", "m/s")</li>
+              <li>Describe what the feature <strong>measures or represents</strong></li>
+              <li>Mention any <strong>measurement methods</strong> if relevant</li>
+            </ul>
+
+            <h4>Examples</h4>
+            <ul>
+              <li><code>pH</code> → "Soil pH measured in water suspension, unitless scale 0-14"</li>
+              <li><code>temp</code> → "Air temperature in degrees Celsius at 2m height"</li>
+              <li><code>N_content</code> → "Total nitrogen content in mg/kg of soil"</li>
+            </ul>
+          </HelpButton>
+        </div>
         <p className="text-sm text-slate-500">Describe your data columns.</p>
       </div>
     </div>

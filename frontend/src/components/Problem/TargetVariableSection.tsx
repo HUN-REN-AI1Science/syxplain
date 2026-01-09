@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { Dropdown } from 'primereact/dropdown';
+import HelpButton from '@components/HelpButton';
 
 interface TargetVariableSectionProps {
   columns: string[];
@@ -24,8 +25,29 @@ export const TargetVariableSection: React.FC<TargetVariableSectionProps> = ({
       <div className="bg-green-100 p-2 rounded-lg mr-3 flex-shrink-0">
         <i className="pi pi-compass text-green-600 text-lg"></i>
       </div>
-      <div>
-        <h3 className="text-lg font-bold text-slate-800">Target</h3>
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-bold text-slate-800">Target</h3>
+          <HelpButton title="Target Variable">
+            <h4>What is a Target Variable?</h4>
+            <p>
+              The target variable is the column you want to <strong>predict or explain</strong>.
+              Syxplain will discover mathematical equations that express the target as a function of other features.
+            </p>
+
+            <h4>Requirements</h4>
+            <ul>
+              <li>Must be a <strong>numeric column</strong></li>
+              <li>Cannot contain <strong>missing values (NaN)</strong></li>
+              <li>Should represent a measurable quantity you want to understand</li>
+            </ul>
+
+            <h4>Example</h4>
+            <p>
+              If studying soil chemistry, your target might be <code>phosphorus_content</code> or <code>yield</code>.
+            </p>
+          </HelpButton>
+        </div>
         <p className="text-sm text-slate-500">What to predict?</p>
       </div>
     </div>

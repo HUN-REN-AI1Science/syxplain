@@ -7,6 +7,8 @@ import React, { useState } from 'react';
 import { Message } from 'primereact/message';
 import { uploadService } from '@services/api';
 import { UploadDropZone, UploadProgressOverlay } from '@components/Upload';
+import HelpButton from '@components/HelpButton';
+
 
 interface UploadViewProps {
   onUploadComplete: (filename: string, columns: string[], excludedColumns?: string[], nanCounts?: Record<string, number>) => void;
@@ -91,7 +93,32 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadComplete }) => {
     <div className="flex flex-col items-center justify-center p-6 relative min-h-[400px]">
       <div className={`transition-all duration-500 ease-in-out w-full max-w-2xl flex flex-col items-center ${processing ? 'opacity-20 blur-sm scale-95 pointer-events-none' : 'opacity-100'}`}>
         <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">Upload your Dataset</h2>
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <h2 className="text-2xl font-bold text-slate-800">Upload your Dataset</h2>
+            <HelpButton title="Data Upload Requirements">
+              <h4>Supported File Formats</h4>
+              <ul>
+                <li><strong>CSV</strong> (.csv) - Comma-separated values</li>
+                <li><strong>Excel</strong> (.xlsx, .xls) - Microsoft Excel files</li>
+              </ul>
+
+              <h4>Data Requirements</h4>
+              <ul>
+                <li>All features must contain <strong>numerical data only</strong></li>
+                <li><strong>No missing values</strong> are permitted in the target variable</li>
+                <li>Data should be organized in a tabular format with columns as features</li>
+              </ul>
+
+              <h4>Preprocessing Tips</h4>
+              <p>Before uploading, ensure your data is properly prepared:</p>
+              <ul>
+                <li><strong>Categorical data</strong> - Encode using one-hot or label encoding</li>
+                <li><strong>Text data</strong> - Convert to numerical representations</li>
+                <li><strong>Time series</strong> - Add lagged features or derivatives</li>
+                <li><strong>Missing values</strong> - Impute or remove rows with missing data</li>
+              </ul>
+            </HelpButton>
+          </div>
           <p className="text-slate-500">Supported formats: .csv, .xlsx, .xls</p>
         </div>
 

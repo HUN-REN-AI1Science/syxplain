@@ -7,6 +7,7 @@ import React, { useRef } from 'react';
 import { Button } from 'primereact/button';
 import { Menu } from 'primereact/menu';
 import { Dropdown } from 'primereact/dropdown';
+import HelpButton from '@components/HelpButton';
 
 interface AnalysisTypeSelectorProps {
   analysisType: 'quick' | 'deep';
@@ -35,7 +36,43 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
 
   return (
     <>
-      <div className="mt-6 pt-4 flex justify-end space-x-4">
+      {/* Help button row - right aligned above buttons */}
+      <div className="mt-2 flex justify-end">
+        <HelpButton title="Analysis Types">
+          <h4>Quick Analysis</h4>
+          <p>
+            <strong>Fast and cost-effective.</strong> Uses web searches for background research.
+            Ideal for initial exploration or when you need rapid results.
+          </p>
+          <ul>
+            <li>Faster processing time</li>
+            <li>Lower computational cost</li>
+            <li>Basic literature context</li>
+          </ul>
+
+          <h4>Deep Analysis</h4>
+          <p>
+            <strong>Comprehensive and thorough.</strong> Performs extensive scientific literature
+            research to validate discovered formulas against existing knowledge.
+          </p>
+          <ul>
+            <li>In-depth literature review</li>
+            <li>Higher accuracy validation</li>
+            <li>More detailed scientific context</li>
+            <li>Higher computational cost</li>
+          </ul>
+
+          <h4>Which should I choose?</h4>
+          <p>
+            Start with <strong>Quick Analysis</strong> for initial exploration.
+            Use <strong>Deep Analysis</strong> when you need publication-quality results
+            with thorough scientific validation.
+          </p>
+        </HelpButton>
+      </div>
+
+      {/* Button row */}
+      <div className="mt-2 flex justify-end items-center space-x-4">
         {showExportButton && onExportJson && (
           <Button
             label="Export JSON"

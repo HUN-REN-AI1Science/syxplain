@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { Message } from 'primereact/message';
+import HelpButton from '@components/HelpButton';
 
 export type ResultsStatus = 'loading' | 'processing' | 'completed' | 'failed';
 
@@ -46,7 +47,30 @@ export const ResultsHeader: React.FC<ResultsHeaderProps> = ({
   return (
     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-4 border-b border-slate-100 gap-4">
       <div>
-        <h2 className="text-xl font-bold text-slate-800">{title}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-bold text-slate-800">{title}</h2>
+          <HelpButton title="Understanding Analysis Results">
+            <h4>What's in the Results?</h4>
+            <p>
+              Your analysis includes discovered mathematical equations that explain the relationship
+              between your features and target variable.
+            </p>
+
+            <h4>Key Sections</h4>
+            <ul>
+              <li><strong>Analysis Summary</strong> - Key and secondary drivers identified from your data</li>
+              <li><strong>Recommended Equation</strong> - The best balance of accuracy and simplicity</li>
+              <li><strong>All Equations</strong> - Complete list sorted by complexity</li>
+            </ul>
+
+            <h4>Actions Available</h4>
+            <ul>
+              <li><strong>Share</strong> - Create a public link to share your results</li>
+              <li><strong>Export PDF</strong> - Download a complete report</li>
+              <li><strong>Export Data</strong> - Download predicted values as CSV/Excel</li>
+            </ul>
+          </HelpButton>
+        </div>
         {subtitle && (
           <p className="text-sm text-slate-500">
             {subtitle}

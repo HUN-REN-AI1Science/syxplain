@@ -3,10 +3,9 @@
  * JSON configuration upload and preview section
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import { InputTextarea } from 'primereact/inputtextarea';
-import { Button } from 'primereact/button';
-import { Dialog } from 'primereact/dialog';
+import HelpButton from '@components/HelpButton';
 
 interface JsonConfigUploadProps {
   jsonContent: string;
@@ -17,8 +16,6 @@ export const JsonConfigUpload: React.FC<JsonConfigUploadProps> = ({
   jsonContent,
   onChange,
 }) => {
-  const [showHelp, setShowHelp] = useState(false);
-
   const handleJsonUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const reader = new FileReader();
@@ -45,26 +42,10 @@ export const JsonConfigUpload: React.FC<JsonConfigUploadProps> = ({
       <div className="relative">
         <div className="flex justify-between items-center mb-2">
           <label className="block text-sm font-bold text-slate-700 ml-1">Configuration Preview</label>
-          <div>
-            <Button
-              icon="pi pi-question-circle"
-              className="p-button-rounded p-button-text p-button-sm"
-              onClick={() => setShowHelp(true)}
-              tooltip="View Example JSON"
-              tooltipOptions={{ position: 'left' }}
-            />
-            <Dialog
-              header="Example Configuration"
-              visible={showHelp}
-              onHide={() => setShowHelp(false)}
-              className="w-[90vw] max-w-[600px]"
-              draggable={false}
-              resizable={false}
-            >
-              <div className="pt-2">
-                <p className="text-xs text-slate-600 mb-3">Your JSON file should follow this structure:</p>
-                <pre className="bg-slate-800 text-slate-100 p-3 rounded text-xs font-mono overflow-x-auto">
-                  {`{
+          <HelpButton title="Example Configuration">
+            <p className="text-sm text-slate-600 mb-3">Your JSON file should follow this structure:</p>
+            <pre className="bg-slate-800 text-slate-100 p-3 rounded text-xs font-mono overflow-x-auto">
+              {`{
   "project_description": "Predicting house prices based on features.",
   "target_variable": "price",
   "features": {
@@ -73,10 +54,8 @@ export const JsonConfigUpload: React.FC<JsonConfigUploadProps> = ({
     "location": "Zip code"
   }
 }`}
-                </pre>
-              </div>
-            </Dialog>
-          </div>
+            </pre>
+          </HelpButton>
         </div>
         <InputTextarea
           className="w-full font-mono text-sm bg-slate-50"
@@ -91,3 +70,4 @@ export const JsonConfigUpload: React.FC<JsonConfigUploadProps> = ({
 };
 
 export default JsonConfigUpload;
+

@@ -11,6 +11,7 @@ import { Tag } from 'primereact/tag';
 import { Tooltip } from 'primereact/tooltip';
 import { runsService } from '@services/api';
 import { HistoryFilterBar } from '@components/History';
+import HelpButton from '@components/HelpButton';
 import type { RunSummary } from '@/types';
 
 // ============================================================================
@@ -154,7 +155,25 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
     <div className="p-4 sm:p-6">
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-slate-800 mb-2">Run History</h2>
+        <div className="flex items-center gap-2 mb-2">
+          <h2 className="text-2xl font-bold text-slate-800">Run History</h2>
+          <HelpButton title="Run History">
+            <h4>Run Statuses</h4>
+            <ul>
+              <li><strong>Completed</strong> - Analysis finished successfully, results available</li>
+              <li><strong>Running</strong> - Analysis in progress (hover for % complete)</li>
+              <li><strong>Pending</strong> - Waiting to start processing</li>
+              <li><strong>Failed</strong> - Analysis encountered an error</li>
+              <li><strong>Timeout</strong> - Analysis took too long and was stopped</li>
+            </ul>
+
+            <h4>Navigating Your History</h4>
+            <p>
+              Click <strong>View</strong> on any completed run to see results.
+              Use filters to find specific runs by status or analysis type.
+            </p>
+          </HelpButton>
+        </div>
         <p className="text-slate-500">View your past analysis runs</p>
       </div>
 

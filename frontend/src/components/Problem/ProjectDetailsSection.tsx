@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { InputTextarea } from 'primereact/inputtextarea';
+import HelpButton from '@components/HelpButton';
 
 interface ProjectDetailsSectionProps {
   projectDescription: string;
@@ -20,8 +21,31 @@ export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({
       <div className="bg-blue-100 p-2 rounded-lg mr-3 flex-shrink-0">
         <i className="pi pi-info-circle text-blue-600 text-lg"></i>
       </div>
-      <div>
-        <h3 className="text-lg font-bold text-slate-800">Project Details</h3>
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-bold text-slate-800">Project Details</h3>
+          <HelpButton title="Project Description">
+            <h4>What is this for?</h4>
+            <p>
+              The project description provides context for the AI to understand your research domain
+              and generate more accurate, scientifically relevant explanations.
+            </p>
+
+            <h4>Writing a Good Description</h4>
+            <ul>
+              <li>Describe the <strong>scientific domain</strong> (e.g., soil chemistry, materials science)</li>
+              <li>Explain your <strong>research goal</strong> and what you're trying to understand</li>
+              <li>Mention any <strong>known relationships</strong> or hypotheses you're testing</li>
+            </ul>
+
+            <h4>Example</h4>
+            <p>
+              <em>"We are studying soil health indicators to predict phosphorus availability.
+                The data comes from agricultural fields with varying fertilization histories.
+                We expect pH and organic matter to be key drivers."</em>
+            </p>
+          </HelpButton>
+        </div>
         <p className="text-sm text-slate-500">Provide context for the AI to generate better explanations.</p>
       </div>
     </div>

@@ -20,6 +20,7 @@ import { Scatter } from 'react-chartjs-2';
 import { escapeForAsciiMath } from '@utils/formatting';
 import { exportToCSV, exportToExcel } from '@utils/dataExport';
 import CitationText from './CitationText';
+import HelpButton from '@components/HelpButton';
 import type { Equation, ScatterData, EquationResults } from '@/types';
 
 // Register Chart.js components
@@ -331,10 +332,37 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data }) => {
         {/* Summary Section */}
         {summary && (
           <div className="bg-gradient-to-br from-blue-50 to-slate-50 rounded-xl border border-blue-200 p-6">
-            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <i className="pi pi-chart-bar text-blue-500"></i>
               Analysis Summary
             </h3>
+            <HelpButton title="Analysis Summary">
+              <h4>What's in the Summary?</h4>
+              <p>
+                The summary provides an overview of the most influential factors
+                identified by the symbolic regression analysis.
+              </p>
+
+              <h4>Key Drivers</h4>
+              <p>
+                <strong>Primary variables</strong> that have the strongest impact on your target.
+                These appear most frequently in the discovered equations.
+              </p>
+
+              <h4>Secondary Drivers</h4>
+              <p>
+                <strong>Supporting variables</strong> that contribute to predictions but with
+                less impact than key drivers.
+              </p>
+
+              <h4>Findings</h4>
+              <p>
+                A synthesized interpretation of what the analysis discovered about
+                your data, validated against scientific literature (in Deep Analysis mode).
+              </p>
+            </HelpButton>
+          </div>
 
             {/* Key Drivers */}
             {summary.key_drivers && summary.key_drivers.length > 0 && (
@@ -418,10 +446,38 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data }) => {
         {/* Equations List */}
         {equations && equations.length > 0 && (
           <div className="space-y-4">
+          <div className="flex items-center gap-2">
             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <i className="pi pi-list text-blue-500"></i>
               All Equations ({equations.length})
             </h3>
+            <HelpButton title="Understanding Equations">
+              <h4>Equation Metrics</h4>
+              <ul>
+                <li><strong>Loss (MSE)</strong> - Mean Squared Error, measures prediction accuracy. Lower is better.</li>
+                <li><strong>Complexity</strong> - Number of terms/operations in the equation. Lower means simpler.</li>
+              </ul>
+
+              <h4>Pareto Frontier</h4>
+              <p>
+                Equations are arranged in a Pareto frontier, showing the optimal trade-off
+                between accuracy (loss) and simplicity (complexity). The first equations are
+                simpler but may be less accurate.
+              </p>
+
+              <h4>Scatter Plot</h4>
+              <p>
+                Click "Show Details" to see a measured vs. predicted scatter plot.
+                Points close to the 1:1 line indicate good predictions.
+              </p>
+
+              <h4>Term Breakdown</h4>
+              <p>
+                Each equation includes explanations for its mathematical terms,
+                helping you understand what each part represents scientifically.
+              </p>
+            </HelpButton>
+          </div>
             <div className="space-y-4">
               {equations.map((eq) => (
                 <EquationCard

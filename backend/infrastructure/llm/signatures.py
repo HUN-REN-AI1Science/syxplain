@@ -61,6 +61,12 @@ class ExplainPySrEquations(dspy.Signature):
     2. **Analyze Terms**: For each term, explain its physical or practical meaning based on the features involved.
     3. **Plausibility**: Evaluate if the relationships (positive/negative correlations, functional forms) make sense given the problem description.
 
+    ### TEXT FORMATTING (CRITICAL)
+    - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", or "rationale" fields.
+    - Write all explanations in plain English prose. No subscripts, superscripts, Greek letters in LaTeX form (e.g., $\\alpha$), or special math fonts.
+    - Variable names should be written as plain text (e.g., "Tm_sprsum" not "$T_{m\\_sprsum}$").
+    - Use words instead of symbols for mathematical concepts (e.g., "squared" instead of "^2" in prose).
+
     ### RECOMMENDATION CRITERIA
     When selecting the recommended equation:
     - Consider statistical metrics (loss, complexity).
@@ -217,6 +223,12 @@ class ExplainPySrEquationsDeep(dspy.Signature):
        - **IMPORTANT**: When you use the knowledge from a citation in the "overview" or "term_explanations", you MUST add a reference number in the text like [1], [2], etc., corresponding to the position of that citation URLs in the "citations" array (1-based index).
        - **DO NOT include citation numbers [1], [2], etc. in the "summary" or "recommendation" sections.** These sections should be written in plain text without any citation references.
        - If you find NO link to the deep research, explicitly state "No direct match in provided deep research" in the overview, but this should be rare.
+
+    ### TEXT FORMATTING (CRITICAL)
+    - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", or "rationale" fields.
+    - Write all explanations in plain English prose. No subscripts, superscripts, Greek letters in LaTeX form (e.g., $\\alpha$), or special math fonts.
+    - Variable names should be written as plain text (e.g., "Tm_sprsum" not "$T_{m\\_sprsum}$").
+    - Use words instead of symbols for mathematical concepts (e.g., "squared" instead of "^2" in prose).
 
     ### RECOMMENDATION CRITERIA
     When selecting the recommended equation:
