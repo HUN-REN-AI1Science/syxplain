@@ -40,31 +40,40 @@ export function formatDateTime(date: string | Date): string {
 
 /**
  * Escape special characters for AsciiMath rendering
- * Wraps variable names with underscores in quotes for proper rendering
- * Also escapes AsciiMath reserved keywords (gt, lt, ge, le, etc.) that would
- * otherwise be converted to relational symbols using text() function
+ * Wraps variable names in quotes to prevent AsciiMath from converting
+ * reserved keywords (gt, lt, ge, le, etc.) that appear within identifiers
+ * to relational symbols
  */
 export function escapeForAsciiMath(text: string): string {
   // AsciiMath reserved keywords that get converted to symbols
-  // These need to be wrapped in text() when used as variable names
+  // These can appear within identifiers (e.g., "avgt" contains "gt")
   const reservedKeywords = [
     'gt', 'lt', 'ge', 'le', 'gte', 'lte', 'ne', 'eq',
-    'and', 'or', 'not', 'mod', 'if', 'in'
+    'and', 'or', 'not', 'mod', 'in'
   ];
 
-  let result = text;
+  // Create a pattern that matches any identifier (letter followed by alphanumerics/underscores)
+  // We'll check each match to see if it contains a reserved keyword
+  const identifierPattern = /([a-zA-Z][a-zA-Z0-9_]*)/g;
 
-  // First, escape variable names with underscores using quotes
-  result = result.replace(/([a-zA-Z][a-zA-Z0-9]*(?:_[a-zA-Z0-9]+)+)/g, '"$1"');
+  const result = text.replace(identifierPattern, (match) => {
+    // Check if this identifier contains any reserved keyword as a substring
+    const containsReserved = reservedKeywords.some(keyword =>
+      match.toLowerCase().includes(keyword)
+    );
 
-  // Then, escape reserved keywords when they appear as standalone words
-  // using text() which is the documented AsciiMath way to render literal text
-  for (const keyword of reservedKeywords) {
-    // Match the keyword as a standalone word (not part of a larger identifier)
-    // and not already within quotes or text()
-    const regex = new RegExp(`(?<![a-zA-Z0-9_"(])\\b(${keyword})\\b(?![a-zA-Z0-9_"])`, 'gi');
-    result = result.replace(regex, 'text($1)');
-  }
+    // If it contains a reserved keyword, quote it to prevent symbol conversion
+    if (containsReserved) {
+      return `"${match}"`;
+    }
+
+    // Also quote identifiers with underscores (existing behavior)
+    if (match.includes('_')) {
+      return `"${match}"`;
+    }
+
+    return match;
+  });
 
   return result;
 }
