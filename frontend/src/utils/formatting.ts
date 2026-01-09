@@ -40,39 +40,18 @@ export function formatDateTime(date: string | Date): string {
 
 /**
  * Escape special characters for AsciiMath rendering
- * Wraps variable names in quotes to prevent AsciiMath from converting
- * reserved keywords (gt, lt, ge, le, etc.) that appear within identifiers
- * to relational symbols
+ * Wraps all multi-character variable names in quotes to prevent AsciiMath
+ * from parsing parts of identifiers as reserved symbols (gt, lt, log, sin, etc.)
  */
 export function escapeForAsciiMath(text: string): string {
-  // AsciiMath reserved keywords that get converted to symbols
-  // These can appear within identifiers (e.g., "avgt" contains "gt")
-  const reservedKeywords = [
-    'gt', 'lt', 'ge', 'le', 'gte', 'lte', 'ne', 'eq',
-    'and', 'or', 'not', 'mod', 'in'
-  ];
-
-  // Create a pattern that matches any identifier (letter followed by alphanumerics/underscores)
-  // We'll check each match to see if it contains a reserved keyword
-  const identifierPattern = /([a-zA-Z][a-zA-Z0-9_]*)/g;
+  // Match any identifier (letter followed by alphanumerics/underscores)
+  // that is 2+ characters long - these need to be quoted to prevent
+  // AsciiMath from parsing substrings as reserved symbols
+  const identifierPattern = /([a-zA-Z][a-zA-Z0-9_]+)/g;
 
   const result = text.replace(identifierPattern, (match) => {
-    // Check if this identifier contains any reserved keyword as a substring
-    const containsReserved = reservedKeywords.some(keyword =>
-      match.toLowerCase().includes(keyword)
-    );
-
-    // If it contains a reserved keyword, quote it to prevent symbol conversion
-    if (containsReserved) {
-      return `"${match}"`;
-    }
-
-    // Also quote identifiers with underscores (existing behavior)
-    if (match.includes('_')) {
-      return `"${match}"`;
-    }
-
-    return match;
+    // Quote all multi-character identifiers
+    return `"${match}"`;
   });
 
   return result;
