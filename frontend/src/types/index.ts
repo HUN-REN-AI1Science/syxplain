@@ -148,3 +148,26 @@ export interface ProblemFormPayload {
   analysis_type: AnalysisType;
   deep_research_model: string | null;
 }
+
+// ============================================================================
+// Permission Types
+// ============================================================================
+
+export interface UserPermissions {
+  use_hunren_keys: boolean;
+  is_admin: boolean;
+}
+
+export interface UserApiKeys {
+  openai_api_key: string;
+  openai_model: string;
+}
+
+export interface UserPermissionInfo {
+  user_id: string;
+  email: string;
+  use_hunren_keys: boolean;
+  granted_by: string | null;
+  user_created_at: string | null;
+  permission_updated_at: string | null;
+}

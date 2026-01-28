@@ -29,7 +29,9 @@ logger = logging.getLogger(__name__)
 def generate_pysr_config(
     project_description: str,
     dataset_statistics: str,
-    visualizations_b64: List[str]
+    visualizations_b64: List[str],
+    user_api_key: Optional[str] = None,
+    user_model: Optional[str] = None
 ) -> str:
     """
     Generates PySR configuration JSON using LLM.
@@ -38,11 +40,13 @@ def generate_pysr_config(
         project_description: Description of the project
         dataset_statistics: Statistics of the dataset
         visualizations_b64: List of base64 encoded images
+        user_api_key: Optional user-provided API key
+        user_model: Optional user-specified model
 
     Returns:
         JSON string containing PySR configuration
     """
-    lm = create_dspy_model()
+    lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
     visual_inputs = [dspy.Image(f"data:image/png;base64,{img_b64}") for img_b64 in visualizations_b64]
 
     predictor = dspy.Predict(PySrConfigGenerator)
@@ -75,19 +79,24 @@ def generate_pysr_config(
 
 
 @observe(name="deep_research_equations", as_type="generation")
-def deep_research_equations(features_dict: Dict[str, str], model_name: str = None) -> Dict[str, Any]:
+def deep_research_equations(
+    features_dict: Dict[str, str],
+    model_name: str = None,
+    user_api_key: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Performs deep scientific research to find equations relating features.
 
     Args:
         features_dict: Dictionary mapping variable names to descriptions
-        model_name: Optional override for model name
+        model_name: Optional override for model name (only used with server keys)
+        user_api_key: Optional user-provided API key
 
     Returns:
         Dictionary with 'equations' list
     """
     try:
-        lm = create_deep_research_model(model_name)
+        lm = create_deep_research_model(model_name=model_name, user_api_key=user_api_key)
 
         features_json = json.dumps(features_dict, indent=2)
         predictor = dspy.Predict(DeepResearchEquations)
@@ -123,7 +132,9 @@ def deep_research_equations(features_dict: Dict[str, str], model_name: str = Non
 def generate_equation_explanation(
     project_spec_json: str,
     data_spec_json: str,
-    deep_research_context: Optional[Dict[str, Any]] = None
+    deep_research_context: Optional[Dict[str, Any]] = None,
+    user_api_key: Optional[str] = None,
+    user_model: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Generates explanation for PySR equations as structured JSON.
@@ -132,6 +143,8 @@ def generate_equation_explanation(
         project_spec_json: JSON string of project specification
         data_spec_json: JSON string of equations data
         deep_research_context: Optional dict from deep research step
+        user_api_key: Optional user-provided API key
+        user_model: Optional user-specified model
 
     Returns:
         JSON string with structured equation explanations
@@ -141,6 +154,8 @@ def generate_equation_explanation(
     # Select appropriate model and signature
     if is_deep_analysis:
         lm = create_dspy_model(
+            user_api_key=user_api_key,
+            user_model=user_model,
             extra_body={
                 "tools": [
                     {
@@ -162,7 +177,7 @@ def generate_equation_explanation(
         predictor = dspy.Predict(ExplainPySrEquationsDeep)
 
     else:
-        lm = create_dspy_model()
+        lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
         predictor = dspy.Predict(ExplainPySrEquations)
 
     logger.info(f"Generating explanations. Deep Analysis: {is_deep_analysis}")

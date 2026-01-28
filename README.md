@@ -20,6 +20,7 @@ This is a proof of concept system which uses state of the art symbolic regressio
 - [Production Deployment](#production-deployment)
 - [Testing Worker Tasks Locally](#testing-worker-tasks-locally)
 - [Slurm Worker Reference](#slurm-worker-reference)
+- [Admin Setup](#admin-setup)
 
 ## Architecture
 
@@ -212,6 +213,10 @@ docker-compose -f docker-compose.prod.yml up -d
 - `DEEP_RESEARCH_MODEL`: Comma-separated list of deep research models
 - `DEEP_RESEARCH_API_KEY`: API key for deep research model
 - `DEEP_RESEARCH_API_BASE`: Base URL for deep research API
+- `USER_API_MODELS`: Comma-separated list of models for user-provided API keys (default: `gpt-5.2-thinking,gpt-4o`)
+
+**Admin Configuration:**
+- `ADMIN_EMAILS`: Comma-separated list of admin email addresses
 
 **Database:**
 - `DATABASE_URL`: PostgreSQL connection string
@@ -393,3 +398,19 @@ See [slurm_worker/README.md](slurm_worker/README.md) for detailed worker documen
 - Task input/output formats
 - Progress callback API
 - Troubleshooting guide
+
+## Admin Setup
+
+### Granting HUN-REN API Key Access
+
+After deployment, users need permission to use the built-in HUN-REN API keys. Users without this permission must provide their own OpenAI API key.
+
+**Environment configuration for admins:**
+
+Add admin email addresses to the `ADMIN_EMAILS` environment variable:
+
+```bash
+ADMIN_EMAILS=admin@example.com,admin2@example.com
+```
+
+Admins can manage permissions through the Admin UI at `/admin`.

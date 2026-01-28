@@ -5,6 +5,7 @@ import ProblemView from '@pages/ProblemView';
 import ResultsView from '@pages/results/ResultsView';
 import HistoryView from '@pages/HistoryView';
 import ProfileView from '@pages/ProfileView';
+import AdminView from '@pages/admin/AdminView';
 import Login from '@pages/auth/Login';
 import SignUp from '@pages/auth/SignUp';
 import ForgotPassword from '@pages/auth/ForgotPassword';
@@ -25,7 +26,7 @@ const WORKFLOW_STEPS = [
 ];
 
 function MainApp() {
-  const [view, setView] = useState<'workflow' | 'history' | 'profile'>('workflow');
+  const [view, setView] = useState<'workflow' | 'history' | 'profile' | 'admin'>('workflow');
   const [activeIndex, setActiveIndex] = useState(0);
   const [filename, setFilename] = useState<string | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
@@ -35,7 +36,7 @@ function MainApp() {
   const [fromHistory, setFromHistory] = useState<boolean>(false);
   const toast = useRef<Toast>(null);
   const nodeRef = useRef(null);
-  const { signOut, user } = useAuth();
+  const { signOut, user, isAdmin } = useAuth();
 
   const handleUploadComplete = (fname: string, cols: string[], excludedCols: string[] = [], nanCountsData: Record<string, number> = {}) => {
     setFilename(fname);
@@ -50,16 +51,18 @@ function MainApp() {
     setActiveIndex(2);
 
     try {
-      const { analysis_type, deep_research_model, ...problemDescription } = problemData;
+      const { analysis_type, deep_research_model, user_api_keys, ...problemDescription } = problemData;
       const response = await runsService.create({
         problem_description: problemDescription,
         csv_filename: filename!,
         analysis_type: analysis_type || 'quick',
         deep_research_model: deep_research_model || null,
+        user_api_keys: user_api_keys,
       });
       setRunId(response.data.run_id);
-    } catch (e) {
-      toast.current?.show({ severity: 'error', summary: 'Error', detail: 'Failed to start analysis' });
+    } catch (e: any) {
+      const errorMessage = e.response?.data?.detail || 'Failed to start analysis';
+      toast.current?.show({ severity: 'error', summary: 'Error', detail: errorMessage });
       console.error(e);
       setActiveIndex(1);
     }
@@ -100,12 +103,17 @@ function MainApp() {
         onLogoClick={handleReset}
         onHistoryClick={() => setView('history')}
         onProfileClick={() => setView('profile')}
+        onAdminClick={isAdmin ? () => setView('admin') : undefined}
         onLogout={handleLogout}
       />
 
       <main className="flex-grow py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto">
-          {view === 'history' ? (
+          {view === 'admin' ? (
+            <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
+              <AdminView onBack={() => setView('workflow')} />
+            </Card>
+          ) : view === 'history' ? (
             <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
               <HistoryView onSelectRun={handleSelectRun} />
             </Card>

@@ -191,7 +191,9 @@ class RunService:
         features: Dict[str, str],
         analysis_type: str,
         deep_research_model: Optional[str],
-        user_id: str
+        user_id: str,
+        has_hunren_access: bool = True,
+        user_api_key: Optional[str] = None
     ) -> None:
         """
         Validate a run request before starting.
@@ -203,40 +205,60 @@ class RunService:
             analysis_type: 'quick' or 'deep'
             deep_research_model: Model for deep analysis
             user_id: User UUID as string
+            has_hunren_access: Whether user has HUN-REN key permission
+            user_api_key: User-provided API key (if any)
 
         Raises:
             EntityNotFoundError: If file not found
             ValidationError: If configuration is invalid
             ConfigurationError: If server configuration is missing
         """
-        # Check LLM API key
-        if not self.settings.llm.openai_api_key:
-            raise ConfigurationError(
-                "OPENAI_API_KEY not set on server",
-                config_key="OPENAI_API_KEY"
-            )
-
-        # Validate deep analysis configuration
-        if analysis_type == "deep":
-            if not self.settings.llm.deep_research_api_key:
+        # Check API key availability based on permissions
+        if has_hunren_access:
+            # User uses server keys - check server configuration
+            if not self.settings.llm.openai_api_key:
                 raise ConfigurationError(
-                    "Deep analysis is not configured on this server. DEEP_RESEARCH_API_KEY is missing.",
-                    config_key="DEEP_RESEARCH_API_KEY"
+                    "OPENAI_API_KEY not set on server",
+                    config_key="OPENAI_API_KEY"
                 )
 
-            if not deep_research_model:
+            # Validate deep analysis configuration for server keys
+            if analysis_type == "deep":
+                if not self.settings.llm.deep_research_api_key:
+                    raise ConfigurationError(
+                        "Deep analysis is not configured on this server. DEEP_RESEARCH_API_KEY is missing.",
+                        config_key="DEEP_RESEARCH_API_KEY"
+                    )
+
+                if not deep_research_model:
+                    raise ValidationError(
+                        "deep_research_model is required for deep analysis",
+                        field="deep_research_model"
+                    )
+
+                allowed_models = self.settings.llm.get_deep_research_model_list()
+                if deep_research_model not in allowed_models:
+                    raise ValidationError(
+                        f"Invalid deep_research_model '{deep_research_model}'. Allowed models: {', '.join(allowed_models)}",
+                        field="deep_research_model",
+                        value=deep_research_model
+                    )
+        else:
+            # User must provide their own API key
+            if not user_api_key:
                 raise ValidationError(
-                    "deep_research_model is required for deep analysis",
-                    field="deep_research_model"
+                    "API key required. Please provide your OpenAI API key.",
+                    field="user_api_keys"
                 )
 
-            allowed_models = self.settings.llm.get_deep_research_model_list()
-            if deep_research_model not in allowed_models:
-                raise ValidationError(
-                    f"Invalid deep_research_model '{deep_research_model}'. Allowed models: {', '.join(allowed_models)}",
-                    field="deep_research_model",
-                    value=deep_research_model
-                )
+            # For user keys with deep analysis, only o4-mini-deep-research is allowed
+            if analysis_type == "deep":
+                if deep_research_model and deep_research_model != "o4-mini-deep-research":
+                    raise ValidationError(
+                        "Deep research with user-provided keys only supports the o4-mini-deep-research model",
+                        field="deep_research_model",
+                        value=deep_research_model
+                    )
 
         # Verify file exists and belongs to user
         db_file = self.file_repo.get_latest_by_filename(csv_filename, parse_uuid(user_id))

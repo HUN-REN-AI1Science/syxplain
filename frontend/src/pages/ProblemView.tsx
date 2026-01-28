@@ -6,7 +6,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SelectButton } from 'primereact/selectbutton';
 import { Toast } from 'primereact/toast';
-import { configService } from '@services/api';
+import { configService, permissionsService } from '@services/api';
+import { useAuth } from '@contexts/AuthContext';
 import {
   ExcludedColumnsWarning,
   ProjectDetailsSection,
@@ -14,6 +15,7 @@ import {
   FeaturesSection,
   JsonConfigUpload,
   AnalysisTypeSelector,
+  ApiKeyInputSection,
 } from '@components/Problem';
 
 interface ProblemViewProps {
@@ -24,6 +26,7 @@ interface ProblemViewProps {
 }
 
 const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nanCounts, onSubmit }) => {
+  const { hasHunrenAccess } = useAuth();
   const [mode, setMode] = useState<'form' | 'json'>('form');
   const [jsonContent, setJsonContent] = useState('');
   const toast = useRef<Toast>(null);
@@ -39,6 +42,13 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
   const [projectDescription, setProjectDescription] = useState('');
   const [targetVariable, setTargetVariable] = useState('');
   const [featureDescriptions, setFeatureDescriptions] = useState<Record<string, string>>({});
+
+  // User API key state (for users without HUN-REN access)
+  const [userApiKey, setUserApiKey] = useState('');
+  const [userModel, setUserModel] = useState('');
+  const [userApiModels, setUserApiModels] = useState<string[]>([]);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [apiKeyValidationStatus, setApiKeyValidationStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
 
   // Fetch available deep research models on mount
   useEffect(() => {
@@ -56,6 +66,24 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
       }
     };
     fetchModels();
+  }, []);
+
+  // Fetch available user API models on mount
+  useEffect(() => {
+    const fetchUserModels = async () => {
+      try {
+        const response = await configService.getUserApiModels();
+        const models = response.data.models || [];
+        setUserApiModels(models);
+        // Auto-select first model if available
+        if (models.length > 0) {
+          setUserModel(models[0]);
+        }
+      } catch (e) {
+        console.error('Failed to fetch user API models:', e);
+      }
+    };
+    fetchUserModels();
   }, []);
 
   const validateAndGetPayload = () => {
@@ -119,7 +147,39 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
     URL.revokeObjectURL(url);
   };
 
-  const handleSubmit = () => {
+  // Validate user API key with backend
+  const validateApiKey = async (): Promise<boolean> => {
+    if (hasHunrenAccess) return true;
+
+    if (!userApiKey.trim()) {
+      setApiKeyError('API key is required');
+      return false;
+    }
+
+    setApiKeyValidationStatus('validating');
+    setApiKeyError(null);
+
+    try {
+      await permissionsService.validateKeys({ openai_api_key: userApiKey });
+      setApiKeyValidationStatus('valid');
+      return true;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.detail || 'API key validation failed';
+      setApiKeyError(errorMessage);
+      setApiKeyValidationStatus('invalid');
+      return false;
+    }
+  };
+
+  const handleSubmit = async () => {
+    // Validate API key for users without HUN-REN access
+    if (!hasHunrenAccess) {
+      const isKeyValid = await validateApiKey();
+      if (!isKeyValid) {
+        return;
+      }
+    }
+
     if (mode === 'json') {
       try {
         if (!jsonContent.trim()) {
@@ -173,9 +233,11 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
           return;
         }
 
-        // Validate deep research model selection
-        const deepModel = selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null);
-        if (analysisType === 'deep' && !deepModel) {
+        // Validate deep research model selection (only for HUN-REN users)
+        const deepModel = hasHunrenAccess
+          ? (selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null))
+          : 'o4-mini-deep-research';
+        if (analysisType === 'deep' && hasHunrenAccess && !deepModel) {
           toast.current?.show({
             severity: 'error',
             summary: 'Model Required',
@@ -187,7 +249,8 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
         onSubmit({
           ...parsed,
           analysis_type: analysisType,
-          deep_research_model: analysisType === 'deep' ? deepModel : null
+          deep_research_model: analysisType === 'deep' ? deepModel : null,
+          user_api_keys: !hasHunrenAccess ? { openai_api_key: userApiKey, openai_model: userModel } : undefined
         });
       } catch (e) {
         toast.current?.show({ severity: 'error', summary: 'Invalid JSON', detail: (e as Error).message });
@@ -196,9 +259,11 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
       // Validation for Form Mode
       const payload = validateAndGetPayload();
       if (payload) {
-        // Validate deep research model selection
-        const deepModel = selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null);
-        if (analysisType === 'deep' && !deepModel) {
+        // Validate deep research model selection (only for HUN-REN users)
+        const deepModel = hasHunrenAccess
+          ? (selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null))
+          : 'o4-mini-deep-research';
+        if (analysisType === 'deep' && hasHunrenAccess && !deepModel) {
           toast.current?.show({
             severity: 'error',
             summary: 'Model Required',
@@ -210,7 +275,8 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
         onSubmit({
           ...payload,
           analysis_type: analysisType,
-          deep_research_model: analysisType === 'deep' ? deepModel : null
+          deep_research_model: analysisType === 'deep' ? deepModel : null,
+          user_api_keys: !hasHunrenAccess ? { openai_api_key: userApiKey, openai_model: userModel } : undefined
         });
       }
     }
@@ -271,6 +337,25 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
 
       <Toast ref={toast} />
 
+      {/* API Key Input for users without HUN-REN access */}
+      {!hasHunrenAccess && (
+        <div className="mt-6">
+          <ApiKeyInputSection
+            apiKey={userApiKey}
+            model={userModel}
+            models={userApiModels}
+            onApiKeyChange={(value) => {
+              setUserApiKey(value);
+              setApiKeyError(null);
+              setApiKeyValidationStatus('idle');
+            }}
+            onModelChange={setUserModel}
+            error={apiKeyError}
+            validationStatus={apiKeyValidationStatus}
+          />
+        </div>
+      )}
+
       <AnalysisTypeSelector
         analysisType={analysisType}
         onAnalysisTypeChange={setAnalysisType}
@@ -279,8 +364,9 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
         onDeepModelChange={setSelectedDeepModel}
         onSubmit={handleSubmit}
         onExportJson={handleExportJson}
-        disabled={isSubmitDisabled}
+        disabled={isSubmitDisabled || apiKeyValidationStatus === 'validating'}
         showExportButton={mode === 'form'}
+        hasHunrenAccess={hasHunrenAccess}
       />
     </div>
   );

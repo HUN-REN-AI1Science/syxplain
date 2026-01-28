@@ -10,6 +10,7 @@ from backend.repositories.run_repository import (
 )
 from backend.repositories.file_repository import FileRepository
 from backend.repositories.artifact_repository import ArtifactRepository
+from backend.repositories.permission_repository import PermissionRepository
 
 __all__ = [
     "BaseRepository",
@@ -19,4 +20,5 @@ __all__ = [
     "PaginatedResult",
     "FileRepository",
     "ArtifactRepository",
+    "PermissionRepository",
 ]

@@ -46,11 +46,20 @@ class LLMSettings:
     deep_research_api_base: Optional[str] = field(default_factory=lambda: os.environ.get("DEEP_RESEARCH_API_BASE"))
     deep_research_models: str = field(default_factory=lambda: os.environ.get("DEEP_RESEARCH_MODEL", ""))
 
+    # User-provided key model options (comma-separated)
+    user_api_models: str = field(default_factory=lambda: os.environ.get("USER_API_MODELS", "gpt-5.2-thinking,gpt-4o"))
+
     def get_deep_research_model_list(self) -> List[str]:
         """Parse comma-separated model list."""
         if not self.deep_research_models:
             return []
         return [m.strip() for m in self.deep_research_models.split(",") if m.strip()]
+
+    def get_user_api_model_list(self) -> List[str]:
+        """Parse comma-separated user API model list."""
+        if not self.user_api_models:
+            return ["gpt-5.2-thinking", "gpt-4o"]
+        return [m.strip() for m in self.user_api_models.split(",") if m.strip()]
 
 
 @dataclass
@@ -121,6 +130,22 @@ class ComputeSettings:
 
 
 @dataclass
+class AdminSettings:
+    """Admin access settings."""
+    admin_emails: str = field(default_factory=lambda: os.environ.get("ADMIN_EMAILS", ""))
+
+    def get_admin_email_list(self) -> List[str]:
+        """Parse comma-separated admin email list."""
+        if not self.admin_emails:
+            return []
+        return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]
+
+    def is_admin(self, email: str) -> bool:
+        """Check if an email is in the admin list."""
+        return email.lower() in self.get_admin_email_list()
+
+
+@dataclass
 class Settings:
     """
     Main settings class that aggregates all configuration groups.
@@ -139,6 +164,7 @@ class Settings:
     langfuse: LangfuseSettings = field(default_factory=LangfuseSettings)
     slurm: SlurmSettings = field(default_factory=SlurmSettings)
     compute: ComputeSettings = field(default_factory=ComputeSettings)
+    admin: AdminSettings = field(default_factory=AdminSettings)
 
 
 # Cached settings instance
@@ -193,3 +219,8 @@ def get_slurm_settings() -> SlurmSettings:
 def get_compute_settings() -> ComputeSettings:
     """Get compute backend settings for dependency injection."""
     return get_settings().compute
+
+
+def get_admin_settings() -> AdminSettings:
+    """Get admin settings for dependency injection."""
+    return get_settings().admin

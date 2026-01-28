@@ -294,6 +294,7 @@ class EndpointFilter(logging.Filter):
     """
 
     NOISY_PATTERNS = [
+        "GET /health",
         "GET /api/runs/",
         "GET /api/public/",
     ]

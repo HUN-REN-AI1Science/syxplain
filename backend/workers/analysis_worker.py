@@ -73,7 +73,9 @@ async def _run_analysis(
     problem_desc: Dict[str, Any],
     csv_filename: str,
     analysis_type: str = "quick",
-    deep_research_model: Optional[str] = None
+    deep_research_model: Optional[str] = None,
+    user_api_key: Optional[str] = None,
+    user_model: Optional[str] = None
 ) -> None:
     """
     Async function that runs the orchestrated analysis.
@@ -87,6 +89,8 @@ async def _run_analysis(
         csv_filename: Name of the file to analyze
         analysis_type: 'quick' or 'deep'
         deep_research_model: Model for deep analysis
+        user_api_key: Optional user-provided API key (not stored)
+        user_model: Optional user-specified model
     """
     from backend.core.logging import configure_logging, configure_debug_mode
     configure_logging()
@@ -128,6 +132,8 @@ async def _run_analysis(
             user_id=user_id,
             analysis_type=analysis_type,
             deep_research_model=deep_research_model,
+            user_api_key=user_api_key,
+            user_model=user_model,
         )
 
         logger.info(f"Run {run_id} completed successfully")
@@ -147,7 +153,9 @@ def start_analysis_run(
     csv_filename: str,
     user_id: str,
     analysis_type: str = "quick",
-    deep_research_model: Optional[str] = None
+    deep_research_model: Optional[str] = None,
+    user_api_key: Optional[str] = None,
+    user_model: Optional[str] = None
 ) -> str:
     """
     Create a run record and start background processing.
@@ -158,11 +166,13 @@ def start_analysis_run(
         user_id: Owner's UUID as string
         analysis_type: 'quick' or 'deep'
         deep_research_model: Model for deep analysis
+        user_api_key: Optional user-provided API key (not stored, only in memory)
+        user_model: Optional user-specified model
 
     Returns:
         The run UUID as string
     """
-    # Create Run record in DB
+    # Create Run record in DB (user_api_key is NOT stored)
     with get_db_session() as db:
         run = Run(
             problem_description=problem_desc,
@@ -178,12 +188,15 @@ def start_analysis_run(
 
     logger.info(
         f"Starting background task for Run ID: {run_id} "
-        f"(analysis_type={analysis_type}, model={deep_research_model})"
+        f"(analysis_type={analysis_type}, model={deep_research_model}, using_user_key={user_api_key is not None})"
     )
 
-    # Start async background task
+    # Start async background task (user keys passed in memory only)
     task = asyncio.create_task(
-        _run_analysis(run_id, problem_desc, csv_filename, analysis_type, deep_research_model)
+        _run_analysis(
+            run_id, problem_desc, csv_filename, analysis_type, deep_research_model,
+            user_api_key=user_api_key, user_model=user_model
+        )
     )
     _running_tasks[run_id] = task
 

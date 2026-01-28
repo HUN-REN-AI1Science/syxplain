@@ -34,6 +34,19 @@ class ProblemDescription(BaseModel):
         return v
 
 
+class UserApiKeys(BaseModel):
+    """User-provided API keys (not stored)."""
+    openai_api_key: str = Field(
+        ...,
+        min_length=1,
+        description="OpenAI API key for analysis"
+    )
+    openai_model: str = Field(
+        default="gpt-4o",
+        description="OpenAI model to use"
+    )
+
+
 class RunRequest(BaseModel):
     """Request schema for starting an analysis run."""
     problem_description: ProblemDescription
@@ -49,6 +62,10 @@ class RunRequest(BaseModel):
     deep_research_model: Optional[str] = Field(
         default=None,
         description="Model to use for deep analysis (required when analysis_type is 'deep')"
+    )
+    user_api_keys: Optional[UserApiKeys] = Field(
+        default=None,
+        description="User-provided API keys (required for users without HUN-REN access)"
     )
 
     @field_validator("analysis_type")
@@ -85,4 +102,21 @@ class ProfileDeleteRequest(BaseModel):
     confirm: bool = Field(
         default=False,
         description="Confirmation flag for deletion"
+    )
+
+
+class ValidateKeysRequest(BaseModel):
+    """Request schema for API key validation."""
+    openai_api_key: str = Field(
+        ...,
+        min_length=1,
+        description="OpenAI API key to validate"
+    )
+
+
+class UpdatePermissionRequest(BaseModel):
+    """Request schema for updating user permissions."""
+    use_hunren_keys: bool = Field(
+        ...,
+        description="Whether to grant HUN-REN key access"
     )

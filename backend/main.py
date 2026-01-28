@@ -24,7 +24,7 @@ from backend.core.rate_limit import limiter
 from backend.infrastructure.database.connection import init_db
 
 # Import routers
-from backend.api.routers import config, files, profile, progress, runs, sharing
+from backend.api.routers import admin, config, files, permissions, profile, progress, runs, sharing
 
 
 # ============================================================================
@@ -139,8 +139,10 @@ def create_app() -> FastAPI:
     # Router Registration (order matters for path matching)
     # -------------------------------------------------------------------------
 
+    app.include_router(admin.router)
     app.include_router(config.router)
     app.include_router(files.router)
+    app.include_router(permissions.router)
     app.include_router(profile.router)
     app.include_router(progress.router)
     app.include_router(sharing.router)  # Before runs to capture /api/runs/shared

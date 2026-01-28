@@ -48,6 +48,9 @@ class AnalysisContext:
     analysis_type: str = "quick"
     deep_research_model: Optional[str] = None
     progress: Optional[ProgressTracker] = None
+    # User-provided API keys (not stored, only in memory)
+    user_api_key: Optional[str] = None
+    user_model: Optional[str] = None
 
 
 class AnalysisOrchestrator:
@@ -269,6 +272,8 @@ class AnalysisOrchestrator:
                 project_description=json.dumps(context.problem_description),
                 dataset_statistics=summary_csv,
                 visualizations_b64=visualizations_b64 or [],
+                user_api_key=context.user_api_key,
+                user_model=context.user_model,
             )
             return json.loads(config_json)
         except Exception as e:
@@ -407,6 +412,8 @@ class AnalysisOrchestrator:
                 project_spec_json=json.dumps(context.problem_description),
                 data_spec_json=json.dumps(data_spec),
                 deep_research_context=None,
+                user_api_key=context.user_api_key,
+                user_model=context.user_model,
             )
             return explanations
         except Exception as e:
@@ -438,6 +445,7 @@ class AnalysisOrchestrator:
             deep_result = deep_research_equations(
                 features_dict=features_dict,
                 model_name=context.deep_research_model,
+                user_api_key=context.user_api_key,
             )
 
             # Re-generate explanations with deep research context
@@ -452,6 +460,8 @@ class AnalysisOrchestrator:
                 project_spec_json=json.dumps(context.problem_description),
                 data_spec_json=json.dumps(data_spec),
                 deep_research_context=deep_result,
+                user_api_key=context.user_api_key,
+                user_model=context.user_model,
             )
 
             return enhanced_explanations
@@ -599,6 +609,8 @@ async def run_orchestrated_analysis(
     user_id: str,
     analysis_type: str = "quick",
     deep_research_model: Optional[str] = None,
+    user_api_key: Optional[str] = None,
+    user_model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Convenience function to run analysis with orchestrator.
@@ -610,6 +622,8 @@ async def run_orchestrated_analysis(
         user_id: Owner user ID
         analysis_type: 'quick' or 'deep'
         deep_research_model: Model for deep analysis
+        user_api_key: Optional user-provided API key
+        user_model: Optional user-specified model
 
     Returns:
         Analysis results
@@ -632,6 +646,8 @@ async def run_orchestrated_analysis(
         predictor_columns=numeric_predictors,
         analysis_type=analysis_type,
         deep_research_model=deep_research_model,
+        user_api_key=user_api_key,
+        user_model=user_model,
     )
 
     orchestrator = AnalysisOrchestrator()

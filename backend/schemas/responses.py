@@ -162,6 +162,11 @@ class DeepResearchModelsResponse(BaseModel):
     models: List[str]
 
 
+class UserApiModelsResponse(BaseModel):
+    """Available models for user-provided API keys."""
+    models: List[str]
+
+
 # ============================================================================
 # Error Response
 # ============================================================================
@@ -182,3 +187,40 @@ class ErrorResponse(BaseModel):
 class MessageResponse(BaseModel):
     """Simple message response."""
     message: str
+
+
+# ============================================================================
+# Permission Responses
+# ============================================================================
+
+class PermissionResponse(BaseModel):
+    """User's permission status."""
+    use_hunren_keys: bool
+    is_admin: bool = False
+
+
+class ValidateKeysResponse(BaseModel):
+    """Response for API key validation."""
+    valid: bool
+
+
+class UserPermissionInfo(BaseModel):
+    """User permission info for admin listing."""
+    user_id: str
+    email: str
+    use_hunren_keys: bool
+    granted_by: Optional[str] = None
+    user_created_at: Optional[datetime] = None
+    permission_updated_at: Optional[datetime] = None
+
+
+class UsersWithPermissionsResponse(BaseModel):
+    """List of users with their permissions."""
+    users: List[UserPermissionInfo]
+
+
+class UpdatePermissionResponse(BaseModel):
+    """Response for permission update."""
+    success: bool
+    user_id: str
+    use_hunren_keys: bool

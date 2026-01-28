@@ -11,7 +11,7 @@ from fastapi.responses import Response
 
 from backend.utils.security_utils import safe_content_disposition
 
-from backend.api.dependencies import get_run_service
+from backend.api.dependencies import get_run_service, get_permission_service
 from backend.core.security import User, get_current_user
 from backend.core.exceptions import (
     ConfigurationError,
@@ -19,6 +19,7 @@ from backend.core.exceptions import (
     ValidationError,
 )
 from backend.services.run_service import RunService
+from backend.services.permission_service import PermissionService
 from backend.schemas.requests import RunRequest
 from backend.schemas.responses import (
     PaginatedRunsResponse,
@@ -41,7 +42,8 @@ router = APIRouter(prefix="/api", tags=["Runs"])
 def run_analysis(
     request: RunRequest,
     current_user: User = Depends(get_current_user),
-    run_service: RunService = Depends(get_run_service)
+    run_service: RunService = Depends(get_run_service),
+    permission_service: PermissionService = Depends(get_permission_service)
 ):
     """
     Start a new analysis run.
@@ -61,28 +63,46 @@ def run_analysis(
     logger.info(f"User {current_user.user_id} requesting run for file: {request.csv_filename}")
 
     try:
-        # Validate the request
+        # Check user's permission status (admins automatically have access)
+        has_hunren_access = permission_service.has_hunren_access(
+            current_user.user_id,
+            current_user.email
+        )
+
+        # Extract user API keys if provided
+        user_api_key = None
+        user_model = None
+        if request.user_api_keys:
+            user_api_key = request.user_api_keys.openai_api_key
+            user_model = request.user_api_keys.openai_model
+
+        # Validate the request with permission context
         run_service.validate_run_request(
             csv_filename=request.csv_filename,
             target_variable=request.problem_description.target_variable,
             features=request.problem_description.features,
             analysis_type=request.analysis_type,
             deep_research_model=request.deep_research_model,
-            user_id=current_user.user_id
+            user_id=current_user.user_id,
+            has_hunren_access=has_hunren_access,
+            user_api_key=user_api_key
         )
 
-        # Start the analysis run
+        # Start the analysis run with user keys if applicable
         run_id = start_analysis_run(
             problem_desc=request.problem_description.model_dump(),
             csv_filename=request.csv_filename,
             user_id=current_user.user_id,
             analysis_type=request.analysis_type,
-            deep_research_model=request.deep_research_model
+            deep_research_model=request.deep_research_model,
+            user_api_key=user_api_key if not has_hunren_access else None,
+            user_model=user_model if not has_hunren_access else None
         )
 
         logger.info(
             f"Analysis started with Run ID: {run_id} "
-            f"(analysis_type={request.analysis_type}, model={request.deep_research_model})"
+            f"(analysis_type={request.analysis_type}, model={request.deep_research_model}, "
+            f"using_user_key={not has_hunren_access and user_api_key is not None})"
         )
 
         return RunResponse(

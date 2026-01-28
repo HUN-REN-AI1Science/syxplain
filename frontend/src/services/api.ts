@@ -13,6 +13,9 @@ import type {
   ProfileData,
   ProgressPhase,
   EquationResults,
+  UserPermissions,
+  UserPermissionInfo,
+  UserApiKeys,
 } from '@/types';
 
 // ============================================================================
@@ -81,7 +84,7 @@ export const runsService = {
   getDetails: (id: string) =>
     api.get<RunDetails>(`/runs/${id}/details`),
 
-  create: (data: { problem_description: object; csv_filename: string; analysis_type: string; deep_research_model: string | null }) =>
+  create: (data: { problem_description: object; csv_filename: string; analysis_type: string; deep_research_model: string | null; user_api_keys?: UserApiKeys }) =>
     api.post<{ run_id: string }>('/run', data),
 
   downloadCsv: (id: string) =>
@@ -118,6 +121,9 @@ export const configService = {
 
   getDeepResearchModels: () =>
     api.get<{ models: string[] }>('/config/deep-research-models'),
+
+  getUserApiModels: () =>
+    api.get<{ models: string[] }>('/config/user-api-models'),
 };
 
 // ============================================================================
@@ -184,6 +190,33 @@ export const publicService = {
 
   downloadCsv: (token: string) =>
     publicApi.get(`/public/${token}/download-csv`, { responseType: 'blob' }),
+};
+
+// ============================================================================
+// Permission Service
+// ============================================================================
+
+export const permissionsService = {
+  getMyPermissions: () =>
+    api.get<UserPermissions>('/permissions/me'),
+
+  validateKeys: (data: { openai_api_key: string }) =>
+    api.post<{ valid: boolean }>('/validate-keys', data),
+};
+
+// ============================================================================
+// Admin Service
+// ============================================================================
+
+export const adminService = {
+  getUsers: () =>
+    api.get<{ users: UserPermissionInfo[] }>('/admin/users'),
+
+  updateUserPermission: (userId: string, useHunrenKeys: boolean) =>
+    api.put<{ success: boolean; user_id: string; use_hunren_keys: boolean }>(
+      `/admin/users/${userId}/permissions`,
+      { use_hunren_keys: useHunrenKeys }
+    ),
 };
 
 // Default export for backwards compatibility

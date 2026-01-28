@@ -9,7 +9,7 @@ import logging
 from fastapi import APIRouter
 
 from backend.core.config import get_settings
-from backend.schemas.responses import DeepResearchModelsResponse
+from backend.schemas.responses import DeepResearchModelsResponse, UserApiModelsResponse
 from backend.services.progress_service import get_progress_phases
 
 logger = logging.getLogger(__name__)
@@ -43,3 +43,19 @@ def get_deep_research_models():
     settings = get_settings()
     models = settings.llm.get_deep_research_model_list()
     return DeepResearchModelsResponse(models=models)
+
+
+@router.get(
+    "/config/user-api-models",
+    response_model=UserApiModelsResponse
+)
+def get_user_api_models():
+    """
+    Returns available models for user-provided API keys.
+
+    Returns:
+        UserApiModelsResponse with list of available models
+    """
+    settings = get_settings()
+    models = settings.llm.get_user_api_model_list()
+    return UserApiModelsResponse(models=models)
