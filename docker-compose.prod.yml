@@ -5,6 +5,7 @@
 #   - External Slurm cluster with slurmrestd API enabled
 #   - Shared filesystem accessible by both backend and Slurm compute nodes
 #   - All environment variables set (no defaults for security)
+#   - Reverse proxy (Traefik, Caddy, etc.) for SSL termination recommended
 #
 # Required environment variables (set in .env or deployment config):
 #   - DATABASE_URL: PostgreSQL connection string
@@ -14,6 +15,8 @@
 #   - SLURM_STAGING_DIR: Shared staging directory path
 #   - SUPABASE_JWT_SECRET: JWT secret for auth
 #   - SUPABASE_URL: Supabase project URL
+#   - VITE_SUPABASE_URL: Supabase URL for frontend build
+#   - VITE_SUPABASE_ANON_KEY: Supabase anon key for frontend build
 #
 # Usage:
 #   docker-compose -f docker-compose.prod.yml up -d
@@ -49,6 +52,7 @@ services:
       # Slurm Configuration (REQUIRED - connects to external cluster)
       - SLURM_API_URL=${SLURM_API_URL:?SLURM_API_URL is required}
       - SLURM_AUTH_TOKEN=${SLURM_AUTH_TOKEN:?SLURM_AUTH_TOKEN is required}
+      - SLURM_USER_NAME=${SLURM_USER_NAME:?SLURM_USER_NAME is required}
       - SLURM_PARTITION=${SLURM_PARTITION:-compute}
       - SLURM_DEFAULT_MEMORY=${SLURM_DEFAULT_MEMORY:-16G}
       - SLURM_DEFAULT_CPUS=${SLURM_DEFAULT_CPUS:-8}
@@ -74,33 +78,70 @@ services:
       - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
     volumes:
       - ${SLURM_STAGING_DIR}:${SLURM_STAGING_DIR}
-      - ./data:/app/data
-      - ./outputs:/app/outputs
+      - app_data:/app/data
+      - app_outputs:/app/outputs
+      - app_logs:/app/logs
+    networks:
+      - syxplain-network
     deploy:
       resources:
         limits:
           cpus: '${BACKEND_CPU_LIMIT:-4}'
           memory: ${BACKEND_MEMORY_LIMIT:-4G}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   frontend:
     image: ${FRONTEND_IMAGE:-syxplain-frontend:latest}
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:?VITE_SUPABASE_URL is required}
+        - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY:?VITE_SUPABASE_ANON_KEY is required}
     container_name: syxplain-frontend
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-8080}:80"
-    environment:
-      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:?VITE_SUPABASE_URL is required}
-      - VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=${VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY:-}
-      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY:?VITE_SUPABASE_ANON_KEY is required}
+    networks:
+      - syxplain-network
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  syxplain-network:
+    driver: bridge
+
+volumes:
+  app_data:
+  app_outputs:
+  app_logs:

@@ -56,6 +56,12 @@ def create_app() -> FastAPI:
     # Register exception handlers
     register_exception_handlers(app)
 
+    # Health check endpoint (for container orchestration)
+    @app.get("/health")
+    async def health_check():
+        """Health check endpoint for load balancers and container orchestration."""
+        return {"status": "healthy"}
+
     # Register routers (Order matters! Specific paths before parameterized ones)
     app.include_router(config.router)
     app.include_router(files.router)
