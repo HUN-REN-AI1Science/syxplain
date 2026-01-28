@@ -5,7 +5,6 @@ This is a minimal entry point that configures the FastAPI application,
 registers middleware, and includes all routers. Business logic has been
 moved to the service layer for cleaner separation of concerns.
 """
-import asyncio
 import logging
 
 # Third-party imports
@@ -23,7 +22,6 @@ from backend.core.exceptions import register_exception_handlers
 from backend.core.logging import configure_logging, configure_uvicorn_logging
 from backend.core.rate_limit import limiter
 from backend.infrastructure.database.connection import init_db
-from backend.workers.analysis_worker import cleanup_processes, check_timed_out_runs
 
 # Import routers
 from backend.api.routers import config, files, profile, progress, runs, sharing
@@ -154,7 +152,7 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def on_startup():
-        """Initialize database and start background tasks."""
+        """Initialize database."""
         logger.info("Starting Syxplain API...")
 
         # Configure uvicorn access log filtering
@@ -163,17 +161,6 @@ def create_app() -> FastAPI:
         # Initialize database and run migrations
         init_db()
 
-        # Start background task for process cleanup and timeout checking
-        async def periodic_cleanup():
-            while True:
-                try:
-                    cleanup_processes()
-                    check_timed_out_runs()
-                except Exception as e:
-                    logger.error(f"Error in process cleanup task: {e}")
-                await asyncio.sleep(60)
-
-        asyncio.create_task(periodic_cleanup())
         logger.info("Syxplain API started successfully")
 
     return app

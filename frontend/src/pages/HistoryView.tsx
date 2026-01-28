@@ -28,6 +28,7 @@ const STATUS_CONFIG: Record<string, { severity: 'success' | 'info' | 'warning' |
   pending: { severity: 'warning', label: 'Pending' },
   failed: { severity: 'danger', label: 'Failed' },
   timeout: { severity: 'danger', label: 'Timeout' },
+  cancelled: { severity: 'warning', label: 'Cancelled' },
 };
 
 // ============================================================================

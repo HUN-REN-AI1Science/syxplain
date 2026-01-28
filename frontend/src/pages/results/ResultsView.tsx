@@ -47,6 +47,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   const [initialFetchDone, setInitialFetchDone] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   // Refs
   const toast = useRef<Toast>(null);
@@ -99,8 +100,13 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           setBackendProgress(100);
           setShareToken(response.data.public_share_token || null);
           clearInterval(intervalId);
-        } else if (response.data.status === 'failed' || response.data.status === 'timeout') {
-          setError(response.data.error || (response.data.status === 'timeout' ? 'Analysis timed out' : 'Unknown error'));
+        } else if (response.data.status === 'failed' || response.data.status === 'timeout' || response.data.status === 'cancelled') {
+          const errorMessages: Record<string, string> = {
+            timeout: 'Analysis timed out',
+            cancelled: 'Analysis was cancelled',
+            failed: 'Unknown error',
+          };
+          setError(response.data.error || errorMessages[response.data.status] || 'Unknown error');
           clearInterval(intervalId);
         }
       } catch (e) {
@@ -135,6 +141,21 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
       toast.current?.show({ severity: 'error', summary: 'Export Failed', detail: 'Failed to generate PDF' });
     } finally {
       setExportingPdf(false);
+    }
+  };
+
+  // Handle run cancellation
+  const handleCancelRun = async () => {
+    if (!runId || cancelling) return;
+    setCancelling(true);
+    try {
+      await runsService.cancel(runId);
+      // Polling will pick up the cancelled status
+    } catch (e) {
+      console.error('Failed to cancel:', e);
+      toast.current?.show({ severity: 'error', summary: 'Cancel Failed', detail: 'Failed to cancel the analysis' });
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -232,10 +253,21 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
 
         {/* Loading State - Progress bar for active processing */}
         {isProcessing && !error && (
-          <AnalysisProgressView
-            displayProgress={displayProgress}
-            stepDescription={currentStepDescription}
-          />
+          <>
+            <AnalysisProgressView
+              displayProgress={displayProgress}
+              stepDescription={currentStepDescription}
+            />
+            <div className="flex justify-center mt-4">
+              <Button
+                label={cancelling ? "Cancelling..." : "Stop Analysis"}
+                icon={cancelling ? "pi pi-spin pi-spinner" : "pi pi-stop"}
+                className="!bg-red-600 hover:!bg-red-700 !border-red-600 !text-white font-semibold px-4 py-2 shadow-sm"
+                onClick={handleCancelRun}
+                disabled={cancelling}
+              />
+            </div>
+          </>
         )}
 
         {/* Loading State - Simple spinner for fetching completed runs */}

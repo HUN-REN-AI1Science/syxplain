@@ -1,47 +1,24 @@
 """
 Analysis worker for background processing.
 
-Manages the lifecycle of analysis runs including process spawning,
-status updates, and timeout handling.
+Manages the lifecycle of analysis runs using asyncio background tasks.
+SHAP and PySR compute tasks run on Slurm, not locally.
 """
 
-import json
+import asyncio
 import logging
-import multiprocessing
-
-from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
-
 
 import pandas as pd
 
-from backend.core.config import get_settings
-from backend.infrastructure.database.connection import get_db_session, dispose_engine
+from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run, File as DbFile
 from backend.services.file_service import FileService
 
 logger = logging.getLogger(__name__)
 
-# Global registry for active processes
-active_processes: Dict[str, multiprocessing.Process] = {}
-
-
-def cleanup_processes() -> None:
-    """
-    Check active processes and clean up finished ones.
-
-    Should be called periodically to release resources
-    from completed processes.
-    """
-    finished_run_ids = []
-    for run_id, process in active_processes.items():
-        if not process.is_alive():
-            process.join()  # Ensure resources are released
-            finished_run_ids.append(run_id)
-            logger.info(f"Process for run {run_id} has finished and was joined.")
-
-    for run_id in finished_run_ids:
-        del active_processes[run_id]
+# Track running analysis tasks (for graceful shutdown)
+_running_tasks: Dict[str, asyncio.Task] = {}
 
 
 def update_run_status(
@@ -75,15 +52,15 @@ def update_run_status(
                     run.progress = progress
                 elif status == "completed":
                     run.progress = 100
-                elif status in ("failed", "timeout"):
-                    # Keep current progress for failed/timeout
+                elif status in ("failed", "timeout", "cancelled"):
+                    # Keep current progress for failed/timeout/cancelled
                     pass
                 db.commit()
     except Exception as e:
         logger.error(f"Failed to update run status for {run_id}: {e}")
 
 
-def _run_worker(
+async def _run_analysis(
     run_id: str,
     problem_desc: Dict[str, Any],
     csv_filename: str,
@@ -91,10 +68,10 @@ def _run_worker(
     deep_research_model: Optional[str] = None
 ) -> None:
     """
-    Worker function that runs in a separate process.
+    Async function that runs the orchestrated analysis.
 
     Performs the actual analysis work by delegating to the orchestrator,
-    which coordinates compute tasks (SHAP, PySR) and LLM operations.
+    which coordinates compute tasks (SHAP, PySR) on Slurm and LLM operations.
 
     Args:
         run_id: The run UUID as string
@@ -103,9 +80,6 @@ def _run_worker(
         analysis_type: 'quick' or 'deep'
         deep_research_model: Model for deep analysis
     """
-    import asyncio
-
-    # Configure logging for this process
     from backend.core.logging import configure_logging, configure_debug_mode
     configure_logging()
     configure_debug_mode()
@@ -114,10 +88,7 @@ def _run_worker(
     from backend.infrastructure.monitoring import init_langfuse
     init_langfuse()
 
-    # Dispose of the engine to ensure fresh connections in this process
-    dispose_engine()
-
-    logger.info(f"Worker process started for Run ID: {run_id}")
+    logger.info(f"Analysis task started for Run ID: {run_id}")
 
     try:
         # Load data from DB
@@ -142,17 +113,21 @@ def _run_worker(
         # Run orchestrated analysis
         from backend.services.orchestrator_service import run_orchestrated_analysis
 
-        asyncio.run(run_orchestrated_analysis(
+        await run_orchestrated_analysis(
             run_id=run_id,
             problem_desc=problem_desc,
             data=data,
             user_id=user_id,
             analysis_type=analysis_type,
             deep_research_model=deep_research_model,
-        ))
+        )
 
         logger.info(f"Run {run_id} completed successfully")
 
+    except asyncio.CancelledError:
+        logger.info(f"Run {run_id} was cancelled")
+        update_run_status(run_id, "cancelled", error="Analysis cancelled by user")
+        raise
     except Exception as e:
         error_msg = str(e)
         update_run_status(run_id, "failed", error=error_msg)
@@ -194,64 +169,33 @@ def start_analysis_run(
         run_id = str(run.id)
 
     logger.info(
-        f"Starting background process for Run ID: {run_id} "
+        f"Starting background task for Run ID: {run_id} "
         f"(analysis_type={analysis_type}, model={deep_research_model})"
     )
 
-    # Start worker process
-    process = multiprocessing.Process(
-        target=_run_worker,
-        args=(run_id, problem_desc, csv_filename, analysis_type, deep_research_model)
+    # Start async background task
+    task = asyncio.create_task(
+        _run_analysis(run_id, problem_desc, csv_filename, analysis_type, deep_research_model)
     )
-    process.start()
+    _running_tasks[run_id] = task
 
-    # Register process for monitoring
-    active_processes[run_id] = process
+    # Cleanup when done
+    def cleanup_task(t: asyncio.Task) -> None:
+        _running_tasks.pop(run_id, None)
+
+    task.add_done_callback(cleanup_task)
 
     return run_id
 
 
-def check_timed_out_runs() -> None:
+def get_running_task(run_id: str) -> Optional[asyncio.Task]:
     """
-    Check for runs that have exceeded the timeout and mark them as timed out.
+    Get the asyncio task for a running analysis.
 
-    Should be called periodically to clean up stale runs.
+    Args:
+        run_id: The run UUID as string
+
+    Returns:
+        The asyncio Task if running, None otherwise
     """
-    settings = get_settings()
-    timeout_hours = settings.analysis.timeout_hours
-
-    if timeout_hours <= 0:
-        return  # Timeout disabled
-
-    cutoff_time = datetime.utcnow() - timedelta(hours=timeout_hours)
-
-    try:
-        with get_db_session() as db:
-            stale_runs = db.query(Run).filter(
-                Run.status.in_(["running", "pending"]),
-                Run.created_at < cutoff_time
-            ).all()
-
-            for run in stale_runs:
-                run_id = str(run.id)
-                logger.warning(
-                    f"Run {run_id} has exceeded timeout of {timeout_hours} hours. "
-                    "Marking as timeout."
-                )
-                run.status = "timeout"
-                run.error = f"Analysis exceeded maximum time limit of {timeout_hours} hours"
-
-                # Try to terminate the process if it's still tracked
-                if run_id in active_processes:
-                    process = active_processes[run_id]
-                    if process.is_alive():
-                        logger.info(f"Terminating process for run {run_id}")
-                        process.terminate()
-                        process.join(timeout=5)
-                        if process.is_alive():
-                            process.kill()
-                    del active_processes[run_id]
-
-            db.commit()
-    except Exception as e:
-        logger.error(f"Error checking for timed out runs: {e}")
+    return _running_tasks.get(run_id)

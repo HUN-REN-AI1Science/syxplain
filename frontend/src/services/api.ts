@@ -89,6 +89,9 @@ export const runsService = {
 
   delete: (id: string) =>
     api.delete<{ message: string }>(`/runs/${id}`),
+
+  cancel: (id: string) =>
+    api.post<{ message: string }>(`/runs/${id}/cancel`),
 };
 
 // ============================================================================

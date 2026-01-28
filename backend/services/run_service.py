@@ -9,6 +9,8 @@ import logging
 from typing import Any, Dict, Optional
 from uuid import UUID
 
+from backend.infrastructure.compute import get_compute_backend
+
 from backend.core.config import get_settings
 from backend.core.exceptions import (
     ConfigurationError,
@@ -242,6 +244,53 @@ class RunService:
         # Validate columns exist
         df = self.file_service.parse_dataframe(db_file.content, csv_filename)
         self.file_service.validate_columns_exist(df, target_variable, features)
+
+    async def cancel_run(self, run_id: str, user_id: str) -> bool:
+        """
+        Cancel a running analysis.
+
+        - Cancels Slurm jobs if running
+        - Updates database status to 'cancelled'
+        - Idempotent: returns success if already complete/failed
+
+        Args:
+            run_id: The run UUID as string
+            user_id: The user UUID as string
+
+        Returns:
+            True if cancellation was successful
+
+        Raises:
+            EntityNotFoundError: If run not found or not owned by user
+        """
+        run = self.run_repo.get_by_id_for_user(parse_uuid(run_id), parse_uuid(user_id))
+        if not run:
+            raise EntityNotFoundError("Run", run_id)
+
+        # Already in terminal state - return success (idempotent)
+        if run.status in ("completed", "failed", "timeout", "cancelled"):
+            logger.info(f"Run {run_id} already in terminal state: {run.status}")
+            return True
+
+        # Cancel Slurm jobs if they exist
+        if run.slurm_job_ids:
+            backend = get_compute_backend()
+            for job_type, job_id in run.slurm_job_ids.items():
+                try:
+                    await backend.cancel_task(job_id)
+                    logger.info(f"Cancelled {job_type}: {job_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to cancel {job_type} {job_id}: {e}")
+
+        # Update status in database
+        self.run_repo.update_status(
+            parse_uuid(run_id),
+            status="cancelled",
+            error="Analysis cancelled by user"
+        )
+
+        logger.info(f"User {user_id} cancelled run {run_id}")
+        return True
 
     def delete_run(
         self,

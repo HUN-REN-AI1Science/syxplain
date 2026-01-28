@@ -337,6 +337,12 @@ class AnalysisOrchestrator:
         pysr_job = await self.backend.submit_task(pysr_task_input)
         logger.info(f"PySR task submitted as job {pysr_job.job_id}")
 
+        # Store job IDs in database for cancellation
+        self._store_slurm_job_ids(context.run_id, {
+            "shap_job_id": shap_job.job_id,
+            "pysr_job_id": pysr_job.job_id,
+        })
+
         # Wait for completion (can run in parallel on cluster)
         progress.update_progress("compute_waiting", status="Waiting for compute tasks")
 
@@ -532,6 +538,24 @@ class AnalysisOrchestrator:
                     logger.warning(f"Failed to save visualization {viz.get('filename')}: {e}")
 
             logger.info(f"Saved {len(visualizations)} visualizations for run {run_id}")
+
+    def _store_slurm_job_ids(self, run_id: str, job_ids: Dict[str, str]) -> None:
+        """
+        Store Slurm job IDs in database for cancellation support.
+
+        Args:
+            run_id: Run identifier
+            job_ids: Dictionary with shap_job_id and pysr_job_id
+        """
+        try:
+            with get_db_session() as db:
+                run = db.query(Run).filter(Run.id == run_id).first()
+                if run:
+                    run.slurm_job_ids = job_ids
+                    db.commit()
+                    logger.info(f"Stored Slurm job IDs for run {run_id}: {job_ids}")
+        except Exception as e:
+            logger.error(f"Failed to store Slurm job IDs for {run_id}: {e}")
 
     def _update_run_status(
         self,

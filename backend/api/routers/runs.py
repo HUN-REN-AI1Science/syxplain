@@ -190,6 +190,36 @@ def get_run(
         raise HTTPException(status_code=404, detail=e.message)
 
 
+@router.post(
+    "/runs/{run_id}/cancel",
+    response_model=MessageResponse
+)
+async def cancel_run(
+    run_id: str,
+    current_user: User = Depends(get_current_user),
+    run_service: RunService = Depends(get_run_service)
+):
+    """
+    Cancel a running or pending analysis.
+
+    Returns success even if already completed (idempotent).
+
+    Args:
+        run_id: The run UUID
+
+    Returns:
+        MessageResponse with success message
+
+    Raises:
+        HTTPException: If run not found
+    """
+    try:
+        await run_service.cancel_run(run_id, current_user.user_id)
+        return MessageResponse(message="Run cancelled")
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=e.message)
+
+
 @router.delete(
     "/runs/{run_id}",
     response_model=MessageResponse

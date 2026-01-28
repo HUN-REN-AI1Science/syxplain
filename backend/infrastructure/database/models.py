@@ -44,8 +44,9 @@ class Run(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
-    status = Column(String, default="pending")  # pending, running, completed, failed, timeout
+    status = Column(String, default="pending")  # pending, running, completed, failed, timeout, cancelled
     analysis_type = Column(String, default="quick")  # "quick" or "deep"
+    slurm_job_ids = Column(JSONB, nullable=True)  # {"shap_job_id": "...", "pysr_job_id": "..."}
     progress = Column(Integer, default=0)  # 0-100 percentage
     problem_description = Column(JSONB, nullable=False)
     csv_filename = Column(String, nullable=False)  # Store filename for reference

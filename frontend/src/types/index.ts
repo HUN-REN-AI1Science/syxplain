@@ -40,7 +40,7 @@ export interface RunDetails {
   error: string | null;
 }
 
-export type RunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'timeout';
+export type RunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'timeout' | 'cancelled';
 export type AnalysisType = 'quick' | 'deep';
 
 export interface ProblemDescription {

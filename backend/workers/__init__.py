@@ -3,14 +3,14 @@
 
 from backend.workers.analysis_worker import (
     start_analysis_run,
-    cleanup_processes,
-    check_timed_out_runs,
+    get_running_task,
+    update_run_status,
 )
 from backend.workers import tasks
 
 __all__ = [
     "start_analysis_run",
-    "cleanup_processes",
-    "check_timed_out_runs",
+    "get_running_task",
+    "update_run_status",
     "tasks",
 ]
