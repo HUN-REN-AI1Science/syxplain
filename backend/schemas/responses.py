@@ -28,6 +28,8 @@ class RunStatusResponse(BaseModel):
     error: Optional[str] = None
     results: Optional[Dict[str, Any]] = None
     public_share_token: Optional[str] = None
+    start_time: Optional[datetime] = None
+    finish_time: Optional[datetime] = None
 
 
 class RunSummary(BaseModel):
@@ -39,6 +41,8 @@ class RunSummary(BaseModel):
     target_variable: Optional[str] = None
     progress: int = Field(default=0, ge=0, le=100)
     analysis_type: str = "quick"
+    start_time: Optional[datetime] = None
+    finish_time: Optional[datetime] = None
 
     class Config:
         from_attributes = True

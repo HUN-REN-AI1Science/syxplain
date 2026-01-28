@@ -570,6 +570,12 @@ class AnalysisOrchestrator:
                 run = db.query(Run).filter(Run.id == run_id).first()
                 if run:
                     run.status = status
+                    # Set start_time when transitioning to running
+                    if status == "running" and run.start_time is None:
+                        run.start_time = datetime.utcnow()
+                    # Set finish_time for terminal states
+                    if status in ("completed", "failed", "timeout", "cancelled"):
+                        run.finish_time = datetime.utcnow()
                     if results:
                         run.results = results
                     if error:

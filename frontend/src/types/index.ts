@@ -27,6 +27,8 @@ export interface RunSummary {
   target_variable: string | null;
   progress: number;
   analysis_type: AnalysisType;
+  start_time: string | null;
+  finish_time: string | null;
 }
 
 export interface RunDetails {

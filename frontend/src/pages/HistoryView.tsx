@@ -31,6 +31,17 @@ const STATUS_CONFIG: Record<string, { severity: 'success' | 'info' | 'warning' |
   cancelled: { severity: 'warning', label: 'Cancelled' },
 };
 
+const formatDuration = (startTime?: string | null, finishTime?: string | null): string => {
+  if (!startTime || !finishTime) return '-';
+  const seconds = Math.floor((new Date(finishTime).getTime() - new Date(startTime).getTime()) / 1000);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
+};
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -142,6 +153,10 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
     );
   };
 
+  const durationTemplate = (rowData: RunSummary) => {
+    return formatDuration(rowData.start_time, rowData.finish_time);
+  };
+
   const actionTemplate = (rowData: RunSummary) => (
     <Button
       label="View"
@@ -214,6 +229,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
           <Column field="target_variable" header="Target Variable" sortable />
           <Column field="analysis_type" header="Type" body={analysisTypeTemplate} sortable />
           <Column field="status" header="Status" body={statusTemplate} sortable />
+          <Column header="Duration" body={durationTemplate} />
           <Column header="Actions" body={actionTemplate} />
         </DataTable>
       </div>

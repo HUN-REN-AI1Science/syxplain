@@ -54,6 +54,8 @@ class Run(Base):
     results = Column(JSONB, nullable=True)
     public_share_token = Column(String(32), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    start_time = Column(DateTime, nullable=True)   # Set when status becomes "running"
+    finish_time = Column(DateTime, nullable=True)  # Set when status becomes terminal
 
     # Relationships with cascade delete
     steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")

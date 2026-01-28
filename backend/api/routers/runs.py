@@ -151,7 +151,9 @@ def list_runs(
             csv_filename=run.csv_filename,
             target_variable=run.target_variable,
             progress=run.progress or 0,
-            analysis_type=run.analysis_type or "quick"
+            analysis_type=run.analysis_type or "quick",
+            start_time=run.start_time,
+            finish_time=run.finish_time,
         ))
 
     return PaginatedRunsResponse(

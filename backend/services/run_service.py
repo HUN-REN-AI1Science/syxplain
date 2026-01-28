@@ -97,7 +97,9 @@ class RunService:
             "progress": run.progress or 0,
             "error": run.error,
             "results": run.results,
-            "public_share_token": run.public_share_token
+            "public_share_token": run.public_share_token,
+            "start_time": run.start_time,
+            "finish_time": run.finish_time,
         }
 
     def list_runs(
