@@ -93,8 +93,8 @@ def _run_worker(
     """
     Worker function that runs in a separate process.
 
-    Performs the actual analysis work including data loading,
-    graph execution, and result storage.
+    Performs the actual analysis work by delegating to the orchestrator,
+    which coordinates compute tasks (SHAP, PySR) and LLM operations.
 
     Args:
         run_id: The run UUID as string
@@ -103,6 +103,8 @@ def _run_worker(
         analysis_type: 'quick' or 'deep'
         deep_research_model: Model for deep analysis
     """
+    import asyncio
+
     # Configure logging for this process
     from backend.core.logging import configure_logging, configure_debug_mode
     configure_logging()
@@ -112,17 +114,12 @@ def _run_worker(
     from backend.infrastructure.monitoring import init_langfuse
     init_langfuse()
 
-    # Import syxplain_lib here to ensure Julia is initialized ONLY in this worker process
-    from syxplain_lib import State, run_syxplain
-
     # Dispose of the engine to ensure fresh connections in this process
     dispose_engine()
 
     logger.info(f"Worker process started for Run ID: {run_id}")
 
     try:
-        update_run_status(run_id, "running")
-
         # Load data from DB
         file_service = FileService()
 
@@ -135,98 +132,26 @@ def _run_worker(
                 raise Exception(f"File {csv_filename} not found in database")
 
             logger.info(f"Loading data for {csv_filename} from DB")
-            sample_data = file_service.parse_dataframe(db_file.content, csv_filename)
+            data = file_service.parse_dataframe(db_file.content, csv_filename)
 
-        # Prepare state
-        problem_description_src = json.dumps(problem_desc, indent=2)
+        # Get user_id from run record
+        with get_db_session() as db:
+            run = db.query(Run).filter(Run.id == run_id).first()
+            user_id = str(run.user_id)
 
-        # Initialize progress tracker with run_id
-        from backend.services.progress_service import ProgressTracker
-        progress = ProgressTracker(run_id=run_id)
+        # Run orchestrated analysis
+        from backend.services.orchestrator_service import run_orchestrated_analysis
 
-        def entry_point(state: State) -> State:
-            logger.info("Executing entry_point node")
-            state["logger"] = progress
-            progress.update_progress("initialization", status="Initializing analysis", details={
-                "rows": len(sample_data),
-                "columns": len(sample_data.columns)
-            })
+        asyncio.run(run_orchestrated_analysis(
+            run_id=run_id,
+            problem_desc=problem_desc,
+            data=data,
+            user_id=user_id,
+            analysis_type=analysis_type,
+            deep_research_model=deep_research_model,
+        ))
 
-            state["data"] = sample_data
-            state["problem_description_src"] = problem_description_src
-            state["target_column"] = problem_desc["target_variable"]
-
-            # Filter predictor columns to only include numeric columns
-            all_predictors = list(problem_desc["features"].keys())
-            numeric_predictors = []
-            for col in all_predictors:
-                if col not in sample_data.columns:
-                    logger.warning(f"Excluding column from predictors (not found in data): {col}")
-                elif not pd.api.types.is_numeric_dtype(sample_data[col]):
-                    logger.warning(f"Excluding non-numeric column from predictors: {col}")
-                else:
-                    numeric_predictors.append(col)
-
-            state["predictor_columns"] = numeric_predictors
-            return state
-
-        # Build and run the graph
-        from syxplain_lib import (
-            data_summary,
-            llm_pysr_config_generator,
-            pysr_with_generated_config,
-            explain_pysr_equations,
-            deep_research_node
-        )
-        from langgraph.graph import StateGraph, START, END
-
-        logger.info(f"Building StateGraph (analysis_type={analysis_type})")
-        g = StateGraph(State)
-        g.add_node("entry_point", entry_point)
-        g.add_node("data_summary", data_summary)
-        g.add_node("pysr_config_generator", llm_pysr_config_generator)
-        g.add_node("pysr_executor", pysr_with_generated_config)
-        g.add_node("pysr_explainer", explain_pysr_equations)
-
-        g.add_edge(START, "entry_point")
-        g.add_edge("entry_point", "data_summary")
-        g.add_edge("data_summary", "pysr_config_generator")
-        g.add_edge("pysr_config_generator", "pysr_executor")
-
-        # Conditionally add deep research step for deep analysis
-        if analysis_type == "deep":
-            g.add_node("deep_research", deep_research_node)
-            g.add_edge("pysr_executor", "deep_research")
-            g.add_edge("deep_research", "pysr_explainer")
-        else:
-            g.add_edge("pysr_executor", "pysr_explainer")
-
-        g.add_edge("pysr_explainer", END)
-
-        app = g.compile()
-        logger.info("Invoking graph execution...")
-
-        # Initialize state with our logger and analysis type
-        initial_state = State()
-        initial_state["logger"] = progress
-        initial_state["analysis_type"] = analysis_type
-        initial_state["deep_research_model"] = deep_research_model
-
-        final_state = app.invoke(initial_state)
-        logger.info("Graph execution completed successfully")
-
-        # Save JSON as artifact for download (need to stringify for file output)
-        pysr_explanations = final_state.get("pysr_explanations")
-        if pysr_explanations:
-            progress.save_artifact(
-                "pysr_explanations.json",
-                json.dumps(pysr_explanations).encode('utf-8'),
-                media_type="application/json"
-            )
-
-        # Store results - pysr_explanations is already a dict
-        update_run_status(run_id, "completed", results=pysr_explanations)
-        logger.info(f"Run {run_id} completed. Results stored.")
+        logger.info(f"Run {run_id} completed successfully")
 
     except Exception as e:
         error_msg = str(e)

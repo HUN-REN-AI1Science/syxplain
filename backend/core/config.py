@@ -94,6 +94,33 @@ class LangfuseSettings:
 
 
 @dataclass
+class SlurmSettings:
+    """Slurm cluster settings for slurmrestd API integration."""
+    api_url: str = field(default_factory=lambda: os.environ.get("SLURM_API_URL", ""))
+    auth_token: str = field(default_factory=lambda: os.environ.get("SLURM_AUTH_TOKEN", ""))
+    user_name: str = field(default_factory=lambda: os.environ.get("SLURM_USER_NAME", "slurm"))
+    partition: str = field(default_factory=lambda: os.environ.get("SLURM_PARTITION", "compute"))
+    default_memory: str = field(default_factory=lambda: os.environ.get("SLURM_DEFAULT_MEMORY", "16G"))
+    default_cpus: int = field(default_factory=lambda: int(os.environ.get("SLURM_DEFAULT_CPUS", "8")))
+    default_time_limit: str = field(default_factory=lambda: os.environ.get("SLURM_DEFAULT_TIME_LIMIT", "04:00:00"))
+    staging_dir: str = field(default_factory=lambda: os.environ.get("SLURM_STAGING_DIR", "/tmp/syxplain"))
+
+    @property
+    def is_configured(self) -> bool:
+        """Check if Slurm is properly configured."""
+        return bool(self.api_url and self.auth_token)
+
+
+@dataclass
+class ComputeSettings:
+    """Compute backend settings."""
+    worker_callback_url: str = field(default_factory=lambda: os.environ.get("WORKER_CALLBACK_URL", ""))
+    worker_callback_token: str = field(default_factory=lambda: os.environ.get("WORKER_CALLBACK_TOKEN", ""))
+    job_poll_interval: int = field(default_factory=lambda: int(os.environ.get("JOB_POLL_INTERVAL", "10")))
+    max_retries: int = field(default_factory=lambda: int(os.environ.get("COMPUTE_MAX_RETRIES", "3")))
+
+
+@dataclass
 class Settings:
     """
     Main settings class that aggregates all configuration groups.
@@ -110,6 +137,8 @@ class Settings:
     analysis: AnalysisSettings = field(default_factory=AnalysisSettings)
     shap: SHAPSettings = field(default_factory=SHAPSettings)
     langfuse: LangfuseSettings = field(default_factory=LangfuseSettings)
+    slurm: SlurmSettings = field(default_factory=SlurmSettings)
+    compute: ComputeSettings = field(default_factory=ComputeSettings)
 
 
 # Cached settings instance
@@ -154,3 +183,13 @@ def get_llm_settings() -> LLMSettings:
 def get_langfuse_settings() -> LangfuseSettings:
     """Get Langfuse settings for dependency injection."""
     return get_settings().langfuse
+
+
+def get_slurm_settings() -> SlurmSettings:
+    """Get Slurm settings for dependency injection."""
+    return get_settings().slurm
+
+
+def get_compute_settings() -> ComputeSettings:
+    """Get compute backend settings for dependency injection."""
+    return get_settings().compute

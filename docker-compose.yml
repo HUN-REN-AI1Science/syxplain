@@ -1,3 +1,20 @@
+# Development Docker Compose
+# This configuration includes everything needed to run locally with hot reload:
+# - PostgreSQL database
+# - Backend API (with hot reload)
+# - Frontend (with hot reload via Vite)
+#
+# IMPORTANT: Slurm Setup Required
+# The backend connects to an external Slurm cluster. Before starting:
+#   1. Set up SSH tunnel: ssh -L 6820:localhost:6820 <user>@slurm.science-cloud.hu -i <key>
+#   2. Generate token: scontrol token username=<user> lifespan=3600
+#   3. Configure .env with SLURM_* variables (see .env.example)
+#
+# Quick start:
+#   1. Copy .env.example to .env and configure all required variables
+#   2. Start SSH tunnel to Slurm cluster (see README.md)
+#   3. Run: docker-compose up --build
+
 services:
   postgres:
     image: postgres:18
@@ -9,7 +26,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - syxplain_pgdata:/var/lib/postgresql
+      - syxplain_pgdata:/var/lib/postgresql  # PostgreSQL 18+ uses this path
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U syxplain"]
       interval: 5s
@@ -20,56 +37,76 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    container_name: syxplain-backend
     ports:
       - "8000:8000"
     environment:
+      # LLM Configuration (set these in .env)
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_API_BASE=${OPENAI_API_BASE}
-      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME}
-      - DATABASE_URL=${DATABASE_URL}
-      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - JULIA_NUM_THREADS=${JULIA_NUM_THREADS}
-      - DEEP_RESEARCH_MODEL=${DEEP_RESEARCH_MODEL}
-      - DEEP_RESEARCH_API_KEY=${DEEP_RESEARCH_API_KEY}
-      - DEEP_RESEARCH_API_BASE=${DEEP_RESEARCH_API_BASE}
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - SHAP_SUBSAMPLE_FRACTION=${SHAP_SUBSAMPLE_FRACTION}
-      - SHAP_SUBSAMPLE_MIN=${SHAP_SUBSAMPLE_MIN}
-      - SHAP_SUBSAMPLE_MAX=${SHAP_SUBSAMPLE_MAX}
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
-      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL}
-      - ANALYSIS_TIMEOUT_HOURS=${ANALYSIS_TIMEOUT_HOURS}
-    deploy:
-      resources:
-        limits:
-          cpus: '10'
-          memory: 8G
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-}
+      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4o}
+      - DEEP_RESEARCH_MODEL=${DEEP_RESEARCH_MODEL:-}
+      - DEEP_RESEARCH_API_KEY=${DEEP_RESEARCH_API_KEY:-}
+      - DEEP_RESEARCH_API_BASE=${DEEP_RESEARCH_API_BASE:-}
+      # Database (defaults to local postgres container)
+      - DATABASE_URL=postgresql://syxplain:syxplain@postgres:5432/syxplain
+      # Authentication (optional for local dev - set for Supabase auth)
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:-dev-jwt-secret-not-for-production}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      # Slurm Configuration - set these in .env (see README for setup)
+      - SLURM_API_URL=${SLURM_API_URL}
+      - SLURM_AUTH_TOKEN=${SLURM_AUTH_TOKEN}
+      - SLURM_USER_NAME=${SLURM_USER_NAME:-ai4science_admin}
+      - SLURM_PARTITION=${SLURM_PARTITION:-batch_cpu_m2.large}
+      - SLURM_STAGING_DIR=${SLURM_STAGING_DIR:-/storage/ai4science_admin/syxplain}
+      - SLURM_DEFAULT_MEMORY=${SLURM_DEFAULT_MEMORY:-4G}
+      - SLURM_DEFAULT_CPUS=${SLURM_DEFAULT_CPUS:-2}
+      - SLURM_DEFAULT_TIME_LIMIT=${SLURM_DEFAULT_TIME_LIMIT:-01:00:00}
+      # Compute settings
+      - WORKER_CALLBACK_URL=http://backend:8000/api/internal
+      - WORKER_CALLBACK_TOKEN=dev-callback-token
+      - JOB_POLL_INTERVAL=5
+      # Analysis Settings (sensible defaults for dev)
+      - SHAP_SUBSAMPLE_FRACTION=0.1
+      - SHAP_SUBSAMPLE_MIN=100
+      - SHAP_SUBSAMPLE_MAX=1000
+      - ANALYSIS_TIMEOUT_HOURS=2
+      # CORS (allow all for local dev)
+      - CORS_ORIGINS=*
+      # Langfuse (optional tracing)
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-}
+      - LANGFUSE_ENABLED=false
     volumes:
+      - ./backend:/app/backend  # Mount source for hot reload
       - ./data:/app/data
       - ./outputs:/app/outputs
-      # Mount source code for dev (optional, remove for prod)
-      # - ./backend:/app/backend
-      # - ./syxplain_lib.py:/app/syxplain_lib.py
-      # - ./logger.py:/app/logger.py
+    command: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Allow access to host's SSH tunnel
     depends_on:
       postgres:
         condition: service_healthy
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: node:24-alpine
+    container_name: syxplain-frontend
+    working_dir: /app
     ports:
-      - "8080:80"
+      - "5173:5173"
     environment:
-      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-      - VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=${VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY}
-      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-}
+      - VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=${VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY:-}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY:-}
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules  # Persist node_modules
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     depends_on:
       - backend
 
 volumes:
   syxplain_pgdata:
+  frontend_node_modules:

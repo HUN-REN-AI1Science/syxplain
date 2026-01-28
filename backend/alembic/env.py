@@ -11,7 +11,10 @@ from alembic import context
 # Add the backend directory to the path so we can import database models
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database import Base, DATABASE_URL
+from infrastructure.database.models import Base
+from core.config import get_settings
+
+DATABASE_URL = get_settings().database.url
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
