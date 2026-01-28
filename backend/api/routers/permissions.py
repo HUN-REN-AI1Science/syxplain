@@ -5,9 +5,10 @@ Provides endpoints for checking user permissions and validating API keys.
 """
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.api.dependencies import get_permission_service
+from backend.core.rate_limit import limiter
 from backend.core.security import User, get_current_user
 from backend.services.permission_service import PermissionService
 from backend.schemas.requests import ValidateKeysRequest
@@ -42,8 +43,10 @@ def get_my_permissions(
     "/validate-keys",
     response_model=ValidateKeysResponse
 )
+@limiter.limit("10/minute")
 async def validate_api_keys(
-    request: ValidateKeysRequest,
+    request: Request,
+    body: ValidateKeysRequest,
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -59,25 +62,25 @@ async def validate_api_keys(
     """
     try:
         import openai
-        client = openai.OpenAI(api_key=request.openai_api_key)
+        client = openai.OpenAI(api_key=body.openai_api_key)
         # Make a minimal API call to verify the key
         client.models.list()
         return ValidateKeysResponse(valid=True)
-    except openai.AuthenticationError as e:
+    except openai.AuthenticationError:
         logger.warning(f"Invalid API key provided by user {current_user.user_id}")
         raise HTTPException(
             status_code=400,
             detail="Invalid API key. Please check your key and try again."
         )
-    except openai.RateLimitError as e:
-        logger.warning(f"Rate limited API key for user {current_user.user_id}: {e}")
+    except openai.RateLimitError:
+        logger.warning(f"Rate limited API key for user {current_user.user_id}")
         raise HTTPException(
             status_code=400,
             detail="API key rate limited. Your OpenAI account may have insufficient credits."
         )
-    except Exception as e:
-        logger.error(f"API key validation failed for user {current_user.user_id}: {e}")
+    except Exception:
+        logger.warning(f"API key validation failed for user {current_user.user_id}")
         raise HTTPException(
             status_code=400,
-            detail=f"API key validation failed: {str(e)}"
+            detail="API key validation failed. Please check your key."
         )
