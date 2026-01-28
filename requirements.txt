@@ -21,3 +21,4 @@ openinference-instrumentation-dspy
 openpyxl
 rich
 httpx
+slowapi

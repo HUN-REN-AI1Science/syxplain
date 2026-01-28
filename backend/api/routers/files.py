@@ -5,11 +5,12 @@ Provides endpoints for uploading and validating CSV/Excel files.
 """
 import logging
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from backend.api.dependencies import get_file_repository, get_file_service_dep
 from backend.core.security import User, get_current_user
 from backend.core.exceptions import FileValidationError, FileTooLargeError
+from backend.core.rate_limit import limiter
 from backend.repositories.file_repository import FileRepository
 from backend.services.file_service import FileService
 from backend.schemas.responses import FileUploadResponse
@@ -23,7 +24,9 @@ router = APIRouter(prefix="/api", tags=["Files"])
     "/upload",
     response_model=FileUploadResponse
 )
+@limiter.limit("10/minute")  # Rate limit: 10 uploads per minute per IP
 def upload_file(
+    request: Request,  # Required for rate limiting
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     file_service: FileService = Depends(get_file_service_dep),

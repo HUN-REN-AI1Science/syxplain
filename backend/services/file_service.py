@@ -6,6 +6,7 @@ parsing, validation, and metadata extraction.
 """
 import io
 import logging
+import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -15,6 +16,11 @@ from backend.core.config import get_settings
 from backend.core.exceptions import FileValidationError, FileTooLargeError
 
 logger = logging.getLogger(__name__)
+
+# Security: Allowed filename characters (whitelist approach)
+SAFE_FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._\-\s]{0,198}[a-zA-Z0-9._]$')
+# Characters that indicate path traversal attempts
+PATH_TRAVERSAL_PATTERNS = ['..', '/', '\\', '\x00', '%2e', '%2f', '%5c']
 
 
 @dataclass
@@ -50,6 +56,56 @@ class FileService:
         settings = get_settings()
         self.max_file_size = settings.analysis.max_file_size_bytes
 
+    def sanitize_filename(self, filename: str) -> str:
+        """
+        Sanitize filename to prevent path traversal and injection attacks.
+
+        Args:
+            filename: The raw filename from upload
+
+        Returns:
+            Sanitized filename
+
+        Raises:
+            FileValidationError: If filename is malicious or invalid
+        """
+        if not filename:
+            raise FileValidationError(
+                message="Filename cannot be empty",
+                filename=""
+            )
+
+        # Remove any path components (prevent path traversal)
+        filename = filename.split('/')[-1].split('\\')[-1]
+
+        # Check for path traversal patterns
+        filename_lower = filename.lower()
+        for pattern in PATH_TRAVERSAL_PATTERNS:
+            if pattern in filename_lower:
+                logger.warning(f"Path traversal attempt detected in filename: {filename}")
+                raise FileValidationError(
+                    message="Invalid filename: contains forbidden characters",
+                    filename=filename
+                )
+
+        # Remove null bytes and control characters
+        filename = re.sub(r'[\x00-\x1f\x7f]', '', filename)
+
+        # Check length
+        if len(filename) > 255:
+            raise FileValidationError(
+                message="Filename too long (max 255 characters)",
+                filename=filename
+            )
+
+        if len(filename) < 3:  # Minimum: "a.x"
+            raise FileValidationError(
+                message="Filename too short",
+                filename=filename
+            )
+
+        return filename
+
     def validate_extension(self, filename: str) -> str:
         """
         Validate file extension and return the appropriate MIME type.
@@ -63,7 +119,9 @@ class FileService:
         Raises:
             FileValidationError: If extension is not supported
         """
-        filename_lower = filename.lower() if filename else ""
+        # First sanitize the filename
+        filename = self.sanitize_filename(filename)
+        filename_lower = filename.lower()
 
         for ext, mime_type in self.SUPPORTED_EXTENSIONS.items():
             if filename_lower.endswith(ext):

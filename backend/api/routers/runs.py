@@ -9,6 +9,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
+from backend.utils.security_utils import safe_content_disposition
+
 from backend.api.dependencies import get_run_service
 from backend.core.security import User, get_current_user
 from backend.core.exceptions import (
@@ -293,7 +295,7 @@ def download_csv(
         return Response(
             content=db_file.content,
             media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={db_file.filename}"}
+            headers={"Content-Disposition": safe_content_disposition(db_file.filename)}
         )
     except EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)

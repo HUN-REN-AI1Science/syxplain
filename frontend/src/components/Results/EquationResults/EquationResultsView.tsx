@@ -19,6 +19,7 @@ import {
 import { Scatter } from 'react-chartjs-2';
 import { escapeForAsciiMath } from '@utils/formatting';
 import { exportToCSV, exportToExcel } from '@utils/dataExport';
+import { sanitizeText, sanitizeUrl } from '@utils/security';
 import CitationText from './CitationText';
 import HelpButton from '@components/HelpButton';
 import type { Equation, ScatterData, EquationResults } from '@/types';
@@ -279,18 +280,25 @@ const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = (
                       </h5>
                       <div className="bg-white rounded-lg p-3 border border-slate-100">
                         <ul className="space-y-1">
-                          {equation.citations.map((citation, idx) => (
-                            <li key={idx} className="text-sm">
-                              <a
-                                href={citation}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800 hover:underline break-all"
-                              >
-                                <span className="citation-link">[{idx + 1}]</span> {citation}
-                              </a>
-                            </li>
-                          ))}
+                          {equation.citations.map((citation, idx) => {
+                            const safeUrl = sanitizeUrl(citation);
+                            return (
+                              <li key={idx} className="text-sm">
+                                {safeUrl ? (
+                                  <a
+                                    href={safeUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 hover:underline break-all"
+                                  >
+                                    <span className="citation-link">[{idx + 1}]</span> {safeUrl}
+                                  </a>
+                                ) : (
+                                  <span className="text-slate-500">[{idx + 1}] Invalid URL</span>
+                                )}
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     </div>
@@ -401,7 +409,7 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data }) => {
             {summary.findings && (
               <div>
                 <h4 className="text-sm font-semibold text-slate-600 mb-2">Findings</h4>
-                <p className="text-slate-700 leading-relaxed">{summary.findings}</p>
+                <p className="text-slate-700 leading-relaxed">{sanitizeText(summary.findings)}</p>
               </div>
             )}
           </div>

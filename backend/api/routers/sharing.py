@@ -6,8 +6,11 @@ as well as public access to shared runs (no auth required).
 """
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
+
+from backend.utils.security_utils import safe_content_disposition
+from backend.core.rate_limit import limiter
 
 from backend.api.dependencies import get_share_service
 from backend.core.security import User, get_current_user
@@ -113,7 +116,9 @@ def revoke_share_link(
     "/api/public/{share_token}",
     response_model=PublicRunResponse
 )
+@limiter.limit("30/minute")  # Rate limit public access to prevent enumeration
 def get_public_run(
+    request: Request,  # Required for rate limiting
     share_token: str,
     share_service: ShareService = Depends(get_share_service)
 ):
@@ -180,7 +185,7 @@ def download_public_csv(
         return Response(
             content=db_file.content,
             media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={db_file.filename}"}
+            headers={"Content-Disposition": safe_content_disposition(db_file.filename)}
         )
     except EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
