@@ -44,8 +44,6 @@ def clean_and_fix_json_string(text: str) -> str:
 
     # Only apply aggressive quote fixes if initial parse failed
     # Fix single quotes to double quotes (common LLM issue)
-    # Use regex to replace single quotes used as JSON string delimiters
-    # This handles: {'key': 'value'} -> {"key": "value"}
     fixed = re.sub(r"(?<=[{\[:,])\s*'", ' "', cleaned)  # Opening quotes
     fixed = re.sub(r"'\s*(?=[}\]:,])", '"', fixed)     # Closing quotes
     fixed = re.sub(r"(?<=\[)'", '"', fixed)            # Opening quote after [

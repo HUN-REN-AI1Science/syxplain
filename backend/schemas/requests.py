@@ -107,19 +107,6 @@ class RunRequest(BaseModel):
         }
 
 
-class ShareRequest(BaseModel):
-    """Request schema for sharing configuration (if needed in future)."""
-    pass
-
-
-class ProfileDeleteRequest(BaseModel):
-    """Request schema for profile deletion confirmation (if needed)."""
-    confirm: bool = Field(
-        default=False,
-        description="Confirmation flag for deletion"
-    )
-
-
 class ValidateKeysRequest(BaseModel):
     """Request schema for API key validation."""
     openai_api_key: str = Field(

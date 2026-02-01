@@ -164,7 +164,3 @@ def init_db() -> None:
         raise
 
 
-# Re-export for backward compatibility
-# TODO: Remove these after updating all imports
-SessionLocal = property(lambda self: get_session_factory())
-engine = property(lambda self: get_engine())

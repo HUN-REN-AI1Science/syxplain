@@ -193,25 +193,9 @@ def clear_settings_cache() -> None:
     _settings = None
 
 
-# Convenience function for accessing settings in dependency injection
-def get_database_settings() -> DatabaseSettings:
-    """Get database settings for dependency injection."""
-    return get_settings().database
-
-
 def get_auth_settings() -> AuthSettings:
     """Get auth settings for dependency injection."""
     return get_settings().auth
-
-
-def get_llm_settings() -> LLMSettings:
-    """Get LLM settings for dependency injection."""
-    return get_settings().llm
-
-
-def get_langfuse_settings() -> LangfuseSettings:
-    """Get Langfuse settings for dependency injection."""
-    return get_settings().langfuse
 
 
 def get_slurm_settings() -> SlurmSettings:

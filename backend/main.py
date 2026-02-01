@@ -41,18 +41,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """
-    Add security headers to all responses (OWASP best practices).
-
-    Headers added:
-    - X-Frame-Options: Prevents clickjacking
-    - X-Content-Type-Options: Prevents MIME type sniffing
-    - X-XSS-Protection: XSS protection for legacy browsers
-    - Referrer-Policy: Controls referrer information
-    - Cache-Control/Pragma: Prevents caching of sensitive data
-    - Content-Security-Policy: Restricts resource loading
-    - Permissions-Policy: Restricts browser features
-    """
+    """Add OWASP security headers to all responses."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
         response = await call_next(request)

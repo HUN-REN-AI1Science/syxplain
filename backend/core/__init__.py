@@ -3,9 +3,7 @@
 
 from backend.core.config import (
     get_settings,
-    get_database_settings,
     get_auth_settings,
-    get_llm_settings,
     Settings,
     DatabaseSettings,
     AuthSettings,
@@ -43,9 +41,7 @@ from backend.core.logging import (
 __all__ = [
     # Config
     "get_settings",
-    "get_database_settings",
     "get_auth_settings",
-    "get_llm_settings",
     "Settings",
     "DatabaseSettings",
     "AuthSettings",

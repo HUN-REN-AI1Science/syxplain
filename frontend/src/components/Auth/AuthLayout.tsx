@@ -1,8 +1,3 @@
-/**
- * AuthLayout Component
- * Shared layout wrapper for authentication pages with logo header
- */
-
 import React from 'react';
 import { Card } from 'primereact/card';
 import { Toast } from 'primereact/toast';

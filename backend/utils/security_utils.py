@@ -59,41 +59,6 @@ def safe_content_disposition(filename: str) -> str:
     return f"attachment; filename*=UTF-8''{filename_encoded}"
 
 
-def sanitize_error_message(message: str, max_length: int = 200) -> str:
-    """
-    Sanitize error messages before returning to clients.
-
-    Removes potentially sensitive information like file paths,
-    stack traces, and internal implementation details.
-
-    Args:
-        message: The original error message
-        max_length: Maximum length of returned message
-
-    Returns:
-        Sanitized error message safe for client display
-    """
-    if not message:
-        return "An error occurred"
-
-    # Remove file paths (Unix and Windows)
-    message = re.sub(r'(/[a-zA-Z0-9_\-./]+)+', '[path]', message)
-    message = re.sub(r'([A-Za-z]:\\[a-zA-Z0-9_\-\\./]+)+', '[path]', message)
-
-    # Remove potential stack trace lines
-    message = re.sub(r'File ".*?", line \d+', '[location]', message)
-    message = re.sub(r'at .*?:\d+:\d+', '[location]', message)
-
-    # Remove IP addresses
-    message = re.sub(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', '[ip]', message)
-
-    # Truncate to max length
-    if len(message) > max_length:
-        message = message[:max_length] + "..."
-
-    return message
-
-
 # ============================================================================
 # Shell Injection Prevention (OWASP: A03:2021)
 # ============================================================================

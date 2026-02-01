@@ -426,14 +426,6 @@ class ErrorTrendResponse(BaseModel):
 # Analytics Responses
 # ============================================================================
 
-class UserAnalyticsResponse(BaseModel):
-    """User analytics summary."""
-    total_users: int
-    new_users_30d: int
-    active_users_7d: int
-    users_with_hunren_access: int
-
-
 class UserGrowthItem(BaseModel):
     """Daily user growth item."""
     date: str
