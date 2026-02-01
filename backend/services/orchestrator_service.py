@@ -58,7 +58,7 @@ class AnalysisOrchestrator:
     Orchestrates the complete analysis workflow.
 
     Handles the coordination between:
-    1. Compute-intensive tasks (SHAP, PySR) on backends (local/Slurm)
+    1. Compute-intensive tasks (SHAP, PySR) on the Slurm cluster
     2. LLM operations (config generation, explanation) on main backend
 
     The workflow is:

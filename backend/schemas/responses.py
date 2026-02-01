@@ -224,3 +224,315 @@ class UpdatePermissionResponse(BaseModel):
     success: bool
     user_id: str
     use_hunren_keys: bool
+
+
+# ============================================================================
+# Admin Dashboard Responses
+# ============================================================================
+
+class DashboardStatsResponse(BaseModel):
+    """Dashboard statistics."""
+    total_users: int
+    active_users_24h: int
+    total_runs: int
+    runs_today: int
+    success_rate: float
+    avg_duration_seconds: float
+    pending_runs: int
+    running_runs: int
+
+
+class RunTrendItem(BaseModel):
+    """Single day run trend data."""
+    date: str
+    total: int
+    completed: int
+    failed: int
+    timeout: int
+    cancelled: int
+
+
+class RunTrendsResponse(BaseModel):
+    """Run trends over time."""
+    items: List[RunTrendItem]
+
+
+class StatusDistributionItem(BaseModel):
+    """Status distribution item."""
+    status: str
+    count: int
+
+
+class StatusDistributionResponse(BaseModel):
+    """Status distribution."""
+    items: List[StatusDistributionItem]
+
+
+# ============================================================================
+# Admin Run Management Responses
+# ============================================================================
+
+class AdminRunSummary(BaseModel):
+    """Run summary for admin view with user info."""
+    id: str
+    user_id: str
+    user_email: Optional[str] = None
+    status: str
+    created_at: datetime
+    csv_filename: str
+    target_variable: Optional[str] = None
+    progress: int = Field(default=0, ge=0, le=100)
+    analysis_type: str = "quick"
+    start_time: Optional[datetime] = None
+    finish_time: Optional[datetime] = None
+    error: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PaginatedAdminRunsResponse(BaseModel):
+    """Paginated list of runs for admin."""
+    items: List[AdminRunSummary]
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1)
+    total_pages: int = Field(ge=0)
+
+
+class AdminRunDetailResponse(BaseModel):
+    """Detailed run info for admin view."""
+    id: str
+    user_id: str
+    user_email: Optional[str] = None
+    status: str
+    created_at: Optional[datetime] = None
+    problem_description: Dict[str, Any]
+    csv_filename: str
+    analysis_type: str = "quick"
+    error: Optional[str] = None
+    progress: int = 0
+    start_time: Optional[datetime] = None
+    finish_time: Optional[datetime] = None
+    results: Optional[Dict[str, Any]] = None
+    slurm_job_ids: Optional[Dict[str, Any]] = None
+
+
+class AdminRunActionResponse(BaseModel):
+    """Response for admin run actions."""
+    success: bool
+    message: str
+    run_id: str
+
+
+# ============================================================================
+# System Monitoring Responses
+# ============================================================================
+
+class SystemHealthResponse(BaseModel):
+    """System health status."""
+    database_connected: bool
+    slurm_configured: bool
+    slurm_connected: bool
+    api_healthy: bool
+    uptime_seconds: int
+    checked_at: str
+
+
+class PartitionInfo(BaseModel):
+    """Slurm partition info."""
+    name: str
+    state: str
+    total_nodes: int
+    total_cpus: int
+
+
+class SlurmStatusResponse(BaseModel):
+    """Slurm cluster status."""
+    cluster_status: str
+    queue_length: int
+    active_jobs: int
+    total_jobs: int
+    partitions: List[PartitionInfo]
+    node_status: Dict[str, int]
+    total_nodes: int
+    checked_at: str
+    error: Optional[str] = None
+
+
+# ============================================================================
+# Audit Log Responses
+# ============================================================================
+
+class AuditLogEntry(BaseModel):
+    """Single audit log entry."""
+    id: str
+    admin_email: str
+    action: str
+    target_type: str
+    target_id: str
+    details: Optional[Dict[str, Any]] = None
+    ip_address: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PaginatedAuditLogsResponse(BaseModel):
+    """Paginated audit logs."""
+    items: List[AuditLogEntry]
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1)
+    total_pages: int = Field(ge=0)
+
+
+class AuditFilterOptionsResponse(BaseModel):
+    """Available audit log filter options."""
+    actions: List[str]
+    admins: List[str]
+
+
+# ============================================================================
+# Error Monitoring Responses
+# ============================================================================
+
+class ErrorDistributionItem(BaseModel):
+    """Error type distribution item."""
+    error_type: str
+    count: int
+
+
+class ErrorDistributionResponse(BaseModel):
+    """Error distribution."""
+    items: List[ErrorDistributionItem]
+
+
+class ErrorTrendItem(BaseModel):
+    """Daily error trend item."""
+    date: str
+    total: int
+    failed: int
+    failure_rate: float
+
+
+class ErrorTrendResponse(BaseModel):
+    """Error trend over time."""
+    items: List[ErrorTrendItem]
+
+
+# ============================================================================
+# Analytics Responses
+# ============================================================================
+
+class UserAnalyticsResponse(BaseModel):
+    """User analytics summary."""
+    total_users: int
+    new_users_30d: int
+    active_users_7d: int
+    users_with_hunren_access: int
+
+
+class UserGrowthItem(BaseModel):
+    """Daily user growth item."""
+    date: str
+    count: int
+
+
+class UserGrowthResponse(BaseModel):
+    """User growth trend."""
+    items: List[UserGrowthItem]
+
+
+class TopUserItem(BaseModel):
+    """Top user by activity."""
+    user_id: str
+    email: Optional[str] = None
+    run_count: int
+    completed: int
+
+
+class TopUsersResponse(BaseModel):
+    """Top users list."""
+    items: List[TopUserItem]
+
+
+class PerformanceStatsResponse(BaseModel):
+    """Performance analytics."""
+    avg_duration: float
+    median_duration: float
+    p95_duration: float
+    success_rate: float
+    total_completed: int
+
+
+class PerformanceByTypeItem(BaseModel):
+    """Performance by analysis type."""
+    type: str
+    total_runs: int
+    completed: int
+    failed: int
+    avg_duration: float
+    success_rate: float
+
+
+class PerformanceByTypeResponse(BaseModel):
+    """Performance by type."""
+    items: List[PerformanceByTypeItem]
+
+
+# ============================================================================
+# Configuration Response
+# ============================================================================
+
+class RateLimitsConfig(BaseModel):
+    """Rate limit configuration."""
+    runs_per_minute: int
+    uploads_per_minute: int
+    admin_requests_per_minute: int
+
+
+class FeaturesConfig(BaseModel):
+    """Feature flags."""
+    slurm_configured: bool
+    deep_research_enabled: bool
+    user_api_keys_enabled: bool
+
+
+class SecretsConfig(BaseModel):
+    """Masked secrets configuration."""
+    openai_api_key: Optional[str] = None
+    deep_research_api_key: Optional[str] = None
+    slurm_auth_token: Optional[str] = None
+    database_host: Optional[str] = None
+
+
+class ConfigResponse(BaseModel):
+    """Sanitized system configuration."""
+    compute_backend: str
+    analysis_timeout_hours: float
+    max_file_size_mb: int
+    rate_limits: RateLimitsConfig
+    features: FeaturesConfig
+    secrets: SecretsConfig
+
+
+# ============================================================================
+# Activity Feed
+# ============================================================================
+
+class ActivityItem(BaseModel):
+    """Recent activity item."""
+    id: str
+    admin_email: str
+    action: str
+    target_type: str
+    target_id: str
+    details: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+
+class RecentActivityResponse(BaseModel):
+    """Recent activity feed."""
+    items: List[ActivityItem]

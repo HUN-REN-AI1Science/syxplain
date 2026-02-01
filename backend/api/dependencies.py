@@ -14,11 +14,15 @@ from backend.repositories.run_repository import RunRepository
 from backend.repositories.file_repository import FileRepository
 from backend.repositories.artifact_repository import ArtifactRepository
 from backend.repositories.permission_repository import PermissionRepository
+from backend.repositories.audit_repository import AuditRepository
 from backend.services.file_service import FileService, get_file_service
 from backend.services.run_service import RunService
 from backend.services.share_service import ShareService
 from backend.services.profile_service import ProfileService
 from backend.services.permission_service import PermissionService
+from backend.services.audit_service import AuditService
+from backend.services.admin_stats_service import AdminStatsService
+from backend.services.system_monitor_service import SystemMonitorService
 
 
 # ============================================================================
@@ -111,3 +115,35 @@ def get_permission_service(
 ) -> PermissionService:
     """Provide PermissionService instance with all dependencies."""
     return PermissionService(permission_repo=permission_repo)
+
+
+# ============================================================================
+# Admin Dependencies
+# ============================================================================
+
+def get_audit_repository(
+    db: Session = Depends(get_db)
+) -> AuditRepository:
+    """Provide AuditRepository instance."""
+    return AuditRepository(db)
+
+
+def get_audit_service(
+    audit_repo: AuditRepository = Depends(get_audit_repository)
+) -> AuditService:
+    """Provide AuditService instance."""
+    return AuditService(audit_repo=audit_repo)
+
+
+def get_admin_stats_service(
+    db: Session = Depends(get_db)
+) -> AdminStatsService:
+    """Provide AdminStatsService instance."""
+    return AdminStatsService(db=db)
+
+
+def get_system_monitor_service(
+    db: Session = Depends(get_db)
+) -> SystemMonitorService:
+    """Provide SystemMonitorService instance."""
+    return SystemMonitorService(db=db)

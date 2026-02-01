@@ -1,6 +1,7 @@
 /**
  * AdminView Page
  * Admin user management interface for granting/revoking HUN-REN API key access
+ * Used as a tab within AdminLayout
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -14,16 +15,11 @@ import { Tag } from 'primereact/tag';
 import { InputSwitch } from 'primereact/inputswitch';
 import { adminService } from '@services/api';
 import { useAuth } from '@contexts/AuthContext';
-import { Navigate } from 'react-router-dom';
 import HelpButton from '@components/HelpButton';
 import type { UserPermissionInfo } from '@/types';
 
-interface AdminViewProps {
-  onBack?: () => void;
-}
-
-const AdminView: React.FC<AdminViewProps> = ({ onBack }) => {
-  const { isAdmin, loading: authLoading } = useAuth();
+const AdminView: React.FC = () => {
+  const { isAdmin } = useAuth();
   const [users, setUsers] = useState<UserPermissionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [globalFilter, setGlobalFilter] = useState('');
@@ -41,7 +37,7 @@ const AdminView: React.FC<AdminViewProps> = ({ onBack }) => {
       setLoading(true);
       const response = await adminService.getUsers();
       setUsers(response.data.users);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.current?.show({
         severity: 'error',
         summary: 'Error',
@@ -70,21 +66,17 @@ const AdminView: React.FC<AdminViewProps> = ({ onBack }) => {
             detail: `HUN-REN access ${action}ed for ${user.email}`
           });
           fetchUsers();
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const err = error as { response?: { data?: { detail?: string } } };
           toast.current?.show({
             severity: 'error',
             summary: 'Error',
-            detail: error.response?.data?.detail || `Failed to ${action} access`
+            detail: err.response?.data?.detail || `Failed to ${action} access`
           });
         }
       }
     });
   };
-
-  // Redirect non-admin users
-  if (!authLoading && !isAdmin) {
-    return <Navigate to="/" replace />;
-  }
 
   const emailBodyTemplate = (rowData: UserPermissionInfo) => (
     <div className="flex items-center gap-2">
@@ -149,51 +141,39 @@ const AdminView: React.FC<AdminViewProps> = ({ onBack }) => {
   );
 
   return (
-    <div className="p-4 sm:p-6">
+    <div>
       <Toast ref={toast} />
       <ConfirmDialog />
 
       {/* Header */}
       <div className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <h2 className="text-2xl font-bold text-slate-800">User Management</h2>
-              <HelpButton title="User Management">
-                <h4>Managing API Access</h4>
-                <p>
-                  Control which users can use the built-in HUN-REN API keys for analysis.
-                  Users without access must provide their own OpenAI API key.
-                </p>
+        <div className="flex items-center gap-2 mb-2">
+          <h3 className="text-lg font-semibold text-slate-800">User Management</h3>
+          <HelpButton title="User Management">
+            <h4>Managing API Access</h4>
+            <p>
+              Control which users can use the built-in HUN-REN API keys for analysis.
+              Users without access must provide their own OpenAI API key.
+            </p>
 
-                <h4>Permission Levels</h4>
-                <ul>
-                  <li><strong>HUN-REN Access</strong> - User can use built-in API keys</li>
-                  <li><strong>Standard</strong> - User must provide their own OpenAI key</li>
-                </ul>
+            <h4>Permission Levels</h4>
+            <ul>
+              <li><strong>HUN-REN Access</strong> - User can use built-in API keys</li>
+              <li><strong>Standard</strong> - User must provide their own OpenAI key</li>
+            </ul>
 
-                <h4>How to Grant Access</h4>
-                <p>
-                  Use the toggle switch in the "HUN-REN Access" column to enable or disable
-                  access for any user. Changes take effect immediately.
-                </p>
-              </HelpButton>
-            </div>
-            <p className="text-slate-500">Manage HUN-REN API key access for users</p>
-          </div>
-          {onBack && (
-            <Button
-              label="Back"
-              icon="pi pi-arrow-left"
-              className="p-button-outlined p-button-sm w-full sm:w-auto"
-              onClick={onBack}
-            />
-          )}
+            <h4>How to Grant Access</h4>
+            <p>
+              Use the toggle switch in the "HUN-REN Access" column to enable or disable
+              access for any user. Changes take effect immediately.
+            </p>
+          </HelpButton>
         </div>
+        <p className="text-sm text-slate-500">Manage HUN-REN API key access for users</p>
       </div>
 
       {/* Users Table */}
-      <div className={`transition-opacity duration-200 ${loading ? 'opacity-60' : 'opacity-100'}`}>
+      <div className={`transition-opacity duration-200 overflow-x-auto ${loading ? 'opacity-60' : 'opacity-100'}`}>
         <DataTable
           value={users}
           loading={loading}
@@ -248,7 +228,7 @@ const AdminView: React.FC<AdminViewProps> = ({ onBack }) => {
         <div className="flex items-start gap-3">
           <i className="pi pi-info-circle text-blue-600 mt-0.5" />
           <div>
-            <h3 className="font-semibold text-blue-800 mb-2">About Permissions</h3>
+            <h4 className="font-semibold text-blue-800 mb-2">About Permissions</h4>
             <ul className="text-sm text-blue-700 list-disc pl-5 space-y-1">
               <li><strong>HUN-REN Access:</strong> User can use built-in API keys for analysis</li>
               <li><strong>Standard:</strong> User must provide their own OpenAI API key</li>

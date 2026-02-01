@@ -171,3 +171,221 @@ export interface UserPermissionInfo {
   user_created_at: string | null;
   permission_updated_at: string | null;
 }
+
+// ============================================================================
+// Admin Dashboard Types
+// ============================================================================
+
+export interface DashboardStats {
+  total_users: number;
+  active_users_24h: number;
+  total_runs: number;
+  runs_today: number;
+  success_rate: number;
+  avg_duration_seconds: number;
+  pending_runs: number;
+  running_runs: number;
+}
+
+export interface RunTrendItem {
+  date: string;
+  total: number;
+  completed: number;
+  failed: number;
+  timeout: number;
+  cancelled: number;
+}
+
+export interface StatusDistributionItem {
+  status: string;
+  count: number;
+}
+
+// ============================================================================
+// Admin Run Management Types
+// ============================================================================
+
+export interface AdminRunSummary {
+  id: string;
+  user_id: string;
+  user_email: string | null;
+  status: RunStatus;
+  created_at: string;
+  csv_filename: string;
+  target_variable: string | null;
+  progress: number;
+  analysis_type: AnalysisType;
+  start_time: string | null;
+  finish_time: string | null;
+  error: string | null;
+}
+
+export interface AdminRunDetail {
+  id: string;
+  user_id: string;
+  user_email: string | null;
+  status: RunStatus;
+  created_at: string | null;
+  problem_description: ProblemDescription;
+  csv_filename: string;
+  analysis_type: AnalysisType;
+  error: string | null;
+  progress: number;
+  start_time: string | null;
+  finish_time: string | null;
+  results: Record<string, unknown> | null;
+  slurm_job_ids: Record<string, string> | null;
+}
+
+export interface AdminRunActionResponse {
+  success: boolean;
+  message: string;
+  run_id: string;
+}
+
+// ============================================================================
+// System Monitoring Types
+// ============================================================================
+
+export interface SystemHealth {
+  database_connected: boolean;
+  slurm_configured: boolean;
+  slurm_connected: boolean;
+  api_healthy: boolean;
+  uptime_seconds: number;
+  checked_at: string;
+}
+
+export interface PartitionInfo {
+  name: string;
+  state: string;
+  total_nodes: number;
+  total_cpus: number;
+}
+
+export interface SlurmStatus {
+  cluster_status: string;
+  queue_length: number;
+  active_jobs: number;
+  total_jobs: number;
+  partitions: PartitionInfo[];
+  node_status: Record<string, number>;
+  total_nodes: number;
+  checked_at: string;
+  error?: string;
+}
+
+// ============================================================================
+// Audit Log Types
+// ============================================================================
+
+export interface AuditLogEntry {
+  id: string;
+  admin_email: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  details: Record<string, unknown> | null;
+  ip_address: string | null;
+  created_at: string;
+}
+
+export interface AuditFilterOptions {
+  actions: string[];
+  admins: string[];
+}
+
+// ============================================================================
+// Error Monitoring Types
+// ============================================================================
+
+export interface ErrorDistributionItem {
+  error_type: string;
+  count: number;
+}
+
+export interface ErrorTrendItem {
+  date: string;
+  total: number;
+  failed: number;
+  failure_rate: number;
+}
+
+// ============================================================================
+// Analytics Types
+// ============================================================================
+
+export interface UserGrowthItem {
+  date: string;
+  count: number;
+}
+
+export interface TopUserItem {
+  user_id: string;
+  email: string | null;
+  run_count: number;
+  completed: number;
+}
+
+export interface PerformanceStats {
+  avg_duration: number;
+  median_duration: number;
+  p95_duration: number;
+  success_rate: number;
+  total_completed: number;
+}
+
+export interface PerformanceByTypeItem {
+  type: string;
+  total_runs: number;
+  completed: number;
+  failed: number;
+  avg_duration: number;
+  success_rate: number;
+}
+
+// ============================================================================
+// Configuration Types
+// ============================================================================
+
+export interface RateLimitsConfig {
+  runs_per_minute: number;
+  uploads_per_minute: number;
+  admin_requests_per_minute: number;
+}
+
+export interface FeaturesConfig {
+  slurm_configured: boolean;
+  deep_research_enabled: boolean;
+  user_api_keys_enabled: boolean;
+}
+
+export interface SecretsConfig {
+  openai_api_key: string | null;
+  deep_research_api_key: string | null;
+  slurm_auth_token: string | null;
+  database_host: string | null;
+}
+
+export interface SystemConfig {
+  compute_backend: string;
+  analysis_timeout_hours: number;
+  max_file_size_mb: number;
+  rate_limits: RateLimitsConfig;
+  features: FeaturesConfig;
+  secrets: SecretsConfig;
+}
+
+// ============================================================================
+// Activity Feed Types
+// ============================================================================
+
+export interface ActivityItem {
+  id: string;
+  admin_email: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import or_
+from sqlalchemy import or_, desc
 from sqlalchemy.orm import Session
 
 from backend.infrastructure.database.models import Run
@@ -22,6 +22,14 @@ class RunFilters:
     status: Optional[str] = None
     analysis_type: Optional[str] = None
     search: Optional[str] = None
+
+
+@dataclass
+class AdminRunFilters(RunFilters):
+    """Extended filter parameters for admin run queries."""
+    user_id: Optional[str] = None
+    date_from: Optional[datetime] = None
+    date_to: Optional[datetime] = None
 
 
 @dataclass
@@ -320,3 +328,171 @@ class RunRepository(BaseRepository[Run]):
         count = self.db.query(Run).filter(Run.user_id == user_id).delete()
         self.db.commit()
         return count
+
+    # =========================================================================
+    # Admin Methods
+    # =========================================================================
+
+    def get_all_runs(
+        self,
+        filters: Optional[AdminRunFilters] = None,
+        pagination: Optional[PaginationParams] = None,
+    ) -> PaginatedResult:
+        """
+        Get all runs across all users with optional filtering (admin only).
+
+        Args:
+            filters: Optional filter criteria including user_id, dates
+            pagination: Optional pagination parameters
+
+        Returns:
+            PaginatedResult with runs and metadata
+        """
+        filters = filters or AdminRunFilters()
+        pagination = pagination or PaginationParams()
+
+        query = self.db.query(Run)
+
+        # Apply filters
+        if filters.status:
+            query = query.filter(Run.status == filters.status)
+        if filters.analysis_type:
+            query = query.filter(Run.analysis_type == filters.analysis_type)
+        if filters.search:
+            search_pattern = f"%{filters.search}%"
+            query = query.filter(
+                or_(
+                    Run.csv_filename.ilike(search_pattern),
+                    Run.problem_description["target_variable"].astext.ilike(search_pattern)
+                )
+            )
+        if filters.user_id:
+            try:
+                user_uuid = UUID(filters.user_id)
+                query = query.filter(Run.user_id == user_uuid)
+            except ValueError:
+                pass
+        if filters.date_from:
+            query = query.filter(Run.created_at >= filters.date_from)
+        if filters.date_to:
+            query = query.filter(Run.created_at <= filters.date_to)
+
+        # Get total count before pagination
+        total = query.count()
+
+        # Apply sorting
+        sort_columns = {
+            "created_at": Run.created_at,
+            "csv_filename": Run.csv_filename,
+            "status": Run.status,
+            "analysis_type": Run.analysis_type,
+        }
+        sort_column = sort_columns.get(pagination.sort_field, Run.created_at)
+
+        if pagination.sort_order == "asc":
+            query = query.order_by(sort_column.asc())
+        else:
+            query = query.order_by(sort_column.desc())
+
+        # Apply pagination
+        items = query.offset(pagination.offset).limit(pagination.page_size).all()
+
+        return PaginatedResult(
+            items=items,
+            total=total,
+            page=pagination.page,
+            page_size=pagination.page_size,
+        )
+
+    def admin_get_run(self, run_id: UUID) -> Optional[Run]:
+        """
+        Get a run by ID without user restriction (admin only).
+
+        Args:
+            run_id: The run UUID
+
+        Returns:
+            The run if found, None otherwise
+        """
+        return self.get_by_id(run_id)
+
+    def admin_cancel_run(self, run_id: UUID) -> Optional[Run]:
+        """
+        Cancel a run (admin only).
+
+        Args:
+            run_id: The run UUID
+
+        Returns:
+            Updated run or None if not found
+        """
+        run = self.get_by_id(run_id)
+        if not run:
+            return None
+
+        if run.status in ("pending", "running"):
+            run.status = "cancelled"
+            run.finish_time = datetime.utcnow()
+            self.db.commit()
+            self.db.refresh(run)
+
+        return run
+
+    def admin_delete_run(self, run_id: UUID) -> bool:
+        """
+        Delete a run and all associated data (admin only).
+
+        Args:
+            run_id: The run UUID
+
+        Returns:
+            True if deleted, False if not found
+        """
+        run = self.get_by_id(run_id)
+        if not run:
+            return False
+
+        self.db.delete(run)
+        self.db.commit()
+        return True
+
+    def get_failed_runs(
+        self,
+        days: int = 30,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> PaginatedResult:
+        """
+        Get failed and timeout runs (admin only).
+
+        Args:
+            days: Number of days to look back
+            page: Page number
+            page_size: Items per page
+
+        Returns:
+            PaginatedResult with failed runs
+        """
+        cutoff = datetime.utcnow() - timedelta(days=days)
+
+        query = self.db.query(Run).filter(
+            Run.status.in_(["failed", "timeout"]),
+            Run.created_at >= cutoff,
+        )
+
+        total = query.count()
+        offset = (page - 1) * page_size
+
+        items = (
+            query.order_by(desc(Run.created_at))
+            .offset(offset)
+            .limit(page_size)
+            .all()
+        )
+
+        return PaginatedResult(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+        )

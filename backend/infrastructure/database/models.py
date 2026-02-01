@@ -139,3 +139,24 @@ class UserPermission(Base):
 
     def __repr__(self) -> str:
         return f"<UserPermission(user_id={self.user_id}, use_hunren_keys={self.use_hunren_keys})>"
+
+
+class AuditLog(Base):
+    """
+    Represents an audit log entry for admin actions.
+
+    Tracks all admin actions for accountability and compliance.
+    """
+    __tablename__ = "audit_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    admin_email = Column(String(255), nullable=False, index=True)
+    action = Column(String(100), nullable=False, index=True)
+    target_type = Column(String(50), nullable=False, index=True)
+    target_id = Column(String(255), nullable=False)
+    details = Column(JSONB, nullable=True)
+    ip_address = Column(String(45), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    def __repr__(self) -> str:
+        return f"<AuditLog(admin={self.admin_email}, action={self.action}, target={self.target_type}/{self.target_id})>"

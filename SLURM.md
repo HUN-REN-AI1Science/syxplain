@@ -1,0 +1,488 @@
+# Slurm Integration Guide
+
+This guide explains how Syxplain integrates with a Slurm HPC cluster for compute-intensive tasks (SHAP analysis, PySR symbolic regression).
+
+## Table of Contents
+
+- [Architecture Overview](#architecture-overview)
+- [How It Works](#how-it-works)
+- [Initial Setup (One-Time)](#initial-setup-one-time)
+- [Environment Configuration](#environment-configuration)
+- [Token Management](#token-management)
+- [Worker Deployment](#worker-deployment)
+- [Testing the Integration](#testing-the-integration)
+- [Monitoring Jobs](#monitoring-jobs)
+- [Troubleshooting](#troubleshooting)
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           Your Server / Local Machine                        │
+│  ┌─────────────┐     ┌─────────────────────────────────────────────────┐    │
+│  │   Frontend  │────▶│              Backend API                        │    │
+│  │   (React)   │     │                                                 │    │
+│  └─────────────┘     │  1. Orchestrates analysis workflow              │    │
+│                      │  2. Submits jobs via slurmrestd REST API        │    │
+│                      │  3. Uploads input data (JSON over HTTP)         │    │
+│                      │  4. Polls job status                            │    │
+│                      │  5. Downloads results when complete             │    │
+│                      └──────────────────┬──────────────────────────────┘    │
+└─────────────────────────────────────────┼───────────────────────────────────┘
+                                          │
+                                          │ HTTP (port 6820)
+                                          │ No SSH tunnel needed!
+                                          ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     Slurm Cluster (slurm.science-cloud.hu)                   │
+│                                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                         slurmrestd API                                │   │
+│  │                     http://slurm.science-cloud.hu:6820               │   │
+│  │                                                                       │   │
+│  │  - Receives job submissions                                          │   │
+│  │  - Handles file upload/download (base64 over HTTP)                   │   │
+│  │  - Reports job status                                                │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                         Slurm Scheduler                               │   │
+│  │                                                                       │   │
+│  │  - Queues jobs                                                       │   │
+│  │  - Allocates resources                                               │   │
+│  │  - Dispatches to compute nodes                                       │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                         │
+│                    ┌───────────────┴───────────────┐                        │
+│                    ▼                               ▼                        │
+│  ┌─────────────────────────────┐   ┌─────────────────────────────┐         │
+│  │      Compute Node 1         │   │      Compute Node N         │         │
+│  │                             │   │                             │         │
+│  │  ┌───────────────────────┐  │   │  ┌───────────────────────┐  │         │
+│  │  │  syxplain_worker      │  │   │  │  syxplain_worker      │  │         │
+│  │  │  (Singularity/Conda)  │  │   │  │  (Singularity/Conda)  │  │         │
+│  │  │                       │  │   │  │                       │  │         │
+│  │  │  - SHAP analysis      │  │   │  │  - PySR regression    │  │         │
+│  │  │  - PySR regression    │  │   │  │  - SHAP analysis      │  │         │
+│  │  └───────────────────────┘  │   │  └───────────────────────┘  │         │
+│  └─────────────────────────────┘   └─────────────────────────────┘         │
+│                                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                      Shared Storage (/storage/)                       │   │
+│  │                                                                       │   │
+│  │  /storage/<username>/syxplain/           <- Staging directory        │   │
+│  │  ├── <job-uuid>/input.json               <- Input data               │   │
+│  │  ├── <job-uuid>/output.json              <- Results                  │   │
+│  │  └── <job-uuid>/output.json.stdout       <- Job logs                 │   │
+│  │                                                                       │   │
+│  │  /storage/<username>/containers/         <- Singularity containers   │   │
+│  │  └── syxplain-worker.sif                                             │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## How It Works
+
+### Job Submission Flow
+
+1. **User initiates analysis** via the web UI
+2. **Backend orchestrator** prepares input data and generates PySR configuration using LLM
+3. **Backend uploads input JSON** to the staging directory via slurmrestd file API
+4. **Backend submits job script** via slurmrestd job submission API
+5. **Slurm scheduler** queues the job and allocates resources
+6. **Compute node** runs the worker script (inside Singularity container or conda env)
+7. **Worker writes results** to output.json in the staging directory
+8. **Backend polls** job status via slurmrestd
+9. **Backend downloads results** when job completes
+10. **Orchestrator generates** LLM explanations and returns final results
+
+### What Gets Transferred Over HTTP
+
+| Data | Direction | Method |
+|------|-----------|--------|
+| Input JSON (dataset, config) | Backend → Slurm | base64 encoded via `PUT /slurm/v0.0.41/file` |
+| Job script (bash) | Backend → Slurm | JSON payload via `POST /slurm/v0.0.41/job/submit` |
+| Job status | Slurm → Backend | JSON via `GET /slurm/v0.0.41/job/{id}` |
+| Output JSON (results) | Slurm → Backend | base64 encoded via `GET /slurm/v0.0.41/file` |
+
+### What Must Be Pre-Deployed on Slurm
+
+The **worker code** (`slurm_worker/` Python module) must be available on the compute nodes. This is NOT transferred at runtime - it must be deployed beforehand via:
+
+- **Option A: Singularity container** (recommended) - self-contained, reproducible
+- **Option B: Conda environment** - requires conda setup on the cluster
+
+## Initial Setup (One-Time)
+
+### 1. Get Cluster Access
+
+Contact your Slurm administrator to obtain:
+- SSH access to the login node (`slurm.science-cloud.hu`)
+- A Slurm username with job submission permissions
+- Access to a partition (e.g., `batch_cpu_m2.large`)
+- Storage space under `/storage/<username>/`
+
+### 2. Create Staging Directory
+
+SSH to the cluster and create the staging directory:
+
+```bash
+ssh <username>@slurm.science-cloud.hu
+
+# Create staging directory for job files
+mkdir -p /storage/<username>/syxplain
+
+# Create directory for Singularity containers
+mkdir -p /storage/<username>/containers
+```
+
+### 3. Deploy the Worker
+
+See [Worker Deployment](#worker-deployment) section below.
+
+## Environment Configuration
+
+Configure these environment variables in your `.env` file:
+
+```bash
+# Slurm REST API endpoint (publicly accessible, no tunnel needed)
+SLURM_API_URL=http://slurm.science-cloud.hu:6820
+
+# JWT token for authentication (see Token Management section)
+SLURM_AUTH_TOKEN=<your-jwt-token>
+
+# Your Slurm username
+SLURM_USER_NAME=<your-username>
+
+# Partition to submit jobs to
+SLURM_PARTITION=batch_cpu_m2.large
+
+# Staging directory on shared storage (must exist and be writable)
+SLURM_STAGING_DIR=/storage/<username>/syxplain
+
+# Resource defaults (optional)
+SLURM_DEFAULT_MEMORY=4G
+SLURM_DEFAULT_CPUS=2
+SLURM_DEFAULT_TIME_LIMIT=01:00:00
+```
+
+## Token Management
+
+The Slurm REST API requires JWT authentication. Tokens are generated on the cluster using `scontrol`.
+
+### Generate a Token
+
+```bash
+# SSH to the cluster
+ssh <username>@slurm.science-cloud.hu
+
+# Generate token (lifespan in seconds)
+scontrol token username=<username> lifespan=3600      # 1 hour
+scontrol token username=<username> lifespan=86400     # 1 day
+scontrol token username=<username> lifespan=604800    # 1 week
+scontrol token username=<username> lifespan=31536000  # 1 year
+```
+
+### One-Liner (for scripts)
+
+```bash
+ssh <username>@slurm.science-cloud.hu "scontrol token username=<username> lifespan=3600"
+```
+
+### Token Refresh
+
+Tokens expire after their lifespan. For production:
+- Generate a long-lived token (1 year)
+- Set up a cron job or reminder to refresh before expiration
+- Update `SLURM_AUTH_TOKEN` in your environment when refreshed
+
+## Worker Deployment
+
+The worker code must be deployed to the Slurm cluster. Choose one method:
+
+### Option A: Singularity Container (Recommended)
+
+Singularity containers are self-contained and ensure reproducible environments.
+
+#### Prerequisites
+
+Install Singularity on your local machine:
+- **Linux**: `apt install singularity-container` or `yum install singularity`
+- **macOS**: Use a Linux VM or remote build
+- **Windows**: Use WSL2 with Singularity installed
+
+#### Build the Container
+
+```bash
+cd slurm_worker
+
+# Build using the provided script
+./build-singularity.sh
+
+# Or build manually
+singularity build --fakeroot syxplain-worker.sif syxplain-worker.def
+```
+
+This creates `syxplain-worker.sif` containing:
+- Python 3.11 with scientific computing stack
+- Julia 1.10.2 with PySR pre-compiled
+- SHAP and all dependencies
+- The worker code ready to execute
+
+#### Deploy to Cluster
+
+```bash
+# Copy container to cluster's shared storage
+scp syxplain-worker.sif <username>@slurm.science-cloud.hu:/storage/<username>/containers/
+```
+
+#### Update Backend Configuration
+
+The backend needs to know where the container is located. Update the job script generation in `backend/infrastructure/compute/slurm_backend.py` to use Singularity:
+
+```python
+# In _generate_worker_script method, change the script to:
+script = f"""#!/bin/bash
+#SBATCH --job-name=syxplain-{task.task_type}-{task.run_id[:8]}
+#SBATCH --output={output_path}.stdout
+#SBATCH --error={output_path}.stderr
+
+# Environment setup
+{env_section}
+
+CONTAINER_PATH="/storage/{slurm_settings.user_name}/containers/syxplain-worker.sif"
+
+# Run worker in Singularity container
+singularity run \\
+    --bind /storage:/storage \\
+    --cleanenv \\
+    --env CALLBACK_URL="$CALLBACK_URL" \\
+    --env CALLBACK_TOKEN="$CALLBACK_TOKEN" \\
+    "$CONTAINER_PATH" \\
+    --task-type {task.task_type} \\
+    --run-id {task.run_id} \\
+    --input "{input_path}" \\
+    --output "{output_path}"
+
+exit $?
+"""
+```
+
+### Option B: Conda Environment
+
+If you prefer conda, set up the environment on the cluster.
+
+#### Create Environment
+
+SSH to the cluster and run:
+
+```bash
+# Load conda (cluster-specific)
+module load anaconda  # or: source /path/to/conda/etc/profile.d/conda.sh
+
+# Create environment
+conda create -n syxplain_worker python=3.11 -y
+conda activate syxplain_worker
+
+# Install dependencies
+pip install -r /path/to/slurm_worker/requirements.txt
+
+# Install Julia for PySR (first run will be slow)
+python -c "from pysr import PySRRegressor; print('Julia ready')"
+```
+
+#### Install Worker Code
+
+```bash
+# Copy worker code to cluster
+scp -r slurm_worker <username>@slurm.science-cloud.hu:/storage/<username>/
+
+# Or install as a package
+cd /storage/<username>/slurm_worker
+pip install -e .
+```
+
+## Testing the Integration
+
+### 1. Test API Connectivity
+
+From your local machine:
+
+```bash
+curl -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
+     -H "Slurm-User-Name: $SLURM_USER_NAME" \
+     http://slurm.science-cloud.hu:6820/slurm/v0.0.41/ping
+```
+
+Expected response:
+```json
+{"meta":{"slurm":{"version":{"major":...}}}}
+```
+
+### 2. Test File Upload
+
+```bash
+# Create test file content (base64 encoded)
+CONTENT=$(echo '{"test": "hello"}' | base64)
+
+# Upload via API
+curl -X PUT \
+     -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
+     -H "Slurm-User-Name: $SLURM_USER_NAME" \
+     -H "Content-Type: application/json" \
+     -d "{\"path\": \"/storage/$SLURM_USER_NAME/syxplain/test.json\", \"data\": \"$CONTENT\", \"encoding\": \"base64\"}" \
+     http://slurm.science-cloud.hu:6820/slurm/v0.0.41/file
+```
+
+### 3. Test Job Submission
+
+SSH to the cluster and submit a test job:
+
+```bash
+# Simple test job
+sbatch <<EOF
+#!/bin/bash
+#SBATCH --job-name=test
+#SBATCH --partition=batch_cpu_m2.large
+#SBATCH --time=00:01:00
+
+echo "Hello from Slurm!"
+hostname
+EOF
+
+# Check job status
+squeue -u $USER
+```
+
+### 4. Test Worker Locally
+
+Before deploying, test the worker locally:
+
+```bash
+cd slurm_worker
+pip install -r requirements.txt
+
+# Run SHAP task on example data
+python test_worker_local.py --task shap --example 1
+
+# Run PySR with limited iterations
+python test_worker_local.py --task pysr --example 1 --niterations 5
+```
+
+## Monitoring Jobs
+
+### Via Command Line (SSH)
+
+```bash
+# List your jobs
+squeue -u <username>
+
+# Job details
+scontrol show job <job_id>
+
+# Job history
+sacct -j <job_id> --format=JobID,JobName,State,ExitCode,Elapsed,MaxRSS
+
+# Cancel a job
+scancel <job_id>
+```
+
+### Via REST API
+
+```bash
+# Get job status
+curl -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
+     -H "Slurm-User-Name: $SLURM_USER_NAME" \
+     http://slurm.science-cloud.hu:6820/slurm/v0.0.41/job/<job_id>
+```
+
+### Check Job Output
+
+```bash
+# SSH to cluster
+ssh <username>@slurm.science-cloud.hu
+
+# View job stdout
+cat /storage/<username>/syxplain/<job-uuid>/output.json.stdout
+
+# View job stderr
+cat /storage/<username>/syxplain/<job-uuid>/output.json.stderr
+
+# View results
+cat /storage/<username>/syxplain/<job-uuid>/output.json | python -m json.tool
+```
+
+## Troubleshooting
+
+### Connection Issues
+
+**"Connection refused" or timeout:**
+- Verify the API URL: `http://slurm.science-cloud.hu:6820`
+- Check your network/firewall allows outbound connections to port 6820
+- Test with curl: `curl http://slurm.science-cloud.hu:6820/slurm/v0.0.41/ping`
+
+**"401 Unauthorized":**
+- Token may be expired - generate a new one
+- Token may be for wrong user - verify `SLURM_USER_NAME` matches token
+
+### Job Failures
+
+**Job stuck in PENDING:**
+```bash
+# Check why via SSH
+squeue -u <username> -l
+scontrol show job <job_id> | grep Reason
+```
+
+Common reasons:
+- `Resources` - waiting for nodes to free up
+- `Priority` - other jobs have higher priority
+- `QOSMaxJobsPerUserLimit` - hit job limit
+
+**Job fails immediately:**
+- Check job stderr: `cat /storage/.../output.json.stderr`
+- Verify worker is deployed correctly
+- Verify staging directory exists and is writable
+
+**"ModuleNotFoundError: syxplain_worker":**
+- Worker code not installed on compute nodes
+- If using conda: activate environment not working
+- If using Singularity: container path incorrect
+
+**Julia compilation errors:**
+- First PySR run compiles Julia (slow but one-time)
+- If using container, Julia should be pre-compiled
+- Rebuild container if Julia issues persist
+
+### File Transfer Issues
+
+**"File not found" during upload:**
+- Staging directory doesn't exist
+- Create it: `ssh user@slurm... "mkdir -p /storage/<user>/syxplain"`
+
+**"Permission denied":**
+- Directory not owned by your user
+- Check permissions: `ls -la /storage/<user>/`
+
+### Container Issues
+
+**Container not found:**
+- Verify path: `/storage/<username>/containers/syxplain-worker.sif`
+- Check file was copied: `ssh user@slurm... "ls -la /storage/<user>/containers/"`
+
+**Container can't access files:**
+- Need bind mount: `singularity run --bind /storage:/storage ...`
+
+**Out of memory during container build:**
+```bash
+export SINGULARITY_TMPDIR=/path/to/large/tmp
+./build-singularity.sh
+```
+
+## Additional Resources
+
+- [slurm_worker/README.md](../slurm_worker/README.md) - Detailed worker documentation
+- [Slurm Documentation](https://slurm.schedmd.com/documentation.html)
+- [slurmrestd API Reference](https://slurm.schedmd.com/rest_api.html)
+- [Singularity Documentation](https://docs.sylabs.io/guides/latest/user-guide/)

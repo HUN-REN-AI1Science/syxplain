@@ -1,8 +1,8 @@
 """
 Compute backend base classes and interfaces.
 
-Defines the abstract interface for compute backends that can execute
-SHAP and PySR tasks either locally or on remote clusters.
+Defines the abstract interface for compute backends that execute
+SHAP and PySR tasks on the Slurm cluster.
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -68,13 +68,13 @@ class ComputeJob:
     """
     Represents a submitted compute job.
 
-    Tracks the job throughout its lifecycle.
+    Tracks the job throughout its lifecycle on the Slurm cluster.
     """
     job_id: str
     task_type: str
     run_id: str
-    backend: str  # "local" or "slurm"
     status: TaskStatus
+    backend: str = "slurm"  # Always Slurm
     submitted_at: datetime = field(default_factory=datetime.utcnow)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -83,14 +83,13 @@ class ComputeBackend(ABC):
     """
     Abstract base class for compute backends.
 
-    Implementations handle the details of running tasks on different
-    infrastructure (local processes, Slurm clusters, etc.).
+    Currently only Slurm is supported via slurm.science-cloud.hu.
     """
 
     @property
     @abstractmethod
     def name(self) -> str:
-        """Return the backend name (e.g., 'local', 'slurm')."""
+        """Return the backend name."""
         pass
 
     @abstractmethod

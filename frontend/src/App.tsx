@@ -5,7 +5,7 @@ import ProblemView from '@pages/ProblemView';
 import ResultsView from '@pages/results/ResultsView';
 import HistoryView from '@pages/HistoryView';
 import ProfileView from '@pages/ProfileView';
-import AdminView from '@pages/admin/AdminView';
+import AdminLayout from '@pages/admin/AdminLayout';
 import Login from '@pages/auth/Login';
 import SignUp from '@pages/auth/SignUp';
 import ForgotPassword from '@pages/auth/ForgotPassword';
@@ -111,7 +111,7 @@ function MainApp() {
         <div className="max-w-5xl mx-auto">
           {view === 'admin' ? (
             <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
-              <AdminView onBack={() => setView('workflow')} />
+              <AdminLayout onBack={() => setView('workflow')} />
             </Card>
           ) : view === 'history' ? (
             <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
