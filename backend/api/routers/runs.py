@@ -20,7 +20,7 @@ from backend.core.exceptions import (
 )
 from backend.services.run_service import RunService
 from backend.services.permission_service import PermissionService
-from backend.schemas.requests import RunRequest
+from backend.schemas.requests import RunRequest, SortField, SortOrder
 from backend.schemas.responses import (
     PaginatedRunsResponse,
     RunResponse,
@@ -127,8 +127,8 @@ def run_analysis(
 def list_runs(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
-    sort_field: str = Query("created_at", description="Field to sort by"),
-    sort_order: str = Query("desc", description="Sort order: asc or desc"),
+    sort_field: SortField = Query(SortField.CREATED_AT, description="Field to sort by"),
+    sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order: asc or desc"),
     status: Optional[str] = Query(None, description="Filter by status"),
     analysis_type: Optional[str] = Query(None, description="Filter by analysis type"),
     search: Optional[str] = Query(None, description="Search in filename and target variable"),
@@ -154,8 +154,8 @@ def list_runs(
         user_id=current_user.user_id,
         page=page,
         page_size=page_size,
-        sort_field=sort_field,
-        sort_order=sort_order,
+        sort_field=sort_field.value,
+        sort_order=sort_order.value,
         status=status,
         analysis_type=analysis_type,
         search=search

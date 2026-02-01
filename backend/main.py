@@ -21,6 +21,7 @@ from backend.core.config import get_settings
 from backend.core.exceptions import register_exception_handlers
 from backend.core.logging import configure_logging, configure_uvicorn_logging
 from backend.core.rate_limit import limiter
+from backend.core.security_logging import SecurityLoggingMiddleware
 from backend.infrastructure.database.connection import init_db
 
 # Import routers
@@ -102,6 +103,9 @@ def create_app() -> FastAPI:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
+
+    # Security logging (OWASP: A09 - Security Logging and Monitoring)
+    app.add_middleware(SecurityLoggingMiddleware)
 
     # Security headers (OWASP best practices)
     app.add_middleware(SecurityHeadersMiddleware)

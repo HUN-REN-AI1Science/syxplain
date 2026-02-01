@@ -116,7 +116,7 @@ def revoke_share_link(
     "/api/public/{share_token}",
     response_model=PublicRunResponse
 )
-@limiter.limit("30/minute")  # Rate limit public access to prevent enumeration
+@limiter.limit("5/minute")  # Strict rate limit to prevent token enumeration attacks
 def get_public_run(
     request: Request,  # Required for rate limiting
     share_token: str,
@@ -141,7 +141,9 @@ def get_public_run(
 
 
 @router.get("/api/public/{share_token}/details")
+@limiter.limit("5/minute")  # Strict rate limit to prevent token enumeration attacks
 def get_public_run_details(
+    request: Request,  # Required for rate limiting
     share_token: str,
     share_service: ShareService = Depends(get_share_service)
 ):
@@ -164,7 +166,9 @@ def get_public_run_details(
 
 
 @router.get("/api/public/{share_token}/download-csv")
+@limiter.limit("5/minute")  # Strict rate limit to prevent token enumeration attacks
 def download_public_csv(
+    request: Request,  # Required for rate limiting
     share_token: str,
     share_service: ShareService = Depends(get_share_service)
 ):

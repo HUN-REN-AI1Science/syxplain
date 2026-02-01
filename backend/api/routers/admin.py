@@ -25,7 +25,7 @@ from backend.services.audit_service import AuditService
 from backend.services.admin_stats_service import AdminStatsService
 from backend.services.system_monitor_service import SystemMonitorService
 from backend.repositories.run_repository import RunRepository, AdminRunFilters, PaginationParams
-from backend.schemas.requests import UpdatePermissionRequest
+from backend.schemas.requests import UpdatePermissionRequest, SortField, SortOrder
 from backend.schemas.responses import (
     # User management
     UsersWithPermissionsResponse,
@@ -271,8 +271,8 @@ def get_all_runs(
     request: Request,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=100),
-    sort_field: str = Query(default="created_at"),
-    sort_order: str = Query(default="desc"),
+    sort_field: SortField = Query(default=SortField.CREATED_AT),
+    sort_order: SortOrder = Query(default=SortOrder.DESC),
     status: Optional[str] = None,
     analysis_type: Optional[str] = None,
     user_id: Optional[str] = None,
@@ -295,8 +295,8 @@ def get_all_runs(
     pagination = PaginationParams(
         page=page,
         page_size=page_size,
-        sort_field=sort_field,
-        sort_order=sort_order,
+        sort_field=sort_field.value,
+        sort_order=sort_order.value,
     )
 
     result = run_repo.get_all_runs(filters=filters, pagination=pagination)

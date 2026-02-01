@@ -27,7 +27,9 @@ class ShareService:
     and retrieving shared run data.
     """
 
-    SHARE_TOKEN_LENGTH = 24  # 32 characters when URL-safe encoded
+    # 32 bytes = 256 bits of entropy, produces ~43 character URL-safe token
+    # This provides strong protection against enumeration attacks
+    SHARE_TOKEN_LENGTH = 32
 
     def __init__(
         self,

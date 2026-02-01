@@ -104,14 +104,17 @@ class LangfuseSettings:
 
 @dataclass
 class SlurmSettings:
-    """Slurm cluster settings for slurmrestd API integration."""
+    """
+    Slurm cluster settings for slurmrestd API integration.
+
+    Resource allocation (cpus, memory, time_limit) is managed at the
+    Slurm partition level, not per-job. This simplifies configuration
+    and ensures consistent resource usage across all jobs.
+    """
     api_url: str = field(default_factory=lambda: os.environ.get("SLURM_API_URL", ""))
     auth_token: str = field(default_factory=lambda: os.environ.get("SLURM_AUTH_TOKEN", ""))
     user_name: str = field(default_factory=lambda: os.environ.get("SLURM_USER_NAME", "slurm"))
     partition: str = field(default_factory=lambda: os.environ.get("SLURM_PARTITION", "compute"))
-    default_memory: str = field(default_factory=lambda: os.environ.get("SLURM_DEFAULT_MEMORY", "16G"))
-    default_cpus: int = field(default_factory=lambda: int(os.environ.get("SLURM_DEFAULT_CPUS", "8")))
-    default_time_limit: str = field(default_factory=lambda: os.environ.get("SLURM_DEFAULT_TIME_LIMIT", "04:00:00"))
     staging_dir: str = field(default_factory=lambda: os.environ.get("SLURM_STAGING_DIR", "/tmp/syxplain"))
 
     @property

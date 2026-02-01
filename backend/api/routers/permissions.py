@@ -4,6 +4,7 @@ Permission endpoints router.
 Provides endpoints for checking user permissions and validating API keys.
 """
 import logging
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -15,6 +16,33 @@ from backend.schemas.requests import ValidateKeysRequest
 from backend.schemas.responses import PermissionResponse, ValidateKeysResponse
 
 logger = logging.getLogger(__name__)
+
+# OpenAI API key format pattern
+# Keys start with "sk-" followed by alphanumeric chars, hyphens, and underscores
+# Minimum 32 characters after prefix (typical keys are 48-51 chars total)
+OPENAI_KEY_PATTERN = re.compile(r'^sk-[a-zA-Z0-9_-]{32,}$')
+
+
+def validate_api_key_format(api_key: str) -> tuple[bool, str]:
+    """
+    Validate OpenAI API key format before making external API call.
+
+    This prevents wasting API calls on obviously invalid keys and
+    provides faster feedback to users.
+
+    Args:
+        api_key: The API key to validate
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not api_key:
+        return False, "API key is required"
+
+    if not OPENAI_KEY_PATTERN.match(api_key):
+        return False, "Invalid API key format. OpenAI keys start with 'sk-'"
+
+    return True, ""
 
 router = APIRouter(prefix="/api", tags=["Permissions"])
 
@@ -53,6 +81,7 @@ async def validate_api_keys(
     Validate OpenAI API key before analysis.
 
     This endpoint verifies the API key is valid without storing it.
+    First checks format locally, then makes an API call to verify.
 
     Returns:
         ValidateKeysResponse with valid flag
@@ -60,6 +89,12 @@ async def validate_api_keys(
     Raises:
         HTTPException: If the API key is invalid
     """
+    # Validate format before making external API call
+    is_valid_format, format_error = validate_api_key_format(body.openai_api_key)
+    if not is_valid_format:
+        logger.warning(f"Invalid API key format from user {current_user.user_id}")
+        raise HTTPException(status_code=400, detail=format_error)
+
     try:
         import openai
         client = openai.OpenAI(api_key=body.openai_api_key)

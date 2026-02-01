@@ -4,9 +4,24 @@ Pydantic request schemas for API endpoints.
 These schemas define the structure and validation rules
 for incoming request data.
 """
+from enum import Enum
 from typing import Dict, Optional
 
 from pydantic import BaseModel, Field, field_validator
+
+
+class SortField(str, Enum):
+    """Valid fields for sorting runs."""
+    CREATED_AT = "created_at"
+    CSV_FILENAME = "csv_filename"
+    STATUS = "status"
+    ANALYSIS_TYPE = "analysis_type"
+
+
+class SortOrder(str, Enum):
+    """Sort order direction."""
+    ASC = "asc"
+    DESC = "desc"
 
 
 class ProblemDescription(BaseModel):

@@ -5,6 +5,7 @@ Provides endpoints for Slurm workers to push progress updates
 back to the backend.
 """
 import logging
+import secrets
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
@@ -39,7 +40,12 @@ class WorkerCompletionReport(BaseModel):
 
 
 def _validate_worker_token(token: str) -> bool:
-    """Validate the worker callback token."""
+    """
+    Validate the worker callback token using constant-time comparison.
+
+    Uses secrets.compare_digest to prevent timing attacks that could
+    allow an attacker to guess the token byte-by-byte.
+    """
     compute_settings = get_compute_settings()
     expected_token = compute_settings.worker_callback_token
 
@@ -48,7 +54,8 @@ def _validate_worker_token(token: str) -> bool:
         logger.warning("Worker callback token not configured - rejecting request")
         return False
 
-    return token == expected_token
+    # Use constant-time comparison to prevent timing attacks
+    return secrets.compare_digest(token, expected_token)
 
 
 @router.post("/progress/{run_id}")

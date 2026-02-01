@@ -10,6 +10,11 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from backend.core.config import get_slurm_settings, get_compute_settings
+from backend.utils.security_utils import (
+    shell_escape,
+    validate_slurm_identifier,
+    validate_url,
+)
 from backend.infrastructure.compute.base import (
     ComputeBackend,
     ComputeBackendError,
@@ -93,17 +98,32 @@ class SlurmComputeBackend(ComputeBackend):
 
         Returns:
             Bash script content
+
+        Raises:
+            ValueError: If task contains invalid identifiers or URLs
         """
         compute_settings = get_compute_settings()
 
-        # Build environment variables for the worker
+        # Validate identifiers to prevent injection (raises ValueError if invalid)
+        validate_slurm_identifier(task.task_type, "task_type")
+        validate_slurm_identifier(task.run_id, "run_id")
+
+        # Build environment variables for the worker with proper escaping
         env_vars = []
         if task.callback_url:
-            env_vars.append(f'export CALLBACK_URL="{task.callback_url}"')
+            # Validate URL scheme before escaping
+            validate_url(task.callback_url, "callback_url")
+            escaped_url = shell_escape(task.callback_url)
+            env_vars.append(f'export CALLBACK_URL={escaped_url}')
         if task.callback_token:
-            env_vars.append(f'export CALLBACK_TOKEN="{task.callback_token}"')
+            escaped_token = shell_escape(task.callback_token)
+            env_vars.append(f'export CALLBACK_TOKEN={escaped_token}')
 
         env_section = "\n".join(env_vars) if env_vars else "# No callback configured"
+
+        # Escape paths for safe interpolation
+        escaped_input_path = shell_escape(input_path)
+        escaped_output_path = shell_escape(output_path)
 
         script = f"""#!/bin/bash
 #SBATCH --job-name=syxplain-{task.task_type}-{task.run_id[:8]}
@@ -123,8 +143,8 @@ fi
 python -m syxplain_worker \\
     --task-type {task.task_type} \\
     --run-id {task.run_id} \\
-    --input "{input_path}" \\
-    --output "{output_path}"
+    --input {escaped_input_path} \\
+    --output {escaped_output_path}
 
 # Exit with worker's exit code
 exit $?
@@ -159,20 +179,11 @@ exit $?
             # Generate job script
             script = self._generate_worker_script(task, input_path, output_path)
 
-            # Configure resources
-            resources = task.resources or {}
-            cpus = resources.get("cpus", slurm_settings.default_cpus)
-            memory = resources.get("memory", slurm_settings.default_memory)
-            time_limit = resources.get("time_limit", slurm_settings.default_time_limit)
-
-            # Create submission
+            # Create submission - use partition defaults configured in Slurm
             submission = SlurmJobSubmission(
                 script=script,
                 name=f"syxplain-{task.task_type}-{task.run_id[:8]}",
                 partition=slurm_settings.partition,
-                cpus=cpus,
-                memory=memory,
-                time_limit=time_limit,
                 working_directory=staging_dir,
             )
 

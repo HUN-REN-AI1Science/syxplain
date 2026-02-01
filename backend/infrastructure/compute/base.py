@@ -42,13 +42,14 @@ class ComputeTaskInput:
     Input specification for a compute task.
 
     Contains all information needed to execute a task on any backend.
+    Resources (cpus, memory, time_limit) are configured at the Slurm
+    partition level rather than per-task.
     """
     task_type: str  # "shap" or "pysr"
     run_id: str  # Associated run ID for progress tracking
     input_data: Dict[str, Any]  # Serialized task input
     callback_url: Optional[str] = None  # URL for progress updates
     callback_token: Optional[str] = None  # Auth token for callbacks
-    resources: Dict[str, Any] = field(default_factory=dict)  # cpus, memory, time_limit
 
 
 @dataclass
