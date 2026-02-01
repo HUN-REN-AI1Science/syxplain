@@ -8,7 +8,6 @@ import { DataTable, DataTablePageEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Toast } from 'primereact/toast';
 import { Button } from 'primereact/button';
-import { InputText } from 'primereact/inputtext';
 import { Dropdown } from 'primereact/dropdown';
 import { Calendar } from 'primereact/calendar';
 import { Tag } from 'primereact/tag';
@@ -102,7 +101,15 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
   };
 
   const exportToCSV = () => {
-    const headers = ['Date', 'Admin', 'Action', 'Target Type', 'Target ID', 'IP Address', 'Details'];
+    const headers = [
+      'Date',
+      'Admin',
+      'Action',
+      'Target Type',
+      'Target ID',
+      'IP Address',
+      'Details',
+    ];
     const rows = logs.map((log) => [
       new Date(log.created_at).toISOString(),
       log.admin_email,
@@ -162,21 +169,17 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
   );
 
   const dateTemplate = (rowData: AuditLogEntry) => (
-    <span className="text-sm">
-      {new Date(rowData.created_at).toLocaleString()}
-    </span>
+    <span className="text-sm">{new Date(rowData.created_at).toLocaleString()}</span>
   );
 
   const adminTemplate = (rowData: AuditLogEntry) => (
     <div className="flex flex-col">
       <span className="text-sm">{rowData.admin_email}</span>
-      {rowData.ip_address && (
-        <span className="text-xs text-slate-400">{rowData.ip_address}</span>
-      )}
+      {rowData.ip_address && <span className="text-xs text-slate-400">{rowData.ip_address}</span>}
     </div>
   );
 
-  const detailsTemplate = (rowData: AuditLogEntry) => (
+  const detailsTemplate = (rowData: AuditLogEntry) =>
     rowData.details ? (
       <Button
         icon="pi pi-eye"
@@ -186,8 +189,7 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
       />
     ) : (
       <span className="text-slate-400">-</span>
-    )
-  );
+    );
 
   const actionOptions = filterOptions?.actions.map((a) => ({ label: a, value: a })) || [];
   const adminOptions = filterOptions?.admins.map((a) => ({ label: a, value: a })) || [];
@@ -306,12 +308,7 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
         paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
         currentPageReportTemplate="Showing {first} to {last} of {totalRecords} logs"
       >
-        <Column
-          field="created_at"
-          header="Date"
-          body={dateTemplate}
-          style={{ width: '160px' }}
-        />
+        <Column field="created_at" header="Date" body={dateTemplate} style={{ width: '160px' }} />
         <Column header="Admin" body={adminTemplate} style={{ width: '220px' }} />
         <Column header="Action" body={actionTemplate} style={{ width: '180px' }} />
         <Column header="Target" body={targetTemplate} style={{ width: '180px' }} />

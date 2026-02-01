@@ -22,7 +22,7 @@ import WorkflowSteps from '@components/WorkflowSteps';
 const WORKFLOW_STEPS = [
   { label: 'Upload Data' },
   { label: 'Define Problem' },
-  { label: 'Analysis Results' }
+  { label: 'Analysis Results' },
 ];
 
 function MainApp() {
@@ -38,7 +38,12 @@ function MainApp() {
   const nodeRef = useRef(null);
   const { signOut, user, isAdmin } = useAuth();
 
-  const handleUploadComplete = (fname: string, cols: string[], excludedCols: string[] = [], nanCountsData: Record<string, number> = {}) => {
+  const handleUploadComplete = (
+    fname: string,
+    cols: string[],
+    excludedCols: string[] = [],
+    nanCountsData: Record<string, number> = {}
+  ) => {
     setFilename(fname);
     setColumns(cols);
     setExcludedColumns(excludedCols);
@@ -51,7 +56,8 @@ function MainApp() {
     setActiveIndex(2);
 
     try {
-      const { analysis_type, deep_research_model, user_api_keys, ...problemDescription } = problemData;
+      const { analysis_type, deep_research_model, user_api_keys, ...problemDescription } =
+        problemData;
       const response = await runsService.create({
         problem_description: problemDescription,
         csv_filename: filename!,
@@ -119,31 +125,42 @@ function MainApp() {
             </Card>
           ) : view === 'profile' ? (
             <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
-                <ProfileView onBack={() => setView('workflow')} onSelectRun={handleSelectRun} />
+              <ProfileView onBack={() => setView('workflow')} onSelectRun={handleSelectRun} />
             </Card>
           ) : (
             <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
-                  <div className="flex flex-col">
-                    <WorkflowSteps activeIndex={activeIndex} items={WORKFLOW_STEPS} />
+              <div className="flex flex-col">
+                <WorkflowSteps activeIndex={activeIndex} items={WORKFLOW_STEPS} />
 
-                    <div className="mt-6 min-h-[400px] relative overflow-hidden">
-                      <SwitchTransition mode="out-in">
-                        <CSSTransition
-                          key={activeIndex}
-                          nodeRef={nodeRef}
-                          timeout={300}
-                          classNames="fade"
-                          unmountOnExit
-                        >
-                          <div ref={nodeRef} className="w-full">
-                            {activeIndex === 0 && <UploadView onUploadComplete={handleUploadComplete} />}
-                            {activeIndex === 1 && <ProblemView columns={columns} excludedColumns={excludedColumns} nanCounts={nanCounts} onSubmit={handleStartAnalysis} />}
-                            {activeIndex === 2 && runId && <ResultsView runId={runId} fromHistory={fromHistory} />}
-                          </div>
-                        </CSSTransition>
-                      </SwitchTransition>
-                    </div>
-                  </div>
+                <div className="mt-6 min-h-[400px] relative overflow-hidden">
+                  <SwitchTransition mode="out-in">
+                    <CSSTransition
+                      key={activeIndex}
+                      nodeRef={nodeRef}
+                      timeout={300}
+                      classNames="fade"
+                      unmountOnExit
+                    >
+                      <div ref={nodeRef} className="w-full">
+                        {activeIndex === 0 && (
+                          <UploadView onUploadComplete={handleUploadComplete} />
+                        )}
+                        {activeIndex === 1 && (
+                          <ProblemView
+                            columns={columns}
+                            excludedColumns={excludedColumns}
+                            nanCounts={nanCounts}
+                            onSubmit={handleStartAnalysis}
+                          />
+                        )}
+                        {activeIndex === 2 && runId && (
+                          <ResultsView runId={runId} fromHistory={fromHistory} />
+                        )}
+                      </div>
+                    </CSSTransition>
+                  </SwitchTransition>
+                </div>
+              </div>
             </Card>
           )}
         </div>
@@ -159,11 +176,14 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/share/:token" element={<PublicResultsView />} />
-        <Route path="*" element={
-          <AuthProvider>
-            <AuthGate />
-          </AuthProvider>
-        } />
+        <Route
+          path="*"
+          element={
+            <AuthProvider>
+              <AuthGate />
+            </AuthProvider>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );
@@ -189,10 +209,10 @@ function AuthGate() {
     return showSignUp ? (
       <SignUp onSwitchToLogin={() => setShowSignUp(false)} />
     ) : (
-        <Login
-          onSwitchToSignUp={() => setShowSignUp(true)}
-          onForgotPassword={() => setShowForgotPassword(true)}
-        />
+      <Login
+        onSwitchToSignUp={() => setShowSignUp(true)}
+        onForgotPassword={() => setShowForgotPassword(true)}
+      />
     );
   }
 

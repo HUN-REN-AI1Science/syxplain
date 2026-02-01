@@ -15,7 +15,12 @@ export const WorkflowSteps: React.FC<WorkflowStepsProps> = ({ activeIndex, items
   <div className="px-4 pt-4">
     {/* Desktop Steps */}
     <div className="hidden md:block">
-      <Steps model={items} activeIndex={activeIndex} readOnly={true} className="mb-8 custom-steps" />
+      <Steps
+        model={items}
+        activeIndex={activeIndex}
+        readOnly={true}
+        className="mb-8 custom-steps"
+      />
     </div>
 
     {/* Mobile Steps */}

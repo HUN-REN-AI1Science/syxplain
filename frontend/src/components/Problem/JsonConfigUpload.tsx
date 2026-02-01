@@ -12,10 +12,7 @@ interface JsonConfigUploadProps {
   onChange: (content: string) => void;
 }
 
-export const JsonConfigUpload: React.FC<JsonConfigUploadProps> = ({
-  jsonContent,
-  onChange,
-}) => {
+export const JsonConfigUpload: React.FC<JsonConfigUploadProps> = ({ jsonContent, onChange }) => {
   const handleJsonUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const reader = new FileReader();
@@ -31,7 +28,13 @@ export const JsonConfigUpload: React.FC<JsonConfigUploadProps> = ({
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="border-2 border-dashed border-slate-300 rounded-2xl p-12 text-center hover:border-blue-400 hover:bg-slate-50 transition-colors cursor-pointer relative group">
-        <input type="file" accept=".json" onChange={handleJsonUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" id="json-upload" />
+        <input
+          type="file"
+          accept=".json"
+          onChange={handleJsonUpload}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          id="json-upload"
+        />
         <div className="bg-slate-100 p-4 rounded-full inline-block mb-4 group-hover:bg-white group-hover:shadow-sm transition-all">
           <i className="pi pi-file text-4xl text-slate-400 group-hover:text-blue-500 transition-colors"></i>
         </div>
@@ -41,9 +44,13 @@ export const JsonConfigUpload: React.FC<JsonConfigUploadProps> = ({
 
       <div className="relative">
         <div className="flex justify-between items-center mb-2">
-          <label className="block text-sm font-bold text-slate-700 ml-1">Configuration Preview</label>
+          <label className="block text-sm font-bold text-slate-700 ml-1">
+            Configuration Preview
+          </label>
           <HelpButton title="Example Configuration">
-            <p className="text-sm text-slate-600 mb-3">Your JSON file should follow this structure:</p>
+            <p className="text-sm text-slate-600 mb-3">
+              Your JSON file should follow this structure:
+            </p>
             <pre className="bg-slate-800 text-slate-100 p-3 rounded text-xs font-mono overflow-x-auto">
               {`{
   "project_description": "Predicting house prices based on features.",
@@ -62,7 +69,7 @@ export const JsonConfigUpload: React.FC<JsonConfigUploadProps> = ({
           rows={12}
           value={jsonContent}
           onChange={(e) => onChange(e.target.value)}
-          placeholder='Paste your JSON configuration here...'
+          placeholder="Paste your JSON configuration here..."
         />
       </div>
     </div>
@@ -70,4 +77,3 @@ export const JsonConfigUpload: React.FC<JsonConfigUploadProps> = ({
 };
 
 export default JsonConfigUpload;
-

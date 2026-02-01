@@ -3,16 +3,16 @@ System monitor service for health checks and Slurm cluster status.
 
 Provides real-time system health information for the admin dashboard.
 """
-import asyncio
+
+import contextlib
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
 
-from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-from backend.core.config import get_settings, get_slurm_settings, get_compute_settings
+from backend.core.config import get_settings, get_slurm_settings
 from backend.infrastructure.database.models import Run
 
 logger = logging.getLogger(__name__)
@@ -92,6 +92,7 @@ class SystemMonitorService:
 
             # Simple HTTP check using httpx sync client
             import httpx
+
             response = httpx.get(
                 f"{slurm_settings.api_url}/slurm/v0.0.41/diag",
                 headers={
@@ -105,7 +106,7 @@ class SystemMonitorService:
             logger.debug(f"Slurm health check failed: {e}")
             return False
 
-    def get_slurm_status(self) -> Optional[dict]:
+    def get_slurm_status(self) -> dict | None:
         """
         Get Slurm cluster status.
 
@@ -138,7 +139,7 @@ class SystemMonitorService:
             if diag_response.status_code != 200:
                 return {"error": "Failed to get Slurm diagnostics"}
 
-            diag_data = diag_response.json()
+            diag_response.json()
 
             # Get jobs info
             jobs_response = httpx.get(
@@ -163,7 +164,9 @@ class SystemMonitorService:
                 timeout=10.0,
             )
 
-            partitions_data = partitions_response.json() if partitions_response.status_code == 200 else {}
+            partitions_data = (
+                partitions_response.json() if partitions_response.status_code == 200 else {}
+            )
             partitions = partitions_data.get("partitions", [])
 
             # Get nodes info
@@ -186,18 +189,24 @@ class SystemMonitorService:
             # Aggregate node status
             node_status = {}
             for node in nodes:
-                state = node.get("state", ["UNKNOWN"])[0] if isinstance(node.get("state"), list) else node.get("state", "UNKNOWN")
+                state = (
+                    node.get("state", ["UNKNOWN"])[0]
+                    if isinstance(node.get("state"), list)
+                    else node.get("state", "UNKNOWN")
+                )
                 node_status[state] = node_status.get(state, 0) + 1
 
             # Build partition summary
             partition_summary = []
             for part in partitions:
-                partition_summary.append({
-                    "name": part.get("name", "unknown"),
-                    "state": part.get("state", "UNKNOWN"),
-                    "total_nodes": part.get("total_nodes", 0),
-                    "total_cpus": part.get("total_cpus", 0),
-                })
+                partition_summary.append(
+                    {
+                        "name": part.get("name", "unknown"),
+                        "state": part.get("state", "UNKNOWN"),
+                        "total_nodes": part.get("total_nodes", 0),
+                        "total_cpus": part.get("total_cpus", 0),
+                    }
+                )
 
             return {
                 "cluster_status": "healthy" if running_jobs >= 0 else "degraded",
@@ -234,7 +243,7 @@ class SystemMonitorService:
             logger.error(f"Failed to get database stats: {e}")
             return {"status": "error", "error": str(e)}
 
-    def _mask_secret(self, secret: Optional[str], visible_chars: int = 4) -> Optional[str]:
+    def _mask_secret(self, secret: str | None, visible_chars: int = 4) -> str | None:
         """
         Mask a secret value, showing only the last few characters.
 
@@ -251,7 +260,7 @@ class SystemMonitorService:
             return "***"
         return f"***{secret[-visible_chars:]}"
 
-    def _extract_db_host(self, database_url: Optional[str]) -> Optional[str]:
+    def _extract_db_host(self, database_url: str | None) -> str | None:
         """
         Extract the hostname from a database URL.
 
@@ -265,6 +274,7 @@ class SystemMonitorService:
             return None
         try:
             from urllib.parse import urlparse
+
             parsed = urlparse(database_url)
             return parsed.hostname
         except Exception:
@@ -281,10 +291,8 @@ class SystemMonitorService:
 
         # Get slurm settings for masked secrets
         slurm_settings = None
-        try:
+        with contextlib.suppress(Exception):
             slurm_settings = get_slurm_settings()
-        except Exception:
-            pass
 
         # Build sanitized config - Slurm is the only supported backend
         config = {
@@ -304,7 +312,9 @@ class SystemMonitorService:
             "secrets": {
                 "openai_api_key": self._mask_secret(settings.llm.openai_api_key),
                 "deep_research_api_key": self._mask_secret(settings.llm.deep_research_api_key),
-                "slurm_auth_token": self._mask_secret(slurm_settings.auth_token if slurm_settings else None),
+                "slurm_auth_token": self._mask_secret(
+                    slurm_settings.auth_token if slurm_settings else None
+                ),
                 "database_host": self._extract_db_host(settings.database.url),
             },
         }

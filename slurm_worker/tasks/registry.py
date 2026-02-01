@@ -5,10 +5,11 @@ Provides centralized task creation and registration,
 following the Open/Closed principle - new tasks can be
 added without modifying existing code.
 """
-from typing import Callable, Dict, Type
 
-from slurm_worker.tasks.base import Task
+from collections.abc import Callable
+
 from slurm_worker.reporting import ProgressReporter
+from slurm_worker.tasks.base import Task
 
 
 class TaskRegistry:
@@ -19,10 +20,10 @@ class TaskRegistry:
     Supports both class registration and factory function registration.
     """
 
-    _tasks: Dict[str, Type[Task]] = {}
+    _tasks: dict[str, type[Task]] = {}
 
     @classmethod
-    def register(cls, name: str) -> Callable[[Type[Task]], Type[Task]]:
+    def register(cls, name: str) -> Callable[[type[Task]], type[Task]]:
         """
         Decorator to register a task class.
 
@@ -37,14 +38,16 @@ class TaskRegistry:
         Returns:
             Decorator function
         """
-        def decorator(task_cls: Type[Task]) -> Type[Task]:
+
+        def decorator(task_cls: type[Task]) -> type[Task]:
             cls._tasks[name] = task_cls
             task_cls.name = name
             return task_cls
+
         return decorator
 
     @classmethod
-    def get(cls, name: str) -> Type[Task]:
+    def get(cls, name: str) -> type[Task]:
         """
         Get task class by name.
 

@@ -3,8 +3,8 @@ Repository for user permission data access.
 
 Handles CRUD operations for UserPermission entities.
 """
+
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -24,7 +24,7 @@ class PermissionRepository(BaseRepository[UserPermission]):
         """Initialize with UserPermission model."""
         super().__init__(UserPermission, db)
 
-    def get_by_user_id(self, user_id: UUID) -> Optional[UserPermission]:
+    def get_by_user_id(self, user_id: UUID) -> UserPermission | None:
         """
         Get permission record for a specific user.
 
@@ -34,9 +34,7 @@ class PermissionRepository(BaseRepository[UserPermission]):
         Returns:
             UserPermission if found, None otherwise
         """
-        return self.db.query(UserPermission).filter(
-            UserPermission.user_id == user_id
-        ).first()
+        return self.db.query(UserPermission).filter(UserPermission.user_id == user_id).first()
 
     def has_hunren_access(self, user_id: UUID) -> bool:
         """
@@ -52,10 +50,7 @@ class PermissionRepository(BaseRepository[UserPermission]):
         return permission is not None and permission.use_hunren_keys
 
     def set_permission(
-        self,
-        user_id: UUID,
-        use_hunren_keys: bool,
-        granted_by: Optional[str] = None
+        self, user_id: UUID, use_hunren_keys: bool, granted_by: str | None = None
     ) -> UserPermission:
         """
         Set or update a user's permission.
@@ -81,15 +76,13 @@ class PermissionRepository(BaseRepository[UserPermission]):
             self.db.refresh(permission)
         else:
             permission = UserPermission(
-                user_id=user_id,
-                use_hunren_keys=use_hunren_keys,
-                granted_by=granted_by
+                user_id=user_id, use_hunren_keys=use_hunren_keys, granted_by=granted_by
             )
             permission = self.create(permission)
 
         return permission
 
-    def get_all_permissions(self) -> List[UserPermission]:
+    def get_all_permissions(self) -> list[UserPermission]:
         """
         Get all user permissions.
 

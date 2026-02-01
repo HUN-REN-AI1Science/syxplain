@@ -8,19 +8,19 @@ Provides:
 - Proper log level control per module
 - Request correlation IDs for tracing
 """
-import logging
 
+import logging
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
 
-
 # Try to use Rich for beautiful console output, fallback to standard if not available
 try:
-    from rich.logging import RichHandler
     from rich.console import Console
+    from rich.logging import RichHandler
     from rich.traceback import install as install_rich_traceback
+
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
@@ -37,17 +37,18 @@ LOG_FILENAME = "syxplain.log"
 SENSITIVE_PATTERNS = [
     r'(?i)(password|passwd|pwd)\s*[=:]\s*["\']?[^"\'\s]+',
     r'(?i)(secret|api_key|apikey|token|auth|bearer)\s*[=:]\s*["\']?[^"\'\s]+',
-    r'(?i)authorization:\s*bearer\s+[^\s]+',
-    r'eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+',  # JWT tokens
+    r"(?i)authorization:\s*bearer\s+[^\s]+",
+    r"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+",  # JWT tokens
 ]
 
 # Compiled regex for performance
-SENSITIVE_REGEX = re.compile('|'.join(SENSITIVE_PATTERNS))
+SENSITIVE_REGEX = re.compile("|".join(SENSITIVE_PATTERNS))
 
 
 # ============================================================================
 # Custom Handlers
 # ============================================================================
+
 
 class DateFolderFileHandler(logging.FileHandler):
     """
@@ -57,13 +58,7 @@ class DateFolderFileHandler(logging.FileHandler):
     Automatically rotates to new folder at midnight.
     """
 
-    def __init__(
-        self,
-        base_dir: str,
-        filename: str,
-        mode: str = 'a',
-        encoding: str = 'utf-8'
-    ):
+    def __init__(self, base_dir: str, filename: str, mode: str = "a", encoding: str = "utf-8"):
         self.base_dir = Path(base_dir)
         self.filename = filename
         self.current_date = datetime.now().strftime("%Y-%m-%d")
@@ -106,19 +101,19 @@ class SensitiveDataFilter(logging.Filter):
             record.msg = self._redact(str(record.msg))
         if record.args:
             record.args = tuple(
-                self._redact(str(arg)) if isinstance(arg, str) else arg
-                for arg in record.args
+                self._redact(str(arg)) if isinstance(arg, str) else arg for arg in record.args
             )
         return True
 
     def _redact(self, text: str) -> str:
         """Replace sensitive data with [REDACTED]."""
-        return SENSITIVE_REGEX.sub('[REDACTED]', text)
+        return SENSITIVE_REGEX.sub("[REDACTED]", text)
 
 
 # ============================================================================
 # Formatters
 # ============================================================================
+
 
 class HumanReadableFormatter(logging.Formatter):
     """
@@ -128,13 +123,13 @@ class HumanReadableFormatter(logging.Formatter):
     """
 
     LEVEL_COLORS = {
-        'DEBUG': '\033[36m',     # Cyan
-        'INFO': '\033[32m',      # Green
-        'WARNING': '\033[33m',   # Yellow
-        'ERROR': '\033[31m',     # Red
-        'CRITICAL': '\033[35m',  # Magenta
+        "DEBUG": "\033[36m",  # Cyan
+        "INFO": "\033[32m",  # Green
+        "WARNING": "\033[33m",  # Yellow
+        "ERROR": "\033[31m",  # Red
+        "CRITICAL": "\033[35m",  # Magenta
     }
-    RESET = '\033[0m'
+    RESET = "\033[0m"
 
     def __init__(self, use_colors: bool = True):
         self.use_colors = use_colors
@@ -142,7 +137,7 @@ class HumanReadableFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         # Timestamp
-        timestamp = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        timestamp = datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
         # Level with padding
         level = record.levelname.ljust(8)
@@ -152,7 +147,7 @@ class HumanReadableFormatter(logging.Formatter):
 
         # Color the level if enabled
         if self.use_colors and sys.stdout.isatty():
-            color = self.LEVEL_COLORS.get(record.levelname, '')
+            color = self.LEVEL_COLORS.get(record.levelname, "")
             level = f"{color}{level}{self.RESET}"
 
         # Format message
@@ -160,14 +155,14 @@ class HumanReadableFormatter(logging.Formatter):
 
         # Add exception info if present
         if record.exc_info:
-            message += '\n' + self.formatException(record.exc_info)
+            message += "\n" + self.formatException(record.exc_info)
 
         return f"{timestamp} | {level} | {logger_name:30} | {message}"
 
     def _shorten_name(self, name: str) -> str:
         """Shorten logger name for readability."""
         # backend.api.routers.runs → api.routers.runs
-        if name.startswith('backend.'):
+        if name.startswith("backend."):
             return name[8:]
         return name
 
@@ -183,7 +178,7 @@ def configure_logging(
     log_dir: str = LOG_DIR,
     log_filename: str = LOG_FILENAME,
     level: int = logging.DEBUG,
-    use_rich: bool = True
+    use_rich: bool = True,
 ) -> None:
     """
     Configure professional logging for the application.
@@ -220,7 +215,7 @@ def configure_logging(
             rich_tracebacks=True,
             tracebacks_show_locals=True,
             markup=True,
-            omit_repeated_times=False
+            omit_repeated_times=False,
         )
         console_handler.setLevel(level)
     else:
@@ -264,6 +259,7 @@ def configure_debug_mode() -> None:
     Call this when you need detailed debugging of AI operations.
     """
     import langchain
+
     langchain.debug = True
     logging.getLogger("langgraph").setLevel(logging.DEBUG)
     logging.getLogger("langchain").setLevel(logging.DEBUG)
@@ -285,6 +281,7 @@ def get_logger(name: str) -> logging.Logger:
 # ============================================================================
 # Uvicorn Integration
 # ============================================================================
+
 
 class EndpointFilter(logging.Filter):
     """

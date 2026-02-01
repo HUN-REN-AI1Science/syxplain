@@ -20,23 +20,23 @@ Usage:
     # Use custom data file
     python test_worker_local.py --task shap --data path/to/data.csv --target my_target --predictors "col1,col2,col3"
 """
+
 import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
 
 # Add slurm_worker to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from slurm_worker.tasks import TaskRegistry
 from slurm_worker.reporting.reporter import ProgressObserver
-
+from slurm_worker.tasks import TaskRegistry
 
 # Example configurations
-EXAMPLES: Dict[int, Dict[str, Any]] = {
+EXAMPLES: dict[int, dict[str, Any]] = {
     1: {
         "path": "data/example_1/sample_data.csv",
         "target": "al_p2o5",
@@ -79,7 +79,9 @@ class ConsoleReporter(ProgressObserver):
     def __init__(self, run_id: str = "local-test"):
         self.run_id = run_id
 
-    def on_progress(self, progress: int, status: Optional[str] = None, step: Optional[str] = None) -> None:
+    def on_progress(
+        self, progress: int, status: str | None = None, step: str | None = None
+    ) -> None:
         """Print progress update to console."""
         message = f"[{progress:3d}%]"
         if status:
@@ -88,13 +90,13 @@ class ConsoleReporter(ProgressObserver):
             message += f" ({step})"
         print(message)
 
-    def on_error(self, error: str, details: Optional[Dict[str, Any]] = None) -> None:
+    def on_error(self, error: str, details: dict[str, Any] | None = None) -> None:
         """Print error to console."""
         print(f"[ERROR] {error}")
         if details:
             print(f"        Details: {details}")
 
-    def on_complete(self, results: Dict[str, Any]) -> None:
+    def on_complete(self, results: dict[str, Any]) -> None:
         """Print completion message to console."""
         print("[DONE] Task completed successfully")
 
@@ -125,7 +127,7 @@ def load_data(path: str) -> pd.DataFrame:
         raise ValueError(f"Unsupported file format: {suffix}. Use .csv or .xlsx")
 
 
-def auto_detect_predictors(df: pd.DataFrame, target: str) -> List[str]:
+def auto_detect_predictors(df: pd.DataFrame, target: str) -> list[str]:
     """
     Auto-detect numeric predictor columns.
 
@@ -140,7 +142,7 @@ def auto_detect_predictors(df: pd.DataFrame, target: str) -> List[str]:
     return [col for col in numeric_cols if col != target]
 
 
-def dataframe_to_input(df: pd.DataFrame, target: str, predictors: List[str]) -> Dict[str, Any]:
+def dataframe_to_input(df: pd.DataFrame, target: str, predictors: list[str]) -> dict[str, Any]:
     """
     Convert pandas DataFrame to slurm_worker input format.
 
@@ -153,7 +155,7 @@ def dataframe_to_input(df: pd.DataFrame, target: str, predictors: List[str]) -> 
         Dictionary in slurm_worker input format
     """
     # Select only target and predictor columns
-    columns_to_use = [target] + predictors
+    columns_to_use = [target, *predictors]
     df_subset = df[columns_to_use].copy()
 
     return {
@@ -170,10 +172,10 @@ def dataframe_to_input(df: pd.DataFrame, target: str, predictors: List[str]) -> 
 def prepare_input(
     df: pd.DataFrame,
     target: str,
-    predictors: Optional[List[str]],
+    predictors: list[str] | None,
     task_type: str,
-    niterations: Optional[int] = None,
-) -> Dict[str, Any]:
+    niterations: int | None = None,
+) -> dict[str, Any]:
     """
     Prepare input data for a specific task.
 
@@ -193,7 +195,7 @@ def prepare_input(
         print(f"Auto-detected predictors: {predictors}")
 
     # Validate columns exist
-    missing = [col for col in [target] + predictors if col not in df.columns]
+    missing = [col for col in [target, *predictors] if col not in df.columns]
     if missing:
         raise ValueError(f"Columns not found in data: {missing}")
 
@@ -212,7 +214,9 @@ def prepare_input(
     return input_data
 
 
-def run_task(task_type: str, input_data: Dict[str, Any], reporter: ConsoleReporter) -> Dict[str, Any]:
+def run_task(
+    task_type: str, input_data: dict[str, Any], reporter: ConsoleReporter
+) -> dict[str, Any]:
     """
     Run a task and return results.
 
@@ -224,16 +228,16 @@ def run_task(task_type: str, input_data: Dict[str, Any], reporter: ConsoleReport
     Returns:
         Task results dictionary
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Running {task_type.upper()} task")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     task = TaskRegistry.create(task_type, reporter)
     result = task.run(input_data)
     return result.to_dict()
 
 
-def print_results(task_type: str, results: Dict[str, Any]) -> None:
+def print_results(task_type: str, results: dict[str, Any]) -> None:
     """
     Print formatted results to console.
 
@@ -241,9 +245,9 @@ def print_results(task_type: str, results: Dict[str, Any]) -> None:
         task_type: Task type name
         results: Task results dictionary
     """
-    print(f"\n{'-'*60}")
+    print(f"\n{'-' * 60}")
     print(f"{task_type.upper()} Results")
-    print(f"{'-'*60}")
+    print(f"{'-' * 60}")
 
     if results.get("status") == "error":
         print(f"Error: {results.get('error')}")
@@ -253,7 +257,9 @@ def print_results(task_type: str, results: Dict[str, Any]) -> None:
         interactions = results.get("interactions", [])
         print(f"Top {len(interactions)} interactions:")
         for i, pair in enumerate(interactions[:10], 1):
-            print(f"  {i}. {pair['feature1']} x {pair['feature2']}: {pair['interaction_strength']:.4f}")
+            print(
+                f"  {i}. {pair['feature1']} x {pair['feature2']}: {pair['interaction_strength']:.4f}"
+            )
 
         print(f"\nTop features: {results.get('top_features', [])}")
         print(f"Samples used: {results.get('samples_used')}")

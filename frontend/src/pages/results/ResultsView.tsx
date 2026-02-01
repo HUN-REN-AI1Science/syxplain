@@ -77,7 +77,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   useEffect(() => {
     if (!runId) return;
 
-    let intervalId: NodeJS.Timeout;
+    let shouldStop = false;
 
     const poll = async () => {
       try {
@@ -99,15 +99,19 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           }
           setBackendProgress(100);
           setShareToken(response.data.public_share_token || null);
-          clearInterval(intervalId);
-        } else if (response.data.status === 'failed' || response.data.status === 'timeout' || response.data.status === 'cancelled') {
+          shouldStop = true;
+        } else if (
+          response.data.status === 'failed' ||
+          response.data.status === 'timeout' ||
+          response.data.status === 'cancelled'
+        ) {
           const errorMessages: Record<string, string> = {
             timeout: 'Analysis timed out',
             cancelled: 'Analysis was cancelled',
             failed: 'Unknown error',
           };
           setError(response.data.error || errorMessages[response.data.status] || 'Unknown error');
-          clearInterval(intervalId);
+          shouldStop = true;
         }
       } catch (e) {
         console.error(e);
@@ -117,7 +121,10 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     };
 
     poll();
-    intervalId = setInterval(poll, 2000);
+    const intervalId = setInterval(() => {
+      if (!shouldStop) poll();
+      else clearInterval(intervalId);
+    }, 2000);
 
     return () => clearInterval(intervalId);
   }, [runId]);
@@ -129,16 +136,22 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     setExportingPdf(true);
     try {
       // Handle both object (new format) and string (old format)
-      const parsedData: EquationResults = typeof result === 'object'
-        ? result
-        : JSON.parse(result);
+      const parsedData: EquationResults = typeof result === 'object' ? result : JSON.parse(result);
       // Dynamic import to reduce initial bundle size
       const { generateResultsPdf } = await import('@utils/pdfExport');
       await generateResultsPdf(parsedData, runId);
-      toast.current?.show({ severity: 'success', summary: 'Export Complete', detail: 'PDF saved successfully' });
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Export Complete',
+        detail: 'PDF saved successfully',
+      });
     } catch (e) {
       console.error('PDF export failed:', e);
-      toast.current?.show({ severity: 'error', summary: 'Export Failed', detail: 'Failed to generate PDF' });
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Export Failed',
+        detail: 'Failed to generate PDF',
+      });
     } finally {
       setExportingPdf(false);
     }
@@ -153,7 +166,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
       // Polling will pick up the cancelled status
     } catch (e) {
       console.error('Failed to cancel:', e);
-      toast.current?.show({ severity: 'error', summary: 'Cancel Failed', detail: 'Failed to cancel the analysis' });
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Cancel Failed',
+        detail: 'Failed to cancel the analysis',
+      });
     } finally {
       setCancelling(false);
     }
@@ -164,14 +181,22 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     setDeleting(true);
     try {
       await runsService.delete(runId);
-      toast.current?.show({ severity: 'success', summary: 'Run Deleted', detail: 'The run has been permanently deleted' });
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Run Deleted',
+        detail: 'The run has been permanently deleted',
+      });
       // Navigate to history after short delay
       setTimeout(() => {
         window.location.href = '/history';
       }, 1500);
     } catch (e) {
       console.error('Failed to delete run:', e);
-      toast.current?.show({ severity: 'error', summary: 'Delete Failed', detail: 'Failed to delete the run' });
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Delete Failed',
+        detail: 'Failed to delete the run',
+      });
       setDeleting(false);
       setShowDeleteDialog(false);
     }
@@ -204,15 +229,15 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     return (
       <>
         <Button
-          icon={shareToken ? "pi pi-link" : "pi pi-share-alt"}
+          icon={shareToken ? 'pi pi-link' : 'pi pi-share-alt'}
           onClick={() => setShowShareDialog(true)}
           size="large"
           className={`${shareToken ? '!bg-green-600 hover:!bg-green-700 !border-green-600' : '!bg-blue-600 hover:!bg-blue-700 !border-blue-600'} !text-white font-semibold px-3 py-2 shadow-sm`}
-          tooltip={shareToken ? "Shared - Manage Link" : "Share Results"}
+          tooltip={shareToken ? 'Shared - Manage Link' : 'Share Results'}
           tooltipOptions={{ position: 'bottom' }}
         />
         <Button
-          icon={exportingPdf ? "pi pi-spin pi-spinner" : "pi pi-file-pdf"}
+          icon={exportingPdf ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'}
           onClick={handleExportPdf}
           disabled={exportingPdf}
           size="large"
@@ -231,11 +256,15 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
       {/* Header */}
       <ResultsHeader
         title="Analysis Results"
-        subtitle={runId ? (
-          <>Run ID: <span className="font-mono">{runId.slice(0, 8)}...</span></>
-        ) : (
-          <>Starting analysis...</>
-        )}
+        subtitle={
+          runId ? (
+            <>
+              Run ID: <span className="font-mono">{runId.slice(0, 8)}...</span>
+            </>
+          ) : (
+            <>Starting analysis...</>
+          )
+        }
         status={getHeaderStatus()}
         actions={renderHeaderActions()}
       />
@@ -260,8 +289,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
             />
             <div className="flex justify-center mt-4">
               <Button
-                label={cancelling ? "Cancelling..." : "Stop Analysis"}
-                icon={cancelling ? "pi pi-spin pi-spinner" : "pi pi-stop"}
+                label={cancelling ? 'Cancelling...' : 'Stop Analysis'}
+                icon={cancelling ? 'pi pi-spin pi-spinner' : 'pi pi-stop'}
                 className="!bg-red-600 hover:!bg-red-700 !border-red-600 !text-white font-semibold px-4 py-2 shadow-sm"
                 onClick={handleCancelRun}
                 disabled={cancelling}
@@ -272,16 +301,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
 
         {/* Loading State - Simple spinner for fetching completed runs */}
         {isFetchingCompletedRun && !error && (
-          <LoadingSpinner
-            message="Loading results..."
-            className="py-20"
-          />
+          <LoadingSpinner message="Loading results..." className="py-20" />
         )}
 
         {/* Results */}
-        {result && (
-          <ResultContent result={result} resultsRef={resultsRef} />
-        )}
+        {result && <ResultContent result={result} resultsRef={resultsRef} />}
       </div>
 
       {/* Share Dialog */}
@@ -331,12 +355,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
               This action cannot be undone.
             </p>
             <p className="text-red-600 text-sm">
-              All data related to this analysis run will be permanently removed, including results, configurations, and any shared links.
+              All data related to this analysis run will be permanently removed, including results,
+              configurations, and any shared links.
             </p>
           </div>
-          <p className="text-slate-600">
-            Are you sure you want to delete this run?
-          </p>
+          <p className="text-slate-600">Are you sure you want to delete this run?</p>
         </div>
       </Dialog>
 
@@ -346,7 +369,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           <div className="flex items-start justify-between">
             <div>
               <h4 className="text-sm font-semibold text-red-600 mb-1">Danger Zone</h4>
-              <p className="text-sm text-slate-500">Permanently delete this run and all associated data</p>
+              <p className="text-sm text-slate-500">
+                Permanently delete this run and all associated data
+              </p>
             </div>
             <Button
               label="Delete Run"

@@ -57,15 +57,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
     return `${Math.round(seconds / 3600)}h`;
   };
 
-  const formatUptime = (seconds: number): string => {
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    if (days > 0) return `${days}d ${hours}h`;
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
-  };
-
   const trendChartData = {
     labels: trends.map((t) => t.date),
     datasets: [
@@ -207,7 +198,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
                 value={stats?.success_rate || 0}
                 showValue={false}
                 className="h-1 mt-1"
-                color={stats && stats.success_rate >= 80 ? '#10B981' : stats && stats.success_rate >= 60 ? '#F59E0B' : '#EF4444'}
+                color={
+                  stats && stats.success_rate >= 80
+                    ? '#10B981'
+                    : stats && stats.success_rate >= 60
+                      ? '#F59E0B'
+                      : '#EF4444'
+                }
               />
             </div>
           </div>
@@ -245,7 +242,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
         <Card className="shadow-md">
           <h3 className="text-lg font-semibold text-slate-800 mb-4">Status Distribution</h3>
           <div className="h-64">
-            <Chart type="doughnut" data={distributionChartData} options={distributionChartOptions} />
+            <Chart
+              type="doughnut"
+              data={distributionChartData}
+              options={distributionChartOptions}
+            />
           </div>
         </Card>
       </div>
@@ -258,15 +259,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
         ) : (
           <div className="space-y-3">
             {activity.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg"
-              >
+              <div key={item.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
                 <i className={`${getActionIcon(item.action)} text-lg`} />
                 <div className="flex-grow">
                   <p className="text-sm font-medium text-slate-800">
-                    <span className="text-slate-600">{item.admin_email}</span>{' '}
-                    performed <Tag value={item.action} severity={getActionSeverity(item.action)} className="text-xs" />{' '}
+                    <span className="text-slate-600">{item.admin_email}</span> performed{' '}
+                    <Tag
+                      value={item.action}
+                      severity={getActionSeverity(item.action)}
+                      className="text-xs"
+                    />{' '}
                     on {item.target_type}/{item.target_id.substring(0, 8)}...
                   </p>
                   <p className="text-xs text-slate-500">

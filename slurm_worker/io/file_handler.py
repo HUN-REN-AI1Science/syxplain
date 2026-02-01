@@ -3,9 +3,10 @@ File handling for task I/O.
 
 Provides a clean interface for reading input and writing output files.
 """
+
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from slurm_worker.logging_config import get_logger
 
@@ -20,7 +21,7 @@ class FileHandler:
     """
 
     @staticmethod
-    def read_input(path: str) -> Dict[str, Any]:
+    def read_input(path: str) -> dict[str, Any]:
         """
         Read input JSON file.
 
@@ -39,11 +40,11 @@ class FileHandler:
             raise FileNotFoundError(f"Input file not found: {path}")
 
         logger.info(f"Reading input from: {path}")
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             return json.load(f)
 
     @staticmethod
-    def write_output(path: str, data: Dict[str, Any], indent: int = 2) -> None:
+    def write_output(path: str, data: dict[str, Any], indent: int = 2) -> None:
         """
         Write output JSON file.
 

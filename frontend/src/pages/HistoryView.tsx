@@ -22,7 +22,10 @@ interface HistoryViewProps {
   onSelectRun: (runId: string) => void;
 }
 
-const STATUS_CONFIG: Record<string, { severity: 'success' | 'info' | 'warning' | 'danger'; label: string }> = {
+const STATUS_CONFIG: Record<
+  string,
+  { severity: 'success' | 'info' | 'warning' | 'danger'; label: string }
+> = {
   completed: { severity: 'success', label: 'Completed' },
   running: { severity: 'info', label: 'Running' },
   pending: { severity: 'warning', label: 'Pending' },
@@ -33,7 +36,9 @@ const STATUS_CONFIG: Record<string, { severity: 'success' | 'info' | 'warning' |
 
 const formatDuration = (startTime?: string | null, finishTime?: string | null): string => {
   if (!startTime || !finishTime) return '-';
-  const seconds = Math.floor((new Date(finishTime).getTime() - new Date(startTime).getTime()) / 1000);
+  const seconds = Math.floor(
+    (new Date(finishTime).getTime() - new Date(startTime).getTime()) / 1000
+  );
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const secs = seconds % 60;
@@ -129,8 +134,17 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
       const tagId = `status-tag-${rowData.id.replace(/-/g, '')}`;
       return (
         <>
-          <Tag severity={config.severity} value={config.label} className={tagId} style={{ cursor: 'help' }} />
-          <Tooltip target={`.${tagId}`} content={`${rowData.progress || 0}% complete`} position="top" />
+          <Tag
+            severity={config.severity}
+            value={config.label}
+            className={tagId}
+            style={{ cursor: 'help' }}
+          />
+          <Tooltip
+            target={`.${tagId}`}
+            content={`${rowData.progress || 0}% complete`}
+            position="top"
+          />
         </>
       );
     }
@@ -176,17 +190,27 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
           <HelpButton title="Run History">
             <h4>Run Statuses</h4>
             <ul>
-              <li><strong>Completed</strong> - Analysis finished successfully, results available</li>
-              <li><strong>Running</strong> - Analysis in progress (hover for % complete)</li>
-              <li><strong>Pending</strong> - Waiting to start processing</li>
-              <li><strong>Failed</strong> - Analysis encountered an error</li>
-              <li><strong>Timeout</strong> - Analysis took too long and was stopped</li>
+              <li>
+                <strong>Completed</strong> - Analysis finished successfully, results available
+              </li>
+              <li>
+                <strong>Running</strong> - Analysis in progress (hover for % complete)
+              </li>
+              <li>
+                <strong>Pending</strong> - Waiting to start processing
+              </li>
+              <li>
+                <strong>Failed</strong> - Analysis encountered an error
+              </li>
+              <li>
+                <strong>Timeout</strong> - Analysis took too long and was stopped
+              </li>
             </ul>
 
             <h4>Navigating Your History</h4>
             <p>
-              Click <strong>View</strong> on any completed run to see results.
-              Use filters to find specific runs by status or analysis type.
+              Click <strong>View</strong> on any completed run to see results. Use filters to find
+              specific runs by status or analysis type.
             </p>
           </HelpButton>
         </div>
@@ -198,16 +222,24 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         statusFilter={statusFilter}
-        onStatusChange={(value) => { setStatusFilter(value); setPage(1); }}
+        onStatusChange={(value) => {
+          setStatusFilter(value);
+          setPage(1);
+        }}
         analysisTypeFilter={analysisTypeFilter}
-        onAnalysisTypeChange={(value) => { setAnalysisTypeFilter(value); setPage(1); }}
+        onAnalysisTypeChange={(value) => {
+          setAnalysisTypeFilter(value);
+          setPage(1);
+        }}
         onClearFilters={clearFilters}
         onRefresh={loadRuns}
         hasActiveFilters={hasActiveFilters}
       />
 
       {/* Data Table */}
-      <div className={`overflow-x-auto transition-opacity duration-200 ${loading ? 'opacity-60' : 'opacity-100'}`}>
+      <div
+        className={`overflow-x-auto transition-opacity duration-200 ${loading ? 'opacity-60' : 'opacity-100'}`}
+      >
         <DataTable
           value={runs}
           lazy

@@ -68,7 +68,7 @@ const CitationText: React.FC<CitationTextProps> = ({ text, citations = [], class
     }
 
     const citationContent = match[1]; // Content inside brackets, e.g., "1" or "1, 2, 3"
-    const citationNumbers = citationContent.split(/\s*,\s*/).map(num => parseInt(num.trim(), 10));
+    const citationNumbers = citationContent.split(/\s*,\s*/).map((num) => parseInt(num.trim(), 10));
 
     // Check if this is a single citation or multiple
     if (citationNumbers.length === 1) {
@@ -79,9 +79,7 @@ const CitationText: React.FC<CitationTextProps> = ({ text, citations = [], class
         const citationUrl = citations[citationIndex];
         parts.push(
           <span key={`citation-group-${match.index}`} className="citation-group text-blue-600">
-            [
-            {createCitationLink(citationNumber, citationUrl, `citation-${match.index}`)}
-            ]
+            [{createCitationLink(citationNumber, citationUrl, `citation-${match.index}`)}]
           </span>
         );
       } else {

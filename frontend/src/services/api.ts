@@ -46,7 +46,9 @@ const api: AxiosInstance = axios.create({
 
 // Add request interceptor to inject auth token
 api.interceptors.request.use(async (config) => {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
   if (session?.access_token) {
     config.headers.Authorization = `Bearer ${session.access_token}`;
@@ -97,22 +99,29 @@ export const runsService = {
   },
 
   getById: (id: string) =>
-    api.get<{ status: string; progress: number; results?: EquationResults | { pysr_explanations: string }; error?: string; public_share_token?: string | null }>(`/runs/${id}`),
+    api.get<{
+      status: string;
+      progress: number;
+      results?: EquationResults | { pysr_explanations: string };
+      error?: string;
+      public_share_token?: string | null;
+    }>(`/runs/${id}`),
 
-  getDetails: (id: string) =>
-    api.get<RunDetails>(`/runs/${id}/details`),
+  getDetails: (id: string) => api.get<RunDetails>(`/runs/${id}/details`),
 
-  create: (data: { problem_description: object; csv_filename: string; analysis_type: string; deep_research_model: string | null; user_api_keys?: UserApiKeys }) =>
-    api.post<{ run_id: string }>('/run', data),
+  create: (data: {
+    problem_description: object;
+    csv_filename: string;
+    analysis_type: string;
+    deep_research_model: string | null;
+    user_api_keys?: UserApiKeys;
+  }) => api.post<{ run_id: string }>('/run', data),
 
-  downloadCsv: (id: string) =>
-    api.get(`/runs/${id}/download-csv`, { responseType: 'blob' }),
+  downloadCsv: (id: string) => api.get(`/runs/${id}/download-csv`, { responseType: 'blob' }),
 
-  delete: (id: string) =>
-    api.delete<{ message: string }>(`/runs/${id}`),
+  delete: (id: string) => api.delete<{ message: string }>(`/runs/${id}`),
 
-  cancel: (id: string) =>
-    api.post<{ message: string }>(`/runs/${id}/cancel`),
+  cancel: (id: string) => api.post<{ message: string }>(`/runs/${id}/cancel`),
 };
 
 // ============================================================================
@@ -134,14 +143,11 @@ export const uploadService = {
 // ============================================================================
 
 export const configService = {
-  getProgressConfig: () =>
-    api.get<{ phases: ProgressPhase[] }>('/progress-config'),
+  getProgressConfig: () => api.get<{ phases: ProgressPhase[] }>('/progress-config'),
 
-  getDeepResearchModels: () =>
-    api.get<{ models: string[] }>('/config/deep-research-models'),
+  getDeepResearchModels: () => api.get<{ models: string[] }>('/config/deep-research-models'),
 
-  getUserApiModels: () =>
-    api.get<{ models: string[] }>('/config/user-api-models'),
+  getUserApiModels: () => api.get<{ models: string[] }>('/config/user-api-models'),
 };
 
 // ============================================================================
@@ -173,14 +179,11 @@ export interface SharedRunInfo {
 }
 
 export const sharingService = {
-  createShareLink: (runId: string) =>
-    api.post<ShareResponse>(`/runs/${runId}/share`),
+  createShareLink: (runId: string) => api.post<ShareResponse>(`/runs/${runId}/share`),
 
-  revokeShareLink: (runId: string) =>
-    api.delete(`/runs/${runId}/share`),
+  revokeShareLink: (runId: string) => api.delete(`/runs/${runId}/share`),
 
-  getSharedRuns: () =>
-    api.get<{ items: SharedRunInfo[] }>('/runs/shared'),
+  getSharedRuns: () => api.get<{ items: SharedRunInfo[] }>('/runs/shared'),
 };
 
 // ============================================================================
@@ -200,11 +203,9 @@ export interface PublicRunData {
 }
 
 export const publicService = {
-  getResults: (token: string) =>
-    publicApi.get<PublicRunData>(`/public/${token}`),
+  getResults: (token: string) => publicApi.get<PublicRunData>(`/public/${token}`),
 
-  getDetails: (token: string) =>
-    publicApi.get<RunDetails>(`/public/${token}/details`),
+  getDetails: (token: string) => publicApi.get<RunDetails>(`/public/${token}/details`),
 
   downloadCsv: (token: string) =>
     publicApi.get(`/public/${token}/download-csv`, { responseType: 'blob' }),
@@ -215,8 +216,7 @@ export const publicService = {
 // ============================================================================
 
 export const permissionsService = {
-  getMyPermissions: () =>
-    api.get<UserPermissions>('/permissions/me'),
+  getMyPermissions: () => api.get<UserPermissions>('/permissions/me'),
 
   validateKeys: (data: { openai_api_key: string }) =>
     api.post<{ valid: boolean }>('/validate-keys', data),
@@ -251,8 +251,7 @@ export interface AuditLogsParams {
 
 export const adminService = {
   // User Management
-  getUsers: () =>
-    api.get<{ users: UserPermissionInfo[] }>('/admin/users'),
+  getUsers: () => api.get<{ users: UserPermissionInfo[] }>('/admin/users'),
 
   updateUserPermission: (userId: string, useHunrenKeys: boolean) =>
     api.put<{ success: boolean; user_id: string; use_hunren_keys: boolean }>(
@@ -261,8 +260,7 @@ export const adminService = {
     ),
 
   // Dashboard
-  getDashboardStats: () =>
-    api.get<DashboardStats>('/admin/dashboard/stats'),
+  getDashboardStats: () => api.get<DashboardStats>('/admin/dashboard/stats'),
 
   getRunTrends: (days: number = 30) =>
     api.get<{ items: RunTrendItem[] }>(`/admin/dashboard/trends?days=${days}`),
@@ -290,21 +288,16 @@ export const adminService = {
     return api.get<PaginatedResponse<AdminRunSummary>>(`/admin/runs?${searchParams.toString()}`);
   },
 
-  getRunDetail: (runId: string) =>
-    api.get<AdminRunDetail>(`/admin/runs/${runId}`),
+  getRunDetail: (runId: string) => api.get<AdminRunDetail>(`/admin/runs/${runId}`),
 
-  cancelRun: (runId: string) =>
-    api.post<AdminRunActionResponse>(`/admin/runs/${runId}/cancel`),
+  cancelRun: (runId: string) => api.post<AdminRunActionResponse>(`/admin/runs/${runId}/cancel`),
 
-  deleteRun: (runId: string) =>
-    api.delete<AdminRunActionResponse>(`/admin/runs/${runId}`),
+  deleteRun: (runId: string) => api.delete<AdminRunActionResponse>(`/admin/runs/${runId}`),
 
   // System Monitoring
-  getSystemHealth: () =>
-    api.get<SystemHealth>('/admin/system/health'),
+  getSystemHealth: () => api.get<SystemHealth>('/admin/system/health'),
 
-  getSlurmStatus: () =>
-    api.get<SlurmStatus>('/admin/system/slurm'),
+  getSlurmStatus: () => api.get<SlurmStatus>('/admin/system/slurm'),
 
   // Error Monitoring
   getFailedRuns: (page: number = 1, pageSize: number = 10, days: number = 30) =>
@@ -329,11 +322,12 @@ export const adminService = {
     if (params.target_type) searchParams.append('target_type', params.target_type);
     if (params.date_from) searchParams.append('date_from', params.date_from);
     if (params.date_to) searchParams.append('date_to', params.date_to);
-    return api.get<PaginatedResponse<AuditLogEntry>>(`/admin/audit-logs?${searchParams.toString()}`);
+    return api.get<PaginatedResponse<AuditLogEntry>>(
+      `/admin/audit-logs?${searchParams.toString()}`
+    );
   },
 
-  getAuditFilterOptions: () =>
-    api.get<AuditFilterOptions>('/admin/audit-logs/filters'),
+  getAuditFilterOptions: () => api.get<AuditFilterOptions>('/admin/audit-logs/filters'),
 
   // Analytics
   getUserGrowth: (days: number = 90) =>
@@ -344,17 +338,14 @@ export const adminService = {
       `/admin/analytics/users/top?limit=${limit}&period_days=${periodDays}`
     ),
 
-  getPerformanceStats: () =>
-    api.get<PerformanceStats>('/admin/analytics/performance'),
+  getPerformanceStats: () => api.get<PerformanceStats>('/admin/analytics/performance'),
 
   getPerformanceByType: () =>
     api.get<{ items: PerformanceByTypeItem[] }>('/admin/analytics/performance/by-type'),
 
   // Configuration
-  getConfig: () =>
-    api.get<SystemConfig>('/admin/config'),
+  getConfig: () => api.get<SystemConfig>('/admin/config'),
 };
 
 // Default export for backwards compatibility
 export default api;
-

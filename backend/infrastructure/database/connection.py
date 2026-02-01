@@ -4,15 +4,16 @@ Database connection management.
 Provides SQLAlchemy engine and session factory with proper
 connection pooling configuration.
 """
+
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.core.config import get_settings, DatabaseSettings
+from backend.core.config import DatabaseSettings, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ def get_engine(settings: DatabaseSettings = None) -> Engine:
             max_overflow=settings.max_overflow,
             pool_pre_ping=True,
             pool_recycle=settings.pool_recycle,
-            pool_timeout=settings.pool_timeout
+            pool_timeout=settings.pool_timeout,
         )
         logger.info(f"Database engine created with pool_size={settings.pool_size}")
 
@@ -127,10 +128,11 @@ def init_db() -> None:
     Simply checks alembic_version table and applies any pending migrations.
     """
     import os
-    from alembic.config import Config
+
     from alembic import command
-    from alembic.script import ScriptDirectory
+    from alembic.config import Config
     from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
 
     settings = get_settings().database
     engine = get_engine()
@@ -138,8 +140,7 @@ def init_db() -> None:
     try:
         alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "..", "alembic.ini"))
         alembic_cfg.set_main_option(
-            "script_location",
-            os.path.join(os.path.dirname(__file__), "..", "..", "alembic")
+            "script_location", os.path.join(os.path.dirname(__file__), "..", "..", "alembic")
         )
         alembic_cfg.set_main_option("sqlalchemy.url", settings.url)
 
@@ -162,5 +163,3 @@ def init_db() -> None:
         logger.error(f"Database migration failed: {e}")
         logger.exception("Full migration error traceback:")
         raise
-
-

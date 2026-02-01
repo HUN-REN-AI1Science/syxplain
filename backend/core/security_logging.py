@@ -8,10 +8,10 @@ Provides logging for security-relevant events including:
 
 OWASP: A09:2021 - Security Logging and Monitoring Failures
 """
+
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Optional
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -42,16 +42,10 @@ class SecurityLogger:
     def _cleanup_old_attempts(self, ip: str) -> None:
         """Remove attempts older than the tracking window."""
         cutoff = datetime.utcnow() - timedelta(minutes=self.FAILED_AUTH_WINDOW_MINUTES)
-        self._failed_auths[ip] = [
-            ts for ts in self._failed_auths[ip] if ts > cutoff
-        ]
+        self._failed_auths[ip] = [ts for ts in self._failed_auths[ip] if ts > cutoff]
 
     def log_failed_auth(
-        self,
-        ip: str,
-        endpoint: str,
-        reason: str,
-        user_id: Optional[str] = None
+        self, ip: str, endpoint: str, reason: str, user_id: str | None = None
     ) -> None:
         """
         Log a failed authentication attempt.
@@ -83,12 +77,7 @@ class SecurityLogger:
                 f"endpoint={endpoint}"
             )
 
-    def log_rate_limit_exceeded(
-        self,
-        ip: str,
-        endpoint: str,
-        limit: str
-    ) -> None:
+    def log_rate_limit_exceeded(self, ip: str, endpoint: str, limit: str) -> None:
         """
         Log a rate limit violation.
 
@@ -101,12 +90,7 @@ class SecurityLogger:
             f"Rate limit exceeded | ip={ip} | endpoint={endpoint} | limit={limit}"
         )
 
-    def log_suspicious_activity(
-        self,
-        ip: str,
-        activity_type: str,
-        details: str
-    ) -> None:
+    def log_suspicious_activity(self, ip: str, activity_type: str, details: str) -> None:
         """
         Log suspicious activity.
 
@@ -121,7 +105,7 @@ class SecurityLogger:
 
 
 # Global security logger instance
-_security_logger: Optional[SecurityLogger] = None
+_security_logger: SecurityLogger | None = None
 
 
 def get_security_logger() -> SecurityLogger:
@@ -173,11 +157,7 @@ class SecurityLoggingMiddleware(BaseHTTPMiddleware):
             endpoint = f"{request.method} {request.url.path}"
 
             if response.status_code == 401:
-                sec_logger.log_failed_auth(
-                    ip=ip,
-                    endpoint=endpoint,
-                    reason="unauthorized_response"
-                )
+                sec_logger.log_failed_auth(ip=ip, endpoint=endpoint, reason="unauthorized_response")
             else:
                 security_logger.warning(
                     f"Access denied | ip={ip} | endpoint={endpoint} | status=403"
@@ -190,9 +170,7 @@ class SecurityLoggingMiddleware(BaseHTTPMiddleware):
             endpoint = f"{request.method} {request.url.path}"
 
             sec_logger.log_rate_limit_exceeded(
-                ip=ip,
-                endpoint=endpoint,
-                limit=response.headers.get("X-RateLimit-Limit", "unknown")
+                ip=ip, endpoint=endpoint, limit=response.headers.get("X-RateLimit-Limit", "unknown")
             )
 
         return response

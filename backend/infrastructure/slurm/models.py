@@ -4,14 +4,17 @@ Slurm data models.
 Pydantic models for slurmrestd API request/response handling.
 Compatible with slurmrestd API v0.0.41+
 """
+
+import contextlib
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class JobState(str, Enum):
     """Slurm job states."""
+
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"
@@ -58,17 +61,18 @@ class JobState(str, Enum):
 @dataclass
 class JobStatus:
     """Status information for a Slurm job."""
+
     job_id: str
     state: JobState
-    exit_code: Optional[int] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    node_list: Optional[str] = None
-    reason: Optional[str] = None
-    raw_response: Dict[str, Any] = field(default_factory=dict)
+    exit_code: int | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    node_list: str | None = None
+    reason: str | None = None
+    raw_response: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_slurm_response(cls, data: Dict[str, Any]) -> "JobStatus":
+    def from_slurm_response(cls, data: dict[str, Any]) -> "JobStatus":
         """Parse slurmrestd job status response."""
         job_info = data.get("jobs", [{}])[0] if data.get("jobs") else {}
 
@@ -79,24 +83,17 @@ class JobStatus:
         exit_code = None
         if "exit_code" in job_info:
             exit_info = job_info["exit_code"]
-            if isinstance(exit_info, dict):
-                exit_code = exit_info.get("return_code")
-            else:
-                exit_code = exit_info
+            exit_code = exit_info.get("return_code") if isinstance(exit_info, dict) else exit_info
 
         start_time = None
         if job_info.get("start_time"):
-            try:
+            with contextlib.suppress(ValueError, TypeError, OSError):
                 start_time = datetime.fromtimestamp(job_info["start_time"])
-            except (ValueError, TypeError, OSError):
-                pass
 
         end_time = None
         if job_info.get("end_time"):
-            try:
+            with contextlib.suppress(ValueError, TypeError, OSError):
                 end_time = datetime.fromtimestamp(job_info["end_time"])
-            except (ValueError, TypeError, OSError):
-                pass
 
         return cls(
             job_id=str(job_info.get("job_id", "")),
@@ -113,6 +110,7 @@ class JobStatus:
 @dataclass
 class SlurmJob:
     """Represents a submitted Slurm job."""
+
     job_id: str
     name: str
     partition: str
@@ -184,6 +182,7 @@ class SlurmJobSubmission:
 
     Compatible with slurmrestd API v0.0.41+ format.
     """
+
     script: str
     name: str
     partition: str
@@ -192,13 +191,13 @@ class SlurmJobSubmission:
     time_limit: str = "04:00:00"
     nodes: int = 1
     tasks: int = 1
-    working_directory: Optional[str] = None
-    environment: Dict[str, str] = field(default_factory=dict)
-    stdout_path: Optional[str] = None
-    stderr_path: Optional[str] = None
-    gres: Optional[str] = None  # GPU resources, e.g., "gpu:1"
+    working_directory: str | None = None
+    environment: dict[str, str] = field(default_factory=dict)
+    stdout_path: str | None = None
+    stderr_path: str | None = None
+    gres: str | None = None  # GPU resources, e.g., "gpu:1"
 
-    def to_slurm_request(self) -> Dict[str, Any]:
+    def to_slurm_request(self) -> dict[str, Any]:
         """
         Convert to slurmrestd API v0.0.41+ request format.
 
@@ -209,7 +208,7 @@ class SlurmJobSubmission:
         time_minutes = _parse_time_limit(self.time_limit)
 
         # Build job specification matching slurmrestd v0.0.41 format
-        job_spec: Dict[str, Any] = {
+        job_spec: dict[str, Any] = {
             "name": self.name,
             "partition": self.partition,
             "nodes": self.nodes,
@@ -253,7 +252,8 @@ class SlurmJobSubmission:
 @dataclass
 class SlurmFileUpload:
     """File upload request for Slurm staging."""
+
     filename: str
     content: bytes
-    job_id: Optional[str] = None
-    destination_path: Optional[str] = None
+    job_id: str | None = None
+    destination_path: str | None = None

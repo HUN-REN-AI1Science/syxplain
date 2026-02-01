@@ -117,13 +117,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onBack }) => {
               className={`
                 flex items-center gap-2 px-4 py-2.5 rounded-md font-medium text-sm
                 transition-all duration-200 ease-in-out
-                ${activeIndex === index
-                  ? 'bg-white text-blue-600 shadow-md ring-1 ring-blue-100'
-                  : 'text-slate-600 hover:bg-white/60 hover:text-slate-800 cursor-pointer'
+                ${
+                  activeIndex === index
+                    ? 'bg-white text-blue-600 shadow-md ring-1 ring-blue-100'
+                    : 'text-slate-600 hover:bg-white/60 hover:text-slate-800 cursor-pointer'
                 }
               `}
             >
-              <i className={`${tab.icon} ${activeIndex === index ? 'text-blue-500' : 'text-slate-400'}`} />
+              <i
+                className={`${tab.icon} ${activeIndex === index ? 'text-blue-500' : 'text-slate-400'}`}
+              />
               <span className="hidden sm:inline">{tab.label}</span>
             </button>
           ))}
@@ -131,9 +134,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onBack }) => {
       </div>
 
       {/* Content */}
-      <div className="min-h-[500px]">
-        {renderContent()}
-      </div>
+      <div className="min-h-[500px]">{renderContent()}</div>
     </div>
   );
 };

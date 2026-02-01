@@ -3,10 +3,10 @@ Repository for audit log data access.
 
 Handles CRUD operations for AuditLog entities.
 """
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
-from uuid import UUID
+from typing import Any
 
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -18,16 +18,18 @@ from backend.repositories.base import BaseRepository
 @dataclass
 class AuditFilters:
     """Filter parameters for audit log queries."""
-    action: Optional[str] = None
-    admin_email: Optional[str] = None
-    target_type: Optional[str] = None
-    date_from: Optional[datetime] = None
-    date_to: Optional[datetime] = None
+
+    action: str | None = None
+    admin_email: str | None = None
+    target_type: str | None = None
+    date_from: datetime | None = None
+    date_to: datetime | None = None
 
 
 @dataclass
 class AuditPaginationParams:
     """Pagination parameters for audit queries."""
+
     page: int = 1
     page_size: int = 50
 
@@ -39,7 +41,8 @@ class AuditPaginationParams:
 @dataclass
 class PaginatedAuditResult:
     """Result container for paginated audit queries."""
-    items: List[AuditLog]
+
+    items: list[AuditLog]
     total: int
     page: int
     page_size: int
@@ -66,8 +69,8 @@ class AuditRepository(BaseRepository[AuditLog]):
         action: str,
         target_type: str,
         target_id: str,
-        details: Optional[Dict[str, Any]] = None,
-        ip_address: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        ip_address: str | None = None,
     ) -> AuditLog:
         """
         Create a new audit log entry.
@@ -95,8 +98,8 @@ class AuditRepository(BaseRepository[AuditLog]):
 
     def get_logs(
         self,
-        filters: Optional[AuditFilters] = None,
-        pagination: Optional[AuditPaginationParams] = None,
+        filters: AuditFilters | None = None,
+        pagination: AuditPaginationParams | None = None,
     ) -> PaginatedAuditResult:
         """
         Get paginated audit logs with optional filtering.
@@ -141,7 +144,7 @@ class AuditRepository(BaseRepository[AuditLog]):
             page_size=pagination.page_size,
         )
 
-    def get_recent_logs(self, limit: int = 10) -> List[AuditLog]:
+    def get_recent_logs(self, limit: int = 10) -> list[AuditLog]:
         """
         Get the most recent audit logs.
 
@@ -151,14 +154,9 @@ class AuditRepository(BaseRepository[AuditLog]):
         Returns:
             List of recent AuditLog entries
         """
-        return (
-            self.db.query(AuditLog)
-            .order_by(desc(AuditLog.created_at))
-            .limit(limit)
-            .all()
-        )
+        return self.db.query(AuditLog).order_by(desc(AuditLog.created_at)).limit(limit).all()
 
-    def get_actions_by_admin(self, admin_email: str, days: int = 30) -> List[AuditLog]:
+    def get_actions_by_admin(self, admin_email: str, days: int = 30) -> list[AuditLog]:
         """
         Get all actions by a specific admin in recent days.
 
@@ -180,7 +178,7 @@ class AuditRepository(BaseRepository[AuditLog]):
             .all()
         )
 
-    def get_distinct_actions(self) -> List[str]:
+    def get_distinct_actions(self) -> list[str]:
         """
         Get list of distinct action types.
 
@@ -190,7 +188,7 @@ class AuditRepository(BaseRepository[AuditLog]):
         result = self.db.query(AuditLog.action).distinct().all()
         return [r[0] for r in result]
 
-    def get_distinct_admins(self) -> List[str]:
+    def get_distinct_admins(self) -> list[str]:
         """
         Get list of distinct admin emails.
 

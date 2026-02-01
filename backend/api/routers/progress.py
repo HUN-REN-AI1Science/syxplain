@@ -4,9 +4,10 @@ Progress webhook router.
 Provides endpoints for Slurm workers to push progress updates
 back to the backend.
 """
+
 import logging
 import secrets
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
@@ -22,21 +23,24 @@ router = APIRouter(prefix="/api/internal", tags=["Internal"])
 
 class WorkerProgressUpdate(BaseModel):
     """Progress update from a Slurm worker."""
+
     progress: int = Field(..., ge=0, le=100, description="Progress percentage 0-100")
-    status: Optional[str] = Field(None, description="Human-readable status message")
-    step_name: Optional[str] = Field(None, description="Current step name")
-    details: Optional[Dict[str, Any]] = Field(None, description="Additional details")
+    status: str | None = Field(None, description="Human-readable status message")
+    step_name: str | None = Field(None, description="Current step name")
+    details: dict[str, Any] | None = Field(None, description="Additional details")
 
 
 class WorkerErrorReport(BaseModel):
     """Error report from a Slurm worker."""
+
     error: str = Field(..., description="Error message")
-    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
+    details: dict[str, Any] | None = Field(None, description="Additional error details")
 
 
 class WorkerCompletionReport(BaseModel):
     """Completion report from a Slurm worker."""
-    results: Dict[str, Any] = Field(..., description="Task results")
+
+    results: dict[str, Any] = Field(..., description="Task results")
 
 
 def _validate_worker_token(token: str) -> bool:
@@ -85,9 +89,7 @@ async def receive_progress(
             detail="Invalid worker token",
         )
 
-    logger.debug(
-        f"Progress update for run {run_id}: {progress.progress}% - {progress.status}"
-    )
+    logger.debug(f"Progress update for run {run_id}: {progress.progress}% - {progress.status}")
 
     try:
         with get_db_session() as db:

@@ -3,13 +3,14 @@ SHAP interaction analysis task.
 
 Computes SHAP interaction values to identify important feature pairs.
 """
-from typing import Any, Dict, List, Tuple
+
+from typing import Any
 
 import numpy as np
 
 from slurm_worker.config import SHAPConfig
 from slurm_worker.logging_config import get_logger
-from slurm_worker.tasks.base import Task, TaskResult, DataFrameInput
+from slurm_worker.tasks.base import DataFrameInput, Task, TaskResult
 from slurm_worker.tasks.registry import TaskRegistry
 from slurm_worker.visualization.generators import VisualizationService
 
@@ -33,7 +34,7 @@ class SHAPAnalyzer:
         """
         self.config = config
 
-    def subsample(self, df: Any, n_samples: int) -> Tuple[Any, np.ndarray]:
+    def subsample(self, df: Any, n_samples: int) -> tuple[Any, np.ndarray]:
         """
         Subsample DataFrame for SHAP computation.
 
@@ -79,8 +80,8 @@ class SHAPAnalyzer:
         self,
         model: Any,
         X_subsampled: Any,
-        predictor_columns: List[str],
-    ) -> Tuple[List[Dict[str, Any]], float]:
+        predictor_columns: list[str],
+    ) -> tuple[list[dict[str, Any]], float]:
         """
         Compute SHAP interaction values and extract top interactions.
 
@@ -107,11 +108,13 @@ class SHAPAnalyzer:
         for i in range(n_features):
             for j in range(i + 1, n_features):
                 value = (mean_abs_matrix[i, j] + mean_abs_matrix[j, i]) / 2
-                interaction_pairs.append({
-                    "feature1": predictor_columns[i],
-                    "feature2": predictor_columns[j],
-                    "interaction_strength": float(value),
-                })
+                interaction_pairs.append(
+                    {
+                        "feature1": predictor_columns[i],
+                        "feature2": predictor_columns[j],
+                        "interaction_strength": float(value),
+                    }
+                )
 
         interaction_pairs.sort(key=lambda x: x["interaction_strength"], reverse=True)
         total_mass = sum(x["interaction_strength"] for x in interaction_pairs)
@@ -120,9 +123,9 @@ class SHAPAnalyzer:
 
     def select_top_interactions(
         self,
-        interaction_pairs: List[Dict[str, Any]],
+        interaction_pairs: list[dict[str, Any]],
         total_mass: float,
-    ) -> Tuple[List[Dict[str, Any]], float]:
+    ) -> tuple[list[dict[str, Any]], float]:
         """
         Select top interactions covering target percentage of total mass.
 
@@ -148,9 +151,9 @@ class SHAPAnalyzer:
 
     def extract_top_features(
         self,
-        top_interactions: List[Dict[str, Any]],
+        top_interactions: list[dict[str, Any]],
         max_features: int = 10,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Extract unique features from top interactions.
 
@@ -179,7 +182,7 @@ class SHAPTask(Task):
 
     name = "shap"
 
-    def _validate_input(self, input_data: Dict[str, Any]) -> None:
+    def _validate_input(self, input_data: dict[str, Any]) -> None:
         """Validate SHAP task input."""
         required = ["data", "target_column", "predictor_columns"]
         for field in required:
@@ -189,7 +192,7 @@ class SHAPTask(Task):
         if not input_data["predictor_columns"]:
             raise ValueError("predictor_columns cannot be empty")
 
-    def _get_config(self, input_data: Dict[str, Any]) -> SHAPConfig:
+    def _get_config(self, input_data: dict[str, Any]) -> SHAPConfig:
         """Extract SHAP configuration from input data."""
         return SHAPConfig(
             subsample_fraction=input_data.get("subsample_fraction", 0.1),
@@ -199,7 +202,7 @@ class SHAPTask(Task):
             generate_visualizations=input_data.get("generate_visualizations", True),
         )
 
-    def _execute(self, input_data: Dict[str, Any]) -> TaskResult:
+    def _execute(self, input_data: dict[str, Any]) -> TaskResult:
         """Execute SHAP analysis."""
         self._report(10, "Loading data", "shap_loading")
 
@@ -244,7 +247,9 @@ class SHAPTask(Task):
         self._report(90, "Finalizing", "shap_finalizing")
 
         coverage = (accumulated_mass / total_mass * 100) if total_mass > 0 else 0
-        logger.info(f"SHAP completed: {len(top_interactions)} interactions covering {coverage:.1f}%")
+        logger.info(
+            f"SHAP completed: {len(top_interactions)} interactions covering {coverage:.1f}%"
+        )
 
         return TaskResult.success(
             interactions=top_interactions,

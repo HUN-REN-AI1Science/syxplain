@@ -35,7 +35,7 @@ export const AccountInfoSection: React.FC<AccountInfoSectionProps> = ({
             {new Date(profile.created_at).toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'long',
-              day: 'numeric'
+              day: 'numeric',
             })}
           </span>
         </div>

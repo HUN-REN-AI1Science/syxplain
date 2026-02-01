@@ -4,83 +4,81 @@ Admin endpoints router.
 Provides endpoints for administrative user management, monitoring,
 and analytics.
 """
+
 import logging
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend.api.dependencies import (
-    get_permission_service,
-    get_audit_service,
     get_admin_stats_service,
-    get_system_monitor_service,
+    get_audit_service,
+    get_permission_service,
     get_run_repository,
+    get_system_monitor_service,
 )
-from backend.core.rate_limit import limiter
 from backend.core.config import get_settings
+from backend.core.rate_limit import limiter
 from backend.core.security import User, get_current_user
-from backend.services.permission_service import PermissionService
-from backend.services.audit_service import AuditService
-from backend.services.admin_stats_service import AdminStatsService
-from backend.services.system_monitor_service import SystemMonitorService
-from backend.repositories.run_repository import RunRepository, AdminRunFilters, PaginationParams
-from backend.schemas.requests import UpdatePermissionRequest, SortField, SortOrder
+from backend.repositories.run_repository import AdminRunFilters, PaginationParams, RunRepository
+from backend.schemas.requests import SortField, SortOrder, UpdatePermissionRequest
 from backend.schemas.responses import (
-    # User management
-    UsersWithPermissionsResponse,
-    UserPermissionInfo,
-    UpdatePermissionResponse,
-    # Dashboard
-    DashboardStatsResponse,
-    RunTrendsResponse,
-    RunTrendItem,
-    StatusDistributionResponse,
-    StatusDistributionItem,
-    # Run management
-    PaginatedAdminRunsResponse,
-    AdminRunSummary,
-    AdminRunDetailResponse,
+    ActivityItem,
     AdminRunActionResponse,
-    # System monitoring
-    SystemHealthResponse,
-    SlurmStatusResponse,
-    PartitionInfo,
-    # Audit logs
-    PaginatedAuditLogsResponse,
-    AuditLogEntry,
+    AdminRunDetailResponse,
+    AdminRunSummary,
     AuditFilterOptionsResponse,
-    # Error monitoring
-    ErrorDistributionResponse,
-    ErrorDistributionItem,
-    ErrorTrendResponse,
-    ErrorTrendItem,
-    # Analytics
-    UserGrowthResponse,
-    UserGrowthItem,
-    TopUsersResponse,
-    TopUserItem,
-    PerformanceStatsResponse,
-    PerformanceByTypeResponse,
-    PerformanceByTypeItem,
+    AuditLogEntry,
     # Config
     ConfigResponse,
-    RateLimitsConfig,
+    # Dashboard
+    DashboardStatsResponse,
+    ErrorDistributionItem,
+    # Error monitoring
+    ErrorDistributionResponse,
+    ErrorTrendItem,
+    ErrorTrendResponse,
     FeaturesConfig,
-    SecretsConfig,
+    # Run management
+    PaginatedAdminRunsResponse,
+    # Audit logs
+    PaginatedAuditLogsResponse,
+    PartitionInfo,
+    PerformanceByTypeItem,
+    PerformanceByTypeResponse,
+    PerformanceStatsResponse,
+    RateLimitsConfig,
     # Activity
     RecentActivityResponse,
-    ActivityItem,
+    RunTrendItem,
+    RunTrendsResponse,
+    SecretsConfig,
+    SlurmStatusResponse,
+    StatusDistributionItem,
+    StatusDistributionResponse,
+    # System monitoring
+    SystemHealthResponse,
+    TopUserItem,
+    TopUsersResponse,
+    UpdatePermissionResponse,
+    UserGrowthItem,
+    # Analytics
+    UserGrowthResponse,
+    UserPermissionInfo,
+    # User management
+    UsersWithPermissionsResponse,
 )
+from backend.services.admin_stats_service import AdminStatsService
+from backend.services.audit_service import AuditService
+from backend.services.permission_service import PermissionService
+from backend.services.system_monitor_service import SystemMonitorService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 
-def require_admin(
-    current_user: User = Depends(get_current_user)
-) -> User:
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """
     Dependency that requires admin access.
 
@@ -94,7 +92,7 @@ def require_admin(
     return current_user
 
 
-def get_client_ip(request: Request) -> Optional[str]:
+def get_client_ip(request: Request) -> str | None:
     """Extract client IP from request."""
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
@@ -106,15 +104,13 @@ def get_client_ip(request: Request) -> Optional[str]:
 # User Management Endpoints
 # ============================================================================
 
-@router.get(
-    "/users",
-    response_model=UsersWithPermissionsResponse
-)
+
+@router.get("/users", response_model=UsersWithPermissionsResponse)
 @limiter.limit("30/minute")
 def list_users_with_permissions(
     request: Request,
     admin: User = Depends(require_admin),
-    permission_service: PermissionService = Depends(get_permission_service)
+    permission_service: PermissionService = Depends(get_permission_service),
 ):
     """
     List all users with their permissions.
@@ -131,17 +127,14 @@ def list_users_with_permissions(
                 use_hunren_keys=u["use_hunren_keys"],
                 granted_by=u["granted_by"],
                 user_created_at=u["user_created_at"],
-                permission_updated_at=u["permission_updated_at"]
+                permission_updated_at=u["permission_updated_at"],
             )
             for u in users
         ]
     )
 
 
-@router.put(
-    "/users/{user_id}/permissions",
-    response_model=UpdatePermissionResponse
-)
+@router.put("/users/{user_id}/permissions", response_model=UpdatePermissionResponse)
 @limiter.limit("20/minute")
 def update_user_permission(
     request: Request,
@@ -162,15 +155,14 @@ def update_user_permission(
         UpdatePermissionResponse with success status
     """
     from backend.utils import parse_uuid
+
     try:
         parse_uuid(user_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid user ID format")
 
     permission_service.set_permission(
-        user_id=user_id,
-        use_hunren_keys=body.use_hunren_keys,
-        granted_by=admin.email
+        user_id=user_id, use_hunren_keys=body.use_hunren_keys, granted_by=admin.email
     )
 
     action = "grant_permission" if body.use_hunren_keys else "revoke_permission"
@@ -186,9 +178,7 @@ def update_user_permission(
     logger.info(f"Admin {admin.email} {action} for user {user_id}")
 
     return UpdatePermissionResponse(
-        success=True,
-        user_id=user_id,
-        use_hunren_keys=body.use_hunren_keys
+        success=True, user_id=user_id, use_hunren_keys=body.use_hunren_keys
     )
 
 
@@ -196,10 +186,8 @@ def update_user_permission(
 # Dashboard Endpoints
 # ============================================================================
 
-@router.get(
-    "/dashboard/stats",
-    response_model=DashboardStatsResponse
-)
+
+@router.get("/dashboard/stats", response_model=DashboardStatsResponse)
 @limiter.limit("60/minute")
 def get_dashboard_stats(
     request: Request,
@@ -211,10 +199,7 @@ def get_dashboard_stats(
     return DashboardStatsResponse(**stats)
 
 
-@router.get(
-    "/dashboard/trends",
-    response_model=RunTrendsResponse
-)
+@router.get("/dashboard/trends", response_model=RunTrendsResponse)
 @limiter.limit("30/minute")
 def get_run_trends(
     request: Request,
@@ -227,10 +212,7 @@ def get_run_trends(
     return RunTrendsResponse(items=[RunTrendItem(**t) for t in trends])
 
 
-@router.get(
-    "/dashboard/status-distribution",
-    response_model=StatusDistributionResponse
-)
+@router.get("/dashboard/status-distribution", response_model=StatusDistributionResponse)
 @limiter.limit("30/minute")
 def get_status_distribution(
     request: Request,
@@ -242,10 +224,7 @@ def get_status_distribution(
     return StatusDistributionResponse(items=[StatusDistributionItem(**d) for d in distribution])
 
 
-@router.get(
-    "/dashboard/recent-activity",
-    response_model=RecentActivityResponse
-)
+@router.get("/dashboard/recent-activity", response_model=RecentActivityResponse)
 @limiter.limit("60/minute")
 def get_recent_activity(
     request: Request,
@@ -262,10 +241,8 @@ def get_recent_activity(
 # Run Management Endpoints
 # ============================================================================
 
-@router.get(
-    "/runs",
-    response_model=PaginatedAdminRunsResponse
-)
+
+@router.get("/runs", response_model=PaginatedAdminRunsResponse)
 @limiter.limit("30/minute")
 def get_all_runs(
     request: Request,
@@ -273,12 +250,12 @@ def get_all_runs(
     page_size: int = Query(default=10, ge=1, le=100),
     sort_field: SortField = Query(default=SortField.CREATED_AT),
     sort_order: SortOrder = Query(default=SortOrder.DESC),
-    status: Optional[str] = None,
-    analysis_type: Optional[str] = None,
-    user_id: Optional[str] = None,
-    search: Optional[str] = None,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
+    status: str | None = None,
+    analysis_type: str | None = None,
+    user_id: str | None = None,
+    search: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     admin: User = Depends(require_admin),
     run_repo: RunRepository = Depends(get_run_repository),
     permission_service: PermissionService = Depends(get_permission_service),
@@ -330,10 +307,7 @@ def get_all_runs(
     )
 
 
-@router.get(
-    "/runs/{run_id}",
-    response_model=AdminRunDetailResponse
-)
+@router.get("/runs/{run_id}", response_model=AdminRunDetailResponse)
 @limiter.limit("30/minute")
 def get_run_detail(
     request: Request,
@@ -344,6 +318,7 @@ def get_run_detail(
 ):
     """Get detailed run information."""
     from backend.utils import parse_uuid
+
     try:
         run_uuid = parse_uuid(run_id)
     except ValueError:
@@ -375,10 +350,7 @@ def get_run_detail(
     )
 
 
-@router.post(
-    "/runs/{run_id}/cancel",
-    response_model=AdminRunActionResponse
-)
+@router.post("/runs/{run_id}/cancel", response_model=AdminRunActionResponse)
 @limiter.limit("20/minute")
 def cancel_run(
     request: Request,
@@ -389,6 +361,7 @@ def cancel_run(
 ):
     """Cancel a run."""
     from backend.utils import parse_uuid
+
     try:
         run_uuid = parse_uuid(run_id)
     except ValueError:
@@ -414,10 +387,7 @@ def cancel_run(
     )
 
 
-@router.delete(
-    "/runs/{run_id}",
-    response_model=AdminRunActionResponse
-)
+@router.delete("/runs/{run_id}", response_model=AdminRunActionResponse)
 @limiter.limit("10/minute")
 def delete_run(
     request: Request,
@@ -428,6 +398,7 @@ def delete_run(
 ):
     """Delete a run and all associated data."""
     from backend.utils import parse_uuid
+
     try:
         run_uuid = parse_uuid(run_id)
     except ValueError:
@@ -466,10 +437,8 @@ def delete_run(
 # System Monitoring Endpoints
 # ============================================================================
 
-@router.get(
-    "/system/health",
-    response_model=SystemHealthResponse
-)
+
+@router.get("/system/health", response_model=SystemHealthResponse)
 @limiter.limit("60/minute")
 def get_system_health(
     request: Request,
@@ -481,10 +450,7 @@ def get_system_health(
     return SystemHealthResponse(**health)
 
 
-@router.get(
-    "/system/slurm",
-    response_model=SlurmStatusResponse
-)
+@router.get("/system/slurm", response_model=SlurmStatusResponse)
 @limiter.limit("30/minute")
 def get_slurm_status(
     request: Request,
@@ -500,9 +466,7 @@ def get_slurm_status(
         raise HTTPException(status_code=503, detail=status.get("error", "Slurm unavailable"))
 
     # Convert partition dicts to PartitionInfo models
-    partitions = [
-        PartitionInfo(**p) for p in status.get("partitions", [])
-    ]
+    partitions = [PartitionInfo(**p) for p in status.get("partitions", [])]
 
     return SlurmStatusResponse(
         cluster_status=status.get("cluster_status", "unknown"),
@@ -521,10 +485,8 @@ def get_slurm_status(
 # Error Monitoring Endpoints
 # ============================================================================
 
-@router.get(
-    "/errors/runs",
-    response_model=PaginatedAdminRunsResponse
-)
+
+@router.get("/errors/runs", response_model=PaginatedAdminRunsResponse)
 @limiter.limit("30/minute")
 def get_failed_runs(
     request: Request,
@@ -567,10 +529,7 @@ def get_failed_runs(
     )
 
 
-@router.get(
-    "/errors/distribution",
-    response_model=ErrorDistributionResponse
-)
+@router.get("/errors/distribution", response_model=ErrorDistributionResponse)
 @limiter.limit("30/minute")
 def get_error_distribution(
     request: Request,
@@ -580,15 +539,10 @@ def get_error_distribution(
 ):
     """Get error type distribution."""
     distribution = stats_service.get_error_distribution(days=days)
-    return ErrorDistributionResponse(
-        items=[ErrorDistributionItem(**d) for d in distribution]
-    )
+    return ErrorDistributionResponse(items=[ErrorDistributionItem(**d) for d in distribution])
 
 
-@router.get(
-    "/errors/trend",
-    response_model=ErrorTrendResponse
-)
+@router.get("/errors/trend", response_model=ErrorTrendResponse)
 @limiter.limit("30/minute")
 def get_error_trend(
     request: Request,
@@ -605,20 +559,18 @@ def get_error_trend(
 # Audit Log Endpoints
 # ============================================================================
 
-@router.get(
-    "/audit-logs",
-    response_model=PaginatedAuditLogsResponse
-)
+
+@router.get("/audit-logs", response_model=PaginatedAuditLogsResponse)
 @limiter.limit("30/minute")
 def get_audit_logs(
     request: Request,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
-    action: Optional[str] = None,
-    admin_email: Optional[str] = None,
-    target_type: Optional[str] = None,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
+    action: str | None = None,
+    admin_email: str | None = None,
+    target_type: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     admin: User = Depends(require_admin),
     audit_service: AuditService = Depends(get_audit_service),
 ):
@@ -654,10 +606,7 @@ def get_audit_logs(
     )
 
 
-@router.get(
-    "/audit-logs/filters",
-    response_model=AuditFilterOptionsResponse
-)
+@router.get("/audit-logs/filters", response_model=AuditFilterOptionsResponse)
 @limiter.limit("30/minute")
 def get_audit_filter_options(
     request: Request,
@@ -673,10 +622,8 @@ def get_audit_filter_options(
 # Analytics Endpoints
 # ============================================================================
 
-@router.get(
-    "/analytics/users/growth",
-    response_model=UserGrowthResponse
-)
+
+@router.get("/analytics/users/growth", response_model=UserGrowthResponse)
 @limiter.limit("30/minute")
 def get_user_growth(
     request: Request,
@@ -689,10 +636,7 @@ def get_user_growth(
     return UserGrowthResponse(items=[UserGrowthItem(**g) for g in growth])
 
 
-@router.get(
-    "/analytics/users/top",
-    response_model=TopUsersResponse
-)
+@router.get("/analytics/users/top", response_model=TopUsersResponse)
 @limiter.limit("30/minute")
 def get_top_users(
     request: Request,
@@ -722,10 +666,7 @@ def get_top_users(
     )
 
 
-@router.get(
-    "/analytics/performance",
-    response_model=PerformanceStatsResponse
-)
+@router.get("/analytics/performance", response_model=PerformanceStatsResponse)
 @limiter.limit("30/minute")
 def get_performance_stats(
     request: Request,
@@ -737,10 +678,7 @@ def get_performance_stats(
     return PerformanceStatsResponse(**stats)
 
 
-@router.get(
-    "/analytics/performance/by-type",
-    response_model=PerformanceByTypeResponse
-)
+@router.get("/analytics/performance/by-type", response_model=PerformanceByTypeResponse)
 @limiter.limit("30/minute")
 def get_performance_by_type(
     request: Request,
@@ -749,19 +687,15 @@ def get_performance_by_type(
 ):
     """Get performance metrics by analysis type."""
     by_type = stats_service.get_performance_by_type()
-    return PerformanceByTypeResponse(
-        items=[PerformanceByTypeItem(**t) for t in by_type]
-    )
+    return PerformanceByTypeResponse(items=[PerformanceByTypeItem(**t) for t in by_type])
 
 
 # ============================================================================
 # Configuration Endpoint
 # ============================================================================
 
-@router.get(
-    "/config",
-    response_model=ConfigResponse
-)
+
+@router.get("/config", response_model=ConfigResponse)
 @limiter.limit("30/minute")
 def get_config(
     request: Request,

@@ -25,7 +25,9 @@ export const AppFooter: React.FC = () => (
               src={aiCampusLogo}
               alt="AI Campus"
               className="h-8"
-              style={{ filter: 'invert(35%) sepia(85%) saturate(1500%) hue-rotate(200deg) brightness(95%)' }}
+              style={{
+                filter: 'invert(35%) sepia(85%) saturate(1500%) hue-rotate(200deg) brightness(95%)',
+              }}
             />
           </a>
           <a
@@ -34,11 +36,7 @@ export const AppFooter: React.FC = () => (
             rel="noopener noreferrer"
             className="opacity-70 hover:opacity-100 transition-opacity"
           >
-            <img
-              src={hunrenLogo}
-              alt="HUNREN"
-              className="h-8"
-            />
+            <img src={hunrenLogo} alt="HUNREN" className="h-8" />
           </a>
         </div>
       </div>

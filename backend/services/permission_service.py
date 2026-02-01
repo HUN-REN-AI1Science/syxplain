@@ -3,11 +3,10 @@ Permission service for managing user API key access.
 
 Encapsulates business logic for checking and granting permissions.
 """
+
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional
-from uuid import UUID
 
 from backend.core.config import get_settings
 from backend.repositories.permission_repository import PermissionRepository
@@ -19,11 +18,12 @@ logger = logging.getLogger(__name__)
 @dataclass
 class UserWithPermission:
     """User data with permission info for admin listing."""
+
     user_id: str
     use_hunren_keys: bool
-    granted_by: Optional[str]
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
+    granted_by: str | None
+    created_at: datetime | None
+    updated_at: datetime | None
 
 
 class PermissionService:
@@ -37,7 +37,7 @@ class PermissionService:
         self.permission_repo = permission_repo
         self.settings = get_settings()
 
-    def has_hunren_access(self, user_id: str, email: Optional[str] = None) -> bool:
+    def has_hunren_access(self, user_id: str, email: str | None = None) -> bool:
         """
         Check if a user has HUN-REN API key access.
 
@@ -87,22 +87,11 @@ class PermissionService:
         is_admin = self.is_admin(email) if email else False
 
         # Admins automatically have HUN-REN access
-        if is_admin:
-            use_hunren_keys = True
-        else:
-            use_hunren_keys = self.has_hunren_access(user_id)
+        use_hunren_keys = True if is_admin else self.has_hunren_access(user_id)
 
-        return {
-            "use_hunren_keys": use_hunren_keys,
-            "is_admin": is_admin
-        }
+        return {"use_hunren_keys": use_hunren_keys, "is_admin": is_admin}
 
-    def set_permission(
-        self,
-        user_id: str,
-        use_hunren_keys: bool,
-        granted_by: str
-    ) -> None:
+    def set_permission(self, user_id: str, use_hunren_keys: bool, granted_by: str) -> None:
         """
         Grant or revoke HUN-REN key permission for a user.
 
@@ -113,14 +102,12 @@ class PermissionService:
         """
         user_uuid = parse_uuid(user_id)
         self.permission_repo.set_permission(
-            user_id=user_uuid,
-            use_hunren_keys=use_hunren_keys,
-            granted_by=granted_by
+            user_id=user_uuid, use_hunren_keys=use_hunren_keys, granted_by=granted_by
         )
         action = "granted" if use_hunren_keys else "revoked"
         logger.info(f"HUN-REN key access {action} for user {user_id} by {granted_by}")
 
-    def list_users_with_permissions(self) -> List[dict]:
+    def list_users_with_permissions(self) -> list[dict]:
         """
         Get all users with their permission status.
 
@@ -139,7 +126,9 @@ class PermissionService:
         service_role_key = self.settings.auth.supabase_service_role_key
 
         if not supabase_url or not service_role_key:
-            logger.debug("Supabase service role key not configured, returning only users with permissions")
+            logger.debug(
+                "Supabase service role key not configured, returning only users with permissions"
+            )
             # Fallback: return only users who have permission records
             all_permissions = self.permission_repo.get_all_permissions()
             return [
@@ -162,7 +151,7 @@ class PermissionService:
                     "apikey": service_role_key,
                     "Authorization": f"Bearer {service_role_key}",
                 },
-                timeout=10.0
+                timeout=10.0,
             )
             response.raise_for_status()
             data = response.json()
@@ -173,14 +162,16 @@ class PermissionService:
             for user in users:
                 user_id = user.get("id")
                 perm = permissions.get(user_id, {})
-                result.append({
-                    "user_id": user_id,
-                    "email": user.get("email", ""),
-                    "user_created_at": user.get("created_at"),
-                    "use_hunren_keys": perm.get("use_hunren_keys", False),
-                    "granted_by": perm.get("granted_by"),
-                    "permission_updated_at": perm.get("permission_updated_at"),
-                })
+                result.append(
+                    {
+                        "user_id": user_id,
+                        "email": user.get("email", ""),
+                        "user_created_at": user.get("created_at"),
+                        "use_hunren_keys": perm.get("use_hunren_keys", False),
+                        "granted_by": perm.get("granted_by"),
+                        "permission_updated_at": perm.get("permission_updated_at"),
+                    }
+                )
 
             return result
 

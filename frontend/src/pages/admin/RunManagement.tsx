@@ -99,7 +99,7 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
   };
 
   const handleSort = (e: DataTableSortEvent) => {
-    setSortField(e.sortField as string || 'created_at');
+    setSortField((e.sortField as string) || 'created_at');
     setSortOrder(e.sortOrder === 1 ? 'asc' : 'desc');
   };
 
@@ -169,7 +169,9 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
     });
   };
 
-  const getStatusSeverity = (status: string): 'success' | 'info' | 'warning' | 'danger' | 'secondary' => {
+  const getStatusSeverity = (
+    status: string
+  ): 'success' | 'info' | 'warning' | 'danger' | 'secondary' => {
     const map: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'secondary'> = {
       completed: 'success',
       running: 'info',
@@ -202,15 +204,11 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
   );
 
   const dateTemplate = (rowData: AdminRunSummary) => (
-    <span className="text-sm">
-      {new Date(rowData.created_at).toLocaleString()}
-    </span>
+    <span className="text-sm">{new Date(rowData.created_at).toLocaleString()}</span>
   );
 
   const durationTemplate = (rowData: AdminRunSummary) => (
-    <span className="text-sm">
-      {formatDuration(rowData.start_time, rowData.finish_time)}
-    </span>
+    <span className="text-sm">{formatDuration(rowData.start_time, rowData.finish_time)}</span>
   );
 
   const actionsTemplate = (rowData: AdminRunSummary) => (
@@ -327,12 +325,29 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
         paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
         currentPageReportTemplate="Showing {first} to {last} of {totalRecords} runs"
       >
-        <Column field="id" header="ID" body={(row) => row.id.substring(0, 8) + '...'} style={{ width: '100px' }} />
+        <Column
+          field="id"
+          header="ID"
+          body={(row) => row.id.substring(0, 8) + '...'}
+          style={{ width: '100px' }}
+        />
         <Column header="User" body={userTemplate} style={{ width: '200px' }} />
-        <Column field="status" header="Status" body={statusTemplate} sortable style={{ width: '120px' }} />
+        <Column
+          field="status"
+          header="Status"
+          body={statusTemplate}
+          sortable
+          style={{ width: '120px' }}
+        />
         <Column field="analysis_type" header="Type" sortable style={{ width: '80px' }} />
         <Column field="csv_filename" header="File" sortable style={{ width: '200px' }} />
-        <Column field="created_at" header="Created" body={dateTemplate} sortable style={{ width: '160px' }} />
+        <Column
+          field="created_at"
+          header="Created"
+          body={dateTemplate}
+          sortable
+          style={{ width: '160px' }}
+        />
         <Column header="Duration" body={durationTemplate} style={{ width: '100px' }} />
         <Column header="Actions" body={actionsTemplate} style={{ width: '140px' }} />
       </DataTable>
@@ -358,7 +373,12 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
               </div>
               <div>
                 <label className="text-sm text-slate-500">Status</label>
-                <p><Tag value={selectedRun.status} severity={getStatusSeverity(selectedRun.status)} /></p>
+                <p>
+                  <Tag
+                    value={selectedRun.status}
+                    severity={getStatusSeverity(selectedRun.status)}
+                  />
+                </p>
               </div>
               <div>
                 <label className="text-sm text-slate-500">Analysis Type</label>
@@ -374,7 +394,9 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
               </div>
               <div>
                 <label className="text-sm text-slate-500">Created</label>
-                <p>{selectedRun.created_at ? new Date(selectedRun.created_at).toLocaleString() : '-'}</p>
+                <p>
+                  {selectedRun.created_at ? new Date(selectedRun.created_at).toLocaleString() : '-'}
+                </p>
               </div>
               <div>
                 <label className="text-sm text-slate-500">Duration</label>
@@ -385,7 +407,9 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
             {selectedRun.error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                 <label className="text-sm text-red-600 font-medium">Error</label>
-                <p className="text-sm text-red-800 font-mono whitespace-pre-wrap">{selectedRun.error}</p>
+                <p className="text-sm text-red-800 font-mono whitespace-pre-wrap">
+                  {selectedRun.error}
+                </p>
               </div>
             )}
 

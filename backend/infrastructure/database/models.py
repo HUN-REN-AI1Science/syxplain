@@ -4,12 +4,13 @@ SQLAlchemy ORM models for the Syxplain database.
 These models represent the database tables and their relationships.
 Separated from connection management for cleaner architecture.
 """
+
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, LargeBinary, Boolean
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
@@ -20,6 +21,7 @@ class File(Base):
 
     Files are associated with a user and can be referenced by multiple runs.
     """
+
     __tablename__ = "files"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -40,11 +42,14 @@ class Run(Base):
     A run is created when a user submits an analysis request and
     tracks the progress through completion or failure.
     """
+
     __tablename__ = "runs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
-    status = Column(String, default="pending")  # pending, running, completed, failed, timeout, cancelled
+    status = Column(
+        String, default="pending"
+    )  # pending, running, completed, failed, timeout, cancelled
     analysis_type = Column(String, default="quick")  # "quick" or "deep"
     slurm_job_ids = Column(JSONB, nullable=True)  # {"shap_job_id": "...", "pysr_job_id": "..."}
     progress = Column(Integer, default=0)  # 0-100 percentage
@@ -54,7 +59,7 @@ class Run(Base):
     results = Column(JSONB, nullable=True)
     public_share_token = Column(String(32), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    start_time = Column(DateTime, nullable=True)   # Set when status becomes "running"
+    start_time = Column(DateTime, nullable=True)  # Set when status becomes "running"
     finish_time = Column(DateTime, nullable=True)  # Set when status becomes terminal
 
     # Relationships with cascade delete
@@ -84,6 +89,7 @@ class RunStep(Base):
     Steps track the progress of the analysis through different phases
     with their associated payload data.
     """
+
     __tablename__ = "run_steps"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -106,6 +112,7 @@ class RunArtifact(Base):
     Artifacts include generated visualizations, JSON outputs,
     and other downloadable files.
     """
+
     __tablename__ = "run_artifacts"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -128,6 +135,7 @@ class UserPermission(Base):
     Users with use_hunren_keys=True can use built-in HUN-REN API keys.
     Users without this permission must provide their own OpenAI API key.
     """
+
     __tablename__ = "user_permissions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -147,6 +155,7 @@ class AuditLog(Base):
 
     Tracks all admin actions for accountability and compliance.
     """
+
     __tablename__ = "audit_logs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

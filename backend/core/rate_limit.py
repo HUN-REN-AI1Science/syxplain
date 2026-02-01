@@ -3,6 +3,7 @@ Rate limiting configuration.
 
 Provides a shared limiter instance for use across routers.
 """
+
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 

@@ -3,18 +3,14 @@ Slurm compute backend implementation.
 
 Executes compute tasks on a Slurm cluster via slurmrestd API.
 """
+
 import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
-from backend.core.config import get_slurm_settings, get_compute_settings
-from backend.utils.security_utils import (
-    shell_escape,
-    validate_slurm_identifier,
-    validate_url,
-)
+from backend.core.config import get_compute_settings, get_slurm_settings
 from backend.infrastructure.compute.base import (
     ComputeBackend,
     ComputeBackendError,
@@ -33,6 +29,11 @@ from backend.infrastructure.slurm.client import (
 from backend.infrastructure.slurm.models import (
     JobState,
     SlurmJobSubmission,
+)
+from backend.utils.security_utils import (
+    shell_escape,
+    validate_slurm_identifier,
+    validate_url,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,7 @@ class SlurmComputeBackend(ComputeBackend):
     job status through the Slurm REST API.
     """
 
-    def __init__(self, client: Optional[SlurmClient] = None):
+    def __init__(self, client: SlurmClient | None = None):
         """
         Initialize Slurm backend.
 
@@ -70,7 +71,7 @@ class SlurmComputeBackend(ComputeBackend):
             client: Optional SlurmClient instance (creates new one if not provided)
         """
         self._client = client
-        self._jobs: Dict[str, Dict[str, Any]] = {}
+        self._jobs: dict[str, dict[str, Any]] = {}
 
     @property
     def name(self) -> str:
@@ -102,7 +103,7 @@ class SlurmComputeBackend(ComputeBackend):
         Raises:
             ValueError: If task contains invalid identifiers or URLs
         """
-        compute_settings = get_compute_settings()
+        get_compute_settings()
 
         # Validate identifiers to prevent injection (raises ValueError if invalid)
         validate_slurm_identifier(task.task_type, "task_type")
@@ -114,10 +115,10 @@ class SlurmComputeBackend(ComputeBackend):
             # Validate URL scheme before escaping
             validate_url(task.callback_url, "callback_url")
             escaped_url = shell_escape(task.callback_url)
-            env_vars.append(f'export CALLBACK_URL={escaped_url}')
+            env_vars.append(f"export CALLBACK_URL={escaped_url}")
         if task.callback_token:
             escaped_token = shell_escape(task.callback_token)
-            env_vars.append(f'export CALLBACK_TOKEN={escaped_token}')
+            env_vars.append(f"export CALLBACK_TOKEN={escaped_token}")
 
         env_section = "\n".join(env_vars) if env_vars else "# No callback configured"
 
@@ -155,15 +156,13 @@ exit $?
         """Submit task to Slurm cluster."""
         client = await self._get_client()
         slurm_settings = get_slurm_settings()
-        compute_settings = get_compute_settings()
+        get_compute_settings()
 
         # Generate unique job identifier
         job_uuid = str(uuid.uuid4())
         staging_dir = f"{slurm_settings.staging_dir}/{job_uuid}"
 
-        logger.info(
-            f"Submitting {task.task_type} task to Slurm for run {task.run_id}"
-        )
+        logger.info(f"Submitting {task.task_type} task to Slurm for run {task.run_id}")
 
         try:
             # Serialize and upload input data
@@ -200,9 +199,7 @@ exit $?
                 "submitted_at": datetime.utcnow(),
             }
 
-            logger.info(
-                f"Slurm job {slurm_job_id} submitted for task {job_uuid}"
-            )
+            logger.info(f"Slurm job {slurm_job_id} submitted for task {job_uuid}")
 
             return ComputeJob(
                 job_id=job_uuid,
@@ -256,7 +253,7 @@ exit $?
         except SlurmClientError as e:
             raise ComputeBackendError(f"Failed to get job status: {e}") from e
 
-    async def get_task_result(self, job_id: str) -> Dict[str, Any]:
+    async def get_task_result(self, job_id: str) -> dict[str, Any]:
         """Get results of a completed Slurm job."""
         if job_id not in self._jobs:
             raise JobNotFoundError(f"Job {job_id} not found")
@@ -264,9 +261,7 @@ exit $?
         # First check status
         status = await self.get_task_status(job_id)
         if status.state != TaskState.COMPLETED:
-            raise JobNotCompletedError(
-                f"Job {job_id} is in state {status.state.value}"
-            )
+            raise JobNotCompletedError(f"Job {job_id} is in state {status.state.value}")
 
         job_data = self._jobs[job_id]
         output_path = job_data["output_path"]
@@ -303,7 +298,7 @@ exit $?
         self,
         job_id: str,
         poll_interval: float = 10.0,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> TaskStatus:
         """Wait for Slurm job to complete."""
         if job_id not in self._jobs:

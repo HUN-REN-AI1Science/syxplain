@@ -12,6 +12,7 @@ Package Structure:
     - visualization: Plot generation
     - io: File I/O operations
 """
+
 __version__ = "2.0.0"
 
 from slurm_worker.tasks import TaskRegistry

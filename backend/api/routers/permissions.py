@@ -3,6 +3,7 @@ Permission endpoints router.
 
 Provides endpoints for checking user permissions and validating API keys.
 """
+
 import logging
 import re
 
@@ -11,16 +12,16 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.api.dependencies import get_permission_service
 from backend.core.rate_limit import limiter
 from backend.core.security import User, get_current_user
-from backend.services.permission_service import PermissionService
 from backend.schemas.requests import ValidateKeysRequest
 from backend.schemas.responses import PermissionResponse, ValidateKeysResponse
+from backend.services.permission_service import PermissionService
 
 logger = logging.getLogger(__name__)
 
 # OpenAI API key format pattern
 # Keys start with "sk-" followed by alphanumeric chars, hyphens, and underscores
 # Minimum 32 characters after prefix (typical keys are 48-51 chars total)
-OPENAI_KEY_PATTERN = re.compile(r'^sk-[a-zA-Z0-9_-]{32,}$')
+OPENAI_KEY_PATTERN = re.compile(r"^sk-[a-zA-Z0-9_-]{32,}$")
 
 
 def validate_api_key_format(api_key: str) -> tuple[bool, str]:
@@ -44,16 +45,14 @@ def validate_api_key_format(api_key: str) -> tuple[bool, str]:
 
     return True, ""
 
+
 router = APIRouter(prefix="/api", tags=["Permissions"])
 
 
-@router.get(
-    "/permissions/me",
-    response_model=PermissionResponse
-)
+@router.get("/permissions/me", response_model=PermissionResponse)
 def get_my_permissions(
     current_user: User = Depends(get_current_user),
-    permission_service: PermissionService = Depends(get_permission_service)
+    permission_service: PermissionService = Depends(get_permission_service),
 ):
     """
     Get current user's permissions.
@@ -62,20 +61,14 @@ def get_my_permissions(
         PermissionResponse with use_hunren_keys and is_admin flags
     """
     return permission_service.get_my_permissions(
-        user_id=current_user.user_id,
-        email=current_user.email
+        user_id=current_user.user_id, email=current_user.email
     )
 
 
-@router.post(
-    "/validate-keys",
-    response_model=ValidateKeysResponse
-)
+@router.post("/validate-keys", response_model=ValidateKeysResponse)
 @limiter.limit("10/minute")
 async def validate_api_keys(
-    request: Request,
-    body: ValidateKeysRequest,
-    current_user: User = Depends(get_current_user)
+    request: Request, body: ValidateKeysRequest, current_user: User = Depends(get_current_user)
 ):
     """
     Validate OpenAI API key before analysis.
@@ -97,6 +90,7 @@ async def validate_api_keys(
 
     try:
         import openai
+
         client = openai.OpenAI(api_key=body.openai_api_key)
         # Make a minimal API call to verify the key
         client.models.list()
@@ -104,18 +98,16 @@ async def validate_api_keys(
     except openai.AuthenticationError:
         logger.warning(f"Invalid API key provided by user {current_user.user_id}")
         raise HTTPException(
-            status_code=400,
-            detail="Invalid API key. Please check your key and try again."
+            status_code=400, detail="Invalid API key. Please check your key and try again."
         )
     except openai.RateLimitError:
         logger.warning(f"Rate limited API key for user {current_user.user_id}")
         raise HTTPException(
             status_code=400,
-            detail="API key rate limited. Your OpenAI account may have insufficient credits."
+            detail="API key rate limited. Your OpenAI account may have insufficient credits.",
         )
     except Exception:
         logger.warning(f"API key validation failed for user {current_user.user_id}")
         raise HTTPException(
-            status_code=400,
-            detail="API key validation failed. Please check your key."
+            status_code=400, detail="API key validation failed. Please check your key."
         )

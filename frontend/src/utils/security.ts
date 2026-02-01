@@ -49,12 +49,7 @@ export function sanitizeUrl(url: string | undefined | null): string {
 
   // Block dangerous protocols
   const lowerUrl = trimmed.toLowerCase();
-  const dangerousProtocols = [
-    'javascript:',
-    'data:',
-    'vbscript:',
-    'file:',
-  ];
+  const dangerousProtocols = ['javascript:', 'data:', 'vbscript:', 'file:'];
 
   for (const protocol of dangerousProtocols) {
     if (lowerUrl.startsWith(protocol)) {

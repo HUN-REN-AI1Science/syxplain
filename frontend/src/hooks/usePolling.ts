@@ -44,13 +44,7 @@ export function usePolling<T>(
   fetcher: () => Promise<T>,
   options: UsePollingOptions<T> = {}
 ): UsePollingResult<T> {
-  const {
-    interval = 2000,
-    shouldStop = () => false,
-    enabled = true,
-    onStop,
-    onError,
-  } = options;
+  const { interval = 2000, shouldStop = () => false, enabled = true, onStop, onError } = options;
 
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);

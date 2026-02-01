@@ -1,7 +1,7 @@
 """
 DSPy Signatures for LLM interactions.
 """
-from typing import List
+
 import dspy
 
 
@@ -29,9 +29,10 @@ class PySrConfigGenerator(dspy.Signature):
         "binary_operators": ["<subset of allowed binary ops>"]
     }
     """
+
     project_description: str = dspy.InputField(desc="Project description json")
     dataset_statistics: str = dspy.InputField(desc="Dataset statistics")
-    visualizations: List[dspy.Image] = dspy.InputField(desc="Dataset visualizations")
+    visualizations: list[dspy.Image] = dspy.InputField(desc="Dataset visualizations")
 
     config_json: str = dspy.OutputField(desc="JSON configuration string")
 
@@ -106,10 +107,13 @@ class ExplainPySrEquations(dspy.Signature):
 
     Unless I say otherwise, respond in concise technical English.
     """
+
     project_spec_json: str = dspy.InputField(desc="JSON string of project specification")
     data_spec_json: str = dspy.InputField(desc="JSON string of equations data")
 
-    explanation_json: str = dspy.OutputField(desc="JSON object with equations, summary, and recommendation")
+    explanation_json: str = dspy.OutputField(
+        desc="JSON object with equations, summary, and recommendation"
+    )
 
 
 class DeepResearchEquations(dspy.Signature):
@@ -188,9 +192,14 @@ class DeepResearchEquations(dspy.Signature):
 
     Your final output must be valid JSON with an "equations" array. No narrative text, no explanations outside the JSON structure.
     """
-    features_json: str = dspy.InputField(desc="JSON string of feature dictionary mapping variable names to descriptions")
 
-    equations: str = dspy.OutputField(desc="JSON object with equations array containing equation, citations")
+    features_json: str = dspy.InputField(
+        desc="JSON string of feature dictionary mapping variable names to descriptions"
+    )
+
+    equations: str = dspy.OutputField(
+        desc="JSON object with equations array containing equation, citations"
+    )
 
 
 class ExplainPySrEquationsDeep(dspy.Signature):
@@ -270,7 +279,12 @@ class ExplainPySrEquationsDeep(dspy.Signature):
 
     Unless I say otherwise, respond in concise technical English.
     """
-    project_spec_json: str = dspy.InputField(desc="JSON string of project specification with deep research equations")
+
+    project_spec_json: str = dspy.InputField(
+        desc="JSON string of project specification with deep research equations"
+    )
     data_spec_json: str = dspy.InputField(desc="JSON string of equations data")
 
-    explanation_json: str = dspy.OutputField(desc="JSON object with equations (including citations), summary, and recommendation")
+    explanation_json: str = dspy.OutputField(
+        desc="JSON object with equations (including citations), summary, and recommendation"
+    )

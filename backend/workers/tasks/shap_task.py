@@ -3,8 +3,9 @@ SHAP interaction analysis task.
 
 Defines the SHAP task for computing feature interactions using SHAP values.
 """
+
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -14,9 +15,10 @@ from backend.workers.tasks.base import ComputeTask, TaskInput, TaskOutput, TaskT
 @dataclass
 class SHAPInput(TaskInput):
     """Input for SHAP analysis task."""
+
     data: pd.DataFrame
     target_column: str
-    predictor_columns: List[str]
+    predictor_columns: list[str]
     subsample_fraction: float = 0.1
     subsample_min: int = 1000
     subsample_max: int = 5000
@@ -25,6 +27,7 @@ class SHAPInput(TaskInput):
 @dataclass
 class SHAPInteraction:
     """A single feature interaction result."""
+
     feature1: str
     feature2: str
     interaction_strength: float
@@ -34,6 +37,7 @@ class SHAPInteraction:
 @dataclass
 class Visualization:
     """A visualization result."""
+
     filename: str
     content_b64: str
     type: str  # "feature_plot" or "interaction_plot"
@@ -42,11 +46,12 @@ class Visualization:
 @dataclass
 class SHAPOutput(TaskOutput):
     """Output from SHAP analysis task."""
-    interactions: List[SHAPInteraction]
-    top_features: List[str]
-    computation_time_seconds: Optional[float] = None
-    samples_used: Optional[int] = None
-    visualizations: Optional[List[Visualization]] = None
+
+    interactions: list[SHAPInteraction]
+    top_features: list[str]
+    computation_time_seconds: float | None = None
+    samples_used: int | None = None
+    visualizations: list[Visualization] | None = None
 
 
 class SHAPTask(ComputeTask[SHAPInput, SHAPOutput]):
@@ -67,15 +72,11 @@ class SHAPTask(ComputeTask[SHAPInput, SHAPOutput]):
             raise ValueError("Input DataFrame is empty")
 
         if input_data.target_column not in input_data.data.columns:
-            raise ValueError(
-                f"Target column '{input_data.target_column}' not in DataFrame"
-            )
+            raise ValueError(f"Target column '{input_data.target_column}' not in DataFrame")
 
         missing_predictors = set(input_data.predictor_columns) - set(input_data.data.columns)
         if missing_predictors:
-            raise ValueError(
-                f"Predictor columns not in DataFrame: {missing_predictors}"
-            )
+            raise ValueError(f"Predictor columns not in DataFrame: {missing_predictors}")
 
         if not input_data.predictor_columns:
             raise ValueError("No predictor columns specified")
@@ -83,10 +84,10 @@ class SHAPTask(ComputeTask[SHAPInput, SHAPOutput]):
         if input_data.subsample_fraction <= 0 or input_data.subsample_fraction > 1:
             raise ValueError("subsample_fraction must be between 0 and 1")
 
-    def serialize_input(self, input_data: SHAPInput) -> Dict[str, Any]:
+    def serialize_input(self, input_data: SHAPInput) -> dict[str, Any]:
         """Serialize SHAP input for JSON transport."""
         # Select only relevant columns for efficiency
-        columns_needed = [input_data.target_column] + input_data.predictor_columns
+        columns_needed = [input_data.target_column, *input_data.predictor_columns]
         df_subset = input_data.data[columns_needed]
 
         return {
@@ -98,7 +99,7 @@ class SHAPTask(ComputeTask[SHAPInput, SHAPOutput]):
             "subsample_max": input_data.subsample_max,
         }
 
-    def deserialize_output(self, data: Dict[str, Any]) -> SHAPOutput:
+    def deserialize_output(self, data: dict[str, Any]) -> SHAPOutput:
         """Deserialize SHAP output from JSON."""
         if data.get("status") == "error":
             raise ValueError(f"SHAP task failed: {data.get('error', 'Unknown error')}")
@@ -115,14 +116,18 @@ class SHAPTask(ComputeTask[SHAPInput, SHAPOutput]):
         ]
 
         visualizations_data = data.get("visualizations", [])
-        visualizations = [
-            Visualization(
-                filename=v["filename"],
-                content_b64=v["content_b64"],
-                type=v["type"],
-            )
-            for v in visualizations_data
-        ] if visualizations_data else None
+        visualizations = (
+            [
+                Visualization(
+                    filename=v["filename"],
+                    content_b64=v["content_b64"],
+                    type=v["type"],
+                )
+                for v in visualizations_data
+            ]
+            if visualizations_data
+            else None
+        )
 
         return SHAPOutput(
             interactions=interactions,
@@ -136,10 +141,10 @@ class SHAPTask(ComputeTask[SHAPInput, SHAPOutput]):
     def _generate_visualizations(
         df: "pd.DataFrame",
         target_column: str,
-        predictor_columns: List[str],
-        top_interactions: List[Dict[str, Any]],
+        predictor_columns: list[str],
+        top_interactions: list[dict[str, Any]],
         max_interaction_plots: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Generate visualization plots for SHAP analysis results.
 
@@ -160,7 +165,9 @@ class SHAPTask(ComputeTask[SHAPInput, SHAPOutput]):
         import base64
         import io
         import logging
+
         import matplotlib
+
         matplotlib.use("Agg")  # Non-interactive backend for headless execution
         import matplotlib.pyplot as plt
 
@@ -181,11 +188,13 @@ class SHAPTask(ComputeTask[SHAPInput, SHAPOutput]):
                 buf = io.BytesIO()
                 fig.savefig(buf, format="png", dpi=100)
                 buf.seek(0)
-                visualizations.append({
-                    "filename": f"{col}_vs_{target_column}.png",
-                    "content_b64": base64.b64encode(buf.getvalue()).decode(),
-                    "type": "feature_plot",
-                })
+                visualizations.append(
+                    {
+                        "filename": f"{col}_vs_{target_column}.png",
+                        "content_b64": base64.b64encode(buf.getvalue()).decode(),
+                        "type": "feature_plot",
+                    }
+                )
                 plt.close(fig)
             except Exception as e:
                 logger.warning(f"Failed to generate plot for {col}: {e}")
@@ -207,11 +216,13 @@ class SHAPTask(ComputeTask[SHAPInput, SHAPOutput]):
                 buf = io.BytesIO()
                 fig.savefig(buf, format="png", dpi=100)
                 buf.seek(0)
-                visualizations.append({
-                    "filename": f"{f1}_vs_{f2}_interaction.png",
-                    "content_b64": base64.b64encode(buf.getvalue()).decode(),
-                    "type": "interaction_plot",
-                })
+                visualizations.append(
+                    {
+                        "filename": f"{f1}_vs_{f2}_interaction.png",
+                        "content_b64": base64.b64encode(buf.getvalue()).decode(),
+                        "type": "interaction_plot",
+                    }
+                )
                 plt.close(fig)
             except Exception as e:
                 logger.warning(f"Failed to generate interaction plot for {f1} vs {f2}: {e}")
@@ -220,7 +231,7 @@ class SHAPTask(ComputeTask[SHAPInput, SHAPOutput]):
         return visualizations
 
     @staticmethod
-    def execute(input_dict: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(input_dict: dict[str, Any]) -> dict[str, Any]:
         """
         Execute SHAP analysis using actual SHAP interaction values.
 
@@ -233,12 +244,13 @@ class SHAPTask(ComputeTask[SHAPInput, SHAPOutput]):
         Returns:
             Output dictionary ready for serialization
         """
-        import time
         import logging
+        import time
+
         import numpy as np
         import pandas as pd
-        from sklearn.ensemble import RandomForestRegressor
         import shap
+        from sklearn.ensemble import RandomForestRegressor
 
         logger = logging.getLogger(__name__)
         start_time = time.time()
@@ -301,16 +313,16 @@ class SHAPTask(ComputeTask[SHAPInput, SHAPOutput]):
                 interaction_value = (
                     mean_abs_interaction_matrix[i, j] + mean_abs_interaction_matrix[j, i]
                 ) / 2
-                interaction_pairs_with_values.append({
-                    "feature1": predictor_columns[i],
-                    "feature2": predictor_columns[j],
-                    "interaction_strength": float(interaction_value),
-                })
+                interaction_pairs_with_values.append(
+                    {
+                        "feature1": predictor_columns[i],
+                        "feature2": predictor_columns[j],
+                        "interaction_strength": float(interaction_value),
+                    }
+                )
 
         # Sort by magnitude
-        interaction_pairs_with_values.sort(
-            key=lambda x: x["interaction_strength"], reverse=True
-        )
+        interaction_pairs_with_values.sort(key=lambda x: x["interaction_strength"], reverse=True)
 
         # Calculate total mass and select top interactions
         total_mass = sum(x["interaction_strength"] for x in interaction_pairs_with_values)
@@ -354,6 +366,8 @@ class SHAPTask(ComputeTask[SHAPInput, SHAPOutput]):
             "computation_time_seconds": elapsed,
             "samples_used": len(df_subsampled),
             "total_interaction_mass": float(total_mass),
-            "covered_mass_percent": float(accumulated_mass / total_mass * 100) if total_mass > 0 else 0,
+            "covered_mass_percent": float(accumulated_mass / total_mass * 100)
+            if total_mass > 0
+            else 0,
             "visualizations": visualizations,
         }

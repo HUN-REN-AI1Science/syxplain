@@ -4,16 +4,18 @@ Base class for compute tasks.
 Defines the interface for tasks that can be serialized and executed
 on different compute backends (local or Slurm).
 """
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 import pandas as pd
 
 
 class TaskType(str, Enum):
     """Types of compute tasks."""
+
     SHAP = "shap"
     PYSR = "pysr"
 
@@ -26,12 +28,14 @@ TOutput = TypeVar("TOutput")
 @dataclass
 class TaskInput:
     """Base class for task inputs."""
+
     pass
 
 
 @dataclass
 class TaskOutput:
     """Base class for task outputs."""
+
     pass
 
 
@@ -63,7 +67,7 @@ class ComputeTask(ABC, Generic[TInput, TOutput]):
         pass
 
     @abstractmethod
-    def serialize_input(self, input_data: TInput) -> Dict[str, Any]:
+    def serialize_input(self, input_data: TInput) -> dict[str, Any]:
         """
         Serialize input data for transfer to worker.
 
@@ -78,7 +82,7 @@ class ComputeTask(ABC, Generic[TInput, TOutput]):
         pass
 
     @abstractmethod
-    def deserialize_output(self, data: Dict[str, Any]) -> TOutput:
+    def deserialize_output(self, data: dict[str, Any]) -> TOutput:
         """
         Deserialize output data from worker.
 
@@ -90,7 +94,7 @@ class ComputeTask(ABC, Generic[TInput, TOutput]):
         """
         pass
 
-    def serialize_dataframe(self, df: pd.DataFrame) -> Dict[str, Any]:
+    def serialize_dataframe(self, df: pd.DataFrame) -> dict[str, Any]:
         """
         Serialize a DataFrame for JSON transport.
 
@@ -103,7 +107,7 @@ class ComputeTask(ABC, Generic[TInput, TOutput]):
         # Use orient='split' for efficient serialization with type preservation
         return df.to_dict(orient="split")
 
-    def deserialize_dataframe(self, data: Dict[str, Any]) -> pd.DataFrame:
+    def deserialize_dataframe(self, data: dict[str, Any]) -> pd.DataFrame:
         """
         Deserialize a DataFrame from JSON transport format.
 

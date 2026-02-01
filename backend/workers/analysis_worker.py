@@ -7,26 +7,25 @@ SHAP and PySR compute tasks run on Slurm, not locally.
 
 import asyncio
 import logging
-from typing import Any, Dict, Optional
-
-import pandas as pd
+from typing import Any
 
 from backend.infrastructure.database.connection import get_db_session
-from backend.infrastructure.database.models import Run, File as DbFile
+from backend.infrastructure.database.models import File as DbFile
+from backend.infrastructure.database.models import Run
 from backend.services.file_service import FileService
 
 logger = logging.getLogger(__name__)
 
 # Track running analysis tasks (for graceful shutdown)
-_running_tasks: Dict[str, asyncio.Task] = {}
+_running_tasks: dict[str, asyncio.Task] = {}
 
 
 def update_run_status(
     run_id: str,
     status: str,
-    results: Optional[Dict[str, Any]] = None,
-    error: Optional[str] = None,
-    progress: Optional[int] = None
+    results: dict[str, Any] | None = None,
+    error: str | None = None,
+    progress: int | None = None,
 ) -> None:
     """
     Update run status in the database.
@@ -70,12 +69,12 @@ def update_run_status(
 
 async def _run_analysis(
     run_id: str,
-    problem_desc: Dict[str, Any],
+    problem_desc: dict[str, Any],
     csv_filename: str,
     analysis_type: str = "quick",
-    deep_research_model: Optional[str] = None,
-    user_api_key: Optional[str] = None,
-    user_model: Optional[str] = None
+    deep_research_model: str | None = None,
+    user_api_key: str | None = None,
+    user_model: str | None = None,
 ) -> None:
     """
     Async function that runs the orchestrated analysis.
@@ -92,12 +91,14 @@ async def _run_analysis(
         user_api_key: Optional user-provided API key (not stored)
         user_model: Optional user-specified model
     """
-    from backend.core.logging import configure_logging, configure_debug_mode
+    from backend.core.logging import configure_debug_mode, configure_logging
+
     configure_logging()
     configure_debug_mode()
 
     # Initialize Langfuse tracing
     from backend.infrastructure.monitoring import init_langfuse
+
     init_langfuse()
 
     logger.info(f"Analysis task started for Run ID: {run_id}")
@@ -107,9 +108,12 @@ async def _run_analysis(
         file_service = FileService()
 
         with get_db_session() as db:
-            db_file = db.query(DbFile).filter(
-                DbFile.filename == csv_filename
-            ).order_by(DbFile.created_at.desc()).first()
+            db_file = (
+                db.query(DbFile)
+                .filter(DbFile.filename == csv_filename)
+                .order_by(DbFile.created_at.desc())
+                .first()
+            )
 
             if not db_file:
                 raise Exception(f"File {csv_filename} not found in database")
@@ -149,13 +153,13 @@ async def _run_analysis(
 
 
 def start_analysis_run(
-    problem_desc: Dict[str, Any],
+    problem_desc: dict[str, Any],
     csv_filename: str,
     user_id: str,
     analysis_type: str = "quick",
-    deep_research_model: Optional[str] = None,
-    user_api_key: Optional[str] = None,
-    user_model: Optional[str] = None
+    deep_research_model: str | None = None,
+    user_api_key: str | None = None,
+    user_model: str | None = None,
 ) -> str:
     """
     Create a run record and start background processing.
@@ -179,7 +183,7 @@ def start_analysis_run(
             csv_filename=csv_filename,
             status="pending",
             user_id=user_id,
-            analysis_type=analysis_type
+            analysis_type=analysis_type,
         )
         db.add(run)
         db.commit()
@@ -194,8 +198,13 @@ def start_analysis_run(
     # Start async background task (user keys passed in memory only)
     task = asyncio.create_task(
         _run_analysis(
-            run_id, problem_desc, csv_filename, analysis_type, deep_research_model,
-            user_api_key=user_api_key, user_model=user_model
+            run_id,
+            problem_desc,
+            csv_filename,
+            analysis_type,
+            deep_research_model,
+            user_api_key=user_api_key,
+            user_model=user_model,
         )
     )
     _running_tasks[run_id] = task
@@ -209,7 +218,7 @@ def start_analysis_run(
     return run_id
 
 
-def get_running_task(run_id: str) -> Optional[asyncio.Task]:
+def get_running_task(run_id: str) -> asyncio.Task | None:
     """
     Get the asyncio task for a running analysis.
 

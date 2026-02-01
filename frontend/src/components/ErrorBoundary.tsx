@@ -83,12 +83,9 @@ class ErrorBoundary extends Component<Props, State> {
                   display: 'block',
                 }}
               />
-              <h2 style={{ margin: '0 0 0.5rem 0', color: '#1f2937' }}>
-                Something went wrong
-              </h2>
+              <h2 style={{ margin: '0 0 0.5rem 0', color: '#1f2937' }}>Something went wrong</h2>
               <p style={{ color: '#6b7280', margin: 0 }}>
-                We're sorry, but something unexpected happened. Please try again
-                or reload the page.
+                We're sorry, but something unexpected happened. Please try again or reload the page.
               </p>
             </div>
 
@@ -106,11 +103,7 @@ class ErrorBoundary extends Component<Props, State> {
                 onClick={this.handleReset}
                 className="p-button-outlined"
               />
-              <Button
-                label="Reload Page"
-                icon="pi pi-replay"
-                onClick={this.handleReload}
-              />
+              <Button label="Reload Page" icon="pi pi-replay" onClick={this.handleReload} />
             </div>
 
             {/* Show stack trace in development mode */}

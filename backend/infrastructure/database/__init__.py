@@ -2,12 +2,12 @@
 # Re-export for convenient imports
 
 from backend.infrastructure.database.connection import (
+    dispose_engine,
     get_db,
     get_db_session,
     get_engine,
     get_session_factory,
     init_db,
-    dispose_engine,
 )
 from backend.infrastructure.database.models import (
     Base,
@@ -18,17 +18,17 @@ from backend.infrastructure.database.models import (
 )
 
 __all__ = [
-    # Connection
-    "get_db",
-    "get_db_session",
-    "get_engine",
-    "get_session_factory",
-    "init_db",
-    "dispose_engine",
     # Models
     "Base",
     "File",
     "Run",
     "RunArtifact",
     "RunStep",
+    "dispose_engine",
+    # Connection
+    "get_db",
+    "get_db_session",
+    "get_engine",
+    "get_session_factory",
+    "init_db",
 ]

@@ -4,9 +4,10 @@ Base task class and result types.
 Defines the interface for all task implementations (Strategy pattern)
 and provides common functionality (Template Method pattern).
 """
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from slurm_worker.reporting import ProgressReporter
 
@@ -21,9 +22,10 @@ class TaskResult:
         data: Result data
         error: Error message if failed
     """
+
     status: str
-    data: Dict[str, Any] = field(default_factory=dict)
-    error: Optional[str] = None
+    data: dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
 
     @classmethod
     def success(cls, **data) -> "TaskResult":
@@ -35,7 +37,7 @@ class TaskResult:
         """Create a failure result."""
         return cls(status="error", error=error, data=data)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         result = {"status": self.status, **self.data}
         if self.error:
@@ -68,7 +70,7 @@ class Task(ABC):
         self.reporter = reporter
 
     @abstractmethod
-    def _validate_input(self, input_data: Dict[str, Any]) -> None:
+    def _validate_input(self, input_data: dict[str, Any]) -> None:
         """
         Validate input data.
 
@@ -81,7 +83,7 @@ class Task(ABC):
         pass
 
     @abstractmethod
-    def _execute(self, input_data: Dict[str, Any]) -> TaskResult:
+    def _execute(self, input_data: dict[str, Any]) -> TaskResult:
         """
         Execute the task.
 
@@ -93,7 +95,7 @@ class Task(ABC):
         """
         pass
 
-    def run(self, input_data: Dict[str, Any]) -> TaskResult:
+    def run(self, input_data: dict[str, Any]) -> TaskResult:
         """
         Run the task with validation and error handling.
 
@@ -130,12 +132,13 @@ class DataFrameInput:
 
     Encapsulates the common input structure for tasks.
     """
+
     df: Any  # pandas DataFrame
     target_column: str
-    predictor_columns: List[str]
+    predictor_columns: list[str]
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "DataFrameInput":
+    def from_dict(cls, data: dict[str, Any]) -> "DataFrameInput":
         """
         Parse input dictionary into DataFrameInput.
 

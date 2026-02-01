@@ -3,8 +3,8 @@ Compute backend factory.
 
 Provides factory function for creating the Slurm compute backend.
 """
+
 import logging
-from typing import Optional
 
 from backend.core.config import get_slurm_settings
 from backend.infrastructure.compute.base import ComputeBackend, ComputeBackendError
@@ -12,7 +12,7 @@ from backend.infrastructure.compute.base import ComputeBackend, ComputeBackendEr
 logger = logging.getLogger(__name__)
 
 # Cached backend instance
-_backend: Optional[ComputeBackend] = None
+_backend: ComputeBackend | None = None
 
 
 def get_compute_backend(force_new: bool = False) -> ComputeBackend:
@@ -40,6 +40,7 @@ def get_compute_backend(force_new: bool = False) -> ComputeBackend:
         )
 
     from backend.infrastructure.compute.slurm_backend import SlurmComputeBackend
+
     _backend = SlurmComputeBackend()
     logger.info(f"Using Slurm compute backend at {slurm_settings.api_url}")
 

@@ -3,8 +3,9 @@ PySR symbolic regression task.
 
 Defines the PySR task for discovering mathematical equations.
 """
+
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any
 
 import pandas as pd
 
@@ -14,16 +15,13 @@ from backend.workers.tasks.base import ComputeTask, TaskInput, TaskOutput, TaskT
 @dataclass
 class PySRConfig:
     """Configuration for PySR symbolic regression."""
+
     niterations: int = 40
     populations: int = 15
     population_size: int = 33
     ncycles_per_iteration: int = 550
-    binary_operators: List[str] = field(
-        default_factory=lambda: ["+", "-", "*", "/"]
-    )
-    unary_operators: List[str] = field(
-        default_factory=lambda: ["exp", "log", "sqrt", "abs"]
-    )
+    binary_operators: list[str] = field(default_factory=lambda: ["+", "-", "*", "/"])
+    unary_operators: list[str] = field(default_factory=lambda: ["exp", "log", "sqrt", "abs"])
     maxsize: int = 20
     maxdepth: int = 10
     timeout_in_seconds: int = 3600
@@ -34,37 +32,41 @@ class PySRConfig:
 @dataclass
 class PySRInput(TaskInput):
     """Input for PySR task."""
+
     data: pd.DataFrame
     target_column: str
-    predictor_columns: List[str]
+    predictor_columns: list[str]
     config: PySRConfig = field(default_factory=PySRConfig)
 
 
 @dataclass
 class Equation:
     """A discovered symbolic equation."""
+
     equation: str
     complexity: int
     loss: float
     score: float
-    sympy_format: Optional[str] = None
+    sympy_format: str | None = None
 
 
 @dataclass
 class ScatterData:
     """Scatter plot data for equation visualization."""
-    measured: List[float]
-    predicted: List[float]
+
+    measured: list[float]
+    predicted: list[float]
 
 
 @dataclass
 class PySROutput(TaskOutput):
     """Output from PySR task."""
-    equations: List[Equation]
-    best_equation: Optional[Equation] = None
-    computation_time_seconds: Optional[float] = None
-    iterations_completed: Optional[int] = None
-    scatter_data: Optional[Dict[str, ScatterData]] = None  # equation string -> scatter data
+
+    equations: list[Equation]
+    best_equation: Equation | None = None
+    computation_time_seconds: float | None = None
+    iterations_completed: int | None = None
+    scatter_data: dict[str, ScatterData] | None = None  # equation string -> scatter data
 
 
 class PySRTask(ComputeTask[PySRInput, PySROutput]):
@@ -85,23 +87,19 @@ class PySRTask(ComputeTask[PySRInput, PySROutput]):
             raise ValueError("Input DataFrame is empty")
 
         if input_data.target_column not in input_data.data.columns:
-            raise ValueError(
-                f"Target column '{input_data.target_column}' not in DataFrame"
-            )
+            raise ValueError(f"Target column '{input_data.target_column}' not in DataFrame")
 
         missing_predictors = set(input_data.predictor_columns) - set(input_data.data.columns)
         if missing_predictors:
-            raise ValueError(
-                f"Predictor columns not in DataFrame: {missing_predictors}"
-            )
+            raise ValueError(f"Predictor columns not in DataFrame: {missing_predictors}")
 
         if not input_data.predictor_columns:
             raise ValueError("No predictor columns specified")
 
-    def serialize_input(self, input_data: PySRInput) -> Dict[str, Any]:
+    def serialize_input(self, input_data: PySRInput) -> dict[str, Any]:
         """Serialize PySR input for JSON transport."""
         # Select only relevant columns
-        columns_needed = [input_data.target_column] + input_data.predictor_columns
+        columns_needed = [input_data.target_column, *input_data.predictor_columns]
         df_subset = input_data.data[columns_needed]
 
         config_dict = {
@@ -125,7 +123,7 @@ class PySRTask(ComputeTask[PySRInput, PySROutput]):
             "config": config_dict,
         }
 
-    def deserialize_output(self, data: Dict[str, Any]) -> PySROutput:
+    def deserialize_output(self, data: dict[str, Any]) -> PySROutput:
         """Deserialize PySR output from JSON."""
         if data.get("status") == "error":
             raise ValueError(f"PySR task failed: {data.get('error', 'Unknown error')}")
@@ -155,13 +153,17 @@ class PySRTask(ComputeTask[PySRInput, PySROutput]):
 
         # Deserialize scatter data if present
         scatter_data_raw = data.get("scatter_data", {})
-        scatter_data = {
-            eq_str: ScatterData(
-                measured=sd["measured"],
-                predicted=sd["predicted"],
-            )
-            for eq_str, sd in scatter_data_raw.items()
-        } if scatter_data_raw else None
+        scatter_data = (
+            {
+                eq_str: ScatterData(
+                    measured=sd["measured"],
+                    predicted=sd["predicted"],
+                )
+                for eq_str, sd in scatter_data_raw.items()
+            }
+            if scatter_data_raw
+            else None
+        )
 
         return PySROutput(
             equations=equations,
@@ -172,7 +174,7 @@ class PySRTask(ComputeTask[PySRInput, PySROutput]):
         )
 
     @staticmethod
-    def execute(input_dict: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(input_dict: dict[str, Any]) -> dict[str, Any]:
         """
         Execute PySR symbolic regression.
 
@@ -185,10 +187,11 @@ class PySRTask(ComputeTask[PySRInput, PySROutput]):
         Returns:
             Output dictionary ready for serialization
         """
-        import os
-        import time
-        import tempfile
         import logging
+        import os
+        import tempfile
+        import time
+
         import numpy as np
         import pandas as pd
         from pysr import PySRRegressor
@@ -301,13 +304,15 @@ class PySRTask(ComputeTask[PySRInput, PySROutput]):
             # Generate scatter data for selected equations
             for idx, row in selected_equations.iterrows():
                 eq_string = str(row.get("equation", ""))
-                equations_list.append({
-                    "equation": eq_string,
-                    "complexity": int(row.get("complexity", 0)),
-                    "loss": float(row.get("loss", float("inf"))),
-                    "score": float(row.get("score", 0.0)),
-                    "sympy_format": str(row.get("sympy_format", "")),
-                })
+                equations_list.append(
+                    {
+                        "equation": eq_string,
+                        "complexity": int(row.get("complexity", 0)),
+                        "loss": float(row.get("loss", float("inf"))),
+                        "score": float(row.get("score", 0.0)),
+                        "sympy_format": str(row.get("sympy_format", "")),
+                    }
+                )
 
                 # Generate predictions using lambda_format
                 try:
@@ -326,7 +331,9 @@ class PySRTask(ComputeTask[PySRInput, PySROutput]):
                         "predicted": y_pred.tolist() if hasattr(y_pred, "tolist") else list(y_pred),
                     }
                 except Exception as e:
-                    logger.warning(f"Failed to generate scatter data for equation '{eq_string[:50]}...': {e}")
+                    logger.warning(
+                        f"Failed to generate scatter data for equation '{eq_string[:50]}...': {e}"
+                    )
 
             logger.info(f"Generated scatter data for {len(scatter_data)} equations")
 

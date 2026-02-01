@@ -3,15 +3,16 @@ PySR symbolic regression task.
 
 Discovers mathematical equations that fit the data using genetic programming.
 """
-from typing import Any, Dict, List, Optional, Tuple
+
 import os
 import tempfile
+from typing import Any
 
 import numpy as np
 
 from slurm_worker.config import PySRConfig
 from slurm_worker.logging_config import get_logger
-from slurm_worker.tasks.base import Task, TaskResult, DataFrameInput
+from slurm_worker.tasks.base import DataFrameInput, Task, TaskResult
 from slurm_worker.tasks.registry import TaskRegistry
 
 logger = get_logger("tasks.pysr")
@@ -59,7 +60,7 @@ class PySRConfigBuilder:
 
         return max(200, int(10 * x_complexity_factor * y_complexity_factor))
 
-    def build_constraints(self) -> Tuple[Dict, Dict]:
+    def build_constraints(self) -> tuple[dict, dict]:
         """
         Build operator constraints.
 
@@ -117,7 +118,7 @@ class EquationExtractor:
         model: Any,
         X: Any,
         y: Any,
-    ) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, List[float]]], Optional[Dict[str, Any]]]:
+    ) -> tuple[list[dict[str, Any]], dict[str, dict[str, list[float]]], dict[str, Any] | None]:
         """
         Extract equations and generate scatter data.
 
@@ -165,7 +166,7 @@ class EquationExtractor:
 
         return equations_list, scatter_data, best_equation
 
-    def _subsample_for_scatter(self, X: Any, y: Any) -> Tuple[Any, np.ndarray]:
+    def _subsample_for_scatter(self, X: Any, y: Any) -> tuple[Any, np.ndarray]:
         """Subsample data for scatter plots."""
         y_values = y.values if hasattr(y, "values") else y
 
@@ -177,7 +178,7 @@ class EquationExtractor:
 
         return X, y_values
 
-    def _row_to_dict(self, row: Any) -> Dict[str, Any]:
+    def _row_to_dict(self, row: Any) -> dict[str, Any]:
         """Convert equation row to dictionary."""
         return {
             "equation": str(row.get("equation", "")),
@@ -195,7 +196,7 @@ class EquationExtractor:
         X_sample: Any,
         X_sample_np: np.ndarray,
         y_sample: np.ndarray,
-    ) -> Optional[Dict[str, List[float]]]:
+    ) -> dict[str, list[float]] | None:
         """Generate scatter data for an equation."""
         eq_string = str(row.get("equation", ""))
 
@@ -228,7 +229,7 @@ class PySRTask(Task):
 
     name = "pysr"
 
-    def _validate_input(self, input_data: Dict[str, Any]) -> None:
+    def _validate_input(self, input_data: dict[str, Any]) -> None:
         """Validate PySR task input."""
         required = ["data", "target_column", "predictor_columns"]
         for field in required:
@@ -238,7 +239,7 @@ class PySRTask(Task):
         if not input_data["predictor_columns"]:
             raise ValueError("predictor_columns cannot be empty")
 
-    def _get_config(self, input_data: Dict[str, Any]) -> PySRConfig:
+    def _get_config(self, input_data: dict[str, Any]) -> PySRConfig:
         """Extract PySR configuration from input data."""
         config_dict = input_data.get("config", {})
         return PySRConfig(
@@ -255,7 +256,7 @@ class PySRTask(Task):
             turbo=config_dict.get("turbo", True),
         )
 
-    def _execute(self, input_data: Dict[str, Any]) -> TaskResult:
+    def _execute(self, input_data: dict[str, Any]) -> TaskResult:
         """Execute PySR symbolic regression."""
         from pysr import PySRRegressor
 

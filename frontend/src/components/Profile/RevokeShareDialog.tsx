@@ -31,7 +31,10 @@ export const RevokeShareDialog: React.FC<RevokeShareDialogProps> = ({
       </div>
     }
   >
-    <p className="text-slate-600">This will remove public access. Anyone with the link will no longer be able to view this result.</p>
+    <p className="text-slate-600">
+      This will remove public access. Anyone with the link will no longer be able to view this
+      result.
+    </p>
   </Dialog>
 );
 

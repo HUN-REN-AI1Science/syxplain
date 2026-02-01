@@ -6,17 +6,16 @@ file staging, and status monitoring.
 
 Compatible with slurmrestd API v0.0.41+
 """
+
 import asyncio
 import base64
 import logging
-from typing import Any, Dict, Optional
 
 import httpx
 
-from backend.core.config import get_slurm_settings, get_compute_settings
+from backend.core.config import get_compute_settings, get_slurm_settings
 from backend.infrastructure.slurm.models import (
     JobStatus,
-    SlurmJob,
     SlurmJobSubmission,
 )
 
@@ -28,21 +27,25 @@ API_VERSION = "v0.0.41"
 
 class SlurmClientError(Exception):
     """Base exception for Slurm client errors."""
+
     pass
 
 
 class SlurmJobSubmissionError(SlurmClientError):
     """Error during job submission."""
+
     pass
 
 
 class SlurmFileTransferError(SlurmClientError):
     """Error during file upload/download."""
+
     pass
 
 
 class SlurmJobNotFoundError(SlurmClientError):
     """Job not found in Slurm."""
+
     pass
 
 
@@ -62,9 +65,9 @@ class SlurmClient:
 
     def __init__(
         self,
-        base_url: Optional[str] = None,
-        auth_token: Optional[str] = None,
-        user_name: Optional[str] = None,
+        base_url: str | None = None,
+        auth_token: str | None = None,
+        user_name: str | None = None,
         timeout: float = 60.0,
     ):
         """
@@ -87,9 +90,9 @@ class SlurmClient:
         if not self.auth_token:
             raise SlurmClientError("Slurm auth token not configured")
 
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         """Build request headers for slurmrestd API."""
         return {
             "Authorization": f"Bearer {self.auth_token}",
@@ -235,7 +238,7 @@ class SlurmClient:
         job_id: str,
         filename: str,
         content: bytes,
-        destination_dir: Optional[str] = None,
+        destination_dir: str | None = None,
     ) -> str:
         """
         Upload a file to Slurm staging area via slurmrestd.
@@ -323,17 +326,15 @@ class SlurmClient:
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 raise SlurmFileTransferError(f"File not found: {file_path}") from e
-            raise SlurmFileTransferError(
-                f"File download failed: {e.response.status_code}"
-            ) from e
+            raise SlurmFileTransferError(f"File download failed: {e.response.status_code}") from e
         except httpx.RequestError as e:
             raise SlurmFileTransferError(f"Request failed: {e}") from e
 
     async def wait_for_completion(
         self,
         job_id: str,
-        poll_interval: Optional[int] = None,
-        timeout: Optional[float] = None,
+        poll_interval: int | None = None,
+        timeout: float | None = None,
     ) -> JobStatus:
         """
         Wait for a job to reach terminal state.
@@ -364,9 +365,7 @@ class SlurmClient:
             logger.debug(f"Job {job_id} still {status.state.value}, waiting...")
 
             if timeout and elapsed >= timeout:
-                raise asyncio.TimeoutError(
-                    f"Job {job_id} did not complete within {timeout}s"
-                )
+                raise asyncio.TimeoutError(f"Job {job_id} did not complete within {timeout}s")
 
             await asyncio.sleep(interval)
             elapsed += interval

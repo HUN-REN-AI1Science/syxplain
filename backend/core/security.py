@@ -4,14 +4,14 @@ Security utilities for authentication and authorization.
 Provides JWT validation for Supabase tokens and user extraction.
 Refactored from the original auth.py for cleaner separation of concerns.
 """
+
 import logging
-from typing import Optional
 
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from backend.core.config import get_auth_settings, AuthSettings
+from backend.core.config import AuthSettings, get_auth_settings
 from backend.core.exceptions import AuthenticationError
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,7 @@ class User:
         user_id: Unique identifier from Supabase
         email: User's email address
     """
+
     def __init__(self, user_id: str, email: str):
         self.user_id = user_id
         self.email = email
@@ -37,10 +38,7 @@ class User:
         return f"User(id={self.user_id}, email={self.email})"
 
 
-def decode_jwt_token(
-    token: str,
-    settings: AuthSettings
-) -> dict:
+def decode_jwt_token(token: str, settings: AuthSettings) -> dict:
     """
     Decode and validate a JWT token.
 
@@ -56,33 +54,23 @@ def decode_jwt_token(
     """
     if not settings.supabase_jwt_secret:
         raise AuthenticationError(
-            message="Authentication not configured",
-            reason="JWT secret not set"
+            message="Authentication not configured", reason="JWT secret not set"
         )
 
     try:
         payload = jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated"
+            token, settings.supabase_jwt_secret, algorithms=["HS256"], audience="authenticated"
         )
         return payload
     except jwt.ExpiredSignatureError:
-        raise AuthenticationError(
-            message="Token has expired",
-            reason="expired"
-        )
+        raise AuthenticationError(message="Token has expired", reason="expired")
     except jwt.InvalidTokenError as e:
-        raise AuthenticationError(
-            message="Invalid authentication credentials",
-            reason=str(e)
-        )
+        raise AuthenticationError(message="Invalid authentication credentials", reason=str(e))
 
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    settings: AuthSettings = Depends(get_auth_settings)
+    settings: AuthSettings = Depends(get_auth_settings),
 ) -> User:
     """
     FastAPI dependency that validates JWT token and returns the current user.
@@ -105,8 +93,7 @@ async def get_current_user(
 
         if not user_id:
             raise AuthenticationError(
-                message="Invalid authentication credentials",
-                reason="Missing user ID in token"
+                message="Invalid authentication credentials", reason="Missing user ID in token"
             )
 
         return User(user_id=user_id, email=email)
@@ -120,9 +107,9 @@ async def get_current_user(
 
 
 async def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
-    settings: AuthSettings = Depends(get_auth_settings)
-) -> Optional[User]:
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
+    settings: AuthSettings = Depends(get_auth_settings),
+) -> User | None:
     """
     Optional authentication dependency.
 
@@ -146,9 +133,7 @@ async def get_optional_user(
 
 
 def verify_user_owns_resource(
-    user: User,
-    resource_user_id: str,
-    resource_type: str = "resource"
+    user: User, resource_user_id: str, resource_type: str = "resource"
 ) -> None:
     """
     Verify that the current user owns the specified resource.
@@ -163,6 +148,5 @@ def verify_user_owns_resource(
     """
     if str(user.user_id) != str(resource_user_id):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"{resource_type} not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"{resource_type} not found"
         )

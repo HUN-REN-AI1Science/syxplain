@@ -40,12 +40,7 @@ export interface UseProgressInterpolationResult {
 export function useProgressInterpolation(
   options: UseProgressInterpolationOptions
 ): UseProgressInterpolationResult {
-  const {
-    phases = [],
-    backendProgress,
-    status,
-    updateInterval = 500,
-  } = options;
+  const { phases = [], backendProgress, status, updateInterval = 500 } = options;
 
   const [displayProgress, setDisplayProgress] = useState(0);
   const phasesRef = useRef(phases);
@@ -60,19 +55,19 @@ export function useProgressInterpolation(
     if (status === 'completed') {
       return {
         currentStepDescription: 'Analysis complete!',
-        currentStepLabel: 'Complete'
+        currentStepLabel: 'Complete',
       };
     }
     if (status === 'failed' || status === 'timeout') {
       return {
         currentStepDescription: 'Analysis stopped',
-        currentStepLabel: status === 'timeout' ? 'Timeout' : 'Failed'
+        currentStepLabel: status === 'timeout' ? 'Timeout' : 'Failed',
       };
     }
     if (phases.length === 0) {
       return {
         currentStepDescription: 'Processing...',
-        currentStepLabel: 'Processing'
+        currentStepLabel: 'Processing',
       };
     }
 
@@ -98,7 +93,7 @@ export function useProgressInterpolation(
 
     return {
       currentStepDescription: 'Finalizing...',
-      currentStepLabel: 'Finalizing'
+      currentStepLabel: 'Finalizing',
     };
   }, [backendProgress, phases, status]);
 
@@ -163,4 +158,3 @@ export function useProgressInterpolation(
 
   return { displayProgress, currentStepDescription, currentStepLabel };
 }
-

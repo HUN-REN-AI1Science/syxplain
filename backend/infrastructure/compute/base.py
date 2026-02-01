@@ -4,15 +4,17 @@ Compute backend base classes and interfaces.
 Defines the abstract interface for compute backends that execute
 SHAP and PySR tasks on the Slurm cluster.
 """
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class TaskState(str, Enum):
     """State of a compute task."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -45,23 +47,25 @@ class ComputeTaskInput:
     Resources (cpus, memory, time_limit) are configured at the Slurm
     partition level rather than per-task.
     """
+
     task_type: str  # "shap" or "pysr"
     run_id: str  # Associated run ID for progress tracking
-    input_data: Dict[str, Any]  # Serialized task input
-    callback_url: Optional[str] = None  # URL for progress updates
-    callback_token: Optional[str] = None  # Auth token for callbacks
+    input_data: dict[str, Any]  # Serialized task input
+    callback_url: str | None = None  # URL for progress updates
+    callback_token: str | None = None  # Auth token for callbacks
 
 
 @dataclass
 class TaskStatus:
     """Status of a compute task."""
+
     job_id: str
     state: TaskState
     progress: int = 0  # 0-100
-    message: Optional[str] = None
-    error: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    message: str | None = None
+    error: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 @dataclass
@@ -71,13 +75,14 @@ class ComputeJob:
 
     Tracks the job throughout its lifecycle on the Slurm cluster.
     """
+
     job_id: str
     task_type: str
     run_id: str
     status: TaskStatus
     backend: str = "slurm"  # Always Slurm
     submitted_at: datetime = field(default_factory=datetime.utcnow)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class ComputeBackend(ABC):
@@ -127,7 +132,7 @@ class ComputeBackend(ABC):
         pass
 
     @abstractmethod
-    async def get_task_result(self, job_id: str) -> Dict[str, Any]:
+    async def get_task_result(self, job_id: str) -> dict[str, Any]:
         """
         Get results of a completed task.
 
@@ -164,7 +169,7 @@ class ComputeBackend(ABC):
         self,
         job_id: str,
         poll_interval: float = 5.0,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> TaskStatus:
         """
         Wait for a task to complete.
@@ -200,14 +205,17 @@ class ComputeBackend(ABC):
 
 class ComputeBackendError(Exception):
     """Base exception for compute backend errors."""
+
     pass
 
 
 class JobNotFoundError(ComputeBackendError):
     """Job not found in backend."""
+
     pass
 
 
 class JobNotCompletedError(ComputeBackendError):
     """Job has not completed successfully."""
+
     pass

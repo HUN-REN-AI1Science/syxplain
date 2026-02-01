@@ -76,7 +76,7 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
   };
 
   const errorColors: Record<string, string> = {
-    'Timeout': '#F59E0B',
+    Timeout: '#F59E0B',
     'API Error': '#EF4444',
     'File Error': '#8B5CF6',
     'Resource Error': '#EC4899',
@@ -90,9 +90,7 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
     datasets: [
       {
         data: distribution.map((d) => d.count),
-        backgroundColor: distribution.map(
-          (d) => errorColors[d.error_type] || '#6B7280'
-        ),
+        backgroundColor: distribution.map((d) => errorColors[d.error_type] || '#6B7280'),
       },
     ],
   };
@@ -192,9 +190,7 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
   );
 
   const dateTemplate = (rowData: AdminRunSummary) => (
-    <span className="text-sm">
-      {new Date(rowData.created_at).toLocaleString()}
-    </span>
+    <span className="text-sm">{new Date(rowData.created_at).toLocaleString()}</span>
   );
 
   const errorTemplate = (rowData: AdminRunSummary) => (
@@ -203,7 +199,9 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
       onClick={() => viewError(rowData)}
       title={rowData.error || 'Click to view details'}
     >
-      {rowData.error ? rowData.error.substring(0, 50) + (rowData.error.length > 50 ? '...' : '') : 'No error message'}
+      {rowData.error
+        ? rowData.error.substring(0, 50) + (rowData.error.length > 50 ? '...' : '')
+        : 'No error message'}
     </span>
   );
 
@@ -218,9 +216,8 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
 
   // Calculate summary stats
   const totalFailures = distribution.reduce((sum, d) => sum + d.count, 0);
-  const avgFailureRate = trend.length > 0
-    ? trend.reduce((sum, t) => sum + t.failure_rate, 0) / trend.length
-    : 0;
+  const avgFailureRate =
+    trend.length > 0 ? trend.reduce((sum, t) => sum + t.failure_rate, 0) / trend.length : 0;
 
   return (
     <div className="space-y-6">
@@ -245,8 +242,12 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
           />
         </div>
         <div className="flex flex-wrap gap-3 text-sm text-slate-600">
-          <span>Failures: <strong className="text-red-600">{totalFailures}</strong></span>
-          <span>Avg Rate: <strong className="text-orange-600">{avgFailureRate.toFixed(1)}%</strong></span>
+          <span>
+            Failures: <strong className="text-red-600">{totalFailures}</strong>
+          </span>
+          <span>
+            Avg Rate: <strong className="text-orange-600">{avgFailureRate.toFixed(1)}%</strong>
+          </span>
         </div>
       </div>
 
@@ -254,9 +255,7 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Error Trend Chart */}
         <Card className="shadow-md lg:col-span-2">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">
-            Error Trend
-          </h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">Error Trend</h3>
           <div className="h-64">
             <Chart type="line" data={trendChartData} options={trendChartOptions} />
           </div>
@@ -264,9 +263,7 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
 
         {/* Error Distribution Chart */}
         <Card className="shadow-md">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">
-            Error Distribution
-          </h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">Error Distribution</h3>
           <div className="h-64">
             {distribution.length > 0 ? (
               <Chart type="pie" data={distributionChartData} options={distributionChartOptions} />
@@ -281,38 +278,46 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
 
       {/* Failed Runs Table */}
       <Card className="shadow-md">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">
-          Failed Runs
-        </h3>
+        <h3 className="text-lg font-semibold text-slate-800 mb-4">Failed Runs</h3>
         <div className="overflow-x-auto">
-        <DataTable
-          value={failedRuns}
-          loading={loading}
-          paginator
-          rows={pageSize}
-          totalRecords={totalRecords}
-          lazy
-          first={(page - 1) * pageSize}
-          onPage={handlePageChange}
-          rowsPerPageOptions={[10, 25, 50]}
-          emptyMessage="No failed runs found"
-          className="text-sm"
-          paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport"
-          currentPageReportTemplate="Showing {first} to {last} of {totalRecords} failed runs"
-        >
-          <Column
-            field="id"
-            header="ID"
-            body={(row) => row.id.substring(0, 8) + '...'}
-            style={{ width: '100px' }}
-          />
-          <Column header="User" body={userTemplate} style={{ width: '180px' }} />
-          <Column field="status" header="Status" body={statusTemplate} style={{ width: '100px' }} />
-          <Column field="csv_filename" header="File" style={{ width: '180px' }} />
-          <Column header="Error" body={errorTemplate} style={{ width: '250px' }} />
-          <Column field="created_at" header="Date" body={dateTemplate} style={{ width: '160px' }} />
-          <Column header="" body={actionsTemplate} style={{ width: '60px' }} />
-        </DataTable>
+          <DataTable
+            value={failedRuns}
+            loading={loading}
+            paginator
+            rows={pageSize}
+            totalRecords={totalRecords}
+            lazy
+            first={(page - 1) * pageSize}
+            onPage={handlePageChange}
+            rowsPerPageOptions={[10, 25, 50]}
+            emptyMessage="No failed runs found"
+            className="text-sm"
+            paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport"
+            currentPageReportTemplate="Showing {first} to {last} of {totalRecords} failed runs"
+          >
+            <Column
+              field="id"
+              header="ID"
+              body={(row) => row.id.substring(0, 8) + '...'}
+              style={{ width: '100px' }}
+            />
+            <Column header="User" body={userTemplate} style={{ width: '180px' }} />
+            <Column
+              field="status"
+              header="Status"
+              body={statusTemplate}
+              style={{ width: '100px' }}
+            />
+            <Column field="csv_filename" header="File" style={{ width: '180px' }} />
+            <Column header="Error" body={errorTemplate} style={{ width: '250px' }} />
+            <Column
+              field="created_at"
+              header="Date"
+              body={dateTemplate}
+              style={{ width: '160px' }}
+            />
+            <Column header="" body={actionsTemplate} style={{ width: '60px' }} />
+          </DataTable>
         </div>
       </Card>
 
@@ -359,9 +364,7 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
             </div>
 
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <label className="text-sm text-red-600 font-medium block mb-2">
-                Error Message
-              </label>
+              <label className="text-sm text-red-600 font-medium block mb-2">Error Message</label>
               <pre className="text-sm text-red-800 font-mono whitespace-pre-wrap overflow-auto max-h-64">
                 {selectedError.error || 'No error message available'}
               </pre>

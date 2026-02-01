@@ -3,6 +3,7 @@ Command-line interface for the worker.
 
 Handles argument parsing and provides the main entry point.
 """
+
 import argparse
 import sys
 import time
@@ -10,7 +11,7 @@ import traceback
 
 from slurm_worker.config import WorkerConfig
 from slurm_worker.io import FileHandler
-from slurm_worker.logging_config import setup_logging, get_logger
+from slurm_worker.logging_config import get_logger, setup_logging
 from slurm_worker.reporting import ProgressReporter
 from slurm_worker.tasks import TaskRegistry
 
@@ -164,7 +165,7 @@ class WorkerRunner:
         return 1
 
 
-def main(argv: list = None) -> int:
+def main(argv: list | None = None) -> int:
     """
     Main entry point.
 

@@ -4,6 +4,7 @@ Configuration endpoints router.
 Provides endpoints for retrieving application configuration
 such as progress phases and available models.
 """
+
 import logging
 
 from fastapi import APIRouter
@@ -29,10 +30,7 @@ def get_progress_config():
     return {"phases": phases}
 
 
-@router.get(
-    "/config/deep-research-models",
-    response_model=DeepResearchModelsResponse
-)
+@router.get("/config/deep-research-models", response_model=DeepResearchModelsResponse)
 def get_deep_research_models():
     """
     Returns available deep research models from environment configuration.
@@ -45,10 +43,7 @@ def get_deep_research_models():
     return DeepResearchModelsResponse(models=models)
 
 
-@router.get(
-    "/config/user-api-models",
-    response_model=UserApiModelsResponse
-)
+@router.get("/config/user-api-models", response_model=UserApiModelsResponse)
 def get_user_api_models():
     """
     Returns available models for user-provided API keys.

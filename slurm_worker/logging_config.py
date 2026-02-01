@@ -3,14 +3,14 @@ Logging configuration for the worker.
 
 Provides consistent logging setup across all modules.
 """
+
 import logging
 import sys
-from typing import Optional
 
 
 def setup_logging(
     level: int = logging.INFO,
-    name: Optional[str] = None,
+    name: str | None = None,
 ) -> logging.Logger:
     """
     Configure and return a logger.

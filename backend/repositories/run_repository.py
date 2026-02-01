@@ -4,12 +4,13 @@ Repository for Run entity data access.
 Provides specialized queries for runs beyond basic CRUD,
 including filtering, pagination, and status management.
 """
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import or_, desc
+from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
 from backend.infrastructure.database.models import Run
@@ -19,22 +20,25 @@ from backend.repositories.base import BaseRepository
 @dataclass
 class RunFilters:
     """Filter parameters for run queries."""
-    status: Optional[str] = None
-    analysis_type: Optional[str] = None
-    search: Optional[str] = None
+
+    status: str | None = None
+    analysis_type: str | None = None
+    search: str | None = None
 
 
 @dataclass
 class AdminRunFilters(RunFilters):
     """Extended filter parameters for admin run queries."""
-    user_id: Optional[str] = None
-    date_from: Optional[datetime] = None
-    date_to: Optional[datetime] = None
+
+    user_id: str | None = None
+    date_from: datetime | None = None
+    date_to: datetime | None = None
 
 
 @dataclass
 class PaginationParams:
     """Pagination parameters for queries."""
+
     page: int = 1
     page_size: int = 10
     sort_field: str = "created_at"
@@ -48,7 +52,8 @@ class PaginationParams:
 @dataclass
 class PaginatedResult:
     """Result container for paginated queries."""
-    items: List[Run]
+
+    items: list[Run]
     total: int
     page: int
     page_size: int
@@ -69,7 +74,7 @@ class RunRepository(BaseRepository[Run]):
     def __init__(self, db: Session):
         super().__init__(Run, db)
 
-    def get_by_id_for_user(self, run_id: UUID, user_id: UUID) -> Optional[Run]:
+    def get_by_id_for_user(self, run_id: UUID, user_id: UUID) -> Run | None:
         """
         Get a run by ID, ensuring it belongs to the specified user.
 
@@ -80,16 +85,13 @@ class RunRepository(BaseRepository[Run]):
         Returns:
             The run if found and owned by user, None otherwise
         """
-        return self.db.query(Run).filter(
-            Run.id == run_id,
-            Run.user_id == user_id
-        ).first()
+        return self.db.query(Run).filter(Run.id == run_id, Run.user_id == user_id).first()
 
     def get_user_runs(
         self,
         user_id: UUID,
-        filters: Optional[RunFilters] = None,
-        pagination: Optional[PaginationParams] = None
+        filters: RunFilters | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult:
         """
         Get paginated runs for a user with optional filtering.
@@ -118,7 +120,7 @@ class RunRepository(BaseRepository[Run]):
             query = query.filter(
                 or_(
                     Run.csv_filename.ilike(search_pattern),
-                    Run.problem_description["target_variable"].astext.ilike(search_pattern)
+                    Run.problem_description["target_variable"].astext.ilike(search_pattern),
                 )
             )
 
@@ -131,7 +133,7 @@ class RunRepository(BaseRepository[Run]):
             "csv_filename": Run.csv_filename,
             "status": Run.status,
             "analysis_type": Run.analysis_type,
-            "target_variable": Run.problem_description["target_variable"].astext
+            "target_variable": Run.problem_description["target_variable"].astext,
         }
         sort_column = sort_columns.get(pagination.sort_field, Run.created_at)
 
@@ -144,13 +146,10 @@ class RunRepository(BaseRepository[Run]):
         items = query.offset(pagination.offset).limit(pagination.page_size).all()
 
         return PaginatedResult(
-            items=items,
-            total=total,
-            page=pagination.page,
-            page_size=pagination.page_size
+            items=items, total=total, page=pagination.page, page_size=pagination.page_size
         )
 
-    def get_by_share_token(self, token: str) -> Optional[Run]:
+    def get_by_share_token(self, token: str) -> Run | None:
         """
         Get a run by its public share token.
 
@@ -160,11 +159,9 @@ class RunRepository(BaseRepository[Run]):
         Returns:
             The run if found, None otherwise
         """
-        return self.db.query(Run).filter(
-            Run.public_share_token == token
-        ).first()
+        return self.db.query(Run).filter(Run.public_share_token == token).first()
 
-    def get_shared_runs(self, user_id: UUID) -> List[Run]:
+    def get_shared_runs(self, user_id: UUID) -> list[Run]:
         """
         Get all runs shared by a user.
 
@@ -174,19 +171,21 @@ class RunRepository(BaseRepository[Run]):
         Returns:
             List of shared runs
         """
-        return self.db.query(Run).filter(
-            Run.user_id == user_id,
-            Run.public_share_token.isnot(None)
-        ).order_by(Run.created_at.desc()).all()
+        return (
+            self.db.query(Run)
+            .filter(Run.user_id == user_id, Run.public_share_token.isnot(None))
+            .order_by(Run.created_at.desc())
+            .all()
+        )
 
     def update_status(
         self,
         run_id: UUID,
         status: str,
-        results: Optional[Dict[str, Any]] = None,
-        error: Optional[str] = None,
-        progress: Optional[int] = None
-    ) -> Optional[Run]:
+        results: dict[str, Any] | None = None,
+        error: str | None = None,
+        progress: int | None = None,
+    ) -> Run | None:
         """
         Update run status and related fields.
 
@@ -223,7 +222,7 @@ class RunRepository(BaseRepository[Run]):
         self.db.commit()
         return run
 
-    def update_progress(self, run_id: UUID, progress: int) -> Optional[Run]:
+    def update_progress(self, run_id: UUID, progress: int) -> Run | None:
         """
         Update run progress percentage.
 
@@ -240,7 +239,7 @@ class RunRepository(BaseRepository[Run]):
             self.db.commit()
         return run
 
-    def set_share_token(self, run_id: UUID, token: str) -> Optional[Run]:
+    def set_share_token(self, run_id: UUID, token: str) -> Run | None:
         """
         Set or update the share token for a run.
 
@@ -257,7 +256,7 @@ class RunRepository(BaseRepository[Run]):
             self.db.commit()
         return run
 
-    def revoke_share_token(self, run_id: UUID) -> Optional[Run]:
+    def revoke_share_token(self, run_id: UUID) -> Run | None:
         """
         Remove the share token from a run.
 
@@ -273,7 +272,7 @@ class RunRepository(BaseRepository[Run]):
             self.db.commit()
         return run
 
-    def get_stale_runs(self, timeout_hours: float) -> List[Run]:
+    def get_stale_runs(self, timeout_hours: float) -> list[Run]:
         """
         Get runs that have exceeded the timeout period.
 
@@ -284,10 +283,11 @@ class RunRepository(BaseRepository[Run]):
             List of stale runs
         """
         cutoff_time = datetime.utcnow() - timedelta(hours=timeout_hours)
-        return self.db.query(Run).filter(
-            Run.status.in_(["running", "pending"]),
-            Run.created_at < cutoff_time
-        ).all()
+        return (
+            self.db.query(Run)
+            .filter(Run.status.in_(["running", "pending"]), Run.created_at < cutoff_time)
+            .all()
+        )
 
     def count_for_user(self, user_id: UUID) -> int:
         """
@@ -301,7 +301,7 @@ class RunRepository(BaseRepository[Run]):
         """
         return self.db.query(Run).filter(Run.user_id == user_id).count()
 
-    def get_earliest_for_user(self, user_id: UUID) -> Optional[Run]:
+    def get_earliest_for_user(self, user_id: UUID) -> Run | None:
         """
         Get the earliest run for a user.
 
@@ -311,9 +311,9 @@ class RunRepository(BaseRepository[Run]):
         Returns:
             Earliest run or None
         """
-        return self.db.query(Run).filter(
-            Run.user_id == user_id
-        ).order_by(Run.created_at.asc()).first()
+        return (
+            self.db.query(Run).filter(Run.user_id == user_id).order_by(Run.created_at.asc()).first()
+        )
 
     def delete_all_for_user(self, user_id: UUID) -> int:
         """
@@ -335,8 +335,8 @@ class RunRepository(BaseRepository[Run]):
 
     def get_all_runs(
         self,
-        filters: Optional[AdminRunFilters] = None,
-        pagination: Optional[PaginationParams] = None,
+        filters: AdminRunFilters | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult:
         """
         Get all runs across all users with optional filtering (admin only).
@@ -363,7 +363,7 @@ class RunRepository(BaseRepository[Run]):
             query = query.filter(
                 or_(
                     Run.csv_filename.ilike(search_pattern),
-                    Run.problem_description["target_variable"].astext.ilike(search_pattern)
+                    Run.problem_description["target_variable"].astext.ilike(search_pattern),
                 )
             )
         if filters.user_id:
@@ -404,7 +404,7 @@ class RunRepository(BaseRepository[Run]):
             page_size=pagination.page_size,
         )
 
-    def admin_get_run(self, run_id: UUID) -> Optional[Run]:
+    def admin_get_run(self, run_id: UUID) -> Run | None:
         """
         Get a run by ID without user restriction (admin only).
 
@@ -416,7 +416,7 @@ class RunRepository(BaseRepository[Run]):
         """
         return self.get_by_id(run_id)
 
-    def admin_cancel_run(self, run_id: UUID) -> Optional[Run]:
+    def admin_cancel_run(self, run_id: UUID) -> Run | None:
         """
         Cancel a run (admin only).
 
@@ -483,12 +483,7 @@ class RunRepository(BaseRepository[Run]):
         total = query.count()
         offset = (page - 1) * page_size
 
-        items = (
-            query.order_by(desc(Run.created_at))
-            .offset(offset)
-            .limit(page_size)
-            .all()
-        )
+        items = query.order_by(desc(Run.created_at)).offset(offset).limit(page_size).all()
 
         return PaginatedResult(
             items=items,

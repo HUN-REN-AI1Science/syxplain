@@ -3,14 +3,14 @@ Admin stats service for dashboard metrics and analytics.
 
 Provides aggregated statistics and trend data for the admin dashboard.
 """
+
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, case, and_
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
-from backend.infrastructure.database.models import Run, UserPermission
+from backend.infrastructure.database.models import Run
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,8 @@ class AdminStatsService:
         active_users_24h = (
             self.db.query(func.count(func.distinct(Run.user_id)))
             .filter(Run.created_at >= yesterday)
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         # Total runs
@@ -59,15 +60,13 @@ class AdminStatsService:
 
         # Runs today
         runs_today = (
-            self.db.query(func.count(Run.id))
-            .filter(Run.created_at >= today_start)
-            .scalar() or 0
+            self.db.query(func.count(Run.id)).filter(Run.created_at >= today_start).scalar() or 0
         )
 
         # Success rate (completed / (completed + failed + timeout))
-        terminal_runs = self.db.query(Run).filter(
-            Run.status.in_(["completed", "failed", "timeout"])
-        ).count()
+        terminal_runs = (
+            self.db.query(Run).filter(Run.status.in_(["completed", "failed", "timeout"])).count()
+        )
         completed_runs = self.db.query(Run).filter(Run.status == "completed").count()
         success_rate = (completed_runs / terminal_runs * 100) if terminal_runs > 0 else 0.0
 
@@ -75,8 +74,7 @@ class AdminStatsService:
         avg_duration = (
             self.db.query(
                 func.avg(
-                    func.extract("epoch", Run.finish_time) -
-                    func.extract("epoch", Run.start_time)
+                    func.extract("epoch", Run.finish_time) - func.extract("epoch", Run.start_time)
                 )
             )
             .filter(
@@ -103,7 +101,7 @@ class AdminStatsService:
             "running_runs": running_runs,
         }
 
-    def get_run_trends(self, days: int = 30) -> List[dict]:
+    def get_run_trends(self, days: int = 30) -> list[dict]:
         """
         Get daily run counts with status breakdown.
 
@@ -143,7 +141,7 @@ class AdminStatsService:
             for r in results
         ]
 
-    def get_status_distribution(self) -> List[dict]:
+    def get_status_distribution(self) -> list[dict]:
         """
         Get current distribution of run statuses.
 
@@ -151,14 +149,12 @@ class AdminStatsService:
             List of status counts
         """
         results = (
-            self.db.query(Run.status, func.count(Run.id).label("count"))
-            .group_by(Run.status)
-            .all()
+            self.db.query(Run.status, func.count(Run.id).label("count")).group_by(Run.status).all()
         )
 
         return [{"status": r.status, "count": r.count} for r in results]
 
-    def get_analysis_type_distribution(self) -> List[dict]:
+    def get_analysis_type_distribution(self) -> list[dict]:
         """
         Get distribution of analysis types (quick vs deep).
 
@@ -173,7 +169,7 @@ class AdminStatsService:
 
         return [{"type": r.analysis_type, "count": r.count} for r in results]
 
-    def get_user_growth(self, days: int = 90) -> List[dict]:
+    def get_user_growth(self, days: int = 90) -> list[dict]:
         """
         Get daily new user signup counts.
 
@@ -208,7 +204,7 @@ class AdminStatsService:
 
         return [{"date": str(r.date), "count": r.count} for r in results]
 
-    def get_top_users(self, limit: int = 10, period_days: int = 30) -> List[dict]:
+    def get_top_users(self, limit: int = 10, period_days: int = 30) -> list[dict]:
         """
         Get top users by run count in recent period.
 
@@ -253,8 +249,7 @@ class AdminStatsService:
         # Duration statistics for completed runs
         durations = (
             self.db.query(
-                func.extract("epoch", Run.finish_time) -
-                func.extract("epoch", Run.start_time)
+                func.extract("epoch", Run.finish_time) - func.extract("epoch", Run.start_time)
             )
             .filter(
                 Run.status == "completed",
@@ -276,9 +271,9 @@ class AdminStatsService:
             avg_duration = median_duration = p95_duration = 0.0
 
         # Success rate
-        terminal_runs = self.db.query(Run).filter(
-            Run.status.in_(["completed", "failed", "timeout"])
-        ).count()
+        terminal_runs = (
+            self.db.query(Run).filter(Run.status.in_(["completed", "failed", "timeout"])).count()
+        )
         completed_runs = self.db.query(Run).filter(Run.status == "completed").count()
         success_rate = (completed_runs / terminal_runs * 100) if terminal_runs > 0 else 0.0
 
@@ -290,7 +285,7 @@ class AdminStatsService:
             "total_completed": completed_runs,
         }
 
-    def get_performance_by_type(self) -> List[dict]:
+    def get_performance_by_type(self) -> list[dict]:
         """
         Get performance metrics grouped by analysis type.
 
@@ -304,8 +299,7 @@ class AdminStatsService:
             # Duration stats
             durations = (
                 self.db.query(
-                    func.extract("epoch", Run.finish_time) -
-                    func.extract("epoch", Run.start_time)
+                    func.extract("epoch", Run.finish_time) - func.extract("epoch", Run.start_time)
                 )
                 .filter(
                     Run.analysis_type == analysis_type,
@@ -320,32 +314,36 @@ class AdminStatsService:
             avg_duration = sum(duration_values) / len(duration_values) if duration_values else 0
 
             # Counts
-            total = self.db.query(Run).filter(
-                Run.analysis_type == analysis_type
-            ).count()
-            completed = self.db.query(Run).filter(
-                Run.analysis_type == analysis_type,
-                Run.status == "completed"
-            ).count()
-            failed = self.db.query(Run).filter(
-                Run.analysis_type == analysis_type,
-                Run.status.in_(["failed", "timeout"])
-            ).count()
+            total = self.db.query(Run).filter(Run.analysis_type == analysis_type).count()
+            completed = (
+                self.db.query(Run)
+                .filter(Run.analysis_type == analysis_type, Run.status == "completed")
+                .count()
+            )
+            failed = (
+                self.db.query(Run)
+                .filter(Run.analysis_type == analysis_type, Run.status.in_(["failed", "timeout"]))
+                .count()
+            )
 
-            success_rate = (completed / (completed + failed) * 100) if (completed + failed) > 0 else 0
+            success_rate = (
+                (completed / (completed + failed) * 100) if (completed + failed) > 0 else 0
+            )
 
-            result.append({
-                "type": analysis_type,
-                "total_runs": total,
-                "completed": completed,
-                "failed": failed,
-                "avg_duration": round(avg_duration, 1),
-                "success_rate": round(success_rate, 1),
-            })
+            result.append(
+                {
+                    "type": analysis_type,
+                    "total_runs": total,
+                    "completed": completed,
+                    "failed": failed,
+                    "avg_duration": round(avg_duration, 1),
+                    "success_rate": round(success_rate, 1),
+                }
+            )
 
         return result
 
-    def get_error_distribution(self, days: int = 30) -> List[dict]:
+    def get_error_distribution(self, days: int = 30) -> list[dict]:
         """
         Get error types grouped by frequency.
 
@@ -369,7 +367,7 @@ class AdminStatsService:
         )
 
         # Simple categorization of errors
-        error_counts: Dict[str, int] = {}
+        error_counts: dict[str, int] = {}
         for (error,) in failed_runs:
             # Categorize by common error patterns
             if not error:
@@ -394,7 +392,7 @@ class AdminStatsService:
             for k, v in sorted(error_counts.items(), key=lambda x: -x[1])
         ]
 
-    def get_error_trend(self, days: int = 30) -> List[dict]:
+    def get_error_trend(self, days: int = 30) -> list[dict]:
         """
         Get daily failure rate trend.
 

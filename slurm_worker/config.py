@@ -3,14 +3,15 @@ Configuration dataclasses for the worker.
 
 Provides type-safe, immutable configuration objects with sensible defaults.
 """
-from dataclasses import dataclass, field
-from typing import List, Optional
+
 import os
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
 class CallbackConfig:
     """Configuration for backend callbacks."""
+
     url: str = ""
     token: str = ""
     timeout: int = 10
@@ -32,6 +33,7 @@ class CallbackConfig:
 @dataclass(frozen=True)
 class SHAPConfig:
     """Configuration for SHAP analysis."""
+
     subsample_fraction: float = 0.1
     subsample_min: int = 1000
     subsample_max: int = 5000
@@ -45,12 +47,13 @@ class SHAPConfig:
 @dataclass(frozen=True)
 class PySRConfig:
     """Configuration for PySR symbolic regression."""
-    niterations: Optional[int] = None  # None = auto-estimate
+
+    niterations: int | None = None  # None = auto-estimate
     populations: int = 15
     population_size: int = 33
     ncycles_per_iteration: int = 550
-    binary_operators: List[str] = field(default_factory=lambda: ["+", "-", "*", "/"])
-    unary_operators: List[str] = field(default_factory=lambda: ["exp", "log", "sqrt", "abs"])
+    binary_operators: list[str] = field(default_factory=lambda: ["+", "-", "*", "/"])
+    unary_operators: list[str] = field(default_factory=lambda: ["exp", "log", "sqrt", "abs"])
     maxsize: int = 20
     maxdepth: int = 10
     timeout_in_seconds: int = 3600
@@ -63,6 +66,7 @@ class PySRConfig:
 @dataclass
 class WorkerConfig:
     """Main worker configuration."""
+
     task_type: str
     run_id: str
     input_path: str

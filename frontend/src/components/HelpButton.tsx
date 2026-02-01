@@ -17,11 +17,7 @@ interface HelpButtonProps {
   className?: string;
 }
 
-export const HelpButton: React.FC<HelpButtonProps> = ({
-  title,
-  children,
-  className = '',
-}) => {
+export const HelpButton: React.FC<HelpButtonProps> = ({ title, children, className = '' }) => {
   const [visible, setVisible] = useState(false);
 
   return (
@@ -42,13 +38,10 @@ export const HelpButton: React.FC<HelpButtonProps> = ({
         draggable={false}
         resizable={false}
       >
-        <div className="help-content text-slate-600 leading-relaxed pt-2">
-          {children}
-        </div>
+        <div className="help-content text-slate-600 leading-relaxed pt-2">{children}</div>
       </Dialog>
     </>
   );
 };
 
 export default HelpButton;
-

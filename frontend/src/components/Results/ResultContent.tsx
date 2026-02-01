@@ -18,7 +18,9 @@ interface ResultContentProps {
 /**
  * Parses result data and returns the appropriate format
  */
-const parseResult = (result: EquationResults | string): {
+const parseResult = (
+  result: EquationResults | string
+): {
   type: 'new' | 'legacy';
   data: EquationResults | string;
 } => {

@@ -183,7 +183,13 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
         value={rowData.success_rate}
         showValue={false}
         className="h-2 w-24"
-        color={rowData.success_rate >= 80 ? '#10B981' : rowData.success_rate >= 60 ? '#F59E0B' : '#EF4444'}
+        color={
+          rowData.success_rate >= 80
+            ? '#10B981'
+            : rowData.success_rate >= 60
+              ? '#F59E0B'
+              : '#EF4444'
+        }
       />
       <span className="text-sm font-medium">{rowData.success_rate.toFixed(1)}%</span>
     </div>
@@ -235,9 +241,7 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
           <div className="text-center">
             <i className="pi pi-check-circle text-3xl text-green-500 mb-2" />
             <p className="text-sm text-slate-500">Success Rate</p>
-            <p className="text-xl font-bold text-slate-800">
-              {stats?.success_rate.toFixed(1)}%
-            </p>
+            <p className="text-xl font-bold text-slate-800">{stats?.success_rate.toFixed(1)}%</p>
           </div>
         </Card>
 
@@ -245,9 +249,7 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
           <div className="text-center">
             <i className="pi pi-check text-3xl text-teal-500 mb-2" />
             <p className="text-sm text-slate-500">Completed</p>
-            <p className="text-xl font-bold text-slate-800">
-              {stats?.total_completed || 0}
-            </p>
+            <p className="text-xl font-bold text-slate-800">{stats?.total_completed || 0}</p>
           </div>
         </Card>
       </div>
@@ -257,7 +259,9 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
         {/* Performance Trend */}
         <Card className="shadow-md">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-            <h3 className="text-base sm:text-lg font-semibold text-slate-800">Performance Trend (30d)</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-slate-800">
+              Performance Trend (30d)
+            </h3>
             <Button
               icon="pi pi-refresh"
               className="p-button-outlined p-button-sm"
@@ -313,7 +317,15 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
                 </li>
                 <li>
                   <span className="text-slate-400">Success rate:</span>{' '}
-                  <strong className={type.success_rate >= 80 ? 'text-green-600' : type.success_rate >= 60 ? 'text-yellow-600' : 'text-red-600'}>
+                  <strong
+                    className={
+                      type.success_rate >= 80
+                        ? 'text-green-600'
+                        : type.success_rate >= 60
+                          ? 'text-yellow-600'
+                          : 'text-red-600'
+                    }
+                  >
                     {type.success_rate.toFixed(1)}%
                   </strong>
                 </li>

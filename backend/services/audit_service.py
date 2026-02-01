@@ -3,14 +3,15 @@ Audit service for logging and retrieving admin actions.
 
 Provides business logic for audit trail management.
 """
+
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from backend.repositories.audit_repository import (
-    AuditRepository,
     AuditFilters,
     AuditPaginationParams,
+    AuditRepository,
     PaginatedAuditResult,
 )
 
@@ -33,8 +34,8 @@ class AuditService:
         action: str,
         target_type: str,
         target_id: str,
-        details: Optional[Dict[str, Any]] = None,
-        ip_address: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        ip_address: str | None = None,
     ) -> None:
         """
         Log an admin action.
@@ -55,19 +56,17 @@ class AuditService:
             details=details,
             ip_address=ip_address,
         )
-        logger.info(
-            f"Audit: {admin_email} performed '{action}' on {target_type}/{target_id}"
-        )
+        logger.info(f"Audit: {admin_email} performed '{action}' on {target_type}/{target_id}")
 
     def get_audit_logs(
         self,
         page: int = 1,
         page_size: int = 50,
-        action: Optional[str] = None,
-        admin_email: Optional[str] = None,
-        target_type: Optional[str] = None,
-        date_from: Optional[datetime] = None,
-        date_to: Optional[datetime] = None,
+        action: str | None = None,
+        admin_email: str | None = None,
+        target_type: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> PaginatedAuditResult:
         """
         Get paginated audit logs with optional filters.
@@ -94,7 +93,7 @@ class AuditService:
         pagination = AuditPaginationParams(page=page, page_size=page_size)
         return self.audit_repo.get_logs(filters=filters, pagination=pagination)
 
-    def get_recent_activity(self, limit: int = 10) -> List[dict]:
+    def get_recent_activity(self, limit: int = 10) -> list[dict]:
         """
         Get recent admin activity for dashboard.
 

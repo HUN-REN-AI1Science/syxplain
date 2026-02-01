@@ -41,7 +41,7 @@ const AdminView: React.FC = () => {
       toast.current?.show({
         severity: 'error',
         summary: 'Error',
-        detail: 'Failed to load users'
+        detail: 'Failed to load users',
       });
     } finally {
       setLoading(false);
@@ -63,7 +63,7 @@ const AdminView: React.FC = () => {
           toast.current?.show({
             severity: 'success',
             summary: 'Success',
-            detail: `HUN-REN access ${action}ed for ${user.email}`
+            detail: `HUN-REN access ${action}ed for ${user.email}`,
           });
           fetchUsers();
         } catch (error: unknown) {
@@ -71,10 +71,10 @@ const AdminView: React.FC = () => {
           toast.current?.show({
             severity: 'error',
             summary: 'Error',
-            detail: err.response?.data?.detail || `Failed to ${action} access`
+            detail: err.response?.data?.detail || `Failed to ${action} access`,
           });
         }
-      }
+      },
     });
   };
 
@@ -111,15 +111,13 @@ const AdminView: React.FC = () => {
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     });
   };
 
   const grantedByTemplate = (rowData: UserPermissionInfo) => {
     if (!rowData.granted_by) return <span className="text-slate-400">-</span>;
-    return (
-      <span className="text-sm text-slate-600">{rowData.granted_by}</span>
-    );
+    return <span className="text-sm text-slate-600">{rowData.granted_by}</span>;
   };
 
   const header = (
@@ -152,20 +150,24 @@ const AdminView: React.FC = () => {
           <HelpButton title="User Management">
             <h4>Managing API Access</h4>
             <p>
-              Control which users can use the built-in HUN-REN API keys for analysis.
-              Users without access must provide their own OpenAI API key.
+              Control which users can use the built-in HUN-REN API keys for analysis. Users without
+              access must provide their own OpenAI API key.
             </p>
 
             <h4>Permission Levels</h4>
             <ul>
-              <li><strong>HUN-REN Access</strong> - User can use built-in API keys</li>
-              <li><strong>Standard</strong> - User must provide their own OpenAI key</li>
+              <li>
+                <strong>HUN-REN Access</strong> - User can use built-in API keys
+              </li>
+              <li>
+                <strong>Standard</strong> - User must provide their own OpenAI key
+              </li>
             </ul>
 
             <h4>How to Grant Access</h4>
             <p>
-              Use the toggle switch in the "HUN-REN Access" column to enable or disable
-              access for any user. Changes take effect immediately.
+              Use the toggle switch in the "HUN-REN Access" column to enable or disable access for
+              any user. Changes take effect immediately.
             </p>
           </HelpButton>
         </div>
@@ -173,7 +175,9 @@ const AdminView: React.FC = () => {
       </div>
 
       {/* Users Table */}
-      <div className={`transition-opacity duration-200 overflow-x-auto ${loading ? 'opacity-60' : 'opacity-100'}`}>
+      <div
+        className={`transition-opacity duration-200 overflow-x-auto ${loading ? 'opacity-60' : 'opacity-100'}`}
+      >
         <DataTable
           value={users}
           loading={loading}
@@ -202,11 +206,7 @@ const AdminView: React.FC = () => {
             sortable
             style={{ width: '150px' }}
           />
-          <Column
-            header="HUN-REN Access"
-            body={accessToggleTemplate}
-            style={{ width: '180px' }}
-          />
+          <Column header="HUN-REN Access" body={accessToggleTemplate} style={{ width: '180px' }} />
           <Column
             field="user_created_at"
             header="Joined"
@@ -230,10 +230,19 @@ const AdminView: React.FC = () => {
           <div>
             <h4 className="font-semibold text-blue-800 mb-2">About Permissions</h4>
             <ul className="text-sm text-blue-700 list-disc pl-5 space-y-1">
-              <li><strong>HUN-REN Access:</strong> User can use built-in API keys for analysis</li>
-              <li><strong>Standard:</strong> User must provide their own OpenAI API key</li>
-              <li>Admin users are defined by the <code className="bg-blue-100 px-1 rounded">ADMIN_EMAILS</code> environment variable</li>
-              <li>User-provided API keys are never stored - they exist only in memory during analysis</li>
+              <li>
+                <strong>HUN-REN Access:</strong> User can use built-in API keys for analysis
+              </li>
+              <li>
+                <strong>Standard:</strong> User must provide their own OpenAI API key
+              </li>
+              <li>
+                Admin users are defined by the{' '}
+                <code className="bg-blue-100 px-1 rounded">ADMIN_EMAILS</code> environment variable
+              </li>
+              <li>
+                User-provided API keys are never stored - they exist only in memory during analysis
+              </li>
             </ul>
           </div>
         </div>

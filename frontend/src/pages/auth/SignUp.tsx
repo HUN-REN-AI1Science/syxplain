@@ -111,7 +111,13 @@ const SignUp: React.FC<SignUpProps> = ({ onSwitchToLogin }) => {
           label="Sign Up"
           loading={loading}
           className="w-full mt-4"
-          style={{ backgroundColor: '#0052cc', color: 'white', borderColor: '#0052cc', height: '48px', fontSize: '16px' }}
+          style={{
+            backgroundColor: '#0052cc',
+            color: 'white',
+            borderColor: '#0052cc',
+            height: '48px',
+            fontSize: '16px',
+          }}
         />
 
         <div className="text-center mt-4">

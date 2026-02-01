@@ -36,8 +36,8 @@ export const LegacyResultsFallback: React.FC<LegacyResultsFallbackProps> = ({
       </div>
       <h3 className="text-xl font-bold text-slate-800 mb-2">Legacy Run Format</h3>
       <p className="text-slate-600 max-w-md mx-auto mb-6">
-        This analysis was generated using an older format that is no longer displayed in the application.
-        You can download the original results as a Markdown file.
+        This analysis was generated using an older format that is no longer displayed in the
+        application. You can download the original results as a Markdown file.
       </p>
       <Button
         label="Download Results (Markdown)"

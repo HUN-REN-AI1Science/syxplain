@@ -48,11 +48,7 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
   }
 
   if (!config) {
-    return (
-      <div className="text-center py-8 text-slate-500">
-        Failed to load configuration
-      </div>
-    );
+    return <div className="text-center py-8 text-slate-500">Failed to load configuration</div>;
   }
 
   const ConfigItem: React.FC<{
@@ -67,10 +63,7 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
       </div>
       <div>
         {typeof value === 'boolean' ? (
-          <Tag
-            value={value ? 'Enabled' : 'Disabled'}
-            severity={value ? 'success' : 'secondary'}
-          />
+          <Tag value={value ? 'Enabled' : 'Disabled'} severity={value ? 'success' : 'secondary'} />
         ) : (
           <span className="font-mono text-slate-800">{value}</span>
         )}
@@ -102,11 +95,7 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
             <i className="pi pi-server mr-2 text-blue-500" />
             Compute Configuration
           </h4>
-          <ConfigItem
-            label="Compute Backend"
-            value={config.compute_backend}
-            icon="pi pi-cog"
-          />
+          <ConfigItem label="Compute Backend" value={config.compute_backend} icon="pi pi-cog" />
           <ConfigItem
             label="Analysis Timeout"
             value={`${config.analysis_timeout_hours} hours`}
@@ -256,18 +245,20 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
         </h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-            <i className={`pi ${config.features.slurm_configured ? 'pi-check-circle text-green-500' : 'pi-exclamation-circle text-yellow-500'}`} />
+            <i
+              className={`pi ${config.features.slurm_configured ? 'pi-check-circle text-green-500' : 'pi-exclamation-circle text-yellow-500'}`}
+            />
             <div>
               <p className="font-medium text-slate-700">Slurm Cluster</p>
               <p className="text-sm text-slate-500">
-                {config.features.slurm_configured
-                  ? 'slurm.science-cloud.hu'
-                  : 'Connection issue'}
+                {config.features.slurm_configured ? 'slurm.science-cloud.hu' : 'Connection issue'}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-            <i className={`pi ${config.features.deep_research_enabled ? 'pi-check-circle text-green-500' : 'pi-minus-circle text-slate-400'}`} />
+            <i
+              className={`pi ${config.features.deep_research_enabled ? 'pi-check-circle text-green-500' : 'pi-minus-circle text-slate-400'}`}
+            />
             <div>
               <p className="font-medium text-slate-700">Deep Research</p>
               <p className="text-sm text-slate-500">
@@ -281,9 +272,7 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
             <i className="pi pi-check-circle text-green-500" />
             <div>
               <p className="font-medium text-slate-700">User API Keys</p>
-              <p className="text-sm text-slate-500">
-                Users can use own keys
-              </p>
+              <p className="text-sm text-slate-500">Users can use own keys</p>
             </div>
           </div>
         </div>
@@ -297,8 +286,13 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
             <h3 className="font-semibold text-blue-800 mb-2">Configuration Notes</h3>
             <ul className="text-sm text-blue-700 list-disc pl-5 space-y-1">
               <li>This is a read-only view of system configuration</li>
-              <li>Configuration changes require updating environment variables and restarting the application</li>
-              <li>API keys and secrets are masked, showing only the last 4 characters for verification</li>
+              <li>
+                Configuration changes require updating environment variables and restarting the
+                application
+              </li>
+              <li>
+                API keys and secrets are masked, showing only the last 4 characters for verification
+              </li>
               <li>Rate limits apply per-user and are enforced by the API</li>
             </ul>
           </div>

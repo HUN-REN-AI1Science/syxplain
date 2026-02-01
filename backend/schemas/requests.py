@@ -4,14 +4,15 @@ Pydantic request schemas for API endpoints.
 These schemas define the structure and validation rules
 for incoming request data.
 """
+
 from enum import Enum
-from typing import Dict, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
 
 class SortField(str, Enum):
     """Valid fields for sorting runs."""
+
     CREATED_AT = "created_at"
     CSV_FILENAME = "csv_filename"
     STATUS = "status"
@@ -20,30 +21,27 @@ class SortField(str, Enum):
 
 class SortOrder(str, Enum):
     """Sort order direction."""
+
     ASC = "asc"
     DESC = "desc"
 
 
 class ProblemDescription(BaseModel):
     """Describes the analysis problem configuration."""
+
     project_description: str = Field(
-        ...,
-        min_length=1,
-        description="Description of the project and analysis goals"
+        ..., min_length=1, description="Description of the project and analysis goals"
     )
     target_variable: str = Field(
-        ...,
-        min_length=1,
-        description="Name of the target variable to predict"
+        ..., min_length=1, description="Name of the target variable to predict"
     )
-    features: Dict[str, str] = Field(
-        ...,
-        description="Dictionary mapping feature names to their descriptions"
+    features: dict[str, str] = Field(
+        ..., description="Dictionary mapping feature names to their descriptions"
     )
 
     @field_validator("features")
     @classmethod
-    def features_not_empty(cls, v: Dict[str, str]) -> Dict[str, str]:
+    def features_not_empty(cls, v: dict[str, str]) -> dict[str, str]:
         if not v:
             raise ValueError("At least one feature must be specified")
         return v
@@ -51,36 +49,24 @@ class ProblemDescription(BaseModel):
 
 class UserApiKeys(BaseModel):
     """User-provided API keys (not stored)."""
-    openai_api_key: str = Field(
-        ...,
-        min_length=1,
-        description="OpenAI API key for analysis"
-    )
-    openai_model: str = Field(
-        default="gpt-4o",
-        description="OpenAI model to use"
-    )
+
+    openai_api_key: str = Field(..., min_length=1, description="OpenAI API key for analysis")
+    openai_model: str = Field(default="gpt-4o", description="OpenAI model to use")
 
 
 class RunRequest(BaseModel):
     """Request schema for starting an analysis run."""
+
     problem_description: ProblemDescription
-    csv_filename: str = Field(
-        ...,
-        min_length=1,
-        description="Name of the uploaded file to analyze"
-    )
-    analysis_type: str = Field(
-        default="quick",
-        description="Type of analysis: 'quick' or 'deep'"
-    )
-    deep_research_model: Optional[str] = Field(
+    csv_filename: str = Field(..., min_length=1, description="Name of the uploaded file to analyze")
+    analysis_type: str = Field(default="quick", description="Type of analysis: 'quick' or 'deep'")
+    deep_research_model: str | None = Field(
         default=None,
-        description="Model to use for deep analysis (required when analysis_type is 'deep')"
+        description="Model to use for deep analysis (required when analysis_type is 'deep')",
     )
-    user_api_keys: Optional[UserApiKeys] = Field(
+    user_api_keys: UserApiKeys | None = Field(
         default=None,
-        description="User-provided API keys (required for users without HUN-REN access)"
+        description="User-provided API keys (required for users without HUN-REN access)",
     )
 
     @field_validator("analysis_type")
@@ -98,27 +84,22 @@ class RunRequest(BaseModel):
                     "target_variable": "price",
                     "features": {
                         "sqft": "Square footage of the house",
-                        "bedrooms": "Number of bedrooms"
-                    }
+                        "bedrooms": "Number of bedrooms",
+                    },
                 },
                 "csv_filename": "houses.csv",
-                "analysis_type": "quick"
+                "analysis_type": "quick",
             }
         }
 
 
 class ValidateKeysRequest(BaseModel):
     """Request schema for API key validation."""
-    openai_api_key: str = Field(
-        ...,
-        min_length=1,
-        description="OpenAI API key to validate"
-    )
+
+    openai_api_key: str = Field(..., min_length=1, description="OpenAI API key to validate")
 
 
 class UpdatePermissionRequest(BaseModel):
     """Request schema for updating user permissions."""
-    use_hunren_keys: bool = Field(
-        ...,
-        description="Whether to grant HUN-REN key access"
-    )
+
+    use_hunren_keys: bool = Field(..., description="Whether to grant HUN-REN key access")

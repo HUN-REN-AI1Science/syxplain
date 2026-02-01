@@ -4,8 +4,10 @@ Progress reporter for backend communication.
 Implements the Observer pattern - tasks notify the reporter of progress,
 which then forwards updates to the backend API.
 """
+
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
+
 import requests
 
 from slurm_worker.config import CallbackConfig
@@ -18,17 +20,17 @@ class ProgressObserver(ABC):
     """Abstract base for progress observers (Interface Segregation)."""
 
     @abstractmethod
-    def on_progress(self, progress: int, status: Optional[str], step: Optional[str]) -> None:
+    def on_progress(self, progress: int, status: str | None, step: str | None) -> None:
         """Called when progress updates."""
         pass
 
     @abstractmethod
-    def on_error(self, error: str, details: Optional[Dict[str, Any]]) -> None:
+    def on_error(self, error: str, details: dict[str, Any] | None) -> None:
         """Called when an error occurs."""
         pass
 
     @abstractmethod
-    def on_complete(self, results: Dict[str, Any]) -> None:
+    def on_complete(self, results: dict[str, Any]) -> None:
         """Called when task completes."""
         pass
 
@@ -45,7 +47,7 @@ class ProgressReporter(ProgressObserver):
         config: Callback configuration
     """
 
-    def __init__(self, run_id: str, config: Optional[CallbackConfig] = None):
+    def __init__(self, run_id: str, config: CallbackConfig | None = None):
         """
         Initialize progress reporter.
 
@@ -73,8 +75,8 @@ class ProgressReporter(ProgressObserver):
     def _make_request(
         self,
         endpoint: str,
-        payload: Dict[str, Any],
-        timeout: Optional[int] = None,
+        payload: dict[str, Any],
+        timeout: int | None = None,
     ) -> bool:
         """
         Make HTTP POST request to backend.
@@ -109,8 +111,8 @@ class ProgressReporter(ProgressObserver):
     def on_progress(
         self,
         progress: int,
-        status: Optional[str] = None,
-        step: Optional[str] = None,
+        status: str | None = None,
+        step: str | None = None,
     ) -> None:
         """
         Report progress update.
@@ -128,13 +130,16 @@ class ProgressReporter(ProgressObserver):
 
         logger.info(message)
 
-        self._make_request("progress", {
-            "progress": progress,
-            "status": status,
-            "step_name": step,
-        })
+        self._make_request(
+            "progress",
+            {
+                "progress": progress,
+                "status": status,
+                "step_name": step,
+            },
+        )
 
-    def on_error(self, error: str, details: Optional[Dict[str, Any]] = None) -> None:
+    def on_error(self, error: str, details: dict[str, Any] | None = None) -> None:
         """
         Report error.
 
@@ -145,7 +150,7 @@ class ProgressReporter(ProgressObserver):
         logger.error(f"Error: {error}")
         self._make_request("error", {"error": error, "details": details})
 
-    def on_complete(self, results: Dict[str, Any]) -> None:
+    def on_complete(self, results: dict[str, Any]) -> None:
         """
         Report task completion.
 
@@ -159,19 +164,19 @@ class ProgressReporter(ProgressObserver):
     def report_progress(
         self,
         progress: int,
-        status: Optional[str] = None,
-        step_name: Optional[str] = None,
+        status: str | None = None,
+        step_name: str | None = None,
     ) -> bool:
         """Alias for on_progress (backwards compatibility)."""
         self.on_progress(progress, status, step_name)
         return True
 
-    def report_error(self, error: str, details: Optional[Dict[str, Any]] = None) -> bool:
+    def report_error(self, error: str, details: dict[str, Any] | None = None) -> bool:
         """Alias for on_error (backwards compatibility)."""
         self.on_error(error, details)
         return True
 
-    def report_completion(self, results: Dict[str, Any]) -> bool:
+    def report_completion(self, results: dict[str, Any]) -> bool:
         """Alias for on_complete (backwards compatibility)."""
         self.on_complete(results)
         return True

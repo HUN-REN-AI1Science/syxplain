@@ -5,6 +5,7 @@ This is a minimal entry point that configures the FastAPI application,
 registers middleware, and includes all routers. Business logic has been
 moved to the service layer for cleaner separation of concerns.
 """
+
 import logging
 
 # Third-party imports
@@ -16,6 +17,9 @@ from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
+# Import routers
+from backend.api.routers import admin, config, files, permissions, profile, progress, runs, sharing
+
 # Local imports
 from backend.core.config import get_settings
 from backend.core.exceptions import register_exception_handlers
@@ -23,10 +27,6 @@ from backend.core.logging import configure_logging, configure_uvicorn_logging
 from backend.core.rate_limit import limiter
 from backend.core.security_logging import SecurityLoggingMiddleware
 from backend.infrastructure.database.connection import init_db
-
-# Import routers
-from backend.api.routers import admin, config, files, permissions, profile, progress, runs, sharing
-
 
 # ============================================================================
 # Logging Configuration (must be first)
@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # Security Middleware
 # ============================================================================
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add OWASP security headers to all responses."""
@@ -68,6 +69,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # ============================================================================
 # Application Factory
 # ============================================================================
+
 
 def create_app() -> FastAPI:
     """

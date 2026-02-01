@@ -25,7 +25,12 @@ interface ProblemViewProps {
   onSubmit: (data: any) => void;
 }
 
-const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nanCounts, onSubmit }) => {
+const ProblemView: React.FC<ProblemViewProps> = ({
+  columns,
+  excludedColumns,
+  nanCounts,
+  onSubmit,
+}) => {
   const { hasHunrenAccess } = useAuth();
   const [mode, setMode] = useState<'form' | 'json'>('form');
   const [jsonContent, setJsonContent] = useState('');
@@ -48,7 +53,9 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
   const [userModel, setUserModel] = useState('');
   const [userApiModels, setUserApiModels] = useState<string[]>([]);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
-  const [apiKeyValidationStatus, setApiKeyValidationStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
+  const [apiKeyValidationStatus, setApiKeyValidationStatus] = useState<
+    'idle' | 'validating' | 'valid' | 'invalid'
+  >('idle');
 
   // Fetch available deep research models on mount
   useEffect(() => {
@@ -88,11 +95,19 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
 
   const validateAndGetPayload = () => {
     if (!projectDescription.trim()) {
-      toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'Project Description is required.' });
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Validation Error',
+        detail: 'Project Description is required.',
+      });
       return null;
     }
     if (!targetVariable) {
-      toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'Target Variable is required.' });
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Validation Error',
+        detail: 'Target Variable is required.',
+      });
       return null;
     }
 
@@ -101,32 +116,37 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
       toast.current?.show({
         severity: 'error',
         summary: 'Invalid Target Variable',
-        detail: `The target variable "${targetVariable}" contains ${nanCounts[targetVariable]} missing (NaN) values. Please clean your data or select a different target.`
+        detail: `The target variable "${targetVariable}" contains ${nanCounts[targetVariable]} missing (NaN) values. Please clean your data or select a different target.`,
       });
       return null;
     }
 
-    const activeColumns = columns.filter(col =>
-      col !== targetVariable &&
-      (!excludedColumns || !excludedColumns.includes(col))
+    const activeColumns = columns.filter(
+      (col) => col !== targetVariable && (!excludedColumns || !excludedColumns.includes(col))
     );
 
-    const missingDescriptions = activeColumns.filter(col => !featureDescriptions[col] || featureDescriptions[col].trim() === '');
+    const missingDescriptions = activeColumns.filter(
+      (col) => !featureDescriptions[col] || featureDescriptions[col].trim() === ''
+    );
 
     if (missingDescriptions.length > 0) {
-      toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: `Please provide descriptions for all features. Missing: ${missingDescriptions.join(', ')}` });
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Validation Error',
+        detail: `Please provide descriptions for all features. Missing: ${missingDescriptions.join(', ')}`,
+      });
       return null;
     }
 
     const features: Record<string, string> = {};
-    activeColumns.forEach(col => {
+    activeColumns.forEach((col) => {
       features[col] = featureDescriptions[col];
     });
 
     return {
       project_description: projectDescription,
       target_variable: targetVariable,
-      features: features
+      features: features,
     };
   };
 
@@ -183,22 +203,51 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
     if (mode === 'json') {
       try {
         if (!jsonContent.trim()) {
-          toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'JSON content is empty.' });
+          toast.current?.show({
+            severity: 'error',
+            summary: 'Validation Error',
+            detail: 'JSON content is empty.',
+          });
           return;
         }
         const parsed = JSON.parse(jsonContent);
 
         // Validate JSON structure
-        if (!parsed.project_description || typeof parsed.project_description !== 'string' || !parsed.project_description.trim()) {
-          toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'JSON must contain a valid "project_description".' });
+        if (
+          !parsed.project_description ||
+          typeof parsed.project_description !== 'string' ||
+          !parsed.project_description.trim()
+        ) {
+          toast.current?.show({
+            severity: 'error',
+            summary: 'Validation Error',
+            detail: 'JSON must contain a valid "project_description".',
+          });
           return;
         }
-        if (!parsed.target_variable || typeof parsed.target_variable !== 'string' || !parsed.target_variable.trim()) {
-          toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'JSON must contain a valid "target_variable".' });
+        if (
+          !parsed.target_variable ||
+          typeof parsed.target_variable !== 'string' ||
+          !parsed.target_variable.trim()
+        ) {
+          toast.current?.show({
+            severity: 'error',
+            summary: 'Validation Error',
+            detail: 'JSON must contain a valid "target_variable".',
+          });
           return;
         }
-        if (!parsed.features || typeof parsed.features !== 'object' || Array.isArray(parsed.features) || Object.keys(parsed.features).length === 0) {
-          toast.current?.show({ severity: 'error', summary: 'Validation Error', detail: 'JSON must contain "features" object with at least one feature.' });
+        if (
+          !parsed.features ||
+          typeof parsed.features !== 'object' ||
+          Array.isArray(parsed.features) ||
+          Object.keys(parsed.features).length === 0
+        ) {
+          toast.current?.show({
+            severity: 'error',
+            summary: 'Validation Error',
+            detail: 'JSON must contain "features" object with at least one feature.',
+          });
           return;
         }
 
@@ -207,18 +256,20 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
           toast.current?.show({
             severity: 'error',
             summary: 'Invalid Target Variable',
-            detail: `The target variable "${parsed.target_variable}" does not exist in the uploaded dataset.`
+            detail: `The target variable "${parsed.target_variable}" does not exist in the uploaded dataset.`,
           });
           return;
         }
 
         // Validate that all feature names exist in columns
-        const invalidFeatures = Object.keys(parsed.features).filter(feature => !columns.includes(feature));
+        const invalidFeatures = Object.keys(parsed.features).filter(
+          (feature) => !columns.includes(feature)
+        );
         if (invalidFeatures.length > 0) {
           toast.current?.show({
             severity: 'error',
             summary: 'Invalid Features',
-            detail: `The following features do not exist in the dataset: ${invalidFeatures.join(', ')}`
+            detail: `The following features do not exist in the dataset: ${invalidFeatures.join(', ')}`,
           });
           return;
         }
@@ -228,20 +279,20 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
           toast.current?.show({
             severity: 'error',
             summary: 'Invalid Target Variable',
-            detail: `The target variable "${parsed.target_variable}" contains missing (NaN) values. Please clean your data or select a different target.`
+            detail: `The target variable "${parsed.target_variable}" contains missing (NaN) values. Please clean your data or select a different target.`,
           });
           return;
         }
 
         // Validate deep research model selection (only for HUN-REN users)
         const deepModel = hasHunrenAccess
-          ? (selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null))
+          ? selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null)
           : 'o4-mini-deep-research';
         if (analysisType === 'deep' && hasHunrenAccess && !deepModel) {
           toast.current?.show({
             severity: 'error',
             summary: 'Model Required',
-            detail: 'Please select a deep research model.'
+            detail: 'Please select a deep research model.',
           });
           return;
         }
@@ -250,10 +301,16 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
           ...parsed,
           analysis_type: analysisType,
           deep_research_model: analysisType === 'deep' ? deepModel : null,
-          user_api_keys: !hasHunrenAccess ? { openai_api_key: userApiKey, openai_model: userModel } : undefined
+          user_api_keys: !hasHunrenAccess
+            ? { openai_api_key: userApiKey, openai_model: userModel }
+            : undefined,
         });
       } catch (e) {
-        toast.current?.show({ severity: 'error', summary: 'Invalid JSON', detail: (e as Error).message });
+        toast.current?.show({
+          severity: 'error',
+          summary: 'Invalid JSON',
+          detail: (e as Error).message,
+        });
       }
     } else {
       // Validation for Form Mode
@@ -261,13 +318,13 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
       if (payload) {
         // Validate deep research model selection (only for HUN-REN users)
         const deepModel = hasHunrenAccess
-          ? (selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null))
+          ? selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null)
           : 'o4-mini-deep-research';
         if (analysisType === 'deep' && hasHunrenAccess && !deepModel) {
           toast.current?.show({
             severity: 'error',
             summary: 'Model Required',
-            detail: 'Please select a deep research model.'
+            detail: 'Please select a deep research model.',
           });
           return;
         }
@@ -276,7 +333,9 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
           ...payload,
           analysis_type: analysisType,
           deep_research_model: analysisType === 'deep' ? deepModel : null,
-          user_api_keys: !hasHunrenAccess ? { openai_api_key: userApiKey, openai_model: userModel } : undefined
+          user_api_keys: !hasHunrenAccess
+            ? { openai_api_key: userApiKey, openai_model: userModel }
+            : undefined,
         });
       }
     }
@@ -284,10 +343,11 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
 
   const modeOptions = [
     { label: 'Interactive Form', value: 'form' },
-    { label: 'Upload JSON', value: 'json' }
+    { label: 'Upload JSON', value: 'json' },
   ];
 
-  const isSubmitDisabled = mode === 'form' && Boolean(targetVariable && nanCounts && nanCounts[targetVariable] > 0);
+  const isSubmitDisabled =
+    mode === 'form' && Boolean(targetVariable && nanCounts && nanCounts[targetVariable] > 0);
 
   return (
     <div className="p-4">
@@ -298,7 +358,11 @@ const ProblemView: React.FC<ProblemViewProps> = ({ columns, excludedColumns, nan
         </div>
 
         <div className="mt-4 md:mt-0">
-          <SelectButton value={mode} onChange={(e: any) => setMode(e.value)} options={modeOptions} />
+          <SelectButton
+            value={mode}
+            onChange={(e: any) => setMode(e.value)}
+            options={modeOptions}
+          />
         </div>
       </div>
 

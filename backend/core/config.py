@@ -7,19 +7,20 @@ and sensible defaults. Groups related settings for better organization.
 Note: Uses standard dataclasses instead of pydantic-settings to avoid
 additional dependencies. Environment variables are loaded at module import.
 """
+
 import os
 from dataclasses import dataclass, field
-
-from typing import List, Optional
 
 
 @dataclass
 class DatabaseSettings:
     """Database connection settings."""
-    url: str = field(default_factory=lambda: os.environ.get(
-        "DATABASE_URL",
-        "postgresql://syxplain:syxplain@localhost:5432/syxplain"
-    ))
+
+    url: str = field(
+        default_factory=lambda: os.environ.get(
+            "DATABASE_URL", "postgresql://syxplain:syxplain@localhost:5432/syxplain"
+        )
+    )
     pool_size: int = field(default_factory=lambda: int(os.environ.get("DB_POOL_SIZE", "40")))
     max_overflow: int = field(default_factory=lambda: int(os.environ.get("DB_MAX_OVERFLOW", "5")))
     pool_timeout: int = field(default_factory=lambda: int(os.environ.get("DB_POOL_TIMEOUT", "30")))
@@ -29,33 +30,49 @@ class DatabaseSettings:
 @dataclass
 class AuthSettings:
     """Authentication settings for Supabase integration."""
-    supabase_jwt_secret: str = field(default_factory=lambda: os.environ.get("SUPABASE_JWT_SECRET", ""))
+
+    supabase_jwt_secret: str = field(
+        default_factory=lambda: os.environ.get("SUPABASE_JWT_SECRET", "")
+    )
     supabase_url: str = field(default_factory=lambda: os.environ.get("SUPABASE_URL", ""))
-    supabase_service_role_key: str = field(default_factory=lambda: os.environ.get("SUPABASE_SERVICE_ROLE_KEY", ""))
+    supabase_service_role_key: str = field(
+        default_factory=lambda: os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    )
 
 
 @dataclass
 class LLMSettings:
     """LLM API settings for OpenAI-compatible endpoints."""
+
     openai_api_key: str = field(default_factory=lambda: os.environ.get("OPENAI_API_KEY", ""))
-    openai_api_base: Optional[str] = field(default_factory=lambda: os.environ.get("OPENAI_API_BASE"))
-    openai_model_name: str = field(default_factory=lambda: os.environ.get("OPENAI_MODEL_NAME", "gpt-4o"))
+    openai_api_base: str | None = field(default_factory=lambda: os.environ.get("OPENAI_API_BASE"))
+    openai_model_name: str = field(
+        default_factory=lambda: os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
+    )
 
     # Deep research settings
-    deep_research_api_key: str = field(default_factory=lambda: os.environ.get("DEEP_RESEARCH_API_KEY", ""))
-    deep_research_api_base: Optional[str] = field(default_factory=lambda: os.environ.get("DEEP_RESEARCH_API_BASE"))
-    deep_research_models: str = field(default_factory=lambda: os.environ.get("DEEP_RESEARCH_MODEL", ""))
+    deep_research_api_key: str = field(
+        default_factory=lambda: os.environ.get("DEEP_RESEARCH_API_KEY", "")
+    )
+    deep_research_api_base: str | None = field(
+        default_factory=lambda: os.environ.get("DEEP_RESEARCH_API_BASE")
+    )
+    deep_research_models: str = field(
+        default_factory=lambda: os.environ.get("DEEP_RESEARCH_MODEL", "")
+    )
 
     # User-provided key model options (comma-separated)
-    user_api_models: str = field(default_factory=lambda: os.environ.get("USER_API_MODELS", "gpt-5.2-thinking,gpt-4o"))
+    user_api_models: str = field(
+        default_factory=lambda: os.environ.get("USER_API_MODELS", "gpt-5.2-thinking,gpt-4o")
+    )
 
-    def get_deep_research_model_list(self) -> List[str]:
+    def get_deep_research_model_list(self) -> list[str]:
         """Parse comma-separated model list."""
         if not self.deep_research_models:
             return []
         return [m.strip() for m in self.deep_research_models.split(",") if m.strip()]
 
-    def get_user_api_model_list(self) -> List[str]:
+    def get_user_api_model_list(self) -> list[str]:
         """Parse comma-separated user API model list."""
         if not self.user_api_models:
             return ["gpt-5.2-thinking", "gpt-4o"]
@@ -65,9 +82,10 @@ class LLMSettings:
 @dataclass
 class CORSSettings:
     """CORS configuration settings."""
+
     origins: str = field(default_factory=lambda: os.environ.get("CORS_ORIGINS", "*"))
 
-    def get_allowed_origins(self) -> List[str]:
+    def get_allowed_origins(self) -> list[str]:
         """Parse allowed origins from environment variable."""
         if self.origins == "*":
             return ["*"]
@@ -77,8 +95,13 @@ class CORSSettings:
 @dataclass
 class AnalysisSettings:
     """Analysis workflow settings."""
-    timeout_hours: float = field(default_factory=lambda: float(os.environ.get("ANALYSIS_TIMEOUT_HOURS", "24")))
-    max_file_size_mb: int = field(default_factory=lambda: int(os.environ.get("MAX_FILE_SIZE_MB", "50")))
+
+    timeout_hours: float = field(
+        default_factory=lambda: float(os.environ.get("ANALYSIS_TIMEOUT_HOURS", "24"))
+    )
+    max_file_size_mb: int = field(
+        default_factory=lambda: int(os.environ.get("MAX_FILE_SIZE_MB", "50"))
+    )
 
     @property
     def max_file_size_bytes(self) -> int:
@@ -88,18 +111,30 @@ class AnalysisSettings:
 @dataclass
 class SHAPSettings:
     """SHAP analysis settings."""
-    subsample_fraction: float = field(default_factory=lambda: float(os.environ.get("SHAP_SUBSAMPLE_FRACTION", "0.1")))
-    subsample_min: int = field(default_factory=lambda: int(os.environ.get("SHAP_SUBSAMPLE_MIN", "1000")))
-    subsample_max: int = field(default_factory=lambda: int(os.environ.get("SHAP_SUBSAMPLE_MAX", "5000")))
+
+    subsample_fraction: float = field(
+        default_factory=lambda: float(os.environ.get("SHAP_SUBSAMPLE_FRACTION", "0.1"))
+    )
+    subsample_min: int = field(
+        default_factory=lambda: int(os.environ.get("SHAP_SUBSAMPLE_MIN", "1000"))
+    )
+    subsample_max: int = field(
+        default_factory=lambda: int(os.environ.get("SHAP_SUBSAMPLE_MAX", "5000"))
+    )
 
 
 @dataclass
 class LangfuseSettings:
     """Langfuse tracing settings."""
+
     public_key: str = field(default_factory=lambda: os.environ.get("LANGFUSE_PUBLIC_KEY", ""))
     secret_key: str = field(default_factory=lambda: os.environ.get("LANGFUSE_SECRET_KEY", ""))
-    base_url: str = field(default_factory=lambda: os.environ.get("LANGFUSE_BASE_URL", "https://cloud.langfuse.com"))
-    enabled: bool = field(default_factory=lambda: os.environ.get("LANGFUSE_ENABLED", "true").lower() == "true")
+    base_url: str = field(
+        default_factory=lambda: os.environ.get("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
+    )
+    enabled: bool = field(
+        default_factory=lambda: os.environ.get("LANGFUSE_ENABLED", "true").lower() == "true"
+    )
 
 
 @dataclass
@@ -111,11 +146,14 @@ class SlurmSettings:
     Slurm partition level, not per-job. This simplifies configuration
     and ensures consistent resource usage across all jobs.
     """
+
     api_url: str = field(default_factory=lambda: os.environ.get("SLURM_API_URL", ""))
     auth_token: str = field(default_factory=lambda: os.environ.get("SLURM_AUTH_TOKEN", ""))
     user_name: str = field(default_factory=lambda: os.environ.get("SLURM_USER_NAME", "slurm"))
     partition: str = field(default_factory=lambda: os.environ.get("SLURM_PARTITION", "compute"))
-    staging_dir: str = field(default_factory=lambda: os.environ.get("SLURM_STAGING_DIR", "/tmp/syxplain"))
+    staging_dir: str = field(
+        default_factory=lambda: os.environ.get("SLURM_STAGING_DIR", "/tmp/syxplain")
+    )
 
     @property
     def is_configured(self) -> bool:
@@ -126,18 +164,28 @@ class SlurmSettings:
 @dataclass
 class ComputeSettings:
     """Compute backend settings."""
-    worker_callback_url: str = field(default_factory=lambda: os.environ.get("WORKER_CALLBACK_URL", ""))
-    worker_callback_token: str = field(default_factory=lambda: os.environ.get("WORKER_CALLBACK_TOKEN", ""))
-    job_poll_interval: int = field(default_factory=lambda: int(os.environ.get("JOB_POLL_INTERVAL", "10")))
-    max_retries: int = field(default_factory=lambda: int(os.environ.get("COMPUTE_MAX_RETRIES", "3")))
+
+    worker_callback_url: str = field(
+        default_factory=lambda: os.environ.get("WORKER_CALLBACK_URL", "")
+    )
+    worker_callback_token: str = field(
+        default_factory=lambda: os.environ.get("WORKER_CALLBACK_TOKEN", "")
+    )
+    job_poll_interval: int = field(
+        default_factory=lambda: int(os.environ.get("JOB_POLL_INTERVAL", "10"))
+    )
+    max_retries: int = field(
+        default_factory=lambda: int(os.environ.get("COMPUTE_MAX_RETRIES", "3"))
+    )
 
 
 @dataclass
 class AdminSettings:
     """Admin access settings."""
+
     admin_emails: str = field(default_factory=lambda: os.environ.get("ADMIN_EMAILS", ""))
 
-    def get_admin_email_list(self) -> List[str]:
+    def get_admin_email_list(self) -> list[str]:
         """Parse comma-separated admin email list."""
         if not self.admin_emails:
             return []
@@ -158,6 +206,7 @@ class Settings:
         settings = get_settings()
         print(settings.database.url)
     """
+
     database: DatabaseSettings = field(default_factory=DatabaseSettings)
     auth: AuthSettings = field(default_factory=AuthSettings)
     llm: LLMSettings = field(default_factory=LLMSettings)
@@ -171,7 +220,7 @@ class Settings:
 
 
 # Cached settings instance
-_settings: Optional[Settings] = None
+_settings: Settings | None = None
 
 
 def get_settings() -> Settings:

@@ -4,6 +4,7 @@ Security utilities for the backend.
 Provides functions for safe output encoding and input sanitization.
 OWASP: A03:2021 - Injection Prevention
 """
+
 import re
 import shlex
 from urllib.parse import quote, urlparse
@@ -36,13 +37,13 @@ def safe_content_disposition(filename: str) -> str:
 
     # Remove control characters, newlines, and carriage returns
     # These could be used for HTTP response splitting attacks
-    filename = re.sub(r'[\x00-\x1f\x7f\r\n]', '', filename)
+    filename = re.sub(r"[\x00-\x1f\x7f\r\n]", "", filename)
 
     # Limit length to prevent buffer issues
     if len(filename) > 200:
         # Preserve extension if possible
-        if '.' in filename:
-            name, ext = filename.rsplit('.', 1)
+        if "." in filename:
+            name, ext = filename.rsplit(".", 1)
             max_name_len = 200 - len(ext) - 1
             filename = f"{name[:max_name_len]}.{ext}"
         else:
@@ -54,7 +55,7 @@ def safe_content_disposition(filename: str) -> str:
 
     # RFC 5987 encoding for non-ASCII and special characters
     # This properly handles Unicode filenames and special characters
-    filename_encoded = quote(filename, safe='')
+    filename_encoded = quote(filename, safe="")
 
     return f"attachment; filename*=UTF-8''{filename_encoded}"
 
@@ -62,6 +63,7 @@ def safe_content_disposition(filename: str) -> str:
 # ============================================================================
 # Shell Injection Prevention (OWASP: A03:2021)
 # ============================================================================
+
 
 def shell_escape(value: str) -> str:
     """
@@ -102,7 +104,7 @@ def validate_slurm_identifier(value: str, field_name: str) -> str:
     Raises:
         ValueError: If the value contains invalid characters
     """
-    if not re.match(r'^[a-zA-Z0-9_-]+$', value):
+    if not re.match(r"^[a-zA-Z0-9_-]+$", value):
         raise ValueError(f"{field_name} contains invalid characters")
     return value
 
@@ -125,6 +127,6 @@ def validate_url(value: str, field_name: str) -> str:
         ValueError: If the URL doesn't use http or https scheme
     """
     parsed = urlparse(value)
-    if parsed.scheme not in ('http', 'https'):
+    if parsed.scheme not in ("http", "https"):
         raise ValueError(f"{field_name} must use http or https")
     return value

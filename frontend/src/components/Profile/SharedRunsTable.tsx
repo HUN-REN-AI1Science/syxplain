@@ -44,19 +44,33 @@ export const SharedRunsTable: React.FC<SharedRunsTableProps> = ({
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Dataset</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase">
+                  Dataset
+                </th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Target</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Type</th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Created</th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase">Share Link</th>
-                <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase text-right">Actions</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase">
+                  Created
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase">
+                  Share Link
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase text-right">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {sharedRuns.map((run, idx) => (
-                <tr key={run.id} className={idx !== sharedRuns.length - 1 ? 'border-b border-slate-100' : ''}>
+                <tr
+                  key={run.id}
+                  className={idx !== sharedRuns.length - 1 ? 'border-b border-slate-100' : ''}
+                >
                   <td className="px-4 py-3 text-slate-700 text-sm">
-                    <span className="font-mono truncate max-w-[150px] inline-block" title={run.csv_filename}>
+                    <span
+                      className="font-mono truncate max-w-[150px] inline-block"
+                      title={run.csv_filename}
+                    >
                       {run.csv_filename}
                     </span>
                   </td>
@@ -64,7 +78,9 @@ export const SharedRunsTable: React.FC<SharedRunsTableProps> = ({
                     {run.target_variable || '-'}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${run.analysis_type === 'deep' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                    <span
+                      className={`text-xs font-medium px-2 py-1 rounded-full ${run.analysis_type === 'deep' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}
+                    >
                       {run.analysis_type === 'deep' ? 'Deep' : 'Quick'}
                     </span>
                   </td>

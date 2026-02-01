@@ -4,16 +4,16 @@ Analysis orchestrator service.
 Coordinates the workflow between compute backends and LLM operations,
 managing the complete analysis pipeline from data ingestion to explanation.
 """
-import asyncio
+
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
 
-from backend.core.config import get_settings, get_compute_settings
+from backend.core.config import get_compute_settings
 from backend.infrastructure.compute import (
     ComputeBackend,
     ComputeTaskInput,
@@ -21,9 +21,8 @@ from backend.infrastructure.compute import (
     get_compute_backend,
 )
 from backend.infrastructure.database.connection import get_db_session
-from backend.infrastructure.database.models import Run, RunArtifact
+from backend.infrastructure.database.models import Run
 from backend.services.progress_service import ProgressTracker
-from backend.workers.tasks import SHAPTask, PySRTask
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +30,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class OrchestratorConfig:
     """Configuration for the orchestrator."""
+
     compute_timeout: float = 14400.0  # 4 hours default
     poll_interval: float = 10.0
     max_retries: int = 3
@@ -39,18 +39,19 @@ class OrchestratorConfig:
 @dataclass
 class AnalysisContext:
     """Context for an analysis run."""
+
     run_id: str
     user_id: str
-    problem_description: Dict[str, Any]
+    problem_description: dict[str, Any]
     data: pd.DataFrame
     target_column: str
-    predictor_columns: List[str]
+    predictor_columns: list[str]
     analysis_type: str = "quick"
-    deep_research_model: Optional[str] = None
-    progress: Optional[ProgressTracker] = None
+    deep_research_model: str | None = None
+    progress: ProgressTracker | None = None
     # User-provided API keys (not stored, only in memory)
-    user_api_key: Optional[str] = None
-    user_model: Optional[str] = None
+    user_api_key: str | None = None
+    user_model: str | None = None
 
 
 class AnalysisOrchestrator:
@@ -73,8 +74,8 @@ class AnalysisOrchestrator:
 
     def __init__(
         self,
-        backend: Optional[ComputeBackend] = None,
-        config: Optional[OrchestratorConfig] = None,
+        backend: ComputeBackend | None = None,
+        config: OrchestratorConfig | None = None,
     ):
         """
         Initialize orchestrator.
@@ -93,7 +94,7 @@ class AnalysisOrchestrator:
             self._backend = get_compute_backend()
         return self._backend
 
-    async def run_analysis(self, context: AnalysisContext) -> Dict[str, Any]:
+    async def run_analysis(self, context: AnalysisContext) -> dict[str, Any]:
         """
         Execute the complete analysis workflow.
 
@@ -129,44 +130,28 @@ class AnalysisOrchestrator:
 
             # Step 2: Generate PySR config using LLM
             progress.update_progress(
-                "pysr_config_generation",
-                status="Generating symbolic regression configuration"
+                "pysr_config_generation", status="Generating symbolic regression configuration"
             )
             pysr_config = await self._generate_pysr_config(
                 context, data_summary, visualizations_b64=feature_visualizations
             )
 
             # Step 3: Submit compute tasks
-            progress.update_progress(
-                "compute_submission",
-                status="Submitting compute tasks"
-            )
+            progress.update_progress("compute_submission", status="Submitting compute tasks")
             compute_results = await self._run_compute_tasks(context, pysr_config, progress)
 
             # Step 4: LLM explanation of results
-            progress.update_progress(
-                "llm_explanation",
-                status="Generating explanations"
-            )
-            explanations = await self._generate_explanations(
-                context, compute_results, data_summary
-            )
+            progress.update_progress("llm_explanation", status="Generating explanations")
+            explanations = await self._generate_explanations(context, compute_results, data_summary)
 
             # Step 5: Optional deep research
             if context.analysis_type == "deep" and context.deep_research_model:
-                progress.update_progress(
-                    "deep_research",
-                    status="Performing deep research"
-                )
-                explanations = await self._run_deep_research(
-                    context, compute_results, explanations
-                )
+                progress.update_progress("deep_research", status="Performing deep research")
+                explanations = await self._run_deep_research(context, compute_results, explanations)
 
             # Step 6: Finalize and store results
             progress.update_progress("finalization", status="Finalizing results")
-            final_results = self._compile_final_results(
-                context, compute_results, explanations
-            )
+            final_results = self._compile_final_results(context, compute_results, explanations)
 
             # Save artifacts (including visualizations from compute results)
             visualizations = compute_results.get("visualizations", [])
@@ -184,7 +169,7 @@ class AnalysisOrchestrator:
             self._update_run_status(run_id, "failed", error=str(e))
             raise OrchestratorError(f"Analysis failed: {e}") from e
 
-    def _generate_data_summary(self, context: AnalysisContext) -> Dict[str, Any]:
+    def _generate_data_summary(self, context: AnalysisContext) -> dict[str, Any]:
         """Generate a summary of the input data."""
         df = context.data
         return {
@@ -204,7 +189,7 @@ class AnalysisOrchestrator:
     def _generate_feature_visualizations(
         self,
         context: AnalysisContext,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Generate feature vs target visualizations for LLM config generation.
 
@@ -216,7 +201,9 @@ class AnalysisOrchestrator:
         """
         import base64
         import io
+
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -246,9 +233,9 @@ class AnalysisOrchestrator:
     async def _generate_pysr_config(
         self,
         context: AnalysisContext,
-        data_summary: Dict[str, Any],
-        visualizations_b64: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        data_summary: dict[str, Any],
+        visualizations_b64: list[str] | None = None,
+    ) -> dict[str, Any]:
         """
         Generate PySR configuration using LLM.
 
@@ -290,9 +277,9 @@ class AnalysisOrchestrator:
     async def _run_compute_tasks(
         self,
         context: AnalysisContext,
-        pysr_config: Dict[str, Any],
+        pysr_config: dict[str, Any],
         progress: ProgressTracker,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Submit and monitor compute tasks on the backend.
 
@@ -307,9 +294,9 @@ class AnalysisOrchestrator:
             task_type="shap",
             run_id=context.run_id,
             input_data={
-                "data": context.data[
-                    [context.target_column] + context.predictor_columns
-                ].to_dict(orient="split"),
+                "data": context.data[[context.target_column, *context.predictor_columns]].to_dict(
+                    orient="split"
+                ),
                 "target_column": context.target_column,
                 "predictor_columns": context.predictor_columns,
                 "generate_visualizations": True,
@@ -322,9 +309,9 @@ class AnalysisOrchestrator:
             task_type="pysr",
             run_id=context.run_id,
             input_data={
-                "data": context.data[
-                    [context.target_column] + context.predictor_columns
-                ].to_dict(orient="split"),
+                "data": context.data[[context.target_column, *context.predictor_columns]].to_dict(
+                    orient="split"
+                ),
                 "target_column": context.target_column,
                 "predictor_columns": context.predictor_columns,
                 "config": pysr_config,
@@ -343,10 +330,13 @@ class AnalysisOrchestrator:
         logger.info(f"PySR task submitted as job {pysr_job.job_id}")
 
         # Store job IDs in database for cancellation
-        self._store_slurm_job_ids(context.run_id, {
-            "shap_job_id": shap_job.job_id,
-            "pysr_job_id": pysr_job.job_id,
-        })
+        self._store_slurm_job_ids(
+            context.run_id,
+            {
+                "shap_job_id": shap_job.job_id,
+                "pysr_job_id": pysr_job.job_id,
+            },
+        )
 
         # Wait for completion (can run in parallel on cluster)
         progress.update_progress("compute_waiting", status="Waiting for compute tasks")
@@ -389,9 +379,9 @@ class AnalysisOrchestrator:
     async def _generate_explanations(
         self,
         context: AnalysisContext,
-        compute_results: Dict[str, Any],
-        data_summary: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        compute_results: dict[str, Any],
+        data_summary: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Generate LLM explanations for the results.
 
@@ -418,20 +408,26 @@ class AnalysisOrchestrator:
             return explanations
         except Exception as e:
             logger.error(f"Explanation generation failed: {e}")
-            return {"error": str(e), "equations": compute_results.get("pysr", {}).get("equations", [])}
+            return {
+                "error": str(e),
+                "equations": compute_results.get("pysr", {}).get("equations", []),
+            }
 
     async def _run_deep_research(
         self,
         context: AnalysisContext,
-        compute_results: Dict[str, Any],
-        explanations: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        compute_results: dict[str, Any],
+        explanations: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Run deep research using o4-mini.
 
         This runs on the main backend (has LLM keys).
         """
-        from backend.services.llm_service import deep_research_equations, generate_equation_explanation
+        from backend.services.llm_service import (
+            deep_research_equations,
+            generate_equation_explanation,
+        )
 
         try:
             # Get features from problem description
@@ -472,9 +468,9 @@ class AnalysisOrchestrator:
     def _compile_final_results(
         self,
         context: AnalysisContext,
-        compute_results: Dict[str, Any],
-        explanations: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        compute_results: dict[str, Any],
+        explanations: dict[str, Any],
+    ) -> dict[str, Any]:
         """Compile all results into final output format."""
         pysr_results = compute_results.get("pysr", {})
         scatter_data = pysr_results.get("scatter_data", {})
@@ -504,9 +500,9 @@ class AnalysisOrchestrator:
     def _save_artifacts(
         self,
         run_id: str,
-        results: Dict[str, Any],
+        results: dict[str, Any],
         progress: ProgressTracker,
-        visualizations: Optional[List[Dict[str, Any]]] = None,
+        visualizations: list[dict[str, Any]] | None = None,
     ) -> None:
         """
         Save result artifacts including visualizations.
@@ -524,9 +520,7 @@ class AnalysisOrchestrator:
             results_for_json = {k: v for k, v in results.items() if k != "visualizations"}
             results_json = json.dumps(results_for_json, indent=2).encode("utf-8")
             progress.save_artifact(
-                "pysr_explanations.json",
-                results_json,
-                media_type="application/json"
+                "pysr_explanations.json", results_json, media_type="application/json"
             )
         except Exception as e:
             logger.error(f"Failed to save JSON artifact for {run_id}: {e}")
@@ -539,17 +533,13 @@ class AnalysisOrchestrator:
                     content_b64 = viz.get("content_b64", "")
                     if content_b64:
                         content_bytes = base64.b64decode(content_b64)
-                        progress.save_artifact(
-                            filename,
-                            content_bytes,
-                            media_type="image/png"
-                        )
+                        progress.save_artifact(filename, content_bytes, media_type="image/png")
                 except Exception as e:
                     logger.warning(f"Failed to save visualization {viz.get('filename')}: {e}")
 
             logger.info(f"Saved {len(visualizations)} visualizations for run {run_id}")
 
-    def _store_slurm_job_ids(self, run_id: str, job_ids: Dict[str, str]) -> None:
+    def _store_slurm_job_ids(self, run_id: str, job_ids: dict[str, str]) -> None:
         """
         Store Slurm job IDs in database for cancellation support.
 
@@ -571,8 +561,8 @@ class AnalysisOrchestrator:
         self,
         run_id: str,
         status: str,
-        results: Optional[Dict[str, Any]] = None,
-        error: Optional[str] = None,
+        results: dict[str, Any] | None = None,
+        error: str | None = None,
     ) -> None:
         """Update run status in database."""
         try:
@@ -599,19 +589,20 @@ class AnalysisOrchestrator:
 
 class OrchestratorError(Exception):
     """Error during orchestration."""
+
     pass
 
 
 async def run_orchestrated_analysis(
     run_id: str,
-    problem_desc: Dict[str, Any],
+    problem_desc: dict[str, Any],
     data: pd.DataFrame,
     user_id: str,
     analysis_type: str = "quick",
-    deep_research_model: Optional[str] = None,
-    user_api_key: Optional[str] = None,
-    user_model: Optional[str] = None,
-) -> Dict[str, Any]:
+    deep_research_model: str | None = None,
+    user_api_key: str | None = None,
+    user_model: str | None = None,
+) -> dict[str, Any]:
     """
     Convenience function to run analysis with orchestrator.
 
@@ -633,7 +624,8 @@ async def run_orchestrated_analysis(
 
     # Filter to numeric predictors
     numeric_predictors = [
-        col for col in predictor_columns
+        col
+        for col in predictor_columns
         if col in data.columns and pd.api.types.is_numeric_dtype(data[col])
     ]
 

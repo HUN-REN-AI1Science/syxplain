@@ -32,19 +32,25 @@ export const TargetVariableSection: React.FC<TargetVariableSectionProps> = ({
             <h4>What is a Target Variable?</h4>
             <p>
               The target variable is the column you want to <strong>predict or explain</strong>.
-              Syxplain will discover mathematical equations that express the target as a function of other features.
+              Syxplain will discover mathematical equations that express the target as a function of
+              other features.
             </p>
 
             <h4>Requirements</h4>
             <ul>
-              <li>Must be a <strong>numeric column</strong></li>
-              <li>Cannot contain <strong>missing values (NaN)</strong></li>
+              <li>
+                Must be a <strong>numeric column</strong>
+              </li>
+              <li>
+                Cannot contain <strong>missing values (NaN)</strong>
+              </li>
               <li>Should represent a measurable quantity you want to understand</li>
             </ul>
 
             <h4>Example</h4>
             <p>
-              If studying soil chemistry, your target might be <code>phosphorus_content</code> or <code>yield</code>.
+              If studying soil chemistry, your target might be <code>phosphorus_content</code> or{' '}
+              <code>yield</code>.
             </p>
           </HelpButton>
         </div>
@@ -57,7 +63,7 @@ export const TargetVariableSection: React.FC<TargetVariableSectionProps> = ({
       <Dropdown
         value={targetVariable}
         onChange={(e: any) => onChange(e.value)}
-        options={columns.map(col => ({ label: col, value: col }))}
+        options={columns.map((col) => ({ label: col, value: col }))}
         placeholder="Select Target..."
         className="w-full bg-slate-50 border-slate-200"
       />
@@ -65,8 +71,8 @@ export const TargetVariableSection: React.FC<TargetVariableSectionProps> = ({
         <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start animate-fade-in">
           <i className="pi pi-exclamation-circle text-red-500 mr-2 mt-0.5"></i>
           <div className="text-sm text-red-700">
-            <strong>Warning:</strong> This column contains missing values.
-            Analysis cannot proceed with a target containing missing data.
+            <strong>Warning:</strong> This column contains missing values. Analysis cannot proceed
+            with a target containing missing data.
           </div>
         </div>
       )}

@@ -9,9 +9,13 @@ import { uploadService } from '@services/api';
 import { UploadDropZone, UploadProgressOverlay } from '@components/Upload';
 import HelpButton from '@components/HelpButton';
 
-
 interface UploadViewProps {
-  onUploadComplete: (filename: string, columns: string[], excludedColumns?: string[], nanCounts?: Record<string, number>) => void;
+  onUploadComplete: (
+    filename: string,
+    columns: string[],
+    excludedColumns?: string[],
+    nanCounts?: Record<string, number>
+  ) => void;
 }
 
 const UploadView: React.FC<UploadViewProps> = ({ onUploadComplete }) => {
@@ -42,18 +46,23 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadComplete }) => {
 
           // If column_types is empty but we have columns, warn or fall back to treating all as numeric
           if (allColumns.length > 0 && Object.keys(columnTypes).length === 0) {
-            console.warn('column_types missing from backend response, treating all columns as numeric');
-            allColumns.forEach((col: string) => columnTypes[col] = 'numeric');
+            console.warn(
+              'column_types missing from backend response, treating all columns as numeric'
+            );
+            allColumns.forEach((col: string) => (columnTypes[col] = 'numeric'));
           }
 
-          const numericColumns = allColumns.filter((col: string) =>
-            columnTypes[col] === 'numeric'
-          );
-          const excludedColumns = allColumns.filter((col: string) =>
-            columnTypes[col] !== 'numeric'
+          const numericColumns = allColumns.filter((col: string) => columnTypes[col] === 'numeric');
+          const excludedColumns = allColumns.filter(
+            (col: string) => columnTypes[col] !== 'numeric'
           );
 
-          onUploadComplete(response.data.filename, numericColumns, excludedColumns, response.data.nan_counts);
+          onUploadComplete(
+            response.data.filename,
+            numericColumns,
+            excludedColumns,
+            response.data.nan_counts
+          );
         }, 1500);
       }
     } catch (err) {
@@ -73,9 +82,9 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadComplete }) => {
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
+    if (e.type === 'dragenter' || e.type === 'dragover') {
       setDragActive(true);
-    } else if (e.type === "dragleave") {
+    } else if (e.type === 'dragleave') {
       setDragActive(false);
     }
   };
@@ -91,31 +100,49 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadComplete }) => {
 
   return (
     <div className="flex flex-col items-center justify-center p-6 relative min-h-[400px]">
-      <div className={`transition-all duration-500 ease-in-out w-full max-w-2xl flex flex-col items-center ${processing ? 'opacity-20 blur-sm scale-95 pointer-events-none' : 'opacity-100'}`}>
+      <div
+        className={`transition-all duration-500 ease-in-out w-full max-w-2xl flex flex-col items-center ${processing ? 'opacity-20 blur-sm scale-95 pointer-events-none' : 'opacity-100'}`}
+      >
         <div className="text-center mb-6">
           <div className="flex items-center justify-center gap-2 mb-2">
             <h2 className="text-2xl font-bold text-slate-800">Upload your Dataset</h2>
             <HelpButton title="Data Upload Requirements">
               <h4>Supported File Formats</h4>
               <ul>
-                <li><strong>CSV</strong> (.csv) - Comma-separated values</li>
-                <li><strong>Excel</strong> (.xlsx, .xls) - Microsoft Excel files</li>
+                <li>
+                  <strong>CSV</strong> (.csv) - Comma-separated values
+                </li>
+                <li>
+                  <strong>Excel</strong> (.xlsx, .xls) - Microsoft Excel files
+                </li>
               </ul>
 
               <h4>Data Requirements</h4>
               <ul>
-                <li>All features must contain <strong>numerical data only</strong></li>
-                <li><strong>No missing values</strong> are permitted in the target variable</li>
+                <li>
+                  All features must contain <strong>numerical data only</strong>
+                </li>
+                <li>
+                  <strong>No missing values</strong> are permitted in the target variable
+                </li>
                 <li>Data should be organized in a tabular format with columns as features</li>
               </ul>
 
               <h4>Preprocessing Tips</h4>
               <p>Before uploading, ensure your data is properly prepared:</p>
               <ul>
-                <li><strong>Categorical data</strong> - Encode using one-hot or label encoding</li>
-                <li><strong>Text data</strong> - Convert to numerical representations</li>
-                <li><strong>Time series</strong> - Add lagged features or derivatives</li>
-                <li><strong>Missing values</strong> - Impute or remove rows with missing data</li>
+                <li>
+                  <strong>Categorical data</strong> - Encode using one-hot or label encoding
+                </li>
+                <li>
+                  <strong>Text data</strong> - Convert to numerical representations
+                </li>
+                <li>
+                  <strong>Time series</strong> - Add lagged features or derivatives
+                </li>
+                <li>
+                  <strong>Missing values</strong> - Impute or remove rows with missing data
+                </li>
               </ul>
             </HelpButton>
           </div>

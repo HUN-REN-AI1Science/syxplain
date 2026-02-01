@@ -4,10 +4,11 @@ Visualization generators.
 Implements the Strategy pattern for different types of plots.
 Each generator is responsible for a specific visualization type.
 """
-from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Protocol
+
 import base64
 import io
+from abc import ABC, abstractmethod
+from typing import Any, Protocol
 
 from slurm_worker.logging_config import get_logger
 
@@ -16,6 +17,7 @@ logger = get_logger("visualization")
 
 class DataFrame(Protocol):
     """Protocol for DataFrame-like objects (duck typing)."""
+
     def __getitem__(self, key: str) -> Any: ...
 
 
@@ -40,7 +42,7 @@ class VisualizationGenerator(ABC):
         self.figsize = figsize
 
     @abstractmethod
-    def _create_figure(self, data: Dict[str, Any]) -> Any:
+    def _create_figure(self, data: dict[str, Any]) -> Any:
         """
         Create matplotlib figure.
 
@@ -53,7 +55,7 @@ class VisualizationGenerator(ABC):
         pass
 
     @abstractmethod
-    def get_filename(self, data: Dict[str, Any]) -> str:
+    def get_filename(self, data: dict[str, Any]) -> str:
         """
         Get filename for the visualization.
 
@@ -70,7 +72,7 @@ class VisualizationGenerator(ABC):
         """Get visualization type identifier."""
         pass
 
-    def generate(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, data: dict[str, Any]) -> dict[str, Any]:
         """
         Generate visualization and encode as base64.
 
@@ -81,6 +83,7 @@ class VisualizationGenerator(ABC):
             Dict with filename, content_b64, and type
         """
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -111,12 +114,12 @@ class FeaturePlotGenerator(VisualizationGenerator):
     def get_type(self) -> str:
         return "feature_plot"
 
-    def get_filename(self, data: Dict[str, Any]) -> str:
+    def get_filename(self, data: dict[str, Any]) -> str:
         feature = data["feature"]
         target = data["target"]
         return f"{feature}_vs_{target}.png"
 
-    def _create_figure(self, data: Dict[str, Any]) -> Any:
+    def _create_figure(self, data: dict[str, Any]) -> Any:
         import matplotlib.pyplot as plt
 
         df = data["df"]
@@ -139,12 +142,12 @@ class InteractionPlotGenerator(VisualizationGenerator):
     def get_type(self) -> str:
         return "interaction_plot"
 
-    def get_filename(self, data: Dict[str, Any]) -> str:
+    def get_filename(self, data: dict[str, Any]) -> str:
         f1 = data["feature1"]
         f2 = data["feature2"]
         return f"{f1}_vs_{f2}_interaction.png"
 
-    def _create_figure(self, data: Dict[str, Any]) -> Any:
+    def _create_figure(self, data: dict[str, Any]) -> Any:
         import matplotlib.pyplot as plt
 
         df = data["df"]
@@ -177,8 +180,8 @@ class VisualizationService:
         self,
         df: DataFrame,
         target_column: str,
-        predictor_columns: List[str],
-    ) -> List[Dict[str, Any]]:
+        predictor_columns: list[str],
+    ) -> list[dict[str, Any]]:
         """
         Generate feature vs target plots.
 
@@ -195,11 +198,13 @@ class VisualizationService:
 
         for col in predictor_columns:
             try:
-                viz = self._feature_gen.generate({
-                    "df": df,
-                    "feature": col,
-                    "target": target_column,
-                })
+                viz = self._feature_gen.generate(
+                    {
+                        "df": df,
+                        "feature": col,
+                        "target": target_column,
+                    }
+                )
                 visualizations.append(viz)
             except Exception as e:
                 logger.warning(f"Skipping plot for {col}: {e}")
@@ -209,9 +214,9 @@ class VisualizationService:
     def generate_interaction_plots(
         self,
         df: DataFrame,
-        interactions: List[Dict[str, Any]],
+        interactions: list[dict[str, Any]],
         max_plots: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Generate interaction plots.
 
@@ -229,11 +234,13 @@ class VisualizationService:
 
         for interaction in interactions_to_plot:
             try:
-                viz = self._interaction_gen.generate({
-                    "df": df,
-                    "feature1": interaction["feature1"],
-                    "feature2": interaction["feature2"],
-                })
+                viz = self._interaction_gen.generate(
+                    {
+                        "df": df,
+                        "feature1": interaction["feature1"],
+                        "feature2": interaction["feature2"],
+                    }
+                )
                 visualizations.append(viz)
             except Exception as e:
                 f1, f2 = interaction["feature1"], interaction["feature2"]
@@ -245,10 +252,10 @@ class VisualizationService:
         self,
         df: DataFrame,
         target_column: str,
-        predictor_columns: List[str],
-        interactions: List[Dict[str, Any]],
+        predictor_columns: list[str],
+        interactions: list[dict[str, Any]],
         max_interaction_plots: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Generate all visualizations.
 
@@ -264,9 +271,7 @@ class VisualizationService:
         """
         visualizations = []
 
-        visualizations.extend(
-            self.generate_feature_plots(df, target_column, predictor_columns)
-        )
+        visualizations.extend(self.generate_feature_plots(df, target_column, predictor_columns))
         visualizations.extend(
             self.generate_interaction_plots(df, interactions, max_interaction_plots)
         )
