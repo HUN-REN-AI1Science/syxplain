@@ -478,6 +478,9 @@ def get_slurm_status(
         total_nodes=status.get("total_nodes", 0),
         checked_at=status.get("checked_at", datetime.utcnow().isoformat()),
         error=status.get("error"),
+        configured_partition=status.get("configured_partition"),
+        configured_cpus=status.get("configured_cpus"),
+        configured_memory=status.get("configured_memory"),
     )
 
 

@@ -61,12 +61,12 @@ services:
       # Slurm Configuration - set these in .env (see README for setup)
       - SLURM_API_URL=${SLURM_API_URL}
       - SLURM_AUTH_TOKEN=${SLURM_AUTH_TOKEN}
-      - SLURM_USER_NAME=${SLURM_USER_NAME:-ai4science_admin}
+      - SLURM_USER_NAME=${SLURM_USER_NAME:-ai4science}
       - SLURM_PARTITION=${SLURM_PARTITION:-batch_cpu_m2.large}
-      - SLURM_STAGING_DIR=${SLURM_STAGING_DIR:-/storage/ai4science_admin/syxplain}
-      - SLURM_DEFAULT_MEMORY=${SLURM_DEFAULT_MEMORY:-4G}
-      - SLURM_DEFAULT_CPUS=${SLURM_DEFAULT_CPUS:-2}
-      - SLURM_DEFAULT_TIME_LIMIT=${SLURM_DEFAULT_TIME_LIMIT:-01:00:00}
+      - SLURM_STAGING_DIR=${SLURM_STAGING_DIR:-/storage/ai4science/syxplain}
+      - SLURM_CPUS=${SLURM_CPUS:-4}
+      - SLURM_MEMORY=${SLURM_MEMORY:-8G}
+      - SLURM_TIME_LIMIT=${SLURM_TIME_LIMIT:-04:00:00}
       # Compute settings
       - WORKER_CALLBACK_URL=http://backend:8000/api/internal
       - WORKER_CALLBACK_TOKEN=dev-callback-token

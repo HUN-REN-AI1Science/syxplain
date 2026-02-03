@@ -24,7 +24,7 @@
 #   CONTAINER_PATH - Path to Singularity container (default: see below)
 
 # Default container location
-CONTAINER_PATH="${CONTAINER_PATH:-/storage/ai4science_admin/containers/syxplain-worker.sif}"
+CONTAINER_PATH="${CONTAINER_PATH:-/storage/ai4science/syxplain/containers/syxplain-worker.sif}"
 
 # Validate required variables
 if [ -z "$TASK_TYPE" ] || [ -z "$RUN_ID" ] || [ -z "$INPUT_PATH" ] || [ -z "$OUTPUT_PATH" ]; then

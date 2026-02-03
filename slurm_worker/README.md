@@ -16,31 +16,52 @@ Standalone worker for executing compute-intensive tasks (SHAP and PySR) on Slurm
 
 ## Quick Start
 
-### 1. Build the Singularity Container
+### 1. Deploy Worker Code to Cluster
 
-On a machine with Singularity installed:
+Copy the worker code to the cluster's shared storage:
 
 ```bash
-cd slurm_worker
-./build-singularity.sh
+scp -r slurm_worker ai4science@slurm.science-cloud.hu:/storage/ai4science/syxplain/
+```
+
+### 2. Build the Singularity Container on Cluster
+
+SSH to the cluster and build (no local Singularity installation needed):
+
+```bash
+# SSH to the cluster
+ssh ai4science@slurm.science-cloud.hu
+
+# Create containers directory
+mkdir -p /storage/ai4science/syxplain/containers
+
+# Build the container
+cd /storage/ai4science/syxplain/slurm_worker
+singularity build --fakeroot ../containers/syxplain-worker.sif syxplain-worker.def
 ```
 
 This creates `syxplain-worker.sif` with all dependencies pre-installed and Julia pre-compiled.
 
-### 2. Deploy to Slurm Cluster
-
-Copy the container to the cluster's shared storage:
-
-```bash
-scp syxplain-worker.sif <username>@slurm.science-cloud.hu:/storage/<username>/containers/
-```
-
 ### 3. Test the Container
 
-SSH to the cluster and verify:
+On the cluster, verify it works:
 
 ```bash
-singularity run /storage/<username>/containers/syxplain-worker.sif --help
+singularity run /storage/ai4science/syxplain/containers/syxplain-worker.sif --help
+```
+
+### 4. Update/Refresh the Container
+
+When you make changes to the worker code:
+
+```bash
+# From your local machine - copy updated code
+scp -r slurm_worker ai4science@slurm.science-cloud.hu:/storage/ai4science/syxplain/
+
+# SSH and rebuild with --force to overwrite
+ssh ai4science@slurm.science-cloud.hu
+cd /storage/ai4science/syxplain/slurm_worker
+singularity build --fakeroot --force ../containers/syxplain-worker.sif syxplain-worker.def
 ```
 
 ## Local Testing
@@ -76,8 +97,6 @@ python test_worker_local.py --task shap \
 
 ## Singularity Container
 
-### Building the Container
-
 The Singularity container is the recommended deployment method. It includes:
 
 - Python 3.11 with scientific computing stack
@@ -85,35 +104,18 @@ The Singularity container is the recommended deployment method. It includes:
 - SHAP and all required dependencies
 - The worker code ready to execute
 
-**Option 1: Build from definition file (recommended)**
-
-```bash
-cd slurm_worker
-./build-singularity.sh
-```
-
-**Option 2: Build manually**
-
-```bash
-cd slurm_worker
-singularity build --fakeroot syxplain-worker.sif syxplain-worker.def
-```
-
-**Option 3: Convert from Docker**
-
-```bash
-cd slurm_worker
-docker build -t syxplain-worker .
-singularity build syxplain-worker.sif docker-daemon://syxplain-worker:latest
-```
+Build instructions are in the [Quick Start](#quick-start) section above.
 
 ### Container Storage
 
-Deploy the container to a location accessible by all compute nodes:
+The container is deployed to a location accessible by all compute nodes:
 
 ```bash
-# Recommended location on slurm.science-cloud.hu
-/storage/ai4science_admin/containers/syxplain-worker.sif
+# Container location on slurm.science-cloud.hu
+/storage/ai4science/syxplain/containers/syxplain-worker.sif
+
+# Worker source code location
+/storage/ai4science/syxplain/slurm_worker/
 ```
 
 ### Running the Container
@@ -154,7 +156,7 @@ See `example-job.sbatch` for a complete job script template. Key points:
 #SBATCH --mem=4G
 #SBATCH --time=01:00:00
 
-CONTAINER_PATH="/storage/ai4science_admin/containers/syxplain-worker.sif"
+CONTAINER_PATH="/storage/ai4science/syxplain/containers/syxplain-worker.sif"
 
 singularity run \
     --bind /storage:/storage \
@@ -320,7 +322,7 @@ sudo singularity build syxplain-worker.sif syxplain-worker.def
 ```bash
 # Build in a directory with more space
 export SINGULARITY_TMPDIR=/path/to/large/tmp
-./build-singularity.sh
+singularity build --fakeroot syxplain-worker.sif syxplain-worker.def
 ```
 
 ### Julia Compilation Slow

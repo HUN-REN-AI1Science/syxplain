@@ -178,11 +178,14 @@ exit $?
             # Generate job script
             script = self._generate_worker_script(task, input_path, output_path)
 
-            # Create submission - use partition defaults configured in Slurm
+            # Create submission with configured resources
             submission = SlurmJobSubmission(
                 script=script,
                 name=f"syxplain-{task.task_type}-{task.run_id[:8]}",
                 partition=slurm_settings.partition,
+                cpus=slurm_settings.cpus,
+                memory=slurm_settings.memory,
+                time_limit=slurm_settings.time_limit,
                 working_directory=staging_dir,
             )
 

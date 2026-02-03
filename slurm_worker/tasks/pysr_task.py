@@ -276,12 +276,17 @@ class PySRTask(Task):
         niterations = config_builder.get_niterations(df_input.X, df_input.y)
         constraints, nested_constraints = config_builder.build_constraints()
 
+        # Get CPU count from SLURM allocation or fallback to os.cpu_count()
+        cpu_count = int(os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count() or 4))
+
+        # Set Julia threading to match allocated CPUs
+        os.environ["JULIA_NUM_THREADS"] = str(cpu_count)
+
         # Setup temp directory
-        cpu_count = os.cpu_count() or 4
         temp_dir = os.path.join(tempfile.gettempdir(), f"pysr_{run_id}")
         os.makedirs(temp_dir, exist_ok=True)
 
-        logger.info(f"PySR config: niterations={niterations}, cpus={cpu_count}")
+        logger.info(f"PySR config: niterations={niterations}, cpus={cpu_count}, julia_threads={cpu_count}")
 
         self._report(20, "Creating PySR model", "pysr_model")
 

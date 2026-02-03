@@ -400,6 +400,10 @@ class SlurmStatusResponse(BaseModel):
     total_nodes: int
     checked_at: str
     error: str | None = None
+    # Configuration info for highlighting in UI
+    configured_partition: str | None = None
+    configured_cpus: int | None = None
+    configured_memory: str | None = None
 
 
 # ============================================================================

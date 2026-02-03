@@ -222,8 +222,28 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
               {slurmStatus.partitions.length > 0 && (
                 <div>
                   <h4 className="text-sm font-medium text-slate-600 mb-2">Partitions</h4>
-                  <DataTable value={slurmStatus.partitions} size="small" className="text-sm">
-                    <Column field="name" header="Name" />
+                  <DataTable
+                    value={slurmStatus.partitions}
+                    size="small"
+                    className="text-sm"
+                    rowClassName={(row: PartitionInfo) =>
+                      row.name === slurmStatus.configured_partition
+                        ? 'bg-blue-50 font-semibold'
+                        : ''
+                    }
+                  >
+                    <Column
+                      field="name"
+                      header="Name"
+                      body={(row: PartitionInfo) => (
+                        <div className="flex items-center gap-2">
+                          {row.name}
+                          {row.name === slurmStatus.configured_partition && (
+                            <Tag value="Active" severity="info" className="text-xs" />
+                          )}
+                        </div>
+                      )}
+                    />
                     <Column
                       field="state"
                       header="State"
@@ -237,6 +257,30 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
                     <Column field="total_nodes" header="Nodes" />
                     <Column field="total_cpus" header="CPUs" />
                   </DataTable>
+
+                  {/* Job Configuration Info */}
+                  {slurmStatus.configured_partition && (
+                    <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <i className="pi pi-cog text-blue-600" />
+                        <span className="font-medium text-blue-800">Job Configuration</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="text-slate-500">Partition:</span>{' '}
+                          <span className="font-medium">{slurmStatus.configured_partition}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">CPUs per job:</span>{' '}
+                          <span className="font-medium">{slurmStatus.configured_cpus}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Memory per job:</span>{' '}
+                          <span className="font-medium">{slurmStatus.configured_memory}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>

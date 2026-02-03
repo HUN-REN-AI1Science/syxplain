@@ -52,9 +52,9 @@ except:
 print('Julia pre-compilation complete')
 " || true
 
-    # Clean up
-    apt-get clean
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    # Clean up (avoid /tmp and /var/tmp as they may contain host files with fakeroot)
+    apt-get clean || true
+    rm -rf /var/lib/apt/lists/* || true
 
 %files
     # Copy worker code into container
@@ -73,6 +73,8 @@ print('Julia pre-compilation complete')
     export PYTHONPATH=/app
     export LC_ALL=C.UTF-8
     export LANG=C.UTF-8
+    # Julia threading - will be overridden by SLURM_CPUS_PER_TASK in the worker
+    export JULIA_NUM_THREADS=${SLURM_CPUS_PER_TASK:-4}
 
 %runscript
     exec python -m slurm_worker "$@"

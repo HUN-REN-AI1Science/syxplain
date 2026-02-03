@@ -273,6 +273,10 @@ export interface SlurmStatus {
   total_nodes: number;
   checked_at: string;
   error?: string;
+  // Configuration info for highlighting in UI
+  configured_partition?: string;
+  configured_cpus?: number;
+  configured_memory?: string;
 }
 
 // ============================================================================

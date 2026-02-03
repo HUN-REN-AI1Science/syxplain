@@ -142,9 +142,7 @@ class SlurmSettings:
     """
     Slurm cluster settings for slurmrestd API integration.
 
-    Resource allocation (cpus, memory, time_limit) is managed at the
-    Slurm partition level, not per-job. This simplifies configuration
-    and ensures consistent resource usage across all jobs.
+    Resource allocation can be configured via environment variables.
     """
 
     api_url: str = field(default_factory=lambda: os.environ.get("SLURM_API_URL", ""))
@@ -154,6 +152,11 @@ class SlurmSettings:
     staging_dir: str = field(
         default_factory=lambda: os.environ.get("SLURM_STAGING_DIR", "/tmp/syxplain")
     )
+
+    # Resource allocation
+    cpus: int = field(default_factory=lambda: int(os.environ.get("SLURM_CPUS", "4")))
+    memory: str = field(default_factory=lambda: os.environ.get("SLURM_MEMORY", "8G"))
+    time_limit: str = field(default_factory=lambda: os.environ.get("SLURM_TIME_LIMIT", "04:00:00"))
 
     @property
     def is_configured(self) -> bool:

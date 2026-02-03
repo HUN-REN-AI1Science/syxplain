@@ -197,14 +197,29 @@ class SystemMonitorService:
                 node_status[state] = node_status.get(state, 0) + 1
 
             # Build partition summary
+            # SLURM API structure:
+            # - name: partition name
+            # - partition.state: array like ["UP"]
+            # - nodes.total: total nodes
+            # - cpus.total: total CPUs
             partition_summary = []
             for part in partitions:
+                # Extract state from nested structure
+                state = "UNKNOWN"
+                if "partition" in part and "state" in part["partition"]:
+                    state_list = part["partition"]["state"]
+                    state = state_list[0] if state_list else "UNKNOWN"
+
+                # Extract nodes and CPUs from nested structure
+                total_nodes = part.get("nodes", {}).get("total", 0)
+                total_cpus = part.get("cpus", {}).get("total", 0)
+
                 partition_summary.append(
                     {
                         "name": part.get("name", "unknown"),
-                        "state": part.get("state", "UNKNOWN"),
-                        "total_nodes": part.get("total_nodes", 0),
-                        "total_cpus": part.get("total_cpus", 0),
+                        "state": state,
+                        "total_nodes": total_nodes,
+                        "total_cpus": total_cpus,
                     }
                 )
 
@@ -217,6 +232,10 @@ class SystemMonitorService:
                 "node_status": node_status,
                 "total_nodes": len(nodes),
                 "checked_at": datetime.utcnow().isoformat(),
+                # Configuration info for highlighting in UI
+                "configured_partition": slurm_settings.partition,
+                "configured_cpus": slurm_settings.cpus,
+                "configured_memory": slurm_settings.memory,
             }
 
         except Exception as e:

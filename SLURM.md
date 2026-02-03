@@ -31,7 +31,8 @@ This guide explains how Syxplain integrates with a Slurm HPC cluster for compute
 └─────────────────────────────────────────┼───────────────────────────────────┘
                                           │
                                           │ HTTP (port 6820)
-                                          │ No SSH tunnel needed!
+                                          │ Direct access from prod server
+                                          │ (SSH tunnel needed for local dev)
                                           ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                     Slurm Cluster (slurm.science-cloud.hu)                   │
@@ -143,10 +144,43 @@ See [Worker Deployment](#worker-deployment) section below.
 
 ## Environment Configuration
 
+### Production vs Local Development
+
+The Slurm REST API (`slurm.science-cloud.hu:6820`) is accessible directly from the production server. However, for **local development**, you need to set up an SSH tunnel first:
+
+```bash
+# Open SSH tunnel (run this in a separate terminal before starting the backend)
+ssh ai4science@slurm.science-cloud.hu -L 6820:localhost:6820
+```
+
+Keep this tunnel open while developing. After the tunnel is established, you can access the Slurm API via `localhost:6820`.
+
+**Important:** If running the backend inside Docker (via docker-compose), you need two changes:
+
+1. **Bind the SSH tunnel to all interfaces** (not just localhost):
+   ```bash
+   # Note the 0.0.0.0: prefix - this allows Docker containers to reach the tunnel
+   ssh ai4science@slurm.science-cloud.hu -L 0.0.0.0:6820:localhost:6820
+   ```
+
+2. **Use `host.docker.internal`** in your `.env` file:
+   ```bash
+   SLURM_API_URL=http://host.docker.internal:6820
+   ```
+
+This works because:
+- `0.0.0.0` makes the tunnel listen on all network interfaces, including Docker's bridge network
+- `host.docker.internal` resolves to the host machine (configured via `extra_hosts` in docker-compose.yml)
+
+### Environment Variables
+
 Configure these environment variables in your `.env` file:
 
 ```bash
-# Slurm REST API endpoint (publicly accessible, no tunnel needed)
+# Slurm REST API endpoint
+# Production:        http://slurm.science-cloud.hu:6820 (direct access)
+# Local dev native:  http://localhost:6820 (via SSH tunnel)
+# Local dev Docker:  http://host.docker.internal:6820 (via SSH tunnel on host)
 SLURM_API_URL=http://slurm.science-cloud.hu:6820
 
 # JWT token for authentication (see Token Management section)
@@ -205,23 +239,23 @@ The worker code must be deployed to the Slurm cluster. Choose one method:
 
 Singularity containers are self-contained and ensure reproducible environments.
 
-#### Prerequisites
+#### Build on the Cluster (Easiest)
 
-Install Singularity on your local machine:
-- **Linux**: `apt install singularity-container` or `yum install singularity`
-- **macOS**: Use a Linux VM or remote build
-- **Windows**: Use WSL2 with Singularity installed
-
-#### Build the Container
+Most HPC clusters have Singularity installed. Build directly on the cluster without installing Singularity locally:
 
 ```bash
-cd slurm_worker
+# 1. Copy worker code to the cluster
+scp -r slurm_worker ai4science@slurm.science-cloud.hu:/storage/ai4science/syxplain/
 
-# Build using the provided script
-./build-singularity.sh
+# 2. SSH to the cluster
+ssh ai4science@slurm.science-cloud.hu
 
-# Or build manually
-singularity build --fakeroot syxplain-worker.sif syxplain-worker.def
+# 3. Create containers directory
+mkdir -p /storage/ai4science/syxplain/containers
+
+# 4. Build the container
+cd /storage/ai4science/syxplain/slurm_worker
+singularity build --fakeroot ../containers/syxplain-worker.sif syxplain-worker.def
 ```
 
 This creates `syxplain-worker.sif` containing:
@@ -230,12 +264,21 @@ This creates `syxplain-worker.sif` containing:
 - SHAP and all dependencies
 - The worker code ready to execute
 
-#### Deploy to Cluster
+#### Updating/Refreshing the Container
+
+When you make changes to the worker code, redeploy:
 
 ```bash
-# Copy container to cluster's shared storage
-scp syxplain-worker.sif <username>@slurm.science-cloud.hu:/storage/<username>/containers/
+# 1. Copy updated worker code
+scp -r slurm_worker ai4science@slurm.science-cloud.hu:/storage/ai4science/syxplain/
+
+# 2. SSH and rebuild
+ssh ai4science@slurm.science-cloud.hu
+cd /storage/ai4science/syxplain/slurm_worker
+singularity build --fakeroot --force ../containers/syxplain-worker.sif syxplain-worker.def
 ```
+
+The `--force` flag overwrites the existing container.
 
 #### Update Backend Configuration
 
@@ -251,7 +294,7 @@ script = f"""#!/bin/bash
 # Environment setup
 {env_section}
 
-CONTAINER_PATH="/storage/{slurm_settings.user_name}/containers/syxplain-worker.sif"
+CONTAINER_PATH="/storage/ai4science/syxplain/containers/syxplain-worker.sif"
 
 # Run worker in Singularity container
 singularity run \\
@@ -307,12 +350,26 @@ pip install -e .
 
 ### 1. Test API Connectivity
 
-From your local machine:
+#### From Production Server
 
 ```bash
 curl -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
      -H "Slurm-User-Name: $SLURM_USER_NAME" \
      http://slurm.science-cloud.hu:6820/slurm/v0.0.41/ping
+```
+
+#### From Local Development (requires SSH tunnel)
+
+First, open the SSH tunnel in a separate terminal:
+```bash
+ssh ai4science@slurm.science-cloud.hu -L 6820:localhost:6820
+```
+
+Then test connectivity via localhost:
+```bash
+curl -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
+     -H "Slurm-User-Name: $SLURM_USER_NAME" \
+     http://localhost:6820/slurm/v0.0.41/ping
 ```
 
 Expected response:
@@ -418,7 +475,17 @@ cat /storage/<username>/syxplain/<job-uuid>/output.json | python -m json.tool
 ### Connection Issues
 
 **"Connection refused" or timeout:**
-- Verify the API URL: `http://slurm.science-cloud.hu:6820`
+- **Local development (native):** Make sure the SSH tunnel is open:
+  ```bash
+  ssh ai4science@slurm.science-cloud.hu -L 6820:localhost:6820
+  ```
+  Then use `SLURM_API_URL=http://localhost:6820` in your `.env`
+- **Local development (Docker):** The tunnel must bind to all interfaces, not just localhost:
+  ```bash
+  ssh ai4science@slurm.science-cloud.hu -L 0.0.0.0:6820:localhost:6820
+  ```
+  Then use `SLURM_API_URL=http://host.docker.internal:6820` in your `.env`
+- **Production:** Verify the API URL: `http://slurm.science-cloud.hu:6820`
 - Check your network/firewall allows outbound connections to port 6820
 - Test with curl: `curl http://slurm.science-cloud.hu:6820/slurm/v0.0.41/ping`
 
