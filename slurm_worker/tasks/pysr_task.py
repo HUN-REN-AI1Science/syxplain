@@ -286,7 +286,9 @@ class PySRTask(Task):
         temp_dir = os.path.join(tempfile.gettempdir(), f"pysr_{run_id}")
         os.makedirs(temp_dir, exist_ok=True)
 
-        logger.info(f"PySR config: niterations={niterations}, cpus={cpu_count}, julia_threads={cpu_count}")
+        logger.info(
+            f"PySR config: niterations={niterations}, cpus={cpu_count}, julia_threads={cpu_count}"
+        )
 
         self._report(20, "Creating PySR model", "pysr_model")
 

@@ -103,7 +103,7 @@ class SlurmComputeBackend(ComputeBackend):
         Raises:
             ValueError: If task contains invalid identifiers or URLs
         """
-        get_compute_settings()
+        slurm_settings = get_slurm_settings()
 
         # Validate identifiers to prevent injection (raises ValueError if invalid)
         validate_slurm_identifier(task.task_type, "task_type")
@@ -126,6 +126,34 @@ class SlurmComputeBackend(ComputeBackend):
         escaped_input_path = shell_escape(input_path)
         escaped_output_path = shell_escape(output_path)
 
+        # Use Singularity container if configured, otherwise fall back to conda
+        if slurm_settings.container_path:
+            escaped_container = shell_escape(slurm_settings.container_path)
+            worker_command = f"""# Run worker in Singularity container
+singularity run \\
+    --bind /storage:/storage \\
+    --cleanenv \\
+    --env CALLBACK_URL="$CALLBACK_URL" \\
+    --env CALLBACK_TOKEN="$CALLBACK_TOKEN" \\
+    {escaped_container} \\
+    --task-type {task.task_type} \\
+    --run-id {task.run_id} \\
+    --input {escaped_input_path} \\
+    --output {escaped_output_path}"""
+        else:
+            worker_command = f"""# Activate conda environment if available
+if command -v conda &> /dev/null; then
+    source "$(conda info --base)/etc/profile.d/conda.sh"
+    conda activate syxplain_worker 2>/dev/null || true
+fi
+
+# Run the worker script
+python -m slurm_worker \\
+    --task-type {task.task_type} \\
+    --run-id {task.run_id} \\
+    --input {escaped_input_path} \\
+    --output {escaped_output_path}"""
+
         script = f"""#!/bin/bash
 #SBATCH --job-name=syxplain-{task.task_type}-{task.run_id[:8]}
 #SBATCH --output={output_path}.stdout
@@ -134,18 +162,7 @@ class SlurmComputeBackend(ComputeBackend):
 # Environment setup
 {env_section}
 
-# Activate conda environment if available
-if command -v conda &> /dev/null; then
-    source "$(conda info --base)/etc/profile.d/conda.sh"
-    conda activate syxplain_worker 2>/dev/null || true
-fi
-
-# Run the worker script
-python -m syxplain_worker \\
-    --task-type {task.task_type} \\
-    --run-id {task.run_id} \\
-    --input {escaped_input_path} \\
-    --output {escaped_output_path}
+{worker_command}
 
 # Exit with worker's exit code
 exit $?

@@ -195,10 +195,14 @@ SLURM_PARTITION=batch_cpu_m2.large
 # Staging directory on shared storage (must exist and be writable)
 SLURM_STAGING_DIR=/storage/<username>/syxplain
 
-# Resource defaults (optional)
-SLURM_DEFAULT_MEMORY=4G
-SLURM_DEFAULT_CPUS=2
-SLURM_DEFAULT_TIME_LIMIT=01:00:00
+# Resource allocation per job
+SLURM_CPUS=4              # CPUs per job
+SLURM_MEMORY="8G"         # Memory per job
+SLURM_TIME_LIMIT="04:00:00"  # Max job time (HH:MM:SS)
+
+# Singularity container path (required for production)
+# If set, jobs run inside the container; if empty, falls back to conda
+SLURM_CONTAINER_PATH="/storage/<username>/syxplain/containers/syxplain-worker.sif"
 ```
 
 ## Token Management
@@ -264,6 +268,24 @@ This creates `syxplain-worker.sif` containing:
 - SHAP and all dependencies
 - The worker code ready to execute
 
+#### Verify the Container
+
+After building, test that the container works:
+
+```bash
+# Test SHAP import
+singularity exec ../containers/syxplain-worker.sif python -c "import shap; print('SHAP OK')"
+
+# Test CLI help
+singularity run ../containers/syxplain-worker.sif --help
+```
+
+Expected output:
+```
+SHAP OK
+usage: __main__.py [-h] --task-type {pysr,shap} ...
+```
+
 #### Updating/Refreshing the Container
 
 When you make changes to the worker code, redeploy:
@@ -280,37 +302,27 @@ singularity build --fakeroot --force ../containers/syxplain-worker.sif syxplain-
 
 The `--force` flag overwrites the existing container.
 
-#### Update Backend Configuration
+#### Configure Backend to Use Container
 
-The backend needs to know where the container is located. Update the job script generation in `backend/infrastructure/compute/slurm_backend.py` to use Singularity:
+Set the `SLURM_CONTAINER_PATH` environment variable in your `.env` file:
 
-```python
-# In _generate_worker_script method, change the script to:
-script = f"""#!/bin/bash
-#SBATCH --job-name=syxplain-{task.task_type}-{task.run_id[:8]}
-#SBATCH --output={output_path}.stdout
-#SBATCH --error={output_path}.stderr
-
-# Environment setup
-{env_section}
-
-CONTAINER_PATH="/storage/ai4science/syxplain/containers/syxplain-worker.sif"
-
-# Run worker in Singularity container
-singularity run \\
-    --bind /storage:/storage \\
-    --cleanenv \\
-    --env CALLBACK_URL="$CALLBACK_URL" \\
-    --env CALLBACK_TOKEN="$CALLBACK_TOKEN" \\
-    "$CONTAINER_PATH" \\
-    --task-type {task.task_type} \\
-    --run-id {task.run_id} \\
-    --input "{input_path}" \\
-    --output "{output_path}"
-
-exit $?
-"""
+```bash
+SLURM_CONTAINER_PATH="/storage/ai4science/syxplain/containers/syxplain-worker.sif"
 ```
+
+When this variable is set, the backend automatically generates job scripts that use Singularity:
+
+```bash
+singularity run \
+    --bind /storage:/storage \
+    --cleanenv \
+    --env CALLBACK_URL="$CALLBACK_URL" \
+    --env CALLBACK_TOKEN="$CALLBACK_TOKEN" \
+    /storage/ai4science/syxplain/containers/syxplain-worker.sif \
+    --task-type <type> --run-id <id> --input <path> --output <path>
+```
+
+If `SLURM_CONTAINER_PATH` is not set (empty string), the backend falls back to using a conda environment for development purposes.
 
 ### Option B: Conda Environment
 

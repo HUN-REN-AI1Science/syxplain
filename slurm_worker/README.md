@@ -47,7 +47,17 @@ This creates `syxplain-worker.sif` with all dependencies pre-installed and Julia
 On the cluster, verify it works:
 
 ```bash
-singularity run /storage/ai4science/syxplain/containers/syxplain-worker.sif --help
+# Test SHAP import
+singularity exec ../containers/syxplain-worker.sif python -c "import shap; print('SHAP OK')"
+
+# Test CLI help
+singularity run ../containers/syxplain-worker.sif --help
+```
+
+Expected output:
+```
+SHAP OK
+usage: __main__.py [-h] --task-type {pysr,shap} ...
 ```
 
 ### 4. Update/Refresh the Container
