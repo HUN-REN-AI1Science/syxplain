@@ -2,16 +2,16 @@
 
 Standalone worker for executing compute-intensive tasks (SHAP and PySR) on Slurm clusters.
 
+> **Note:** For overall Slurm integration setup (environment variables, SSH tunnels, token management), see [SLURM.md](../SLURM.md).
+
 ## Table of Contents
 
 - [Quick Start](#quick-start)
 - [Local Testing](#local-testing)
 - [Singularity Container](#singularity-container)
-- [Slurm Integration](#slurm-integration)
 - [Task Types](#task-types)
 - [Adding New Tasks](#adding-new-tasks)
 - [Progress Callbacks](#progress-callbacks)
-- [Environment Variables](#environment-variables)
 - [Troubleshooting](#troubleshooting)
 
 ## Quick Start
@@ -152,47 +152,6 @@ singularity run --bind /storage:/storage \
     --output /storage/user/staging/abc123/output.json
 ```
 
-## Slurm Integration
-
-### Example Job Script
-
-See `example-job.sbatch` for a complete job script template. Key points:
-
-```bash
-#!/bin/bash
-#SBATCH --job-name=syxplain-compute
-#SBATCH --partition=batch_cpu_m2.large
-#SBATCH --cpus-per-task=2
-#SBATCH --mem=4G
-#SBATCH --time=01:00:00
-
-CONTAINER_PATH="/storage/ai4science/syxplain/containers/syxplain-worker.sif"
-
-singularity run \
-    --bind /storage:/storage \
-    --cleanenv \
-    --env CALLBACK_URL="$CALLBACK_URL" \
-    --env CALLBACK_TOKEN="$CALLBACK_TOKEN" \
-    "$CONTAINER_PATH" \
-    --task-type "$TASK_TYPE" \
-    --run-id "$RUN_ID" \
-    --input "$INPUT_PATH" \
-    --output "$OUTPUT_PATH"
-```
-
-### Manual Job Submission (Testing)
-
-```bash
-# Set environment variables
-export TASK_TYPE=shap
-export RUN_ID=test-$(date +%s)
-export INPUT_PATH=/storage/$USER/syxplain/test-input.json
-export OUTPUT_PATH=/storage/$USER/syxplain/test-output.json
-
-# Submit job
-sbatch example-job.sbatch
-```
-
 ## Task Types
 
 ### SHAP (`--task-type shap`)
@@ -309,14 +268,6 @@ If `CALLBACK_URL` and `CALLBACK_TOKEN` are configured, the worker will:
 - POST completion to `{CALLBACK_URL}/complete/{run_id}`
 
 All requests include the `X-Worker-Token` header for authentication.
-
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `CALLBACK_URL` | Backend API base URL for progress reporting |
-| `CALLBACK_TOKEN` | Authentication token for API calls |
-| `SLURM_JOB_ID` | Used as run_id fallback if not specified |
 
 ## Troubleshooting
 

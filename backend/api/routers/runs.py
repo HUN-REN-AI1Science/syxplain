@@ -35,7 +35,7 @@ router = APIRouter(prefix="/api", tags=["Runs"])
 
 
 @router.post("/run", response_model=RunResponse)
-def run_analysis(
+async def run_analysis(
     request: RunRequest,
     current_user: User = Depends(get_current_user),
     run_service: RunService = Depends(get_run_service),

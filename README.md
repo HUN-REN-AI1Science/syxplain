@@ -9,6 +9,15 @@
 
 This is a proof of concept system which uses state of the art symbolic regression models to predict a selected variable in a dataset and explain the predicted equations in natural language using large language models. Setting the hiperparameters of the symbolic regression can be tedious, so here we use an LLM with vision capabilities to analyze the dataset and suggest hiperparameters for the symbolic regression model.
 
+## Quick Navigation
+
+| I want to... | Go to |
+|--------------|-------|
+| Run locally for development | [Quick Start](#quick-start-development) |
+| Deploy to production server | [Production Deployment](#production-deployment) |
+| Set up Slurm HPC compute | [SLURM.md](./SLURM.md) |
+| Develop the Slurm worker | [slurm_worker/README.md](./slurm_worker/README.md) |
+
 ## Table of Contents
 
 - [Architecture](#architecture)
@@ -156,8 +165,8 @@ The backend communicates with the Slurm cluster via the **slurmrestd REST API** 
 - SSH is only needed to generate authentication tokens
 
 For detailed Slurm setup, architecture diagrams, worker deployment, and troubleshooting, see:
-- **[docs/SLURM.md](docs/SLURM.md)** - Complete Slurm integration guide
-- **[slurm_worker/README.md](slurm_worker/README.md)** - Worker documentation
+- **[SLURM.md](./SLURM.md)** - Complete Slurm integration guide
+- **[slurm_worker/README.md](./slurm_worker/README.md)** - Worker documentation
 
 ### Quick Connectivity Test
 

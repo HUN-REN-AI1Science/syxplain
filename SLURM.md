@@ -2,14 +2,46 @@
 
 This guide explains how Syxplain integrates with a Slurm HPC cluster for compute-intensive tasks (SHAP analysis, PySR symbolic regression).
 
+## TL;DR Quick Setup
+
+Get Slurm integration running in 5 steps:
+
+1. **Get cluster access** - Contact your Slurm admin for SSH access and a username
+2. **Create staging directory** on cluster:
+   ```bash
+   ssh <username>@slurm.science-cloud.hu "mkdir -p /storage/<username>/syxplain"
+   ```
+3. **Generate auth token**:
+   ```bash
+   ssh <username>@slurm.science-cloud.hu "scontrol token username=<username> lifespan=31536000"
+   ```
+4. **Deploy worker** - See [slurm_worker/README.md](./slurm_worker/README.md) for container build instructions
+5. **Configure `.env`**:
+   ```bash
+   SLURM_API_URL="http://slurm.science-cloud.hu:6820"
+   SLURM_AUTH_TOKEN="<token-from-step-3>"
+   SLURM_USER_NAME="<username>"
+   SLURM_STAGING_DIR="/storage/<username>/syxplain"
+   SLURM_CONTAINER_PATH="/storage/<username>/containers/syxplain-worker.sif"
+   ```
+
+**Test connectivity:**
+```bash
+curl -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
+     -H "Slurm-User-Name: $SLURM_USER_NAME" \
+     http://slurm.science-cloud.hu:6820/slurm/v0.0.41/ping
+```
+
+For detailed configuration and troubleshooting, continue reading.
+
+---
+
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
 - [How It Works](#how-it-works)
-- [Initial Setup (One-Time)](#initial-setup-one-time)
 - [Environment Configuration](#environment-configuration)
 - [Token Management](#token-management)
-- [Worker Deployment](#worker-deployment)
 - [Testing the Integration](#testing-the-integration)
 - [Monitoring Jobs](#monitoring-jobs)
 - [Troubleshooting](#troubleshooting)
@@ -85,124 +117,58 @@ This guide explains how Syxplain integrates with a Slurm HPC cluster for compute
 
 ## How It Works
 
-### Job Submission Flow
+1. Backend uploads input data to Slurm staging directory via REST API
+2. Backend submits job script via slurmrestd
+3. Slurm scheduler runs the worker (Singularity container)
+4. Worker writes results to staging directory
+5. Backend polls for completion and downloads results
 
-1. **User initiates analysis** via the web UI
-2. **Backend orchestrator** prepares input data and generates PySR configuration using LLM
-3. **Backend uploads input JSON** to the staging directory via slurmrestd file API
-4. **Backend submits job script** via slurmrestd job submission API
-5. **Slurm scheduler** queues the job and allocates resources
-6. **Compute node** runs the worker script (inside Singularity container or conda env)
-7. **Worker writes results** to output.json in the staging directory
-8. **Backend polls** job status via slurmrestd
-9. **Backend downloads results** when job completes
-10. **Orchestrator generates** LLM explanations and returns final results
+**Data transfer:** All data is base64 encoded JSON over HTTP - no SSH tunnel needed for file transfer.
 
-### What Gets Transferred Over HTTP
-
-| Data | Direction | Method |
-|------|-----------|--------|
-| Input JSON (dataset, config) | Backend → Slurm | base64 encoded via `PUT /slurm/v0.0.41/file` |
-| Job script (bash) | Backend → Slurm | JSON payload via `POST /slurm/v0.0.41/job/submit` |
-| Job status | Slurm → Backend | JSON via `GET /slurm/v0.0.41/job/{id}` |
-| Output JSON (results) | Slurm → Backend | base64 encoded via `GET /slurm/v0.0.41/file` |
-
-### What Must Be Pre-Deployed on Slurm
-
-The **worker code** (`slurm_worker/` Python module) must be available on the compute nodes. This is NOT transferred at runtime - it must be deployed beforehand via:
-
-- **Option A: Singularity container** (recommended) - self-contained, reproducible
-- **Option B: Conda environment** - requires conda setup on the cluster
-
-## Initial Setup (One-Time)
-
-### 1. Get Cluster Access
-
-Contact your Slurm administrator to obtain:
-- SSH access to the login node (`slurm.science-cloud.hu`)
-- A Slurm username with job submission permissions
-- Access to a partition (e.g., `batch_cpu_m2.large`)
-- Storage space under `/storage/<username>/`
-
-### 2. Create Staging Directory
-
-SSH to the cluster and create the staging directory:
-
-```bash
-ssh <username>@slurm.science-cloud.hu
-
-# Create staging directory for job files
-mkdir -p /storage/<username>/syxplain
-
-# Create directory for Singularity containers
-mkdir -p /storage/<username>/containers
-```
-
-### 3. Deploy the Worker
-
-See [Worker Deployment](#worker-deployment) section below.
+**Worker deployment:** The worker code must be pre-deployed as a Singularity container. See [slurm_worker/README.md](./slurm_worker/README.md) for build instructions.
 
 ## Environment Configuration
 
-### Production vs Local Development
+### Configuration Reference
 
-The Slurm REST API (`slurm.science-cloud.hu:6820`) is accessible directly from the production server. However, for **local development**, you need to set up an SSH tunnel first:
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SLURM_API_URL` | Yes | - | Slurm REST API endpoint |
+| `SLURM_AUTH_TOKEN` | Yes | - | JWT token (see [Token Management](#token-management)) |
+| `SLURM_USER_NAME` | Yes | - | Your Slurm username |
+| `SLURM_STAGING_DIR` | Yes | - | Staging directory on cluster storage |
+| `SLURM_CONTAINER_PATH` | Yes* | - | Path to Singularity container |
+| `SLURM_PARTITION` | No | `batch_cpu_m2.large` | Slurm partition for jobs |
+| `SLURM_CPUS` | No | `4` | CPUs per job |
+| `SLURM_MEMORY` | No | `8G` | Memory per job |
+| `SLURM_TIME_LIMIT` | No | `04:00:00` | Max job time (HH:MM:SS) |
+| `WORKER_CALLBACK_URL` | No | - | URL for progress updates |
+| `WORKER_CALLBACK_TOKEN` | No | - | Auth token for callbacks |
+
+\* Required for production; falls back to conda for development.
+
+### Local Development: SSH Tunnel
+
+The Slurm API is publicly accessible from the production server. For **local development**, set up an SSH tunnel:
 
 ```bash
-# Open SSH tunnel (run this in a separate terminal before starting the backend)
-ssh ai4science@slurm.science-cloud.hu -L 6820:localhost:6820
+# Native Python/venv development
+ssh <username>@slurm.science-cloud.hu -L 6820:localhost:6820
+# Use: SLURM_API_URL=http://localhost:6820
+
+# Docker development (bind to all interfaces)
+ssh <username>@slurm.science-cloud.hu -L 0.0.0.0:6820:localhost:6820
+# Use: SLURM_API_URL=http://host.docker.internal:6820
 ```
 
-Keep this tunnel open while developing. After the tunnel is established, you can access the Slurm API via `localhost:6820`.
+### Progress Callbacks (Optional)
 
-**Important:** If running the backend inside Docker (via docker-compose), you need two changes:
+For real-time progress updates, configure callback URL and token. Without callbacks, jobs still complete - you just won't see live progress.
 
-1. **Bind the SSH tunnel to all interfaces** (not just localhost):
-   ```bash
-   # Note the 0.0.0.0: prefix - this allows Docker containers to reach the tunnel
-   ssh ai4science@slurm.science-cloud.hu -L 0.0.0.0:6820:localhost:6820
-   ```
-
-2. **Use `host.docker.internal`** in your `.env` file:
-   ```bash
-   SLURM_API_URL=http://host.docker.internal:6820
-   ```
-
-This works because:
-- `0.0.0.0` makes the tunnel listen on all network interfaces, including Docker's bridge network
-- `host.docker.internal` resolves to the host machine (configured via `extra_hosts` in docker-compose.yml)
-
-### Environment Variables
-
-Configure these environment variables in your `.env` file:
-
+For local development, use [ngrok](https://ngrok.com/) to expose your backend:
 ```bash
-# Slurm REST API endpoint
-# Production:        http://slurm.science-cloud.hu:6820 (direct access)
-# Local dev native:  http://localhost:6820 (via SSH tunnel)
-# Local dev Docker:  http://host.docker.internal:6820 (via SSH tunnel on host)
-SLURM_API_URL=http://slurm.science-cloud.hu:6820
-
-# JWT token for authentication (see Token Management section)
-SLURM_AUTH_TOKEN=<your-jwt-token>
-
-# Your Slurm username
-SLURM_USER_NAME=<your-username>
-
-# Partition to submit jobs to
-SLURM_PARTITION=batch_cpu_m2.large
-
-# Staging directory on shared storage (must exist and be writable)
-SLURM_STAGING_DIR=/storage/<username>/syxplain
-
-# Resource allocation per job
-SLURM_CPUS=4              # CPUs per job
-SLURM_MEMORY="8G"         # Memory per job
-SLURM_TIME_LIMIT="04:00:00"  # Max job time (HH:MM:SS)
-
-# Singularity container path (required for production)
-# If set, jobs run inside the container; if empty, falls back to conda
-SLURM_CONTAINER_PATH="/storage/<username>/syxplain/containers/syxplain-worker.sif"
+ngrok http 8000
+# Copy URL to WORKER_CALLBACK_URL in .env
 ```
 
 ## Token Management
@@ -235,209 +201,31 @@ Tokens expire after their lifespan. For production:
 - Set up a cron job or reminder to refresh before expiration
 - Update `SLURM_AUTH_TOKEN` in your environment when refreshed
 
-## Worker Deployment
-
-The worker code must be deployed to the Slurm cluster. Choose one method:
-
-### Option A: Singularity Container (Recommended)
-
-Singularity containers are self-contained and ensure reproducible environments.
-
-#### Build on the Cluster (Easiest)
-
-Most HPC clusters have Singularity installed. Build directly on the cluster without installing Singularity locally:
-
-```bash
-# 1. Copy worker code to the cluster
-scp -r slurm_worker ai4science@slurm.science-cloud.hu:/storage/ai4science/syxplain/
-
-# 2. SSH to the cluster
-ssh ai4science@slurm.science-cloud.hu
-
-# 3. Create containers directory
-mkdir -p /storage/ai4science/syxplain/containers
-
-# 4. Build the container
-cd /storage/ai4science/syxplain/slurm_worker
-singularity build --fakeroot ../containers/syxplain-worker.sif syxplain-worker.def
-```
-
-This creates `syxplain-worker.sif` containing:
-- Python 3.11 with scientific computing stack
-- Julia 1.10.2 with PySR pre-compiled
-- SHAP and all dependencies
-- The worker code ready to execute
-
-#### Verify the Container
-
-After building, test that the container works:
-
-```bash
-# Test SHAP import
-singularity exec ../containers/syxplain-worker.sif python -c "import shap; print('SHAP OK')"
-
-# Test CLI help
-singularity run ../containers/syxplain-worker.sif --help
-```
-
-Expected output:
-```
-SHAP OK
-usage: __main__.py [-h] --task-type {pysr,shap} ...
-```
-
-#### Updating/Refreshing the Container
-
-When you make changes to the worker code, redeploy:
-
-```bash
-# 1. Copy updated worker code
-scp -r slurm_worker ai4science@slurm.science-cloud.hu:/storage/ai4science/syxplain/
-
-# 2. SSH and rebuild
-ssh ai4science@slurm.science-cloud.hu
-cd /storage/ai4science/syxplain/slurm_worker
-singularity build --fakeroot --force ../containers/syxplain-worker.sif syxplain-worker.def
-```
-
-The `--force` flag overwrites the existing container.
-
-#### Configure Backend to Use Container
-
-Set the `SLURM_CONTAINER_PATH` environment variable in your `.env` file:
-
-```bash
-SLURM_CONTAINER_PATH="/storage/ai4science/syxplain/containers/syxplain-worker.sif"
-```
-
-When this variable is set, the backend automatically generates job scripts that use Singularity:
-
-```bash
-singularity run \
-    --bind /storage:/storage \
-    --cleanenv \
-    --env CALLBACK_URL="$CALLBACK_URL" \
-    --env CALLBACK_TOKEN="$CALLBACK_TOKEN" \
-    /storage/ai4science/syxplain/containers/syxplain-worker.sif \
-    --task-type <type> --run-id <id> --input <path> --output <path>
-```
-
-If `SLURM_CONTAINER_PATH` is not set (empty string), the backend falls back to using a conda environment for development purposes.
-
-### Option B: Conda Environment
-
-If you prefer conda, set up the environment on the cluster.
-
-#### Create Environment
-
-SSH to the cluster and run:
-
-```bash
-# Load conda (cluster-specific)
-module load anaconda  # or: source /path/to/conda/etc/profile.d/conda.sh
-
-# Create environment
-conda create -n syxplain_worker python=3.11 -y
-conda activate syxplain_worker
-
-# Install dependencies
-pip install -r /path/to/slurm_worker/requirements.txt
-
-# Install Julia for PySR (first run will be slow)
-python -c "from pysr import PySRRegressor; print('Julia ready')"
-```
-
-#### Install Worker Code
-
-```bash
-# Copy worker code to cluster
-scp -r slurm_worker <username>@slurm.science-cloud.hu:/storage/<username>/
-
-# Or install as a package
-cd /storage/<username>/slurm_worker
-pip install -e .
-```
-
 ## Testing the Integration
 
-### 1. Test API Connectivity
-
-#### From Production Server
+### Test API Connectivity
 
 ```bash
 curl -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
      -H "Slurm-User-Name: $SLURM_USER_NAME" \
-     http://slurm.science-cloud.hu:6820/slurm/v0.0.41/ping
+     $SLURM_API_URL/slurm/v0.0.41/ping
 ```
 
-#### From Local Development (requires SSH tunnel)
+Expected: `{"meta":{"slurm":{"version":{"major":...}}}}`
 
-First, open the SSH tunnel in a separate terminal:
-```bash
-ssh ai4science@slurm.science-cloud.hu -L 6820:localhost:6820
-```
+For local development, ensure the SSH tunnel is running first (see [Local Development](#local-development-ssh-tunnel)).
 
-Then test connectivity via localhost:
-```bash
-curl -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
-     -H "Slurm-User-Name: $SLURM_USER_NAME" \
-     http://localhost:6820/slurm/v0.0.41/ping
-```
+### Test Worker Locally
 
-Expected response:
-```json
-{"meta":{"slurm":{"version":{"major":...}}}}
-```
-
-### 2. Test File Upload
-
-```bash
-# Create test file content (base64 encoded)
-CONTENT=$(echo '{"test": "hello"}' | base64)
-
-# Upload via API
-curl -X PUT \
-     -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
-     -H "Slurm-User-Name: $SLURM_USER_NAME" \
-     -H "Content-Type: application/json" \
-     -d "{\"path\": \"/storage/$SLURM_USER_NAME/syxplain/test.json\", \"data\": \"$CONTENT\", \"encoding\": \"base64\"}" \
-     http://slurm.science-cloud.hu:6820/slurm/v0.0.41/file
-```
-
-### 3. Test Job Submission
-
-SSH to the cluster and submit a test job:
-
-```bash
-# Simple test job
-sbatch <<EOF
-#!/bin/bash
-#SBATCH --job-name=test
-#SBATCH --partition=batch_cpu_m2.large
-#SBATCH --time=00:01:00
-
-echo "Hello from Slurm!"
-hostname
-EOF
-
-# Check job status
-squeue -u $USER
-```
-
-### 4. Test Worker Locally
-
-Before deploying, test the worker locally:
+Before deploying, test the worker on your machine:
 
 ```bash
 cd slurm_worker
 pip install -r requirements.txt
-
-# Run SHAP task on example data
 python test_worker_local.py --task shap --example 1
-
-# Run PySR with limited iterations
-python test_worker_local.py --task pysr --example 1 --niterations 5
 ```
+
+See [slurm_worker/README.md](./slurm_worker/README.md) for more testing options.
 
 ## Monitoring Jobs
 
@@ -561,7 +349,7 @@ export SINGULARITY_TMPDIR=/path/to/large/tmp
 
 ## Additional Resources
 
-- [slurm_worker/README.md](../slurm_worker/README.md) - Detailed worker documentation
+- [slurm_worker/README.md](./slurm_worker/README.md) - Worker deployment, task types, and container building
 - [Slurm Documentation](https://slurm.schedmd.com/documentation.html)
 - [slurmrestd API Reference](https://slurm.schedmd.com/rest_api.html)
 - [Singularity Documentation](https://docs.sylabs.io/guides/latest/user-guide/)
