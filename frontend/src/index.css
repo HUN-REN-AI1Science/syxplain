@@ -421,3 +421,70 @@ body {
   color: #1e293b;
   font-weight: 600;
 }
+
+/* ============================================================================
+   HPC Queue Phase Animations
+   ============================================================================ */
+
+/* Shimmer effect on progress bar during queue phase */
+.progress-bar-shimmer .p-progressbar-value {
+  background: linear-gradient(90deg, #0052cc 0%, #3b82f6 50%, #0052cc 100%) !important;
+  background-size: 200% 100%;
+  animation: progressShimmer 2s linear infinite;
+}
+
+@keyframes progressShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Message fade transition for rotating queue messages */
+@keyframes messageFade {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-animate {
+  animation: messageFade 0.4s ease-out forwards;
+}
+
+/* Subtle pulse animation for queue status indicator */
+@keyframes queuePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.queue-pulse {
+  animation: queuePulse 2s ease-in-out infinite;
+}
+
+/* Tips panel slide-in animation */
+@keyframes tipSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.tip-animate {
+  animation: tipSlideIn 0.5s ease-out forwards;
+}

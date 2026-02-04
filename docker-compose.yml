@@ -67,9 +67,10 @@ services:
       - SLURM_CPUS=${SLURM_CPUS:-4}
       - SLURM_MEMORY=${SLURM_MEMORY:-8G}
       - SLURM_TIME_LIMIT=${SLURM_TIME_LIMIT:-04:00:00}
-      # Compute settings
-      - WORKER_CALLBACK_URL=http://backend:8000/api/internal
-      - WORKER_CALLBACK_TOKEN=dev-callback-token
+      - SLURM_CONTAINER_PATH=${SLURM_CONTAINER_PATH:-}
+      # Compute settings (set WORKER_CALLBACK_URL in .env for Slurm workers to reach backend)
+      - WORKER_CALLBACK_URL=${WORKER_CALLBACK_URL:-http://backend:8000/api/internal}
+      - WORKER_CALLBACK_TOKEN=${WORKER_CALLBACK_TOKEN:-dev-callback-token}
       - JOB_POLL_INTERVAL=5
       # Analysis Settings (sensible defaults for dev)
       - SHAP_SUBSAMPLE_FRACTION=0.1

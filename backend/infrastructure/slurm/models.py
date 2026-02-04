@@ -208,10 +208,11 @@ class SlurmJobSubmission:
         time_minutes = _parse_time_limit(self.time_limit)
 
         # Build job specification matching slurmrestd v0.0.41 format
+        # Note: nodes must be a string (e.g., "1" or "1-4"), not an integer
         job_spec: dict[str, Any] = {
             "name": self.name,
             "partition": self.partition,
-            "nodes": self.nodes,
+            "nodes": str(self.nodes),
             "tasks": self.tasks,
             "time_limit": {"set": True, "number": time_minutes},
         }
@@ -220,9 +221,9 @@ class SlurmJobSubmission:
         memory_mb = _parse_memory(self.memory)
         job_spec["memory_per_node"] = {"set": True, "number": memory_mb}
 
-        # CPUs per task
+        # CPUs per task (plain integer, not wrapped object)
         if self.cpus:
-            job_spec["cpus_per_task"] = {"set": True, "number": self.cpus}
+            job_spec["cpus_per_task"] = self.cpus
 
         # Working directory
         if self.working_directory:

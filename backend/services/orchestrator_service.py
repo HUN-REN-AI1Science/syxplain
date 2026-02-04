@@ -289,6 +289,9 @@ class AnalysisOrchestrator:
         compute_settings = get_compute_settings()
         results = {}
 
+        # Report HPC connection phase (user-friendly)
+        progress.update_progress("hpc_connecting", status="Connecting to computing cluster")
+
         # Build task inputs
         shap_task_input = ComputeTaskInput(
             task_type="shap",
@@ -321,13 +324,14 @@ class AnalysisOrchestrator:
         )
 
         # Submit tasks
-        progress.update_progress("shap_submission", status="Running SHAP analysis")
         shap_job = await self.backend.submit_task(shap_task_input)
         logger.info(f"SHAP task submitted as job {shap_job.job_id}")
 
-        progress.update_progress("pysr_submission", status="Running symbolic regression")
         pysr_job = await self.backend.submit_task(pysr_task_input)
         logger.info(f"PySR task submitted as job {pysr_job.job_id}")
+
+        # Report queued phase (user-friendly - jobs are submitted, waiting in queue)
+        progress.update_progress("hpc_queued", status="Jobs queued for processing")
 
         # Store job IDs in database for cancellation
         self._store_slurm_job_ids(
@@ -339,18 +343,32 @@ class AnalysisOrchestrator:
         )
 
         # Wait for completion (can run in parallel on cluster)
-        progress.update_progress("compute_waiting", status="Waiting for compute tasks")
+        # Track whether we've reported the hpc_starting phase
+        hpc_started_reported = False
+
+        def on_job_state_change(old_state, new_state, status):
+            """Report hpc_starting when first job transitions to RUNNING."""
+            nonlocal hpc_started_reported
+            from backend.infrastructure.slurm.models import JobState
+
+            if not hpc_started_reported and new_state == JobState.RUNNING:
+                progress.update_progress(
+                    "hpc_starting", status="Resources allocated, starting compute"
+                )
+                hpc_started_reported = True
 
         shap_status = await self.backend.wait_for_completion(
             shap_job.job_id,
             poll_interval=self._config.poll_interval,
             timeout=self._config.compute_timeout,
+            on_state_change=on_job_state_change,
         )
 
         pysr_status = await self.backend.wait_for_completion(
             pysr_job.job_id,
             poll_interval=self._config.poll_interval,
             timeout=self._config.compute_timeout,
+            on_state_change=on_job_state_change,
         )
 
         # Check for failures

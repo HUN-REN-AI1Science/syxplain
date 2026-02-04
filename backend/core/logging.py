@@ -177,7 +177,7 @@ _configured = False
 def configure_logging(
     log_dir: str = LOG_DIR,
     log_filename: str = LOG_FILENAME,
-    level: int = logging.DEBUG,
+    level: int = logging.INFO,
     use_rich: bool = True,
 ) -> None:
     """
@@ -186,7 +186,7 @@ def configure_logging(
     Args:
         log_dir: Base directory for log files
         log_filename: Name of the log file
-        level: Logging level (default DEBUG for dev)
+        level: Logging level (default INFO)
         use_rich: Use Rich for beautiful console output
     """
     global _configured
@@ -205,15 +205,11 @@ def configure_logging(
 
     # ---- Console Handler ----
     if use_rich and RICH_AVAILABLE:
-        # Install rich tracebacks for beautiful error output
-        install_rich_traceback(show_locals=True, width=120)
-
         console_handler = RichHandler(
-            console=Console(force_terminal=True),
+            console=Console(force_terminal=True, width=200),
             show_time=True,
-            show_path=True,
-            rich_tracebacks=True,
-            tracebacks_show_locals=True,
+            show_path=False,
+            rich_tracebacks=False,
             markup=True,
             omit_repeated_times=False,
         )

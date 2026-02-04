@@ -54,7 +54,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   const resultsRef = useRef<HTMLDivElement>(null);
 
   // Custom hook for smooth progress interpolation and step description
-  const { displayProgress, currentStepDescription } = useProgressInterpolation({
+  const { displayProgress, currentStepDescription, isInQueuePhase } = useProgressInterpolation({
     phases: progressPhases,
     backendProgress,
     status,
@@ -286,6 +286,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
             <AnalysisProgressView
               displayProgress={displayProgress}
               stepDescription={currentStepDescription}
+              isInQueuePhase={isInQueuePhase}
             />
             <div className="flex justify-center mt-4">
               <Button

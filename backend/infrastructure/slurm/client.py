@@ -1,14 +1,14 @@
 """
 Slurm REST API client.
 
-Provides async interface for interacting with slurmrestd API for job submission,
-file staging, and status monitoring.
+Provides async interface for interacting with slurmrestd API for job submission
+and status monitoring.
 
 Compatible with slurmrestd API v0.0.41+
 """
 
 import asyncio
-import base64
+import json
 import logging
 
 import httpx
@@ -33,12 +33,6 @@ class SlurmClientError(Exception):
 
 class SlurmJobSubmissionError(SlurmClientError):
     """Error during job submission."""
-
-    pass
-
-
-class SlurmFileTransferError(SlurmClientError):
-    """Error during file upload/download."""
 
     pass
 
@@ -145,7 +139,7 @@ class SlurmClient:
         payload = submission.to_slurm_request()
 
         logger.info(f"Submitting job '{submission.name}' to partition '{submission.partition}'")
-        logger.debug(f"Job submission payload: {payload}")
+        logger.info(f"Job submission payload:\n{json.dumps(payload, indent=2)}")
 
         try:
             response = await client.post(self._api_path("job/submit"), json=payload)
@@ -233,108 +227,12 @@ class SlurmClient:
         except httpx.RequestError as e:
             raise SlurmClientError(f"Request failed: {e}") from e
 
-    async def upload_file(
-        self,
-        job_id: str,
-        filename: str,
-        content: bytes,
-        destination_dir: str | None = None,
-    ) -> str:
-        """
-        Upload a file to Slurm staging area via slurmrestd.
-
-        Args:
-            job_id: Associated job ID (for organization)
-            filename: Name of the file
-            content: File content as bytes
-            destination_dir: Target directory (defaults to staging area)
-
-        Returns:
-            Full path to the uploaded file
-
-        Raises:
-            SlurmFileTransferError: If upload fails
-        """
-        client = await self._get_client()
-        settings = get_slurm_settings()
-
-        # Organize files by job_id in staging directory
-        dest_dir = destination_dir or f"{settings.staging_dir}/{job_id}"
-        dest_path = f"{dest_dir}/{filename}"
-
-        # Base64 encode the content for JSON transport
-        encoded_content = base64.b64encode(content).decode("utf-8")
-
-        payload = {
-            "path": dest_path,
-            "data": encoded_content,
-            "encoding": "base64",
-        }
-
-        logger.info(f"Uploading file to Slurm: {dest_path}")
-
-        try:
-            response = await client.put(self._api_path("file"), json=payload)
-            response.raise_for_status()
-            logger.info(f"File uploaded successfully: {dest_path}")
-            return dest_path
-
-        except httpx.HTTPStatusError as e:
-            error_detail = ""
-            try:
-                error_detail = e.response.json()
-            except Exception:
-                error_detail = e.response.text
-            raise SlurmFileTransferError(
-                f"File upload failed: {e.response.status_code} - {error_detail}"
-            ) from e
-        except httpx.RequestError as e:
-            raise SlurmFileTransferError(f"Request failed: {e}") from e
-
-    async def download_file(self, file_path: str) -> bytes:
-        """
-        Download a file from Slurm via slurmrestd.
-
-        Args:
-            file_path: Full path to the file on Slurm
-
-        Returns:
-            File content as bytes
-
-        Raises:
-            SlurmFileTransferError: If download fails
-        """
-        client = await self._get_client()
-
-        logger.info(f"Downloading file from Slurm: {file_path}")
-
-        try:
-            response = await client.get(
-                self._api_path("file"),
-                params={"path": file_path},
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            # Decode base64 content
-            encoded_content = data.get("data", "")
-            content = base64.b64decode(encoded_content)
-
-            logger.info(f"File downloaded successfully: {file_path} ({len(content)} bytes)")
-            return content
-
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
-                raise SlurmFileTransferError(f"File not found: {file_path}") from e
-            raise SlurmFileTransferError(f"File download failed: {e.response.status_code}") from e
-        except httpx.RequestError as e:
-            raise SlurmFileTransferError(f"Request failed: {e}") from e
-
     async def wait_for_completion(
         self,
         job_id: str,
         poll_interval: int | None = None,
         timeout: float | None = None,
+        on_state_change: callable | None = None,
     ) -> JobStatus:
         """
         Wait for a job to reach terminal state.
@@ -343,6 +241,8 @@ class SlurmClient:
             job_id: Slurm job ID
             poll_interval: Seconds between status checks (defaults to config)
             timeout: Maximum seconds to wait (None for no timeout)
+            on_state_change: Optional callback called when job state changes.
+                             Signature: on_state_change(old_state, new_state, status)
 
         Returns:
             Final JobStatus
@@ -351,18 +251,35 @@ class SlurmClient:
             asyncio.TimeoutError: If timeout exceeded
             SlurmClientError: For other errors
         """
+        from backend.infrastructure.slurm.models import JobState
+
         compute_settings = get_compute_settings()
         interval = poll_interval or compute_settings.job_poll_interval
         elapsed = 0.0
+        poll_count = 0
+        last_state: JobState | None = None
 
         while True:
             status = await self.get_job_status(job_id)
+
+            # Notify on state change
+            if on_state_change and status.state != last_state:
+                try:
+                    on_state_change(last_state, status.state, status)
+                except Exception as e:
+                    logger.warning(f"State change callback error: {e}")
+                last_state = status.state
 
             if status.state.is_terminal:
                 logger.info(f"Job {job_id} completed with state: {status.state.value}")
                 return status
 
-            logger.debug(f"Job {job_id} still {status.state.value}, waiting...")
+            # Rate-limit polling debug logs (every ~2 min at 10s intervals)
+            poll_count += 1
+            if poll_count % 12 == 0:
+                logger.debug(
+                    f"Job {job_id} still {status.state.value}, waited {int(elapsed)}s"
+                )
 
             if timeout and elapsed >= timeout:
                 raise asyncio.TimeoutError(f"Job {job_id} did not complete within {timeout}s")

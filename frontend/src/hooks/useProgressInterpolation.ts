@@ -24,6 +24,8 @@ export interface UseProgressInterpolationResult {
   currentStepDescription: string;
   /** Current step label (shorter) */
   currentStepLabel: string;
+  /** Whether the analysis is in the early HPC queue phase */
+  isInQueuePhase: boolean;
 }
 
 /**
@@ -156,5 +158,10 @@ export function useProgressInterpolation(
     return () => clearInterval(intervalId);
   }, [backendProgress, status, updateInterval]);
 
-  return { displayProgress, currentStepDescription, currentStepLabel };
+  // Determine if we're in the early HPC queue phase (progress < 5% and running)
+  const isInQueuePhase = useMemo(() => {
+    return backendProgress < 5 && status === 'running';
+  }, [backendProgress, status]);
+
+  return { displayProgress, currentStepDescription, currentStepLabel, isInQueuePhase };
 }

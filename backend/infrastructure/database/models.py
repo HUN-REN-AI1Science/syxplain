@@ -62,6 +62,9 @@ class Run(Base):
     start_time = Column(DateTime, nullable=True)  # Set when status becomes "running"
     finish_time = Column(DateTime, nullable=True)  # Set when status becomes terminal
 
+    # Input data for compute tasks (stored when submitted to Slurm)
+    input_data = Column(JSONB, nullable=True)  # {"shap": {...}, "pysr": {...}}
+
     # Relationships with cascade delete
     steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")
     artifacts = relationship("RunArtifact", back_populates="run", cascade="all, delete-orphan")

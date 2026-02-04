@@ -89,8 +89,6 @@ async def receive_progress(
             detail="Invalid worker token",
         )
 
-    logger.debug(f"Progress update for run {run_id}: {progress.progress}% - {progress.status}")
-
     try:
         with get_db_session() as db:
             run = db.query(Run).filter(Run.id == run_id).first()
@@ -242,6 +240,68 @@ async def receive_completion(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to store results",
+        )
+
+
+@router.get("/input/{run_id}")
+async def get_job_input(
+    run_id: str,
+    task_type: str,
+    x_worker_token: str = Header(..., alias="X-Worker-Token"),
+):
+    """
+    Get input data for a compute task.
+
+    Called by Slurm workers to fetch their input data.
+
+    Args:
+        run_id: UUID of the run being processed
+        task_type: Type of task (e.g., "shap", "pysr")
+        x_worker_token: Authentication token from worker
+
+    Returns:
+        Input data for the task
+    """
+    if not _validate_worker_token(x_worker_token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid worker token",
+        )
+
+    try:
+        with get_db_session() as db:
+            run = db.query(Run).filter(Run.id == run_id).first()
+
+            if not run:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Run {run_id} not found",
+                )
+
+            if not run.input_data or task_type not in run.input_data:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Input for task {task_type} not found",
+                )
+
+            input_data = run.input_data[task_type]
+
+            # Clear input after fetch (one-time use, saves DB space)
+            updated_input = dict(run.input_data)
+            updated_input[task_type] = None
+            run.input_data = updated_input
+            db.commit()
+
+            logger.info(f"Input fetched for run {run_id}, task {task_type}")
+            return {"input": input_data}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching input for {run_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch input",
         )
 
 

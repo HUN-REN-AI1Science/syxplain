@@ -8,6 +8,9 @@ import argparse
 import sys
 import time
 import traceback
+from typing import Any
+
+import requests
 
 from slurm_worker.config import WorkerConfig
 from slurm_worker.io import FileHandler
@@ -48,8 +51,9 @@ Examples:
     )
     parser.add_argument(
         "--input",
-        required=True,
-        help="Path to input JSON file",
+        required=False,
+        default="",
+        help="Path to input JSON file (optional - fetches via HTTP if not provided)",
     )
     parser.add_argument(
         "--output",
@@ -103,7 +107,7 @@ class WorkerRunner:
             Exit code (0 for success, 1 for failure)
         """
         logger.info(f"Starting {self.config.task_type} task for run {self.config.run_id}")
-        logger.info(f"Input: {self.config.input_path}")
+        logger.info(f"Input: {self.config.input_path or '(via HTTP)'}")
         logger.info(f"Output: {self.config.output_path}")
 
         start_time = time.time()
@@ -113,11 +117,37 @@ class WorkerRunner:
         except Exception as e:
             return self._handle_error(e, start_time)
 
+    def _fetch_input_http(self) -> dict[str, Any]:
+        """Fetch input data from backend via HTTP."""
+        base_url = self.config.callback.url.rstrip("/")
+        url = f"{base_url}/input/{self.config.run_id}"
+
+        logger.info(f"Fetching input from {url}")
+
+        response = requests.get(
+            url,
+            params={"task_type": self.config.task_type},
+            headers={"X-Worker-Token": self.config.callback.token},
+            timeout=60,
+        )
+        response.raise_for_status()
+        return response.json()["input"]
+
     def _execute_task(self, start_time: float) -> int:
         """Execute the task and write results."""
-        # Read input
-        self.reporter.on_progress(5, "Reading input", "reading_input")
-        input_data = self.file_handler.read_input(self.config.input_path)
+        # Fetch input (via HTTP or from file)
+        self.reporter.on_progress(5, "Fetching input", "fetching_input")
+
+        if self.config.input_path:
+            # Local file mode (for testing)
+            input_data = self.file_handler.read_input(self.config.input_path)
+        elif self.config.callback.is_enabled:
+            # Fetch from backend via HTTP
+            input_data = self._fetch_input_http()
+        else:
+            raise RuntimeError(
+                "No input source: provide --input file or configure callback URL"
+            )
 
         # Create and run task
         task = TaskRegistry.create(self.config.task_type, self.reporter)

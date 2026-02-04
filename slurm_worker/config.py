@@ -69,8 +69,8 @@ class WorkerConfig:
 
     task_type: str
     run_id: str
-    input_path: str
     output_path: str
+    input_path: str = ""  # Optional - if empty, fetches via HTTP
     callback: CallbackConfig = field(default_factory=CallbackConfig.from_env)
 
     @classmethod
@@ -83,7 +83,7 @@ class WorkerConfig:
         return cls(
             task_type=args.task_type,
             run_id=args.run_id or os.environ.get("SLURM_JOB_ID", "local"),
-            input_path=args.input,
+            input_path=getattr(args, "input", "") or "",
             output_path=args.output,
             callback=callback,
         )
