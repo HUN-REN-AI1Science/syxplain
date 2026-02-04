@@ -1,5 +1,5 @@
 """
-Slurm compute backend implementation.
+Slurm compute backend.
 
 Executes compute tasks on a Slurm cluster via slurmrestd API.
 """
@@ -9,17 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from backend.core.config import get_compute_settings, get_slurm_settings
-from backend.infrastructure.compute.base import (
-    ComputeBackend,
-    ComputeBackendError,
-    ComputeJob,
-    ComputeTaskInput,
-    JobNotCompletedError,
-    JobNotFoundError,
-    TaskState,
-    TaskStatus,
-)
+from backend.core.config import get_slurm_settings
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
 from backend.infrastructure.slurm.client import (
@@ -30,6 +20,9 @@ from backend.infrastructure.slurm.client import (
 from backend.infrastructure.slurm.models import (
     JobState,
     SlurmJobSubmission,
+    SlurmTask,
+    TaskInput,
+    TaskResult,
 )
 from backend.utils.security_utils import (
     shell_escape,
@@ -39,40 +32,35 @@ from backend.utils.security_utils import (
 
 logger = logging.getLogger(__name__)
 
-# Map Slurm job states to TaskState
-_STATE_MAP = {
-    JobState.PENDING: TaskState.PENDING,
-    JobState.RUNNING: TaskState.RUNNING,
-    JobState.COMPLETED: TaskState.COMPLETED,
-    JobState.FAILED: TaskState.FAILED,
-    JobState.CANCELLED: TaskState.CANCELLED,
-    JobState.TIMEOUT: TaskState.TIMEOUT,
-    JobState.NODE_FAIL: TaskState.FAILED,
-    JobState.PREEMPTED: TaskState.CANCELLED,
-    JobState.BOOT_FAIL: TaskState.FAILED,
-    JobState.DEADLINE: TaskState.TIMEOUT,
-    JobState.OUT_OF_MEMORY: TaskState.FAILED,
-    JobState.UNKNOWN: TaskState.PENDING,
-}
+
+class SlurmBackendError(Exception):
+    """Error in Slurm backend operations."""
+
+    pass
 
 
-class SlurmComputeBackend(ComputeBackend):
+class JobNotFoundError(SlurmBackendError):
+    """Job not found in backend."""
+
+    pass
+
+
+class JobNotCompletedError(SlurmBackendError):
+    """Job has not completed successfully."""
+
+    pass
+
+
+class SlurmBackend:
     """
     Slurm compute backend using slurmrestd API.
 
-    Submits tasks as Slurm jobs, stages input/output files, and monitors
-    job status through the Slurm REST API.
+    Submits tasks as Slurm jobs and monitors job status through the REST API.
     """
 
     def __init__(self, client: SlurmClient | None = None):
-        """
-        Initialize Slurm backend.
-
-        Args:
-            client: Optional SlurmClient instance (creates new one if not provided)
-        """
         self._client = client
-        self._jobs: dict[str, dict[str, Any]] = {}
+        self._tasks: dict[str, dict[str, Any]] = {}
 
     @property
     def name(self) -> str:
@@ -84,52 +72,29 @@ class SlurmComputeBackend(ComputeBackend):
             self._client = SlurmClient()
         return self._client
 
-    def _generate_worker_script(
-        self,
-        task: ComputeTaskInput,
-        output_path: str,
-    ) -> str:
-        """
-        Generate the Slurm job script for executing a task.
-
-        Args:
-            task: Task specification
-            output_path: Path for output JSON file
-
-        Returns:
-            Bash script content
-
-        Raises:
-            ValueError: If task contains invalid identifiers or URLs
-        """
+    def _generate_worker_script(self, task: TaskInput, output_path: str) -> str:
+        """Generate the Slurm job script for executing a task."""
         slurm_settings = get_slurm_settings()
 
-        # Validate identifiers to prevent injection (raises ValueError if invalid)
+        # Validate identifiers to prevent injection
         validate_slurm_identifier(task.task_type, "task_type")
         validate_slurm_identifier(task.run_id, "run_id")
 
-        # Build environment variables for the worker with proper escaping
+        # Build environment variables
         env_vars = []
         if task.callback_url:
-            # Validate URL scheme before escaping
             validate_url(task.callback_url, "callback_url")
-            escaped_url = shell_escape(task.callback_url)
-            env_vars.append(f"export CALLBACK_URL={escaped_url}")
+            env_vars.append(f"export CALLBACK_URL={shell_escape(task.callback_url)}")
         if task.callback_token:
-            escaped_token = shell_escape(task.callback_token)
-            env_vars.append(f"export CALLBACK_TOKEN={escaped_token}")
+            env_vars.append(f"export CALLBACK_TOKEN={shell_escape(task.callback_token)}")
 
         env_section = "\n".join(env_vars) if env_vars else "# No callback configured"
-
-        # Escape output path for safe interpolation
         escaped_output_path = shell_escape(output_path)
 
-        # Use Singularity container if configured, otherwise fall back to conda
-        # Worker fetches input via HTTP using callback URL and run_id
+        # Use Singularity container if configured
         if slurm_settings.container_path:
             escaped_container = shell_escape(slurm_settings.container_path)
             worker_command = f"""# Run worker in Singularity container
-# --writable-tmpfs allows Julia/PySR to write lock files and cache
 singularity run \\
     --writable-tmpfs \\
     --bind /storage:/storage \\
@@ -148,16 +113,14 @@ if command -v conda &> /dev/null; then
     conda activate syxplain_worker 2>/dev/null || true
 fi
 
-# Run the worker script
 python -m slurm_worker \\
     --task-type {task.task_type} \\
     --run-id {task.run_id} \\
     --output {escaped_output_path}"""
 
-        # Extract directory from output path for mkdir
         output_dir = "/".join(output_path.split("/")[:-1])
 
-        script = f"""#!/bin/bash
+        return f"""#!/bin/bash
 #SBATCH --job-name=syxplain-{task.task_type}-{task.run_id[:8]}
 #SBATCH --output=/tmp/syxplain_%j.stdout
 #SBATCH --error=/tmp/syxplain_%j.stderr
@@ -170,44 +133,29 @@ mkdir -p {output_dir}
 
 {worker_command}
 
-# Exit with worker's exit code
 exit $?
 """
-        return script
 
-    async def submit_task(self, task: ComputeTaskInput) -> ComputeJob:
+    async def submit_task(self, task: TaskInput) -> SlurmTask:
         """Submit task to Slurm cluster."""
         client = await self._get_client()
         slurm_settings = get_slurm_settings()
 
-        # Generate unique job identifier
         job_uuid = str(uuid.uuid4())
-
         logger.info(f"Submitting {task.task_type} task to Slurm for run {task.run_id}")
 
         # Store input data in Run record for worker to fetch via HTTP
         with get_db_session() as db:
             run = db.query(Run).filter(Run.id == task.run_id).first()
             if run:
-                # Store input under task_type key (allows multiple tasks per run)
                 input_store = dict(run.input_data) if run.input_data else {}
                 input_store[task.task_type] = task.input_data
                 run.input_data = input_store
                 db.commit()
-                logger.debug(f"Stored input data for run {task.run_id}, task {task.task_type}")
 
         try:
-            # Use /tmp for output - worker sends results via HTTP callback anyway
             output_path = f"/tmp/syxplain_{job_uuid}/output.json"
-
-            # Generate job script (worker fetches input via HTTP)
             script = self._generate_worker_script(task, output_path)
-
-            # Create submission with configured resources
-            # Use staging_dir from config (SLURM_STAGING_DIR env var)
-            # Note: slurmrestd must have write access to this directory
-            working_dir = slurm_settings.staging_dir
-            logger.info(f"Using working_directory: {working_dir}")
 
             submission = SlurmJobSubmission(
                 script=script,
@@ -216,14 +164,12 @@ exit $?
                 cpus=slurm_settings.cpus,
                 memory=slurm_settings.memory,
                 time_limit=slurm_settings.time_limit,
-                working_directory=working_dir,
+                working_directory=slurm_settings.staging_dir,
             )
 
-            # Submit to Slurm
             slurm_job_id = await client.submit_job(submission)
 
-            # Track job
-            self._jobs[job_uuid] = {
+            self._tasks[job_uuid] = {
                 "slurm_job_id": slurm_job_id,
                 "task": task,
                 "output_path": output_path,
@@ -232,49 +178,42 @@ exit $?
 
             logger.info(f"Slurm job {slurm_job_id} submitted for task {job_uuid}")
 
-            return ComputeJob(
+            return SlurmTask(
                 job_id=job_uuid,
+                slurm_job_id=slurm_job_id,
                 task_type=task.task_type,
                 run_id=task.run_id,
-                backend=self.name,
-                status=TaskStatus(
-                    job_id=job_uuid,
-                    state=TaskState.PENDING,
-                    progress=0,
-                ),
+                state=JobState.PENDING,
                 metadata={"slurm_job_id": slurm_job_id},
             )
 
         except SlurmClientError as e:
-            raise ComputeBackendError(f"Failed to submit task to Slurm: {e}") from e
+            raise SlurmBackendError(f"Failed to submit task to Slurm: {e}") from e
 
-    async def get_task_status(self, job_id: str) -> TaskStatus:
+    async def get_task_status(self, job_id: str) -> TaskResult:
         """Get status of a Slurm job."""
-        if job_id not in self._jobs:
+        if job_id not in self._tasks:
             raise JobNotFoundError(f"Job {job_id} not found")
 
-        job_data = self._jobs[job_id]
-        slurm_job_id = job_data["slurm_job_id"]
-
+        task_data = self._tasks[job_id]
+        slurm_job_id = task_data["slurm_job_id"]
         client = await self._get_client()
 
         try:
             slurm_status = await client.get_job_status(slurm_job_id)
-            task_state = _STATE_MAP.get(slurm_status.state, TaskState.PENDING)
 
-            # Estimate progress based on state
             progress = 0
-            if task_state == TaskState.RUNNING:
-                progress = 50  # Running but no finer granularity
-            elif task_state == TaskState.COMPLETED:
+            if slurm_status.state == JobState.RUNNING:
+                progress = 50
+            elif slurm_status.state == JobState.COMPLETED:
                 progress = 100
 
-            return TaskStatus(
+            return TaskResult(
                 job_id=job_id,
-                state=task_state,
+                state=slurm_status.state,
                 progress=progress,
                 message=slurm_status.reason,
-                error=slurm_status.reason if task_state == TaskState.FAILED else None,
+                error=slurm_status.reason if slurm_status.state == JobState.FAILED else None,
                 started_at=slurm_status.start_time,
                 completed_at=slurm_status.end_time,
             )
@@ -282,24 +221,19 @@ exit $?
         except SlurmJobNotFoundError:
             raise JobNotFoundError(f"Slurm job {slurm_job_id} not found")
         except SlurmClientError as e:
-            raise ComputeBackendError(f"Failed to get job status: {e}") from e
+            raise SlurmBackendError(f"Failed to get job status: {e}") from e
 
     async def get_task_result(self, job_id: str) -> dict[str, Any]:
-        """Get results of a completed Slurm job.
-
-        Results are stored in the Run record via the worker callback,
-        so we fetch them from the database instead of downloading files.
-        """
-        if job_id not in self._jobs:
+        """Get results of a completed Slurm job."""
+        if job_id not in self._tasks:
             raise JobNotFoundError(f"Job {job_id} not found")
 
-        # First check status
         status = await self.get_task_status(job_id)
-        if status.state != TaskState.COMPLETED:
+        if status.state != JobState.COMPLETED:
             raise JobNotCompletedError(f"Job {job_id} is in state {status.state.value}")
 
-        job_data = self._jobs[job_id]
-        task = job_data["task"]
+        task_data = self._tasks[job_id]
+        task = task_data["task"]
 
         # Results are stored in Run record via worker callback
         with get_db_session() as db:
@@ -308,22 +242,21 @@ exit $?
                 logger.info(f"Retrieved results for job {job_id} from database")
                 return run.results
 
-        raise ComputeBackendError(f"Results not found for job {job_id}")
+        raise SlurmBackendError(f"Results not found for job {job_id}")
 
     async def cancel_task(self, job_id: str) -> bool:
         """Cancel a Slurm job."""
-        if job_id not in self._jobs:
+        if job_id not in self._tasks:
             raise JobNotFoundError(f"Job {job_id} not found")
 
-        job_data = self._jobs[job_id]
-        slurm_job_id = job_data["slurm_job_id"]
-
+        task_data = self._tasks[job_id]
+        slurm_job_id = task_data["slurm_job_id"]
         client = await self._get_client()
 
         try:
             return await client.cancel_job(slurm_job_id)
         except SlurmClientError as e:
-            raise ComputeBackendError(f"Failed to cancel job: {e}") from e
+            raise SlurmBackendError(f"Failed to cancel job: {e}") from e
 
     async def wait_for_completion(
         self,
@@ -331,26 +264,16 @@ exit $?
         poll_interval: float = 10.0,
         timeout: float | None = None,
         on_state_change: callable | None = None,
-    ) -> TaskStatus:
-        """Wait for Slurm job to complete.
-
-        Args:
-            job_id: Internal job UUID
-            poll_interval: Seconds between status checks
-            timeout: Maximum seconds to wait
-            on_state_change: Optional callback for state changes.
-                             Signature: on_state_change(old_state, new_state, status)
-        """
-        if job_id not in self._jobs:
+    ) -> TaskResult:
+        """Wait for Slurm job to complete."""
+        if job_id not in self._tasks:
             raise JobNotFoundError(f"Job {job_id} not found")
 
-        job_data = self._jobs[job_id]
-        slurm_job_id = job_data["slurm_job_id"]
-
+        task_data = self._tasks[job_id]
+        slurm_job_id = task_data["slurm_job_id"]
         client = await self._get_client()
 
         try:
-            # Use Slurm client's wait_for_completion with state change callback
             slurm_status = await client.wait_for_completion(
                 slurm_job_id,
                 poll_interval=int(poll_interval),
@@ -358,23 +281,64 @@ exit $?
                 on_state_change=on_state_change,
             )
 
-            task_state = _STATE_MAP.get(slurm_status.state, TaskState.PENDING)
-
-            return TaskStatus(
+            return TaskResult(
                 job_id=job_id,
-                state=task_state,
-                progress=100 if task_state == TaskState.COMPLETED else 0,
+                state=slurm_status.state,
+                progress=100 if slurm_status.state == JobState.COMPLETED else 0,
                 message=slurm_status.reason,
-                error=slurm_status.reason if task_state == TaskState.FAILED else None,
+                error=slurm_status.reason if slurm_status.state == JobState.FAILED else None,
                 started_at=slurm_status.start_time,
                 completed_at=slurm_status.end_time,
             )
 
         except SlurmClientError as e:
-            raise ComputeBackendError(f"Error waiting for job: {e}") from e
+            raise SlurmBackendError(f"Error waiting for job: {e}") from e
 
     async def close(self) -> None:
         """Close the Slurm client connection."""
         if self._client:
             await self._client.close()
             self._client = None
+
+
+# =============================================================================
+# Factory / Singleton
+# =============================================================================
+
+_backend: SlurmBackend | None = None
+
+
+def get_slurm_backend(force_new: bool = False) -> SlurmBackend:
+    """
+    Get the Slurm compute backend.
+
+    Args:
+        force_new: If True, create a new instance instead of using cached
+
+    Returns:
+        SlurmBackend instance
+
+    Raises:
+        SlurmBackendError: If Slurm is not configured
+    """
+    global _backend
+
+    if _backend is not None and not force_new:
+        return _backend
+
+    slurm_settings = get_slurm_settings()
+    if not slurm_settings.is_configured:
+        raise SlurmBackendError(
+            "Slurm backend not configured. Set SLURM_API_URL and SLURM_AUTH_TOKEN."
+        )
+
+    _backend = SlurmBackend()
+    logger.info(f"Using Slurm compute backend at {slurm_settings.api_url}")
+
+    return _backend
+
+
+def clear_backend_cache() -> None:
+    """Clear the cached backend. Useful for testing."""
+    global _backend
+    _backend = None

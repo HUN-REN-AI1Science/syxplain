@@ -14,14 +14,14 @@ from typing import Any
 import pandas as pd
 
 from backend.core.config import get_compute_settings
-from backend.infrastructure.compute import (
-    ComputeBackend,
-    ComputeTaskInput,
-    TaskState,
-    get_compute_backend,
-)
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
+from backend.infrastructure.slurm import (
+    JobState,
+    SlurmBackend,
+    TaskInput,
+    get_slurm_backend,
+)
 from backend.services.progress_service import ProgressTracker
 
 logger = logging.getLogger(__name__)
@@ -74,24 +74,24 @@ class AnalysisOrchestrator:
 
     def __init__(
         self,
-        backend: ComputeBackend | None = None,
+        backend: SlurmBackend | None = None,
         config: OrchestratorConfig | None = None,
     ):
         """
         Initialize orchestrator.
 
         Args:
-            backend: Compute backend to use (defaults to configured backend)
+            backend: Slurm backend to use (defaults to configured backend)
             config: Orchestrator configuration
         """
         self._backend = backend
         self._config = config or OrchestratorConfig()
 
     @property
-    def backend(self) -> ComputeBackend:
-        """Get compute backend (lazy initialization)."""
+    def backend(self) -> SlurmBackend:
+        """Get Slurm backend (lazy initialization)."""
         if self._backend is None:
-            self._backend = get_compute_backend()
+            self._backend = get_slurm_backend()
         return self._backend
 
     async def run_analysis(self, context: AnalysisContext) -> dict[str, Any]:
@@ -293,7 +293,7 @@ class AnalysisOrchestrator:
         progress.update_progress("hpc_connecting", status="Connecting to computing cluster")
 
         # Build task inputs
-        shap_task_input = ComputeTaskInput(
+        shap_task_input = TaskInput(
             task_type="shap",
             run_id=context.run_id,
             input_data={
@@ -308,7 +308,7 @@ class AnalysisOrchestrator:
             callback_token=compute_settings.worker_callback_token,
         )
 
-        pysr_task_input = ComputeTaskInput(
+        pysr_task_input = TaskInput(
             task_type="pysr",
             run_id=context.run_id,
             input_data={
@@ -349,8 +349,6 @@ class AnalysisOrchestrator:
         def on_job_state_change(old_state, new_state, status):
             """Report hpc_starting when first job transitions to RUNNING."""
             nonlocal hpc_started_reported
-            from backend.infrastructure.slurm.models import JobState
-
             if not hpc_started_reported and new_state == JobState.RUNNING:
                 progress.update_progress(
                     "hpc_starting", status="Resources allocated, starting compute"
@@ -372,10 +370,10 @@ class AnalysisOrchestrator:
         )
 
         # Check for failures
-        if shap_status.state != TaskState.COMPLETED:
+        if shap_status.state != JobState.COMPLETED:
             raise OrchestratorError(f"SHAP task failed: {shap_status.error}")
 
-        if pysr_status.state != TaskState.COMPLETED:
+        if pysr_status.state != JobState.COMPLETED:
             raise OrchestratorError(f"PySR task failed: {pysr_status.error}")
 
         # Retrieve results

@@ -15,8 +15,8 @@ from backend.core.exceptions import (
     EntityNotFoundError,
     ValidationError,
 )
-from backend.infrastructure.compute import get_compute_backend
 from backend.infrastructure.database.models import Run
+from backend.infrastructure.slurm import get_slurm_backend
 from backend.repositories.artifact_repository import ArtifactRepository
 from backend.repositories.file_repository import FileRepository
 from backend.repositories.run_repository import (
@@ -273,7 +273,7 @@ class RunService:
 
         # Cancel Slurm jobs if they exist
         if run.slurm_job_ids:
-            backend = get_compute_backend()
+            backend = get_slurm_backend()
             for job_type, job_id in run.slurm_job_ids.items():
                 try:
                     await backend.cancel_task(job_id)

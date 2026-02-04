@@ -1,7 +1,9 @@
 """
 Slurm data models.
 
-Pydantic models for slurmrestd API request/response handling.
+Data models for Slurm backend including job submission, status tracking,
+and task input/output.
+
 Compatible with slurmrestd API v0.0.41+
 """
 
@@ -10,6 +12,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
+
+# =============================================================================
+# Job State
+# =============================================================================
 
 
 class JobState(str, Enum):
@@ -56,6 +62,56 @@ class JobState(str, Enum):
     def is_success(self) -> bool:
         """Check if this is a successful terminal state."""
         return self == JobState.COMPLETED
+
+
+# =============================================================================
+# Task Input/Output (for orchestrator)
+# =============================================================================
+
+
+@dataclass
+class TaskInput:
+    """
+    Input specification for a compute task.
+
+    Contains all information needed to execute a task on Slurm.
+    """
+
+    task_type: str  # "shap" or "pysr"
+    run_id: str  # Associated run ID for progress tracking
+    input_data: dict[str, Any]  # Serialized task input
+    callback_url: str | None = None  # URL for progress updates
+    callback_token: str | None = None  # Auth token for callbacks
+
+
+@dataclass
+class TaskResult:
+    """Result of a completed task."""
+
+    job_id: str
+    state: JobState
+    progress: int = 0  # 0-100
+    message: str | None = None
+    error: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+@dataclass
+class SlurmTask:
+    """
+    Represents a submitted Slurm task.
+
+    Tracks the task throughout its lifecycle on the cluster.
+    """
+
+    job_id: str
+    slurm_job_id: str
+    task_type: str
+    run_id: str
+    state: JobState = JobState.PENDING
+    submitted_at: datetime = field(default_factory=datetime.utcnow)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -105,17 +161,6 @@ class JobStatus:
             reason=job_info.get("state_reason"),
             raw_response=data,
         )
-
-
-@dataclass
-class SlurmJob:
-    """Represents a submitted Slurm job."""
-
-    job_id: str
-    name: str
-    partition: str
-    status: JobStatus
-    submitted_at: datetime = field(default_factory=datetime.utcnow)
 
 
 def _parse_time_limit(time_str: str) -> int:
@@ -248,13 +293,3 @@ class SlurmJobSubmission:
             "job": job_spec,
             "script": self.script,
         }
-
-
-@dataclass
-class SlurmFileUpload:
-    """File upload request for Slurm staging."""
-
-    filename: str
-    content: bytes
-    job_id: str | None = None
-    destination_path: str | None = None
