@@ -19,6 +19,7 @@ from starlette.responses import Response
 
 # Import routers
 from backend.api.routers import admin, config, files, permissions, profile, progress, runs, sharing
+from backend.api.websocket import progress_ws
 
 # Local imports
 from backend.core.config import get_settings
@@ -140,6 +141,7 @@ def create_app() -> FastAPI:
     app.include_router(permissions.router)
     app.include_router(profile.router)
     app.include_router(progress.router)
+    app.include_router(progress_ws.router)  # WebSocket for real-time progress
     app.include_router(sharing.router)  # Before runs to capture /api/runs/shared
     app.include_router(runs.router)
 

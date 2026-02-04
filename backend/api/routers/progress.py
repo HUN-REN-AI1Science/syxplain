@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
+from backend.api.websocket.connection_manager import get_connection_manager
 from backend.core.config import get_compute_settings
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
@@ -109,6 +110,15 @@ async def receive_progress(
                     + (f" - {progress.status}" if progress.status else "")
                 )
 
+                # Broadcast progress update via WebSocket
+                manager = get_connection_manager()
+                await manager.broadcast_progress(
+                    run_id=run_id,
+                    progress=progress.progress,
+                    status=run.status,
+                    step_name=progress.step_name,
+                )
+
         return {"status": "ok", "progress": progress.progress}
 
     except HTTPException:
@@ -164,6 +174,15 @@ async def receive_error(
             run.error = error.error
             db.commit()
             logger.info(f"[Run {run_id[:8]}] Marked as failed: {error.error}")
+
+            # Broadcast error via WebSocket
+            manager = get_connection_manager()
+            await manager.broadcast_progress(
+                run_id=run_id,
+                progress=run.progress or 0,
+                status="failed",
+                error=error.error,
+            )
 
         return {"status": "ok", "run_status": "failed"}
 
@@ -230,6 +249,15 @@ async def receive_completion(
             run.progress = 70  # Typical progress after compute phase
             db.commit()
             logger.info(f"[Run {run_id[:8]}] Compute results stored")
+
+            # Broadcast completion via WebSocket
+            manager = get_connection_manager()
+            await manager.broadcast_progress(
+                run_id=run_id,
+                progress=70,
+                status=run.status,
+                results=run.results,
+            )
 
         return {"status": "ok", "results_stored": True}
 

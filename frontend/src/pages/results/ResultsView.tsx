@@ -1,9 +1,9 @@
 /**
  * ResultsView Component
- * Displays analysis results with polling, progress visualization, and PDF export
+ * Displays analysis results with WebSocket-based real-time progress updates
  */
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Button } from 'primereact/button';
 import { Message } from 'primereact/message';
 import { Toast } from 'primereact/toast';
@@ -19,6 +19,7 @@ import {
 import type { ResultsStatus } from '@components/Results';
 import { runsService, configService } from '@services/api';
 import { useProgressInterpolation } from '@hooks/useProgressInterpolation';
+import { useRunProgress } from '@hooks/useRunProgress';
 import type { ProgressPhase, EquationResults } from '@/types';
 
 // ============================================================================
@@ -36,15 +37,11 @@ interface ResultsViewProps {
 
 const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false }) => {
   // State
-  const [status, setStatus] = useState<string>('pending');
-  const [backendProgress, setBackendProgress] = useState<number>(0);
   const [result, setResult] = useState<EquationResults | string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [progressPhases, setProgressPhases] = useState<ProgressPhase[]>([]);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
-  const [initialFetchDone, setInitialFetchDone] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -52,6 +49,40 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   // Refs
   const toast = useRef<Toast>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Callbacks for useRunProgress
+  const handleComplete = useCallback((results: EquationResults) => {
+    setResult(results);
+    // Fetch share token when completed
+    runsService.getById(runId).then((response) => {
+      setShareToken(response.data.public_share_token || null);
+    }).catch(console.error);
+  }, [runId]);
+
+  const handleError = useCallback(() => {
+    // Error is already tracked by the hook
+  }, []);
+
+  // Real-time progress via WebSocket (with polling fallback)
+  const {
+    progress: backendProgress,
+    status,
+    error,
+    results: wsResults,
+    isReady: initialFetchDone,
+  } = useRunProgress({
+    runId,
+    onComplete: handleComplete,
+    onError: handleError,
+    enabled: !!runId,
+  });
+
+  // Sync results from WebSocket if we got them there
+  useEffect(() => {
+    if (wsResults && !result) {
+      setResult(wsResults);
+    }
+  }, [wsResults, result]);
 
   // Custom hook for smooth progress interpolation and step description
   const { displayProgress, currentStepDescription, isInQueuePhase } = useProgressInterpolation({
@@ -72,62 +103,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     };
     fetchConfig();
   }, []);
-
-  // Poll backend for actual progress
-  useEffect(() => {
-    if (!runId) return;
-
-    let shouldStop = false;
-
-    const poll = async () => {
-      try {
-        const response = await runsService.getById(runId);
-        setStatus(response.data.status);
-        setBackendProgress(response.data.progress || 0);
-
-        if (response.data.status === 'completed') {
-          // Handle both new direct format and old wrapper format
-          const results = response.data.results;
-          if (results) {
-            if ('equations' in results) {
-              // New format: results is the EquationResults object directly
-              setResult(results as EquationResults);
-            } else if ('pysr_explanations' in results) {
-              // Old format: results has pysr_explanations wrapper (string)
-              setResult(results.pysr_explanations);
-            }
-          }
-          setBackendProgress(100);
-          setShareToken(response.data.public_share_token || null);
-          shouldStop = true;
-        } else if (
-          response.data.status === 'failed' ||
-          response.data.status === 'timeout' ||
-          response.data.status === 'cancelled'
-        ) {
-          const errorMessages: Record<string, string> = {
-            timeout: 'Analysis timed out',
-            cancelled: 'Analysis was cancelled',
-            failed: 'Unknown error',
-          };
-          setError(response.data.error || errorMessages[response.data.status] || 'Unknown error');
-          shouldStop = true;
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setInitialFetchDone(true);
-      }
-    };
-
-    poll();
-    const intervalId = setInterval(() => {
-      if (!shouldStop) poll();
-      else clearInterval(intervalId);
-    }, 2000);
-
-    return () => clearInterval(intervalId);
-  }, [runId]);
 
   // Handle PDF export (lazy loads the PDF library)
   const handleExportPdf = async () => {
@@ -163,7 +138,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     setCancelling(true);
     try {
       await runsService.cancel(runId);
-      // Polling will pick up the cancelled status
+      // WebSocket will receive the cancelled status update
     } catch (e) {
       console.error('Failed to cancel:', e);
       toast.current?.show({
