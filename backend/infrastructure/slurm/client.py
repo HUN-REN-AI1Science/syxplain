@@ -10,6 +10,7 @@ Compatible with slurmrestd API v0.0.41+
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 
 import httpx
 
@@ -41,6 +42,28 @@ class SlurmJobNotFoundError(SlurmClientError):
     """Job not found in Slurm."""
 
     pass
+
+
+def is_quota_error(error: SlurmJobSubmissionError) -> bool:
+    """
+    Check if error is a quota/QOS policy violation.
+
+    These errors occur when the user has reached their job submission limit
+    or other QOS policy restrictions. They are transient and can be retried.
+
+    Args:
+        error: The submission error to check
+
+    Returns:
+        True if this is a quota/QOS error that should be retried
+    """
+    error_str = str(error).lower()
+    return (
+        "qos policy" in error_str
+        or '"error_number": 2050' in error_str
+        or "error_number\": 2050" in error_str
+        or "job submit limit" in error_str
+    )
 
 
 class SlurmClient:
@@ -232,7 +255,7 @@ class SlurmClient:
         job_id: str,
         poll_interval: int | None = None,
         timeout: float | None = None,
-        on_state_change: callable | None = None,
+        on_state_change: Callable | None = None,
     ) -> JobStatus:
         """
         Wait for a job to reach terminal state.

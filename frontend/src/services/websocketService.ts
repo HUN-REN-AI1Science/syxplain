@@ -88,6 +88,7 @@ export class ProgressWebSocket {
   }
 
   private buildWebSocketUrl(token: string): string {
+    // Use relative URL so Vite proxy handles it in dev, and nginx handles it in production
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     return `${protocol}//${host}/ws/progress/${this.runId}?token=${encodeURIComponent(token)}`;

@@ -182,7 +182,7 @@ def get_run(
     run_service: RunService = Depends(get_run_service),
 ):
     """
-    Get run status for polling.
+    Get run details and status.
 
     Args:
         run_id: The run UUID

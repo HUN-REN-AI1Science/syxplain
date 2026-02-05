@@ -153,7 +153,7 @@ function MainApp() {
                             onSubmit={handleStartAnalysis}
                           />
                         )}
-                        {activeIndex === 2 && runId && (
+                        {activeIndex === 2 && (
                           <ResultsView runId={runId} fromHistory={fromHistory} />
                         )}
                       </div>

@@ -27,7 +27,7 @@ import type { ProgressPhase, EquationResults } from '@/types';
 // ============================================================================
 
 interface ResultsViewProps {
-  runId: string;
+  runId: string | null;
   fromHistory?: boolean;
 }
 
@@ -54,16 +54,18 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   const handleComplete = useCallback((results: EquationResults) => {
     setResult(results);
     // Fetch share token when completed
-    runsService.getById(runId).then((response) => {
-      setShareToken(response.data.public_share_token || null);
-    }).catch(console.error);
+    if (runId) {
+      runsService.getById(runId).then((response) => {
+        setShareToken(response.data.public_share_token || null);
+      }).catch(console.error);
+    }
   }, [runId]);
 
   const handleError = useCallback(() => {
     // Error is already tracked by the hook
   }, []);
 
-  // Real-time progress via WebSocket (with polling fallback)
+  // Real-time progress via WebSocket
   const {
     progress: backendProgress,
     status,
@@ -180,19 +182,26 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   // Derived state
   const isCompleted = status === 'completed';
 
+  // Waiting for run to be created (runId not yet available)
+  const isStarting = !runId;
+
   // Actively processing (pending/running) - shows progress bar
-  const isProcessing = initialFetchDone && (!runId || status === 'pending' || status === 'running');
+  const isProcessing = initialFetchDone && (status === 'pending' || status === 'running');
 
   // Loading a completed run from history (fetching data but run is already complete)
-  const isFetchingCompletedRun = !initialFetchDone && fromHistory;
+  const isFetchingCompletedRun = !initialFetchDone && fromHistory && !!runId;
+
+  // Initial connection state - show progress bar immediately while connecting
+  const isConnecting = !initialFetchDone && !fromHistory && !!runId;
 
   // Check if result is in the new EquationResults format (not legacy markdown)
   const isNewFormat = result !== null && typeof result === 'object' && 'equations' in result;
 
   // Determine header status
   const getHeaderStatus = (): ResultsStatus => {
+    if (isStarting) return 'processing';
     if (isFetchingCompletedRun) return 'loading';
-    if (isProcessing && !error) return 'processing';
+    if ((isProcessing || isConnecting) && !error) return 'processing';
     if (isCompleted) return 'completed';
     return 'failed';
   };
@@ -245,7 +254,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
       />
 
       {/* Run Settings Panel - shown only when navigating from history */}
-      {fromHistory && <RunSettingsPanel runId={runId} />}
+      {fromHistory && runId && <RunSettingsPanel runId={runId} />}
 
       <div>
         {/* Error State */}
@@ -255,23 +264,26 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           </div>
         )}
 
-        {/* Loading State - Progress bar for active processing */}
-        {isProcessing && !error && (
+        {/* Loading State - Progress bar for starting, processing, or initial connection */}
+        {(isStarting || isProcessing || isConnecting) && !error && (
           <>
             <AnalysisProgressView
-              displayProgress={displayProgress}
-              stepDescription={currentStepDescription}
-              isInQueuePhase={isInQueuePhase}
+              displayProgress={isStarting || isConnecting ? 0 : displayProgress}
+              stepDescription={isStarting ? 'Starting analysis...' : isConnecting ? 'Connecting to analysis server...' : currentStepDescription}
+              isInQueuePhase={isStarting || isConnecting || isInQueuePhase}
+              isJobSubmitted={status === 'running' && !isStarting && !isConnecting}
             />
-            <div className="flex justify-center mt-4">
-              <Button
-                label={cancelling ? 'Cancelling...' : 'Stop Analysis'}
-                icon={cancelling ? 'pi pi-spin pi-spinner' : 'pi pi-stop'}
-                className="!bg-red-600 hover:!bg-red-700 !border-red-600 !text-white font-semibold px-4 py-2 shadow-sm"
-                onClick={handleCancelRun}
-                disabled={cancelling}
-              />
-            </div>
+            {status === 'running' && !isStarting && !isConnecting && (
+              <div className="flex justify-center mt-4">
+                <Button
+                  label={cancelling ? 'Cancelling...' : 'Stop Analysis'}
+                  icon={cancelling ? 'pi pi-spin pi-spinner' : 'pi pi-stop'}
+                  className="!bg-red-600 hover:!bg-red-700 !border-red-600 !text-white font-semibold px-4 py-2 shadow-sm"
+                  onClick={handleCancelRun}
+                  disabled={cancelling}
+                />
+              </div>
+            )}
           </>
         )}
 
@@ -285,13 +297,15 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
       </div>
 
       {/* Share Dialog */}
-      <ShareDialog
-        visible={showShareDialog}
-        onHide={() => setShowShareDialog(false)}
-        runId={runId}
-        currentShareToken={shareToken}
-        onShareStatusChange={setShareToken}
-      />
+      {runId && (
+        <ShareDialog
+          visible={showShareDialog}
+          onHide={() => setShowShareDialog(false)}
+          runId={runId}
+          currentShareToken={shareToken}
+          onShareStatusChange={setShareToken}
+        />
+      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog

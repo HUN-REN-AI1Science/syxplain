@@ -6,6 +6,7 @@ This is SEPARATE from logging - it manages workflow state,
 not log messages.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,47 @@ from backend.infrastructure.database.connection import get_session_factory
 from backend.infrastructure.database.models import Run, RunArtifact
 
 logger = logging.getLogger(__name__)
+
+
+def _broadcast_progress_sync(
+    run_id: str,
+    progress: int,
+    status: str,
+    step_name: str | None = None,
+    error: str | None = None,
+    results: dict | None = None,
+) -> None:
+    """
+    Broadcast progress update via WebSocket (sync wrapper for async broadcast).
+
+    This is safe to call from sync code - it will schedule the broadcast
+    on the event loop if one is running, or skip if not.
+    """
+    try:
+        from backend.api.websocket.connection_manager import get_connection_manager
+
+        manager = get_connection_manager()
+
+        # Try to get running event loop
+        try:
+            loop = asyncio.get_running_loop()
+            # Schedule broadcast on the running loop
+            asyncio.ensure_future(
+                manager.broadcast_progress(
+                    run_id=run_id,
+                    progress=progress,
+                    status=status,
+                    step_name=step_name,
+                    error=error,
+                    results=results,
+                )
+            )
+        except RuntimeError:
+            # No running event loop - skip broadcast
+            # This happens during testing or non-async contexts
+            pass
+    except Exception as e:
+        logger.debug(f"Could not broadcast progress: {e}")
 
 
 # ============================================================================
@@ -165,8 +207,8 @@ class ProgressTracker:
             summary = {k: type(v).__name__ for k, v in details.items()}
             logger.debug(f"  Details: {summary}")
 
-        # Update database
-        self._persist_progress(progress)
+        # Update database and broadcast via WebSocket
+        self._persist_progress(progress, step_name=step_name)
 
     def set_progress(self, progress: int, status: str | None = None) -> None:
         """
@@ -189,20 +231,30 @@ class ProgressTracker:
 
         self._persist_progress(progress)
 
-    def _persist_progress(self, progress: int) -> None:
-        """Persist progress to database."""
+    def _persist_progress(self, progress: int, step_name: str | None = None) -> None:
+        """Persist progress to database and broadcast via WebSocket."""
         SessionLocal = get_session_factory()
         db = SessionLocal()
+        run_status = "running"
         try:
             run = db.query(Run).filter(Run.id == self.run_id).first()
             if run:
                 run.progress = progress
+                run_status = run.status
                 db.commit()
                 logger.debug(f"[Run {self.run_id[:8]}] Persisted progress: {progress}%")
         except Exception as e:
             logger.error(f"Failed to update progress for {self.run_id}: {e}")
         finally:
             db.close()
+
+        # Broadcast to WebSocket clients
+        _broadcast_progress_sync(
+            run_id=self.run_id,
+            progress=progress,
+            status=run_status,
+            step_name=step_name,
+        )
 
     def save_artifact(self, filename: str, content: bytes, media_type: str | None = None) -> None:
         """

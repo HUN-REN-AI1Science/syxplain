@@ -232,7 +232,7 @@ class SlurmJobSubmission:
     name: str
     partition: str
     cpus: int = 8
-    memory: str = "16G"
+    memory: str = "7941M"
     time_limit: str = "04:00:00"
     nodes: int = 1
     tasks: int = 1
@@ -274,9 +274,11 @@ class SlurmJobSubmission:
         if self.working_directory:
             job_spec["current_working_directory"] = self.working_directory
 
-        # Environment variables
-        if self.environment:
-            job_spec["environment"] = self.environment
+        # Environment variables - always include SLURM_EXPORT_ENV=ALL
+        env_list = ["SLURM_EXPORT_ENV=ALL"]
+        for key, value in self.environment.items():
+            env_list.append(f"{key}={value}")
+        job_spec["environment"] = env_list
 
         # Output/Error paths (use 'output'/'error' not 'standard_output'/'standard_error')
         if self.stdout_path:

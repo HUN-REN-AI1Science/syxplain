@@ -6,7 +6,6 @@
 // Loading & Progress
 export { LoadingSpinner } from './LoadingSpinner';
 export { AnalysisProgressView } from './AnalysisProgressView';
-export { AnalysisTipsPanel } from './AnalysisTipsPanel';
 
 // Headers
 export { ResultsHeader } from './ResultsHeader';

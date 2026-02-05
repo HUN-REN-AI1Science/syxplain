@@ -5,6 +5,7 @@ Coordinates the workflow between compute backends and LLM operations,
 managing the complete analysis pipeline from data ingestion to explanation.
 """
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -13,15 +14,18 @@ from typing import Any
 
 import pandas as pd
 
-from backend.core.config import get_compute_settings
+from backend.core.config import get_compute_settings, get_slurm_settings
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
 from backend.infrastructure.slurm import (
     JobState,
     SlurmBackend,
+    SlurmBackendError,
+    SlurmTask,
     TaskInput,
     get_slurm_backend,
 )
+from backend.infrastructure.slurm.client import is_quota_error
 from backend.services.progress_service import ProgressTracker
 
 logger = logging.getLogger(__name__)
@@ -93,6 +97,67 @@ class AnalysisOrchestrator:
         if self._backend is None:
             self._backend = get_slurm_backend()
         return self._backend
+
+    def _is_run_cancelled(self, run_id: str) -> bool:
+        """Check if run has been cancelled."""
+        with get_db_session() as db:
+            run = db.query(Run).filter(Run.id == run_id).first()
+            return run is not None and run.status == "cancelled"
+
+    async def _submit_with_retry(
+        self,
+        task_input: TaskInput,
+        task_name: str,
+        run_id: str,
+        progress: ProgressTracker,
+    ) -> SlurmTask:
+        """
+        Submit task with automatic retry on quota errors.
+
+        When the cluster has quota/QOS limits, job submission may fail with
+        error code 2050. This method automatically retries submission after
+        waiting for the configured interval.
+
+        Args:
+            task_input: Task to submit
+            task_name: Human-readable task name for logging
+            run_id: Run ID for cancellation checks
+            progress: Progress tracker for status updates
+
+        Returns:
+            Submitted SlurmTask
+
+        Raises:
+            SlurmBackendError: If submission fails with non-quota error
+            OrchestratorError: If run is cancelled during retry wait
+        """
+        slurm_settings = get_slurm_settings()
+        retry_interval = slurm_settings.retry_interval
+
+        while True:
+            try:
+                return await self.backend.submit_task(task_input)
+            except SlurmBackendError as e:
+                # Check if it's a quota error
+                if not is_quota_error(e):
+                    raise  # Re-raise non-quota errors
+
+                logger.warning(
+                    f"Quota error for {task_name}, retrying in {retry_interval}s: {e}"
+                )
+
+                # Update progress to show waiting state
+                progress.set_progress(
+                    progress.current_progress,
+                    status=f"Waiting for cluster resources (retry in {retry_interval}s)...",
+                )
+
+                # Wait with cancellation check (check every second)
+                for _ in range(retry_interval):
+                    await asyncio.sleep(1)
+                    # Check if run was cancelled
+                    if self._is_run_cancelled(run_id):
+                        raise OrchestratorError("Analysis cancelled by user")
 
     async def run_analysis(self, context: AnalysisContext) -> dict[str, Any]:
         """
@@ -323,11 +388,15 @@ class AnalysisOrchestrator:
             callback_token=compute_settings.worker_callback_token,
         )
 
-        # Submit tasks
-        shap_job = await self.backend.submit_task(shap_task_input)
+        # Submit tasks with retry on quota errors
+        shap_job = await self._submit_with_retry(
+            shap_task_input, "SHAP", context.run_id, progress
+        )
         logger.info(f"SHAP task submitted as job {shap_job.job_id}")
 
-        pysr_job = await self.backend.submit_task(pysr_task_input)
+        pysr_job = await self._submit_with_retry(
+            pysr_task_input, "PySR", context.run_id, progress
+        )
         logger.info(f"PySR task submitted as job {pysr_job.job_id}")
 
         # Report queued phase (user-friendly - jobs are submitted, waiting in queue)

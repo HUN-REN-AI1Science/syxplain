@@ -155,12 +155,17 @@ class SlurmSettings:
 
     # Resource allocation
     cpus: int = field(default_factory=lambda: int(os.environ.get("SLURM_CPUS", "4")))
-    memory: str = field(default_factory=lambda: os.environ.get("SLURM_MEMORY", "8G"))
+    memory: str = field(default_factory=lambda: os.environ.get("SLURM_MEMORY", "7941M"))
     time_limit: str = field(default_factory=lambda: os.environ.get("SLURM_TIME_LIMIT", "04:00:00"))
 
     # Singularity container path (if set, uses container instead of conda)
     container_path: str = field(
         default_factory=lambda: os.environ.get("SLURM_CONTAINER_PATH", "")
+    )
+
+    # Retry interval for quota/QOS errors (seconds)
+    retry_interval: int = field(
+        default_factory=lambda: int(os.environ.get("SLURM_RETRY_INTERVAL", "60"))
     )
 
     @property

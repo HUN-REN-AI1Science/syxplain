@@ -28,7 +28,7 @@ def update_run_status(
     progress: int | None = None,
 ) -> None:
     """
-    Update run status in the database.
+    Update run status in the database and broadcast via WebSocket.
 
     Args:
         run_id: The run UUID as string
@@ -38,6 +38,8 @@ def update_run_status(
         progress: Optional progress percentage
     """
     from datetime import datetime
+
+    final_progress = progress
 
     try:
         with get_db_session() as db:
@@ -57,14 +59,52 @@ def update_run_status(
                 # Set progress based on status or explicit value
                 if progress is not None:
                     run.progress = progress
+                    final_progress = progress
                 elif status == "completed":
                     run.progress = 100
+                    final_progress = 100
                 elif status in ("failed", "timeout", "cancelled"):
                     # Keep current progress for failed/timeout/cancelled
-                    pass
+                    final_progress = run.progress or 0
                 db.commit()
     except Exception as e:
         logger.error(f"Failed to update run status for {run_id}: {e}")
+        return
+
+    # Broadcast via WebSocket
+    _broadcast_status_update(run_id, status, final_progress or 0, error, results)
+
+
+def _broadcast_status_update(
+    run_id: str,
+    status: str,
+    progress: int,
+    error: str | None = None,
+    results: dict[str, Any] | None = None,
+) -> None:
+    """Broadcast status update via WebSocket."""
+    try:
+        from backend.api.websocket.connection_manager import get_connection_manager
+
+        manager = get_connection_manager()
+
+        # Try to get running event loop
+        try:
+            loop = asyncio.get_running_loop()
+            asyncio.ensure_future(
+                manager.broadcast_progress(
+                    run_id=run_id,
+                    progress=progress,
+                    status=status,
+                    error=error,
+                    results=results,
+                )
+            )
+        except RuntimeError:
+            # No running event loop - skip broadcast
+            pass
+    except Exception as e:
+        logger.debug(f"Could not broadcast status update: {e}")
 
 
 async def _run_analysis(

@@ -78,7 +78,7 @@ export interface WebSocketOptions {
 // ============================================================================
 
 export interface UseRunProgressOptions {
-  runId: string;
+  runId: string | null;
   /** Called when the run completes successfully */
   onComplete?: (results: EquationResults) => void;
   /** Called when the run fails */
@@ -96,8 +96,6 @@ export interface UseRunProgressReturn {
   error: string | null;
   /** Results if the run completed */
   results: EquationResults | null;
-  /** Current connection method */
-  connectionMethod: 'websocket' | 'polling';
   /** Current connection state */
   connectionState: ConnectionState;
   /** Whether the initial data has been loaded */

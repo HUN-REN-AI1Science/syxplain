@@ -281,9 +281,9 @@ def get_logger(name: str) -> logging.Logger:
 
 class EndpointFilter(logging.Filter):
     """
-    Filter to reduce noise from frequent polling endpoints.
+    Filter to reduce noise from frequently-called endpoints.
 
-    Filters out GET /api/runs/* logs to keep output clean.
+    Filters out health checks and public endpoints to keep output clean.
     """
 
     NOISY_PATTERNS = [

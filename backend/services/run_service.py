@@ -73,7 +73,7 @@ class RunService:
 
     def get_run_status(self, run_id: str, user_id: str) -> dict[str, Any]:
         """
-        Get run status for polling.
+        Get run status and details.
 
         Args:
             run_id: The run UUID as string

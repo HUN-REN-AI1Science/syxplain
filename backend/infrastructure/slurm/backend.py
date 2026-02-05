@@ -7,6 +7,7 @@ Executes compute tasks on a Slurm cluster via slurmrestd API.
 import logging
 import uuid
 from datetime import datetime
+from collections.abc import Callable
 from typing import Any
 
 from backend.core.config import get_slurm_settings
@@ -263,7 +264,7 @@ exit $?
         job_id: str,
         poll_interval: float = 10.0,
         timeout: float | None = None,
-        on_state_change: callable | None = None,
+        on_state_change: Callable | None = None,
     ) -> TaskResult:
         """Wait for Slurm job to complete."""
         if job_id not in self._tasks:
