@@ -283,7 +283,24 @@ class SlurmClient:
         last_state: JobState | None = None
 
         while True:
-            status = await self.get_job_status(job_id)
+            max_retries = compute_settings.max_retries
+            for attempt in range(max_retries + 1):
+                try:
+                    status = await self.get_job_status(job_id)
+                    break  # success
+                except SlurmClientError as e:
+                    if attempt >= max_retries:
+                        raise  # exhausted retries
+                    wait_time = 2 ** (attempt + 1)  # 2s, 4s, 8s
+                    logger.warning(
+                        f"Job {job_id} status poll failed (attempt {attempt + 1}/{max_retries}), "
+                        f"retrying in {wait_time}s: {e}"
+                    )
+                    # Recreate HTTP client (connection pool may be poisoned)
+                    if self._client:
+                        await self._client.aclose()
+                        self._client = None
+                    await asyncio.sleep(wait_time)
 
             # Notify on state change
             if on_state_change and status.state != last_state:

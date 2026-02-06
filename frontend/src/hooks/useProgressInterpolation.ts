@@ -46,11 +46,17 @@ export function useProgressInterpolation(
 
   const [displayProgress, setDisplayProgress] = useState(0);
   const phasesRef = useRef(phases);
+  const lastBackendUpdateRef = useRef<number>(Date.now());
 
   // Update phases ref
   useEffect(() => {
     phasesRef.current = phases;
   }, [phases]);
+
+  // Track when backendProgress last changed
+  useEffect(() => {
+    lastBackendUpdateRef.current = Date.now();
+  }, [backendProgress]);
 
   // Compute current step description based on backend progress
   const { currentStepDescription, currentStepLabel } = useMemo(() => {
@@ -145,9 +151,16 @@ export function useProgressInterpolation(
           return Math.min(current + 2, backendProgress);
         }
 
-        // If we've reached the max for current phase, hold there
+        // If we've reached the max for current phase, creep slowly after a delay
         if (current >= maxProgress) {
-          return current;
+          const timeSinceUpdate = Date.now() - lastBackendUpdateRef.current;
+          if (timeSinceUpdate < 10_000) {
+            return current; // Normal: hold at max for first 10s
+          }
+          // Slow creep: 0.02% per 500ms (~2.4%/min), capped at maxProgress + 5
+          const creepCeiling = Math.min(maxProgress + 5, 98);
+          if (current >= creepCeiling) return current;
+          return Math.min(current + 0.02, creepCeiling);
         }
 
         // Normal slow increment towards max

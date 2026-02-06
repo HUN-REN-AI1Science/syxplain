@@ -86,6 +86,19 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     }
   }, [wsResults, result]);
 
+  // Fetch results from API when completion arrives without results
+  // (WebSocket broadcasts don't include results payload)
+  useEffect(() => {
+    if (isCompleted && !result && runId) {
+      runsService.getById(runId).then((response) => {
+        if (response.data.results) {
+          setResult(response.data.results as EquationResults | string);
+        }
+        setShareToken(response.data.public_share_token || null);
+      }).catch(console.error);
+    }
+  }, [isCompleted, result, runId]);
+
   // Custom hook for smooth progress interpolation and step description
   const { displayProgress, currentStepDescription, isInQueuePhase } = useProgressInterpolation({
     phases: progressPhases,
@@ -195,7 +208,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   const isConnecting = !initialFetchDone && !fromHistory && !!runId;
 
   // Check if result is in the new EquationResults format (not legacy markdown)
-  const isNewFormat = result !== null && typeof result === 'object' && 'equations' in result;
+  // Accounts for both direct EquationResults and backend combined format (explanations wrapper)
+  const isNewFormat = result !== null && typeof result === 'object' && (
+    ('equations' in result && 'summary' in result) ||
+    ('explanations' in result)
+  );
 
   // Determine header status
   const getHeaderStatus = (): ResultsStatus => {
@@ -292,8 +309,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           <LoadingSpinner message="Loading results..." className="py-20" />
         )}
 
-        {/* Results */}
-        {result && <ResultContent result={result} resultsRef={resultsRef} />}
+        {/* Results - only show after run completes to avoid flashing legacy format during processing */}
+        {result && isCompleted && <ResultContent result={result} resultsRef={resultsRef} />}
       </div>
 
       {/* Share Dialog */}

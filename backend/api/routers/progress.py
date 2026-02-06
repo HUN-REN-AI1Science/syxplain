@@ -21,6 +21,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/internal", tags=["Internal"])
 
+# Maps each worker task_type to its allocated range of the overall progress bar.
+# Workers report 0-100% internally; the endpoint scales into these ranges.
+TASK_PROGRESS_RANGES = {
+    "shap": (10, 25),
+    "pysr": (25, 75),
+}
+
 
 class WorkerProgressUpdate(BaseModel):
     """Progress update from a Slurm worker."""
@@ -29,6 +36,7 @@ class WorkerProgressUpdate(BaseModel):
     status: str | None = Field(None, description="Human-readable status message")
     step_name: str | None = Field(None, description="Current step name")
     details: dict[str, Any] | None = Field(None, description="Additional details")
+    task_type: str | None = Field(None, description="Task type (shap, pysr)")
 
 
 class WorkerErrorReport(BaseModel):
@@ -101,12 +109,19 @@ async def receive_progress(
                     detail=f"Run {run_id} not found",
                 )
 
+            # Scale worker progress into allocated range
+            actual_progress = progress.progress
+            if progress.task_type and progress.task_type in TASK_PROGRESS_RANGES:
+                start, end = TASK_PROGRESS_RANGES[progress.task_type]
+                actual_progress = round(start + (progress.progress / 100) * (end - start))
+
             # Only update if progress increases
-            if progress.progress > (run.progress or 0):
-                run.progress = progress.progress
+            if actual_progress > (run.progress or 0):
+                run.progress = actual_progress
                 db.commit()
                 logger.info(
-                    f"[Run {run_id[:8]}] Progress: {progress.progress}%"
+                    f"[Run {run_id[:8]}] Progress: {actual_progress}%"
+                    + (f" (raw {progress.progress}% from {progress.task_type})" if progress.task_type else "")
                     + (f" - {progress.status}" if progress.status else "")
                 )
 
@@ -114,12 +129,12 @@ async def receive_progress(
                 manager = get_connection_manager()
                 await manager.broadcast_progress(
                     run_id=run_id,
-                    progress=progress.progress,
+                    progress=actual_progress,
                     status=run.status,
                     step_name=progress.step_name,
                 )
 
-        return {"status": "ok", "progress": progress.progress}
+        return {"status": "ok", "progress": actual_progress}
 
     except HTTPException:
         raise
@@ -245,16 +260,16 @@ async def receive_completion(
             else:
                 run.results = completion.results
 
-            # Set progress to indicate compute portion complete
-            run.progress = 70  # Typical progress after compute phase
+            # Don't override progress — worker progress is already scaled
+            # into the correct range by receive_progress()
             db.commit()
-            logger.info(f"[Run {run_id[:8]}] Compute results stored")
+            logger.info(f"[Run {run_id[:8]}] Compute results stored, progress at {run.progress}%")
 
             # Broadcast completion via WebSocket
             manager = get_connection_manager()
             await manager.broadcast_progress(
                 run_id=run_id,
-                progress=70,
+                progress=run.progress or 0,
                 status=run.status,
                 results=run.results,
             )

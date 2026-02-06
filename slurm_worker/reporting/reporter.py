@@ -47,16 +47,18 @@ class ProgressReporter(ProgressObserver):
         config: Callback configuration
     """
 
-    def __init__(self, run_id: str, config: CallbackConfig | None = None):
+    def __init__(self, run_id: str, config: CallbackConfig | None = None, task_type: str | None = None):
         """
         Initialize progress reporter.
 
         Args:
             run_id: UUID of the run being processed
             config: Callback configuration (defaults to env vars)
+            task_type: Task type identifier (e.g., "shap", "pysr")
         """
         self.run_id = run_id
         self.config = config or CallbackConfig.from_env()
+        self.task_type = task_type
         self._enabled = self.config.is_enabled
 
         if not self._enabled:
@@ -130,14 +132,14 @@ class ProgressReporter(ProgressObserver):
 
         logger.info(message)
 
-        self._make_request(
-            "progress",
-            {
-                "progress": progress,
-                "status": status,
-                "step_name": step,
-            },
-        )
+        payload = {
+            "progress": progress,
+            "status": status,
+            "step_name": step,
+        }
+        if self.task_type:
+            payload["task_type"] = self.task_type
+        self._make_request("progress", payload)
 
     def on_error(self, error: str, details: dict[str, Any] | None = None) -> None:
         """

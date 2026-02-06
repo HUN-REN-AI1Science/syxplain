@@ -5,7 +5,7 @@ description: Guide for modifying the core analysis graph and worker logic
 # Development: Analysis Graph (syxplain_lib)
 
 The core analysis logic resides in `syxplain_lib.py`, which implements a LangGraph workflow. It is designed to run in two modes:
-1.  **Backend Mode**: Invoked by `backend/workers/analysis_worker.py`. Logs progress to DB via `ProgressTracker`.
+1.  **Backend Mode**: Invoked by `backend/services/analysis_service.py`. Logs progress to DB via `ProgressTracker`.
 2.  **CLI Mode**: Invoked by `syxplain.py`. Runs independently with dummy logging.
 
 ## Key Components
@@ -16,10 +16,10 @@ The core analysis logic resides in `syxplain_lib.py`, which implements a LangGra
 - **Graph**: `StateGraph` definition in `run_syxplain`.
 - **Dependencies**: Imports services from `backend.services.llm_service`.
 
-### 2. `backend/workers/analysis_worker.py`
-- Handles process lifecycle (multiprocessing).
+### 2. `backend/services/analysis_service.py`
+- Manages analysis run lifecycle (asyncio background tasks).
 - Initializes environment (Logging, Database, Langfuse).
-- **Crucial**: Passes `ProgressTracker` instance (as `state["logger"]`) to `syxplain_lib` to enable DB updates.
+- Delegates compute to orchestrator, which submits tasks to Slurm.
 
 ### 3. `syxplain.py` (CLI)
 - Minimal entry point for local testing.

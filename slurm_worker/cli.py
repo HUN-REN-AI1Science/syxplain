@@ -96,7 +96,7 @@ class WorkerRunner:
             config: Worker configuration
         """
         self.config = config
-        self.reporter = ProgressReporter(config.run_id, config.callback)
+        self.reporter = ProgressReporter(config.run_id, config.callback, task_type=config.task_type)
         self.file_handler = FileHandler()
 
     def run(self) -> int:

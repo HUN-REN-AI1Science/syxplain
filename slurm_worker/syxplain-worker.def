@@ -37,7 +37,9 @@ From: python:3.11-slim
     # Note: requirements.txt must be in the same directory as the .def file during build
     pip install --no-cache-dir numpy pandas scipy scikit-learn shap pysr juliacall requests
 
-    # Pre-compile Julia packages for PySR (this takes a while but speeds up runtime)
+    # Pre-compile Julia packages into a fixed depot path (not /root/.julia)
+    # so they persist and are readable at runtime
+    export JULIA_DEPOT_PATH=/opt/julia-depot
     python -c "
 from pysr import PySRRegressor
 import numpy as np
@@ -73,6 +75,8 @@ print('Julia pre-compilation complete')
     export PYTHONPATH=/app
     export LC_ALL=C.UTF-8
     export LANG=C.UTF-8
+    # Julia depot stacking: writable scratch on top of read-only precompiled depot
+    export JULIA_DEPOT_PATH="/tmp/.julia:/opt/julia-depot"
     # Julia threading - will be overridden by SLURM_CPUS_PER_TASK in the worker
     export JULIA_NUM_THREADS=${SLURM_CPUS_PER_TASK:-4}
 

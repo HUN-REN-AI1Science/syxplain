@@ -102,7 +102,7 @@ singularity run \\
     --cleanenv \\
     --env CALLBACK_URL="$CALLBACK_URL" \\
     --env CALLBACK_TOKEN="$CALLBACK_TOKEN" \\
-    --env JULIA_DEPOT_PATH="/tmp/.julia" \\
+    --env JULIA_DEPOT_PATH="/tmp/.julia:/opt/julia-depot" \\
     {escaped_container} \\
     --task-type {task.task_type} \\
     --run-id {task.run_id} \\

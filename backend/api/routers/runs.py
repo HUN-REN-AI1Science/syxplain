@@ -27,7 +27,7 @@ from backend.schemas.responses import (
 from backend.services.permission_service import PermissionService
 from backend.services.run_service import RunService
 from backend.utils.security_utils import safe_content_disposition
-from backend.workers.analysis_worker import start_analysis_run
+from backend.services.analysis_service import start_analysis_run
 
 logger = logging.getLogger(__name__)
 

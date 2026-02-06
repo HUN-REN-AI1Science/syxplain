@@ -16,6 +16,28 @@ interface ResultContentProps {
 }
 
 /**
+ * Extracts EquationResults from the backend's combined results format.
+ *
+ * The backend stores: { equations: [raw PySR], explanations: { equations: [enriched], summary, recommendation }, ... }
+ * The frontend expects: { equations: [enriched], summary, recommendation }
+ *
+ * The enriched equations (with overview, term_explanations, citations, scatter_data)
+ * live inside the `explanations` field. This function extracts them.
+ */
+const extractFromBackendFormat = (result: Record<string, unknown>): EquationResults | null => {
+  const explanations = result.explanations;
+  if (
+    explanations &&
+    typeof explanations === 'object' &&
+    !Array.isArray(explanations) &&
+    'equations' in explanations
+  ) {
+    return explanations as unknown as EquationResults;
+  }
+  return null;
+};
+
+/**
  * Parses result data and returns the appropriate format
  */
 const parseResult = (
@@ -24,17 +46,32 @@ const parseResult = (
   type: 'new' | 'legacy';
   data: EquationResults | string;
 } => {
-  // Handle object (new format) directly
-  if (typeof result === 'object' && 'equations' in result) {
-    return { type: 'new', data: result };
+  if (typeof result === 'object' && result !== null) {
+    // Direct EquationResults format (has equations + summary at top level)
+    if ('equations' in result && 'summary' in result) {
+      return { type: 'new', data: result };
+    }
+
+    // Backend combined format: the EquationResults are inside `explanations`
+    if ('explanations' in result) {
+      const extracted = extractFromBackendFormat(result as Record<string, unknown>);
+      if (extracted) {
+        return { type: 'new', data: extracted };
+      }
+    }
+
+    // Has equations at top level (fallback — could be incomplete)
+    if ('equations' in result) {
+      return { type: 'new', data: result };
+    }
   }
 
   // Handle string - try to parse as JSON
   if (typeof result === 'string') {
     try {
       const parsed = JSON.parse(result);
-      if (parsed && 'equations' in parsed) {
-        return { type: 'new', data: parsed as EquationResults };
+      if (parsed && typeof parsed === 'object') {
+        return parseResult(parsed);
       }
     } catch {
       // Not valid JSON - treat as legacy markdown

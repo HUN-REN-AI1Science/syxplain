@@ -313,7 +313,6 @@ class PySRTask(Task):
             verbosity=1,
             progress=True,
             tempdir=temp_dir,
-            feature_names=df_input.predictor_columns,
         )
 
         self._report(30, "Running symbolic regression", "pysr_running")

@@ -1,5 +1,5 @@
 """
-Analysis worker for background processing.
+Analysis service for background processing.
 
 Manages the lifecycle of analysis runs using asyncio background tasks.
 SHAP and PySR compute tasks run on Slurm, not locally.
@@ -16,7 +16,7 @@ from backend.services.file_service import FileService
 
 logger = logging.getLogger(__name__)
 
-# Track running analysis tasks (for graceful shutdown)
+# Track running analysis tasks (prevents GC of asyncio tasks)
 _running_tasks: dict[str, asyncio.Task] = {}
 
 
@@ -121,15 +121,6 @@ async def _run_analysis(
 
     Performs the actual analysis work by delegating to the orchestrator,
     which coordinates compute tasks (SHAP, PySR) on Slurm and LLM operations.
-
-    Args:
-        run_id: The run UUID as string
-        problem_desc: Problem description dictionary
-        csv_filename: Name of the file to analyze
-        analysis_type: 'quick' or 'deep'
-        deep_research_model: Model for deep analysis
-        user_api_key: Optional user-provided API key (not stored)
-        user_model: Optional user-specified model
     """
     from backend.core.logging import configure_debug_mode, configure_logging
 
@@ -256,16 +247,3 @@ def start_analysis_run(
     task.add_done_callback(cleanup_task)
 
     return run_id
-
-
-def get_running_task(run_id: str) -> asyncio.Task | None:
-    """
-    Get the asyncio task for a running analysis.
-
-    Args:
-        run_id: The run UUID as string
-
-    Returns:
-        The asyncio Task if running, None otherwise
-    """
-    return _running_tasks.get(run_id)
