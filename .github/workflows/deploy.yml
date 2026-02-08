@@ -5,15 +5,6 @@ on:
     branches:
       - main
   workflow_dispatch:
-    inputs:
-      deploy_frontend:
-        description: 'Deploy frontend'
-        type: boolean
-        default: false
-      deploy_backend:
-        description: 'Deploy backend'
-        type: boolean
-        default: false
 
 env:
   REGISTRY: ghcr.io
@@ -21,32 +12,7 @@ env:
   BACKEND_IMAGE_NAME: ${{ github.repository }}-backend
 
 jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      frontend: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_frontend == 'true' || github.event_name == 'push' && steps.filter.outputs.frontend == 'true' }}
-      backend: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == 'true' || github.event_name == 'push' && steps.filter.outputs.backend == 'true' }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
-        if: github.event_name == 'push'
-        id: filter
-        with:
-          filters: |
-            frontend:
-              - 'frontend/**'
-            backend:
-              - 'backend/**'
-              - 'syxplain_lib.py'
-              - 'langfuse_config.py'
-              - 'llm_modules.py'
-              - 'logger.py'
-              - 'shap_calc.py'
-              - 'requirements.txt'
-
   build-and-push-frontend:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -86,8 +52,6 @@ jobs:
             VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
   build-and-push-backend:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -123,91 +87,33 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  deploy-frontend:
-    needs: build-and-push-frontend
+  deploy:
+    needs: [build-and-push-frontend, build-and-push-backend]
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy Frontend to Server
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Copy compose file to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "docker-compose.prod.yml"
+          target: "/opt/syxplain/"
+
+      - name: Deploy with Docker Compose
         uses: appleboy/ssh-action@v1.2.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            # Variables
-            IMAGE_BASE=$(echo "${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-            FRONTEND_IMAGE="${IMAGE_BASE}:latest"
-            FRONTEND_CONTAINER="syxplain-frontend"
-
-            echo "🚀 Starting Frontend deployment..."
-            echo "📦 Pulling image: $FRONTEND_IMAGE"
-            docker pull $FRONTEND_IMAGE
-
-            if docker ps -a | grep -q $FRONTEND_CONTAINER; then
-              echo "Stopping existing frontend container..."
-              docker stop $FRONTEND_CONTAINER
-              docker rm $FRONTEND_CONTAINER
-            fi
-
-            echo "Starting new frontend container..."
-            docker run -d \
-              --name $FRONTEND_CONTAINER \
-              --restart unless-stopped \
-              -p 80:80 \
-              -p 443:443 \
-              -v /etc/letsencrypt:/etc/letsencrypt:ro \
-              --add-host backend:host-gateway \
-              $FRONTEND_IMAGE
-
-            echo "✅ Frontend Deployment Complete!"
-
-  deploy-backend:
-    needs: build-and-push-backend
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy Backend to Server
-        uses: appleboy/ssh-action@v1.2.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            # Variables
-            IMAGE_BASE=$(echo "${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-            BACKEND_IMAGE="${IMAGE_BASE}:latest"
-            BACKEND_SERVICE="syxplain-backend"
-            APP_DIR="/opt/syxplain"
-
-            echo "🚀 Starting Backend deployment..."
-
-            # Ensure uv is in PATH
-            export PATH="$HOME/.local/bin:$PATH"
-
-            echo "⚙️ Pulling image: $BACKEND_IMAGE"
-            docker pull $BACKEND_IMAGE
-
-            # Create temp container to extract files
-            echo "Extracting backend files..."
-            docker create --name temp_backend $BACKEND_IMAGE
-
-            # Copy files from container to host
-            # We copy the contents of /app to /opt/syxplain
-            docker cp temp_backend:/app/. $APP_DIR/
-
-            # Cleanup temp container
-            docker rm temp_backend
-
-            # Fix permissions (ensure syxplain user owns the files)
-            chown -R $USER:$USER $APP_DIR
-
-            # Install/Update dependencies
-            echo "📦 Synchronizing dependencies..."
-            cd $APP_DIR
-            uv pip install -r requirements.txt
-            uv run python -c "import juliapkg; juliapkg.resolve()"
-
-            # Restart Service
-            echo "🔄 Restarting Backend Service..."
-            sudo systemctl restart $BACKEND_SERVICE
-
-            echo "✅ Backend Deployment Complete!"
+            cd /opt/syxplain
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            docker image prune -f
+            echo "Verifying services..."
+            sleep 10
+            docker compose -f docker-compose.prod.yml ps

@@ -15,18 +15,13 @@
 #   - SLURM_STAGING_DIR: Shared staging directory path
 #   - SUPABASE_JWT_SECRET: JWT secret for auth
 #   - SUPABASE_URL: Supabase project URL
-#   - VITE_SUPABASE_URL: Supabase URL for frontend build
-#   - VITE_SUPABASE_ANON_KEY: Supabase anon key for frontend build
 #
 # Usage:
 #   docker-compose -f docker-compose.prod.yml up -d
 
 services:
   backend:
-    image: ${BACKEND_IMAGE:-syxplain-backend:latest}
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
+    image: ${BACKEND_IMAGE:-ghcr.io/hun-ren-ai1science/syxplain-backend:latest}
     container_name: syxplain-backend
     restart: unless-stopped
     ports:
@@ -110,17 +105,14 @@ services:
         max-file: "5"
 
   frontend:
-    image: ${FRONTEND_IMAGE:-syxplain-frontend:latest}
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:?VITE_SUPABASE_URL is required}
-        - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY:?VITE_SUPABASE_ANON_KEY is required}
+    image: ${FRONTEND_IMAGE:-ghcr.io/hun-ren-ai1science/syxplain-frontend:latest}
     container_name: syxplain-frontend
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-8080}:80"
+      - "${FRONTEND_HTTP_PORT:-80}:80"
+      - "${FRONTEND_HTTPS_PORT:-443}:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
       - syxplain-network
     depends_on:
