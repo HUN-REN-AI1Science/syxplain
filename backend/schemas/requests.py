@@ -129,7 +129,9 @@ class FeedbackRequest(BaseModel):
     """Request schema for submitting user feedback."""
 
     category: FeedbackCategory
-    title: str = Field(..., min_length=1, max_length=100, description="Short summary of the feedback")
+    title: str = Field(
+        ..., min_length=1, max_length=100, description="Short summary of the feedback"
+    )
     description: str = Field(
         ..., min_length=10, max_length=2000, description="Detailed description"
     )

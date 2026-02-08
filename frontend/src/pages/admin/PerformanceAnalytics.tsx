@@ -3,7 +3,7 @@
  * Analysis duration and success rate metrics
  */
 
-import React, { useState, useEffect, RefObject } from 'react';
+import React, { useState, useEffect, useCallback, RefObject } from 'react';
 import { Card } from 'primereact/card';
 import { Toast } from 'primereact/toast';
 import { Chart } from 'primereact/chart';
@@ -25,11 +25,7 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
   const [trends, setTrends] = useState<RunTrendItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchPerformanceData();
-  }, []);
-
-  const fetchPerformanceData = async () => {
+  const fetchPerformanceData = useCallback(async () => {
     try {
       setLoading(true);
       const [statsRes, byTypeRes, trendsRes] = await Promise.all([
@@ -49,7 +45,11 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    fetchPerformanceData();
+  }, [fetchPerformanceData]);
 
   const formatDuration = (seconds: number): string => {
     if (seconds < 60) return `${Math.round(seconds)}s`;

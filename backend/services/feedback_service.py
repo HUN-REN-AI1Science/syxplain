@@ -48,8 +48,7 @@ class FeedbackService:
 
         if not self._github.is_configured:
             logger.info(
-                "GitHub not configured — logging feedback locally.\n"
-                "Title: %s\nBody:\n%s",
+                "GitHub not configured — logging feedback locally.\nTitle: %s\nBody:\n%s",
                 issue_title,
                 issue_body,
             )
@@ -70,8 +69,7 @@ class FeedbackService:
             }
         except Exception:
             logger.exception(
-                "Failed to create GitHub issue — logging feedback locally.\n"
-                "Title: %s\nBody:\n%s",
+                "Failed to create GitHub issue — logging feedback locally.\nTitle: %s\nBody:\n%s",
                 issue_title,
                 issue_body,
             )
@@ -134,12 +132,14 @@ class FeedbackService:
                 app_rows.append(("App URL", context.app_url))
 
             if app_rows:
-                lines.extend([
-                    "",
-                    "### Application Context",
-                    "| Field | Value |",
-                    "|-------|-------|",
-                ])
+                lines.extend(
+                    [
+                        "",
+                        "### Application Context",
+                        "| Field | Value |",
+                        "|-------|-------|",
+                    ]
+                )
                 for field, value in app_rows:
                     lines.append(f"| {field} | {value} |")
 
@@ -150,12 +150,14 @@ class FeedbackService:
                 env_rows.append(("Screen Resolution", context.screen_resolution))
 
             if env_rows:
-                lines.extend([
-                    "",
-                    "### Environment",
-                    "| Field | Value |",
-                    "|-------|-------|",
-                ])
+                lines.extend(
+                    [
+                        "",
+                        "### Environment",
+                        "| Field | Value |",
+                        "|-------|-------|",
+                    ]
+                )
                 for field, value in env_rows:
                     lines.append(f"| {field} | {value} |")
 

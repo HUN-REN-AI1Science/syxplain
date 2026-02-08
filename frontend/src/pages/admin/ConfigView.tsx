@@ -3,7 +3,7 @@
  * Read-only view of system configuration
  */
 
-import React, { useState, useEffect, RefObject } from 'react';
+import React, { useState, useEffect, useCallback, RefObject } from 'react';
 import { Card } from 'primereact/card';
 import { Toast } from 'primereact/toast';
 import { Tag } from 'primereact/tag';
@@ -19,11 +19,7 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
   const [config, setConfig] = useState<SystemConfig | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchConfig();
-  }, []);
-
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     try {
       setLoading(true);
       const response = await adminService.getConfig();
@@ -37,7 +33,11 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
   if (loading) {
     return (

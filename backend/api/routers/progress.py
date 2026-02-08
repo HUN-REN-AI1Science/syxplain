@@ -121,7 +121,11 @@ async def receive_progress(
                 db.commit()
                 logger.info(
                     f"[Run {run_id[:8]}] Progress: {actual_progress}%"
-                    + (f" (raw {progress.progress}% from {progress.task_type})" if progress.task_type else "")
+                    + (
+                        f" (raw {progress.progress}% from {progress.task_type})"
+                        if progress.task_type
+                        else ""
+                    )
                     + (f" - {progress.status}" if progress.status else "")
                 )
 

@@ -142,9 +142,7 @@ class AnalysisOrchestrator:
                 if not is_quota_error(e):
                     raise  # Re-raise non-quota errors
 
-                logger.warning(
-                    f"Quota error for {task_name}, retrying in {retry_interval}s: {e}"
-                )
+                logger.warning(f"Quota error for {task_name}, retrying in {retry_interval}s: {e}")
 
                 # Update progress to show waiting state
                 progress.set_progress(
@@ -393,14 +391,10 @@ class AnalysisOrchestrator:
         )
 
         # Submit tasks with retry on quota errors
-        shap_job = await self._submit_with_retry(
-            shap_task_input, "SHAP", context.run_id, progress
-        )
+        shap_job = await self._submit_with_retry(shap_task_input, "SHAP", context.run_id, progress)
         logger.info(f"SHAP task submitted as job {shap_job.job_id}")
 
-        pysr_job = await self._submit_with_retry(
-            pysr_task_input, "PySR", context.run_id, progress
-        )
+        pysr_job = await self._submit_with_retry(pysr_task_input, "PySR", context.run_id, progress)
         logger.info(f"PySR task submitted as job {pysr_job.job_id}")
 
         # Report queued phase (user-friendly - jobs are submitted, waiting in queue)

@@ -47,7 +47,9 @@ class ProgressReporter(ProgressObserver):
         config: Callback configuration
     """
 
-    def __init__(self, run_id: str, config: CallbackConfig | None = None, task_type: str | None = None):
+    def __init__(
+        self, run_id: str, config: CallbackConfig | None = None, task_type: str | None = None
+    ):
         """
         Initialize progress reporter.
 

@@ -3,7 +3,7 @@
  * Track failed runs and identify error patterns
  */
 
-import React, { useState, useEffect, RefObject } from 'react';
+import React, { useState, useEffect, useCallback, RefObject } from 'react';
 import { Card } from 'primereact/card';
 import { Toast } from 'primereact/toast';
 import { DataTable, DataTablePageEvent } from 'primereact/datatable';
@@ -38,11 +38,7 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
     { label: 'Last 90 days', value: 90 },
   ];
 
-  useEffect(() => {
-    fetchErrorData();
-  }, [page, pageSize, days]);
-
-  const fetchErrorData = async () => {
+  const fetchErrorData = useCallback(async () => {
     try {
       setLoading(true);
       const [runsRes, distRes, trendRes] = await Promise.all([
@@ -63,7 +59,11 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, pageSize, days, toast]);
+
+  useEffect(() => {
+    fetchErrorData();
+  }, [fetchErrorData]);
 
   const handlePageChange = (e: DataTablePageEvent) => {
     setPage((e.page ?? 0) + 1);

@@ -3,7 +3,7 @@
  * View and filter admin action audit logs
  */
 
-import React, { useState, useEffect, RefObject } from 'react';
+import React, { useState, useEffect, useCallback, RefObject } from 'react';
 import { DataTable, DataTablePageEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Toast } from 'primereact/toast';
@@ -48,20 +48,7 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
     fetchFilterOptions();
   }, []);
 
-  useEffect(() => {
-    fetchLogs();
-  }, [page, pageSize, actionFilter, adminFilter, targetTypeFilter, dateFrom, dateTo]);
-
-  const fetchFilterOptions = async () => {
-    try {
-      const response = await adminService.getAuditFilterOptions();
-      setFilterOptions(response.data);
-    } catch (error: unknown) {
-      console.error('Failed to load filter options:', error);
-    }
-  };
-
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
       const response = await adminService.getAuditLogs({
@@ -83,6 +70,19 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
       });
     } finally {
       setLoading(false);
+    }
+  }, [page, pageSize, actionFilter, adminFilter, targetTypeFilter, dateFrom, dateTo, toast]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
+
+  const fetchFilterOptions = async () => {
+    try {
+      const response = await adminService.getAuditFilterOptions();
+      setFilterOptions(response.data);
+    } catch (error: unknown) {
+      console.error('Failed to load filter options:', error);
     }
   };
 

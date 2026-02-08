@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { Panel } from 'primereact/panel';
+import { Panel, type PanelHeaderTemplateOptions, type PanelToggleEvent } from 'primereact/panel';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
 import { ProgressBar } from 'primereact/progressbar';
@@ -40,7 +40,7 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
     }
   };
 
-  const handleToggle = async (e: any) => {
+  const handleToggle = async (e: PanelToggleEvent) => {
     const isExpanding = !e.value;
 
     if (isExpanding && !hasFetched) {
@@ -63,7 +63,7 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
     }
   };
 
-  const headerTemplate = (options: any) => {
+  const headerTemplate = (options: PanelHeaderTemplateOptions) => {
     return (
       <div className="flex items-center justify-between w-full pr-2">
         <div className="flex items-center">

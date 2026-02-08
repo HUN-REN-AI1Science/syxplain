@@ -41,11 +41,11 @@ const SignUp: React.FC<SignUpProps> = ({ onSwitchToLogin }) => {
         life: 5000,
       });
       setTimeout(() => onSwitchToLogin(), 2000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.current?.show({
         severity: 'error',
         summary: 'Error',
-        detail: error.message || 'Failed to sign up',
+        detail: error instanceof Error ? error.message : 'Failed to sign up',
       });
     } finally {
       setLoading(false);

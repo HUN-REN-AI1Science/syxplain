@@ -27,11 +27,11 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin }) => {
         detail: 'Password reset email sent. Please check your inbox.',
       });
       setTimeout(() => onBackToLogin(), 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.current?.show({
         severity: 'error',
         summary: 'Error',
-        detail: error.message || 'Failed to send reset email',
+        detail: error instanceof Error ? error.message : 'Failed to send reset email',
       });
     } finally {
       setLoading(false);

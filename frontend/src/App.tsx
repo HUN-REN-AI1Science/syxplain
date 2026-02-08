@@ -54,7 +54,7 @@ function MainApp() {
     setActiveIndex(1);
   };
 
-  const handleStartAnalysis = async (problemData: any) => {
+  const handleStartAnalysis = async (problemData: Record<string, unknown>) => {
     setFromHistory(false);
     setActiveIndex(2);
 
@@ -69,8 +69,9 @@ function MainApp() {
         user_api_keys: user_api_keys,
       });
       setRunId(response.data.run_id);
-    } catch (e: any) {
-      const errorMessage = e.response?.data?.detail || 'Failed to start analysis';
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      const errorMessage = err.response?.data?.detail || 'Failed to start analysis';
       toast.current?.show({ severity: 'error', summary: 'Error', detail: errorMessage });
       console.error(e);
       setActiveIndex(1);

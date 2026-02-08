@@ -62,8 +62,9 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({ visible, onHide,
       });
       resetForm();
       onHide();
-    } catch (err: any) {
-      const detail = err.response?.status === 429
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number } };
+      const detail = axiosErr.response?.status === 429
         ? 'Too many submissions. Please wait a minute and try again.'
         : 'Failed to submit feedback. Please try again.';
       toast.current?.show({ severity: 'error', summary: 'Error', detail, life: 5000 });

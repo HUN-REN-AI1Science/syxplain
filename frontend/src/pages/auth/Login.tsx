@@ -29,11 +29,11 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignUp, onForgotPassword }) => 
         summary: 'Success',
         detail: 'Logged in successfully',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.current?.show({
         severity: 'error',
         summary: 'Error',
-        detail: error.message || 'Failed to log in',
+        detail: error instanceof Error ? error.message : 'Failed to log in',
       });
     } finally {
       setLoading(false);

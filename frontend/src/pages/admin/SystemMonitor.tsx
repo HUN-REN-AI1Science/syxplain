@@ -3,7 +3,7 @@
  * Real-time system health and Slurm cluster monitoring
  */
 
-import React, { useState, useEffect, useRef, RefObject } from 'react';
+import React, { useState, useEffect, useCallback, useRef, RefObject } from 'react';
 import { Card } from 'primereact/card';
 import { Toast } from 'primereact/toast';
 import { Tag } from 'primereact/tag';
@@ -25,30 +25,7 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const refreshInterval = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    fetchSystemStatus();
-    return () => {
-      if (refreshInterval.current) {
-        clearInterval(refreshInterval.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (autoRefresh) {
-      refreshInterval.current = setInterval(fetchSystemStatus, 30000);
-    } else if (refreshInterval.current) {
-      clearInterval(refreshInterval.current);
-      refreshInterval.current = null;
-    }
-    return () => {
-      if (refreshInterval.current) {
-        clearInterval(refreshInterval.current);
-      }
-    };
-  }, [autoRefresh]);
-
-  const fetchSystemStatus = async () => {
+  const fetchSystemStatus = useCallback(async () => {
     try {
       setLoading(true);
       const healthRes = await adminService.getSystemHealth();
@@ -71,7 +48,30 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    fetchSystemStatus();
+    return () => {
+      if (refreshInterval.current) {
+        clearInterval(refreshInterval.current);
+      }
+    };
+  }, [fetchSystemStatus]);
+
+  useEffect(() => {
+    if (autoRefresh) {
+      refreshInterval.current = setInterval(fetchSystemStatus, 30000);
+    } else if (refreshInterval.current) {
+      clearInterval(refreshInterval.current);
+      refreshInterval.current = null;
+    }
+    return () => {
+      if (refreshInterval.current) {
+        clearInterval(refreshInterval.current);
+      }
+    };
+  }, [autoRefresh, fetchSystemStatus]);
 
   const formatUptime = (seconds: number): string => {
     const days = Math.floor(seconds / 86400);

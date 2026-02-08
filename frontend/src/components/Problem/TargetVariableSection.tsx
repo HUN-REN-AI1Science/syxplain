@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Dropdown } from 'primereact/dropdown';
+import { Dropdown, type DropdownChangeEvent } from 'primereact/dropdown';
 import HelpButton from '@components/HelpButton';
 
 interface TargetVariableSectionProps {
@@ -62,7 +62,7 @@ export const TargetVariableSection: React.FC<TargetVariableSectionProps> = ({
       <label className="block text-sm font-semibold text-slate-700 mb-2">Target Variable</label>
       <Dropdown
         value={targetVariable}
-        onChange={(e: any) => onChange(e.value)}
+        onChange={(e: DropdownChangeEvent) => onChange(e.value)}
         options={columns.map((col) => ({ label: col, value: col }))}
         placeholder="Select Target..."
         className="w-full bg-slate-50 border-slate-200"

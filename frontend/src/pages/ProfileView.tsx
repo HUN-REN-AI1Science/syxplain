@@ -74,9 +74,10 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
     try {
       await profileService.delete();
       await signOut();
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Failed to delete account:', e);
-      setError(e.response?.data?.detail || 'Failed to delete account. Please try again.');
+      const err = e as { response?: { data?: { detail?: string } } };
+      setError(err.response?.data?.detail || 'Failed to delete account. Please try again.');
       setDeleting(false);
     }
   };

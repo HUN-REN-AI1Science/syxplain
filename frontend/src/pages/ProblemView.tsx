@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { SelectButton } from 'primereact/selectbutton';
+import { SelectButton, type SelectButtonChangeEvent } from 'primereact/selectbutton';
 import { Toast } from 'primereact/toast';
 import { configService, permissionsService } from '@services/api';
 import { useAuth } from '@contexts/AuthContext';
@@ -22,7 +22,7 @@ interface ProblemViewProps {
   columns: string[];
   excludedColumns?: string[];
   nanCounts?: Record<string, number>;
-  onSubmit: (data: any) => void;
+  onSubmit: (data: Record<string, unknown>) => void;
 }
 
 const ProblemView: React.FC<ProblemViewProps> = ({
@@ -183,8 +183,9 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       await permissionsService.validateKeys({ openai_api_key: userApiKey });
       setApiKeyValidationStatus('valid');
       return true;
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || 'API key validation failed';
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } } };
+      const errorMessage = err.response?.data?.detail || 'API key validation failed';
       setApiKeyError(errorMessage);
       setApiKeyValidationStatus('invalid');
       return false;
@@ -360,7 +361,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
         <div className="mt-4 md:mt-0">
           <SelectButton
             value={mode}
-            onChange={(e: any) => setMode(e.value)}
+            onChange={(e: SelectButtonChangeEvent) => setMode(e.value)}
             options={modeOptions}
           />
         </div>

@@ -15,6 +15,7 @@ import {
   LineElement,
   Tooltip,
   Legend,
+  type TooltipItem,
 } from 'chart.js';
 import { Scatter } from 'react-chartjs-2';
 import { escapeForAsciiMath } from '@utils/formatting';
@@ -114,7 +115,7 @@ const ScatterPlot: React.FC<{ data: ScatterData }> = ({ data }) => {
         },
         tooltip: {
           callbacks: {
-            label: (context: any) => {
+            label: (context: TooltipItem<'scatter'>) => {
               if (context.dataset.label === '1:1 Line') return '';
               return `Measured: ${context.parsed.x.toFixed(3)}, Predicted: ${context.parsed.y.toFixed(3)}`;
             },

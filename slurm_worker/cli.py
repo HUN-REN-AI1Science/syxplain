@@ -145,9 +145,7 @@ class WorkerRunner:
             # Fetch from backend via HTTP
             input_data = self._fetch_input_http()
         else:
-            raise RuntimeError(
-                "No input source: provide --input file or configure callback URL"
-            )
+            raise RuntimeError("No input source: provide --input file or configure callback URL")
 
         # Create and run task
         task = TaskRegistry.create(self.config.task_type, self.reporter)

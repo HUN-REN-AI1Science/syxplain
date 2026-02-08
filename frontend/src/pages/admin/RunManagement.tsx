@@ -3,7 +3,7 @@
  * Admin view for managing all runs across users
  */
 
-import React, { useState, useEffect, RefObject } from 'react';
+import React, { useState, useEffect, useCallback, RefObject } from 'react';
 import { DataTable, DataTablePageEvent, DataTableSortEvent } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Toast } from 'primereact/toast';
@@ -57,11 +57,7 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
     { label: 'Deep', value: 'deep' },
   ];
 
-  useEffect(() => {
-    fetchRuns();
-  }, [page, pageSize, sortField, sortOrder, statusFilter, typeFilter, dateFrom, dateTo]);
-
-  const fetchRuns = async () => {
+  const fetchRuns = useCallback(async () => {
     try {
       setLoading(true);
       const response = await adminService.getAllRuns({
@@ -86,7 +82,11 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, pageSize, sortField, sortOrder, statusFilter, typeFilter, searchFilter, dateFrom, dateTo, toast]);
+
+  useEffect(() => {
+    fetchRuns();
+  }, [fetchRuns]);
 
   const handleSearch = () => {
     setPage(1);

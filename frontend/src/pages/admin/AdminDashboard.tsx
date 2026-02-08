@@ -3,7 +3,7 @@
  * Dashboard overview with key metrics and visualizations
  */
 
-import React, { useState, useEffect, RefObject } from 'react';
+import React, { useState, useEffect, useCallback, RefObject } from 'react';
 import { Card } from 'primereact/card';
 import { Toast } from 'primereact/toast';
 import { Chart } from 'primereact/chart';
@@ -23,11 +23,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       const [statsRes, trendsRes, distRes, activityRes] = await Promise.all([
@@ -49,7 +45,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const formatDuration = (seconds: number): string => {
     if (seconds < 60) return `${Math.round(seconds)}s`;

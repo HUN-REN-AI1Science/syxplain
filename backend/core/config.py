@@ -159,9 +159,7 @@ class SlurmSettings:
     time_limit: str = field(default_factory=lambda: os.environ.get("SLURM_TIME_LIMIT", "04:00:00"))
 
     # Singularity container path (if set, uses container instead of conda)
-    container_path: str = field(
-        default_factory=lambda: os.environ.get("SLURM_CONTAINER_PATH", "")
-    )
+    container_path: str = field(default_factory=lambda: os.environ.get("SLURM_CONTAINER_PATH", ""))
 
     # Retry interval for quota/QOS errors (seconds)
     retry_interval: int = field(
@@ -200,9 +198,7 @@ class GitHubSettings:
     repo_owner: str = field(
         default_factory=lambda: os.environ.get("GITHUB_FEEDBACK_REPO_OWNER", "")
     )
-    repo_name: str = field(
-        default_factory=lambda: os.environ.get("GITHUB_FEEDBACK_REPO_NAME", "")
-    )
+    repo_name: str = field(default_factory=lambda: os.environ.get("GITHUB_FEEDBACK_REPO_NAME", ""))
 
     @property
     def is_configured(self) -> bool:

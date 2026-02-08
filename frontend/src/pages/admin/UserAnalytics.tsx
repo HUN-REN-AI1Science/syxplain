@@ -3,7 +3,7 @@
  * User growth, activity, and top users analytics
  */
 
-import React, { useState, useEffect, RefObject } from 'react';
+import React, { useState, useEffect, useCallback, RefObject } from 'react';
 import { Card } from 'primereact/card';
 import { Toast } from 'primereact/toast';
 import { Chart } from 'primereact/chart';
@@ -41,11 +41,7 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
     { label: 'Last 90 days', value: 90 },
   ];
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, [growthDays, topUsersDays]);
-
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     try {
       setLoading(true);
       const [statsRes, growthRes, topRes] = await Promise.all([
@@ -65,7 +61,11 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [growthDays, topUsersDays, toast]);
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, [fetchAnalytics]);
 
   // Calculate cumulative growth
   const cumulativeGrowth = growth.reduce<{ date: string; cumulative: number; daily: number }[]>(

@@ -61,7 +61,7 @@ def is_quota_error(error: SlurmJobSubmissionError) -> bool:
     return (
         "qos policy" in error_str
         or '"error_number": 2050' in error_str
-        or "error_number\": 2050" in error_str
+        or 'error_number": 2050' in error_str
         or "job submit limit" in error_str
     )
 
@@ -317,9 +317,7 @@ class SlurmClient:
             # Rate-limit polling debug logs (every ~2 min at 10s intervals)
             poll_count += 1
             if poll_count % 12 == 0:
-                logger.debug(
-                    f"Job {job_id} still {status.state.value}, waited {int(elapsed)}s"
-                )
+                logger.debug(f"Job {job_id} still {status.state.value}, waited {int(elapsed)}s")
 
             if timeout and elapsed >= timeout:
                 raise asyncio.TimeoutError(f"Job {job_id} did not complete within {timeout}s")

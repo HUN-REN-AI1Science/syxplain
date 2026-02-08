@@ -39,9 +39,10 @@ const PublicResultsView: React.FC = () => {
         if (response.data.status !== 'completed') {
           setError('This analysis is not yet complete');
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('Failed to fetch public run:', e);
-        if (e.response?.status === 404) {
+        const err = e as { response?: { status?: number } };
+        if (err.response?.status === 404) {
           setError('This share link is invalid or has been revoked');
         } else {
           setError('Failed to load shared results');

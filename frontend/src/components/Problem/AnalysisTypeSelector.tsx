@@ -6,7 +6,7 @@
 import React, { useRef } from 'react';
 import { Button } from 'primereact/button';
 import { Menu } from 'primereact/menu';
-import { Dropdown } from 'primereact/dropdown';
+import { Dropdown, type DropdownChangeEvent } from 'primereact/dropdown';
 import HelpButton from '@components/HelpButton';
 
 interface AnalysisTypeSelectorProps {
@@ -141,7 +141,7 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
             <div className="mb-4 flex flex-col items-end">
               <Dropdown
                 value={selectedDeepModel}
-                onChange={(e: any) => onDeepModelChange(e.value)}
+                onChange={(e: DropdownChangeEvent) => onDeepModelChange(e.value)}
                 options={deepResearchModels.map((model) => ({ label: model, value: model }))}
                 placeholder="Select a model..."
                 className="w-auto min-w-[200px] bg-slate-50"

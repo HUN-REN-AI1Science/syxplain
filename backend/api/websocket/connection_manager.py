@@ -141,7 +141,9 @@ class ConnectionManager:
             self._connections[run_id].discard(ws)
 
         if dead_connections:
-            logger.info(f"Cleaned up {len(dead_connections)} dead connections for run {run_id[:8]}...")
+            logger.info(
+                f"Cleaned up {len(dead_connections)} dead connections for run {run_id[:8]}..."
+            )
 
         # Close connections after terminal status — the run is done,
         # no more updates will be sent. The server-side close causes

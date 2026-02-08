@@ -67,7 +67,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     progress: backendProgress,
     status,
     error,
-    results: wsResults,
     isReady: initialFetchDone,
   } = useRunProgress({
     runId,

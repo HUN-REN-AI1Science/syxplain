@@ -19,6 +19,7 @@ from pathlib import Path
 try:
     from rich.console import Console
     from rich.logging import RichHandler
+
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
