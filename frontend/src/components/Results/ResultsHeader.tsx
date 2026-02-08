@@ -7,7 +7,7 @@ import React from 'react';
 import { Message } from 'primereact/message';
 import HelpButton from '@components/HelpButton';
 
-export type ResultsStatus = 'loading' | 'processing' | 'completed' | 'failed';
+export type ResultsStatus = 'loading' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
 interface ResultsHeaderProps {
   /** Header title */
@@ -32,6 +32,8 @@ const getStatusConfig = (status: ResultsStatus, statusMessage?: string) => {
       return { severity: 'success' as const, text: statusMessage || 'Completed' };
     case 'failed':
       return { severity: 'error' as const, text: statusMessage || 'Failed' };
+    case 'cancelled':
+      return { severity: 'warn' as const, text: statusMessage || 'Cancelled' };
   }
 };
 

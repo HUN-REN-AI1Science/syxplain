@@ -160,16 +160,16 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     setCancelling(true);
     try {
       await runsService.cancel(runId);
-      // WebSocket will receive the cancelled status update
+      // Don't reset cancelling — WebSocket will deliver terminal status
+      // which hides the entire progress section
     } catch (e) {
       console.error('Failed to cancel:', e);
+      setCancelling(false); // Only reset on error so user can retry
       toast.current?.show({
         severity: 'error',
         summary: 'Cancel Failed',
         detail: 'Failed to cancel the analysis',
       });
-    } finally {
-      setCancelling(false);
     }
   };
 
@@ -224,6 +224,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     if (isFetchingCompletedRun) return 'loading';
     if ((isProcessing || isConnecting) && !error) return 'processing';
     if (isCompleted) return 'completed';
+    if (status === 'cancelled') return 'cancelled';
     return 'failed';
   };
 
@@ -283,10 +284,14 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
       {fromHistory && runId && <RunSettingsPanel runId={runId} />}
 
       <div>
-        {/* Error State */}
+        {/* Error / Cancelled State */}
         {error && (
           <div className="mb-6">
-            <Message severity="error" text={`Analysis Failed: ${error}`} className="w-full" />
+            <Message
+              severity={status === 'cancelled' ? 'warn' : 'error'}
+              text={status === 'cancelled' ? error : `Analysis Failed: ${error}`}
+              className="w-full"
+            />
           </div>
         )}
 

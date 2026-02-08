@@ -66,10 +66,10 @@ export function useProgressInterpolation(
         currentStepLabel: 'Complete',
       };
     }
-    if (status === 'failed' || status === 'timeout') {
+    if (status === 'failed' || status === 'timeout' || status === 'cancelled') {
       return {
-        currentStepDescription: 'Analysis stopped',
-        currentStepLabel: status === 'timeout' ? 'Timeout' : 'Failed',
+        currentStepDescription: status === 'cancelled' ? 'Analysis cancelled' : 'Analysis stopped',
+        currentStepLabel: status === 'timeout' ? 'Timeout' : status === 'cancelled' ? 'Cancelled' : 'Failed',
       };
     }
     if (phases.length === 0) {
@@ -112,8 +112,8 @@ export function useProgressInterpolation(
       return;
     }
 
-    // If failed or timeout, show current backend progress
-    if (status === 'failed' || status === 'timeout') {
+    // If failed, timeout, or cancelled, show current backend progress
+    if (status === 'failed' || status === 'timeout' || status === 'cancelled') {
       setDisplayProgress(backendProgress);
       return;
     }
