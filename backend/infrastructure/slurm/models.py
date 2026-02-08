@@ -280,12 +280,12 @@ class SlurmJobSubmission:
             env_list.append(f"{key}={value}")
         job_spec["environment"] = env_list
 
-        # Output/Error paths (use 'output'/'error' not 'standard_output'/'standard_error')
+        # Output/Error paths (slurmrestd v0.0.41 uses 'standard_output'/'standard_error')
         if self.stdout_path:
-            job_spec["output"] = self.stdout_path
+            job_spec["standard_output"] = self.stdout_path
 
         if self.stderr_path:
-            job_spec["error"] = self.stderr_path
+            job_spec["standard_error"] = self.stderr_path
 
         # GPU resources
         if self.gres:

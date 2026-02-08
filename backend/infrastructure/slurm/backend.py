@@ -73,7 +73,14 @@ class SlurmBackend:
             self._client = SlurmClient()
         return self._client
 
-    def _generate_worker_script(self, task: TaskInput, output_path: str) -> str:
+    def _generate_worker_script(
+        self,
+        task: TaskInput,
+        output_path: str,
+        stdout_path: str,
+        stderr_path: str,
+        log_dir: str,
+    ) -> str:
         """Generate the Slurm job script for executing a task."""
         slurm_settings = get_slurm_settings()
 
@@ -123,14 +130,19 @@ python -m slurm_worker \\
 
         return f"""#!/bin/bash
 #SBATCH --job-name=syxplain-{task.task_type}-{task.run_id[:8]}
-#SBATCH --output=/tmp/syxplain_%j.stdout
-#SBATCH --error=/tmp/syxplain_%j.stderr
+#SBATCH --output={stdout_path}
+#SBATCH --error={stderr_path}
 
 # Environment setup
 {env_section}
 
-# Create output directory
+# Create output and log directories
 mkdir -p {output_dir}
+mkdir -p {log_dir}
+
+# Redirect output to structured log files (ensures correct destination
+# even if log directory didn't exist when Slurm initially opened outputs)
+exec 1>>{stdout_path} 2>>{stderr_path}
 
 {worker_command}
 
@@ -156,7 +168,20 @@ exit $?
 
         try:
             output_path = f"/tmp/syxplain_{job_uuid}/output.json"
-            script = self._generate_worker_script(task, output_path)
+
+            # Build structured log paths: {staging_dir}/logs/{YYYY-MM-DD}/{HHMMSS}_{task_type}_{run_id_short}_{job_uuid_short}.{stdout,stderr}
+            log_date = datetime.utcnow().strftime("%Y-%m-%d")
+            log_timestamp = datetime.utcnow().strftime("%H%M%S")
+            run_id_short = task.run_id[:8]
+            job_uuid_short = job_uuid[:8]
+            log_dir = f"{slurm_settings.staging_dir}/logs/{log_date}"
+            log_basename = f"{log_timestamp}_{task.task_type}_{run_id_short}_{job_uuid_short}"
+            stdout_path = f"{log_dir}/{log_basename}.stdout"
+            stderr_path = f"{log_dir}/{log_basename}.stderr"
+
+            script = self._generate_worker_script(
+                task, output_path, stdout_path, stderr_path, log_dir
+            )
 
             submission = SlurmJobSubmission(
                 script=script,
@@ -166,6 +191,8 @@ exit $?
                 memory=slurm_settings.memory,
                 time_limit=slurm_settings.time_limit,
                 working_directory=slurm_settings.staging_dir,
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
             )
 
             slurm_job_id = await client.submit_job(submission)
