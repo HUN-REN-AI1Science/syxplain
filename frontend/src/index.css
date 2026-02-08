@@ -433,6 +433,11 @@ body {
   animation: progressShimmer 2s linear infinite;
 }
 
+/* Indeterminate progress bar shimmer - brand blue */
+.progress-bar-shimmer .p-progressbar-indeterminate-container .p-progressbar-value {
+  background: linear-gradient(90deg, #0052cc, #3b82f6) !important;
+}
+
 @keyframes progressShimmer {
   0% {
     background-position: 200% 0;

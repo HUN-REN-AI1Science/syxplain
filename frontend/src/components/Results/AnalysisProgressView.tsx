@@ -26,15 +26,28 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
   return (
     <div className="text-center py-20">
       <div className="max-w-md mx-auto mb-6">
-        <ProgressBar
-          value={displayProgress}
-          showValue={false}
-          style={{ height: '8px' }}
-          className={`mb-2 ${isInQueuePhase ? 'progress-bar-shimmer' : ''}`}
-        />
-        <p className="text-lg font-semibold text-blue-600">
-          {Math.floor(displayProgress)}% complete
-        </p>
+        {isInQueuePhase ? (
+          <>
+            <ProgressBar
+              mode="indeterminate"
+              style={{ height: '8px' }}
+              className="mb-2 progress-bar-shimmer"
+            />
+            <p className="text-lg font-semibold text-blue-600">Waiting in queue...</p>
+          </>
+        ) : (
+          <>
+            <ProgressBar
+              value={displayProgress}
+              showValue={false}
+              style={{ height: '8px' }}
+              className="mb-2"
+            />
+            <p className="text-lg font-semibold text-blue-600">
+              {Math.floor(displayProgress)}% complete
+            </p>
+          </>
+        )}
       </div>
 
       {/* Step Description */}
@@ -46,13 +59,25 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
       <hr className="max-w-md mx-auto border-slate-200 mb-6" />
 
       <h3 className="text-xl font-semibold text-slate-800 mt-4 mb-2">
-        AI is analyzing your data
+        {isInQueuePhase ? 'Waiting for resources...' : 'AI is analyzing your data'}
         {isInQueuePhase && <span className="queue-pulse ml-2 text-blue-500">...</span>}
       </h3>
       <p className="text-slate-500 max-w-md mx-auto mb-4">
         Discovering mathematical equations and computing feature importance using symbolic
         regression.
       </p>
+
+      {isInQueuePhase && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto mt-4">
+          <div className="flex items-center gap-2 text-blue-700">
+            <i className="pi pi-info-circle" />
+            <p className="text-sm">
+              Your analysis is queued and waiting for a free compute resource on the HPC cluster.
+              This usually takes a few moments.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Only show "safe to leave" message when job is submitted to cluster */}
       {isJobSubmitted && (

@@ -264,7 +264,7 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
         </div>
       </div>
       {/* Filters Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 items-end w-full">
         <div>
           <label className="block text-sm text-slate-600 mb-1">Status</label>
           <Dropdown

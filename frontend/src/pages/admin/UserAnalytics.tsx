@@ -262,7 +262,7 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
               value={growthDays}
               options={daysOptions}
               onChange={(e) => setGrowthDays(e.value)}
-              className="w-36"
+              className="w-48"
             />
             <Button
               icon="pi pi-refresh"
@@ -291,7 +291,7 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
             value={topUsersDays}
             options={topUsersPeriodOptions}
             onChange={(e) => setTopUsersDays(e.value)}
-            className="w-36"
+            className="w-48"
           />
         </div>
         <div className="overflow-x-auto">

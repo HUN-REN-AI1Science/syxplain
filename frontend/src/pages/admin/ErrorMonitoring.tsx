@@ -231,7 +231,7 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
               setDays(e.value);
               setPage(1);
             }}
-            className="w-36"
+            className="w-48"
           />
           <Button
             icon="pi pi-refresh"
@@ -308,7 +308,6 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
               body={statusTemplate}
               style={{ width: '100px' }}
             />
-            <Column field="csv_filename" header="File" style={{ width: '180px' }} />
             <Column header="Error" body={errorTemplate} style={{ width: '250px' }} />
             <Column
               field="created_at"
