@@ -193,6 +193,24 @@ class ComputeSettings:
 
 
 @dataclass
+class GitHubSettings:
+    """GitHub integration settings for feedback system."""
+
+    token: str = field(default_factory=lambda: os.environ.get("GITHUB_FEEDBACK_TOKEN", ""))
+    repo_owner: str = field(
+        default_factory=lambda: os.environ.get("GITHUB_FEEDBACK_REPO_OWNER", "")
+    )
+    repo_name: str = field(
+        default_factory=lambda: os.environ.get("GITHUB_FEEDBACK_REPO_NAME", "")
+    )
+
+    @property
+    def is_configured(self) -> bool:
+        """Check if GitHub feedback is properly configured."""
+        return bool(self.token and self.repo_owner and self.repo_name)
+
+
+@dataclass
 class AdminSettings:
     """Admin access settings."""
 
@@ -230,6 +248,7 @@ class Settings:
     slurm: SlurmSettings = field(default_factory=SlurmSettings)
     compute: ComputeSettings = field(default_factory=ComputeSettings)
     admin: AdminSettings = field(default_factory=AdminSettings)
+    github: GitHubSettings = field(default_factory=GitHubSettings)
 
 
 # Cached settings instance
@@ -273,3 +292,8 @@ def get_compute_settings() -> ComputeSettings:
 def get_admin_settings() -> AdminSettings:
     """Get admin settings for dependency injection."""
     return get_settings().admin
+
+
+def get_github_settings() -> GitHubSettings:
+    """Get GitHub settings for dependency injection."""
+    return get_settings().github

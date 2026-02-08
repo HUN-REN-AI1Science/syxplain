@@ -18,7 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 # Import routers
-from backend.api.routers import admin, config, files, permissions, profile, progress, runs, sharing
+from backend.api.routers import admin, config, feedback, files, permissions, profile, progress, runs, sharing
 from backend.api.websocket import progress_ws
 
 # Local imports
@@ -137,6 +137,7 @@ def create_app() -> FastAPI:
 
     app.include_router(admin.router)
     app.include_router(config.router)
+    app.include_router(feedback.router)
     app.include_router(files.router)
     app.include_router(permissions.router)
     app.include_router(profile.router)

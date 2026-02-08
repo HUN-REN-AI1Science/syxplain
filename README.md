@@ -28,6 +28,7 @@ This is a proof of concept system which uses state of the art symbolic regressio
 - [Production Deployment](#production-deployment)
 - [Slurm Integration](#slurm-integration)
 - [Admin Setup](#admin-setup)
+- [Feedback System](#feedback-system)
 
 ## Architecture
 
@@ -123,6 +124,9 @@ Copy `.env.example` to `.env` and configure:
 - `SLURM_PARTITION` - Slurm partition (default: `batch_cpu_m2.large`)
 - `SUPABASE_*` - For authentication
 - `LANGFUSE_*` - For LLM tracing
+- `GITHUB_FEEDBACK_TOKEN` - GitHub personal access token for creating feedback issues
+- `GITHUB_FEEDBACK_REPO_OWNER` - GitHub repository owner (e.g. `HUN-REN-AI1Science`)
+- `GITHUB_FEEDBACK_REPO_NAME` - GitHub repository name (e.g. `syxplain`)
 
 See `.env.example` for the complete list.
 
@@ -187,3 +191,23 @@ ADMIN_EMAILS=admin@example.com,admin2@example.com
 ```
 
 Admins can manage user permissions through the Admin UI at `/admin`.
+
+## Feedback System
+
+Users can report bugs and request features directly from the app via the **Feedback** button in the header. Submissions automatically include application context (current page, run ID, browser info) to help with diagnosis.
+
+### Without GitHub (default)
+
+Feedback is logged to the backend console. No additional configuration needed.
+
+### With GitHub Issues
+
+To automatically create GitHub issues from feedback, set these environment variables:
+
+```bash
+GITHUB_FEEDBACK_TOKEN=ghp_...        # Personal access token with `repo` scope
+GITHUB_FEEDBACK_REPO_OWNER=your-org  # Repository owner
+GITHUB_FEEDBACK_REPO_NAME=your-repo  # Repository name
+```
+
+Bug reports are labeled `bug`, feature requests are labeled `enhancement`. If the GitHub API is unreachable, feedback silently falls back to logging.

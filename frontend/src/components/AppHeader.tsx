@@ -14,6 +14,7 @@ interface AppHeaderProps {
   onHistoryClick: () => void;
   onProfileClick: () => void;
   onAdminClick?: () => void;
+  onFeedbackClick: () => void;
   onLogout: () => void;
 }
 
@@ -23,6 +24,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onHistoryClick,
   onProfileClick,
   onAdminClick,
+  onFeedbackClick,
   onLogout,
 }) => (
   <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-50">
@@ -82,6 +84,18 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             />
           </>
         )}
+        <Button
+          label="Feedback"
+          icon="pi pi-comment"
+          className="p-button-outlined p-button-sm p-button-help hidden md:flex"
+          onClick={onFeedbackClick}
+        />
+        <Button
+          icon="pi pi-comment"
+          className="p-button-outlined p-button-sm p-button-help md:hidden"
+          onClick={onFeedbackClick}
+          tooltip="Feedback"
+        />
         <div className="flex items-center space-x-2">
           <Tooltip target=".logout-button" content={userEmail || ''} position="bottom" />
           <Button

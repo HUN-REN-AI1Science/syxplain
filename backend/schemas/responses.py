@@ -599,3 +599,17 @@ class RecentActivityResponse(BaseModel):
     """Recent activity feed."""
 
     items: list[ActivityItem]
+
+
+# ============================================================================
+# Feedback Responses
+# ============================================================================
+
+
+class FeedbackResponse(BaseModel):
+    """Response after submitting feedback."""
+
+    success: bool
+    issue_url: str | None = None
+    issue_number: int | None = None
+    message: str

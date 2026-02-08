@@ -52,6 +52,10 @@ services:
       - USER_API_MODELS=${USER_API_MODELS:-gpt-4o,gpt-4.1}
       # Admin Configuration
       - ADMIN_EMAILS=${ADMIN_EMAILS:-}
+      # GitHub Feedback (optional)
+      - GITHUB_FEEDBACK_TOKEN=${GITHUB_FEEDBACK_TOKEN:-}
+      - GITHUB_FEEDBACK_REPO_OWNER=${GITHUB_FEEDBACK_REPO_OWNER:-}
+      - GITHUB_FEEDBACK_REPO_NAME=${GITHUB_FEEDBACK_REPO_NAME:-}
       # Database (defaults to local postgres container)
       - DATABASE_URL=postgresql://syxplain:syxplain@postgres:5432/syxplain
       # Authentication (optional for local dev - set for Supabase auth)

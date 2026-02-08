@@ -393,3 +393,34 @@ export interface ActivityItem {
   details: Record<string, unknown> | null;
   created_at: string;
 }
+
+// ============================================================================
+// Feedback Types
+// ============================================================================
+
+export type FeedbackCategory = 'bug' | 'feature';
+
+export interface FeedbackContext {
+  current_view?: string;
+  workflow_step?: number;
+  current_run_id?: string;
+  csv_filename?: string;
+  browser_user_agent?: string;
+  screen_resolution?: string;
+  timestamp?: string;
+  app_url?: string;
+}
+
+export interface FeedbackRequest {
+  category: FeedbackCategory;
+  title: string;
+  description: string;
+  context?: FeedbackContext;
+}
+
+export interface FeedbackResponse {
+  success: boolean;
+  issue_url: string | null;
+  issue_number: number | null;
+  message: string;
+}

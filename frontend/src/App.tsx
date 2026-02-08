@@ -18,6 +18,8 @@ import { SwitchTransition, CSSTransition } from 'react-transition-group';
 import AppHeader from '@components/AppHeader';
 import AppFooter from '@components/AppFooter';
 import WorkflowSteps from '@components/WorkflowSteps';
+import FeedbackDialog from '@components/FeedbackDialog';
+import type { FeedbackContext } from '@/types';
 
 const WORKFLOW_STEPS = [
   { label: 'Upload Data' },
@@ -34,6 +36,7 @@ function MainApp() {
   const [nanCounts, setNanCounts] = useState<Record<string, number>>({});
   const [runId, setRunId] = useState<string | null>(null);
   const [fromHistory, setFromHistory] = useState<boolean>(false);
+  const [feedbackVisible, setFeedbackVisible] = useState(false);
   const toast = useRef<Toast>(null);
   const nodeRef = useRef(null);
   const { signOut, user, isAdmin } = useAuth();
@@ -100,6 +103,17 @@ function MainApp() {
     }
   };
 
+  const buildFeedbackContext = (): FeedbackContext => ({
+    current_view: view,
+    workflow_step: view === 'workflow' ? activeIndex : undefined,
+    current_run_id: runId || undefined,
+    csv_filename: filename || undefined,
+    browser_user_agent: navigator.userAgent,
+    screen_resolution: `${window.innerWidth}x${window.innerHeight}`,
+    app_url: window.location.href,
+    timestamp: new Date().toISOString(),
+  });
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
       <Toast ref={toast} />
@@ -110,7 +124,14 @@ function MainApp() {
         onHistoryClick={() => setView('history')}
         onProfileClick={() => setView('profile')}
         onAdminClick={isAdmin ? () => setView('admin') : undefined}
+        onFeedbackClick={() => setFeedbackVisible(true)}
         onLogout={handleLogout}
+      />
+
+      <FeedbackDialog
+        visible={feedbackVisible}
+        onHide={() => setFeedbackVisible(false)}
+        context={buildFeedbackContext()}
       />
 
       <main className="flex-grow py-10 px-4 sm:px-6 lg:px-8">

@@ -34,6 +34,8 @@ import type {
   PerformanceByTypeItem,
   SystemConfig,
   ActivityItem,
+  FeedbackRequest,
+  FeedbackResponse,
 } from '@/types';
 
 // ============================================================================
@@ -347,6 +349,14 @@ export const adminService = {
 
   // Configuration
   getConfig: () => api.get<SystemConfig>('/admin/config'),
+};
+
+// ============================================================================
+// Feedback Service
+// ============================================================================
+
+export const feedbackService = {
+  submit: (data: FeedbackRequest) => api.post<FeedbackResponse>('/feedback', data),
 };
 
 // Default export for backwards compatibility

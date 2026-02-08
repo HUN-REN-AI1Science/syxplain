@@ -103,3 +103,34 @@ class UpdatePermissionRequest(BaseModel):
     """Request schema for updating user permissions."""
 
     use_hunren_keys: bool = Field(..., description="Whether to grant HUN-REN key access")
+
+
+class FeedbackCategory(str, Enum):
+    """Category of user feedback."""
+
+    BUG = "bug"
+    FEATURE = "feature"
+
+
+class FeedbackContext(BaseModel):
+    """Auto-collected application context for feedback."""
+
+    current_view: str | None = None
+    workflow_step: int | None = None
+    current_run_id: str | None = None
+    csv_filename: str | None = None
+    browser_user_agent: str | None = None
+    screen_resolution: str | None = None
+    timestamp: str | None = None
+    app_url: str | None = None
+
+
+class FeedbackRequest(BaseModel):
+    """Request schema for submitting user feedback."""
+
+    category: FeedbackCategory
+    title: str = Field(..., min_length=1, max_length=100, description="Short summary of the feedback")
+    description: str = Field(
+        ..., min_length=10, max_length=2000, description="Detailed description"
+    )
+    context: FeedbackContext | None = None
