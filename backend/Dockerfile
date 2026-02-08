@@ -31,6 +31,9 @@ COPY --from=builder /install /usr/local
 # Copy application code
 COPY . .
 
+# Create directories for volumes so they have correct ownership
+RUN mkdir -p /app/logs /app/data /app/outputs
+
 # Change ownership to non-root user
 RUN chown -R appuser:appuser /app
 
