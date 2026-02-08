@@ -53,9 +53,10 @@ export function exportToCSV(equations: Equation[], runId: string): void {
   const headers = ['equation_id', 'equation', 'measured', 'predicted'];
   const csvContent = [
     headers.join(','),
-    ...rows.map(row =>
-      `${row.equation_id},"${row.equation.replace(/"/g, '""')}",${row.measured},${row.predicted}`
-    )
+    ...rows.map(
+      (row) =>
+        `${row.equation_id},"${row.equation.replace(/"/g, '""')}",${row.measured},${row.predicted}`
+    ),
   ].join('\n');
 
   // Download file
@@ -80,15 +81,17 @@ export function exportToExcel(equations: Equation[], runId: string): void {
 
   // Set column widths
   ws['!cols'] = [
-    { wch: 12 },  // equation_id
-    { wch: 40 },  // equation
-    { wch: 15 },  // measured
-    { wch: 15 },  // predicted
+    { wch: 12 }, // equation_id
+    { wch: 40 }, // equation
+    { wch: 15 }, // measured
+    { wch: 15 }, // predicted
   ];
 
   // Generate and download
   const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
   downloadBlob(blob, `analysis_data_${runId.slice(0, 8)}.xlsx`);
 }
 

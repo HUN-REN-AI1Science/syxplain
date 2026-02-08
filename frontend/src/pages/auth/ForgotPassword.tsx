@@ -27,11 +27,11 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin }) => {
         detail: 'Password reset email sent. Please check your inbox.',
       });
       setTimeout(() => onBackToLogin(), 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.current?.show({
         severity: 'error',
         summary: 'Error',
-        detail: error.message || 'Failed to send reset email',
+        detail: error instanceof Error ? error.message : 'Failed to send reset email',
       });
     } finally {
       setLoading(false);
@@ -39,7 +39,11 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin }) => {
   };
 
   return (
-    <AuthLayout title="Forgot Password" subtitle="Enter your email to reset your password" toastRef={toast}>
+    <AuthLayout
+      title="Forgot Password"
+      subtitle="Enter your email to reset your password"
+      toastRef={toast}
+    >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <label htmlFor="email" className="font-semibold text-slate-700">
@@ -62,9 +66,15 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBackToLogin }) => {
           label="Send Reset Link"
           loading={loading}
           className="w-full mt-4"
-          style={{ backgroundColor: '#0052cc', color: 'white', borderColor: '#0052cc', height: '48px', fontSize: '16px' }}
+          style={{
+            backgroundColor: '#0052cc',
+            color: 'white',
+            borderColor: '#0052cc',
+            height: '48px',
+            fontSize: '16px',
+          }}
           pt={{
-            loadingIcon: { className: 'ml-2' }
+            loadingIcon: { className: 'ml-2' },
           }}
         />
 

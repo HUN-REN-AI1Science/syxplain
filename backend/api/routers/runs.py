@@ -3,43 +3,43 @@ Run management endpoints router.
 
 Provides endpoints for creating, listing, and managing analysis runs.
 """
+
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
-from backend.api.dependencies import get_run_service
-from backend.core.security import User, get_current_user
+from backend.api.dependencies import get_permission_service, get_run_service
 from backend.core.exceptions import (
     ConfigurationError,
     EntityNotFoundError,
     ValidationError,
 )
-from backend.services.run_service import RunService
-from backend.schemas.requests import RunRequest
+from backend.core.security import User, get_current_user
+from backend.schemas.requests import RunRequest, SortField, SortOrder
 from backend.schemas.responses import (
+    MessageResponse,
     PaginatedRunsResponse,
     RunResponse,
     RunStatusResponse,
     RunSummary,
-    MessageResponse,
 )
-from backend.workers.analysis_worker import start_analysis_run
+from backend.services.analysis_service import start_analysis_run
+from backend.services.permission_service import PermissionService
+from backend.services.run_service import RunService
+from backend.utils.security_utils import safe_content_disposition
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Runs"])
 
 
-@router.post(
-    "/run",
-    response_model=RunResponse
-)
-def run_analysis(
+@router.post("/run", response_model=RunResponse)
+async def run_analysis(
     request: RunRequest,
     current_user: User = Depends(get_current_user),
-    run_service: RunService = Depends(get_run_service)
+    run_service: RunService = Depends(get_run_service),
+    permission_service: PermissionService = Depends(get_permission_service),
 ):
     """
     Start a new analysis run.
@@ -59,35 +59,48 @@ def run_analysis(
     logger.info(f"User {current_user.user_id} requesting run for file: {request.csv_filename}")
 
     try:
-        # Validate the request
+        # Check user's permission status (admins automatically have access)
+        has_hunren_access = permission_service.has_hunren_access(
+            current_user.user_id, current_user.email
+        )
+
+        # Extract user API keys if provided
+        user_api_key = None
+        user_model = None
+        if request.user_api_keys:
+            user_api_key = request.user_api_keys.openai_api_key
+            user_model = request.user_api_keys.openai_model
+
+        # Validate the request with permission context
         run_service.validate_run_request(
             csv_filename=request.csv_filename,
             target_variable=request.problem_description.target_variable,
             features=request.problem_description.features,
             analysis_type=request.analysis_type,
             deep_research_model=request.deep_research_model,
-            user_id=current_user.user_id
+            user_id=current_user.user_id,
+            has_hunren_access=has_hunren_access,
+            user_api_key=user_api_key,
         )
 
-        # Start the analysis run
+        # Start the analysis run with user keys if applicable
         run_id = start_analysis_run(
             problem_desc=request.problem_description.model_dump(),
             csv_filename=request.csv_filename,
             user_id=current_user.user_id,
             analysis_type=request.analysis_type,
-            deep_research_model=request.deep_research_model
+            deep_research_model=request.deep_research_model,
+            user_api_key=user_api_key if not has_hunren_access else None,
+            user_model=user_model if not has_hunren_access else None,
         )
 
         logger.info(
             f"Analysis started with Run ID: {run_id} "
-            f"(analysis_type={request.analysis_type}, model={request.deep_research_model})"
+            f"(analysis_type={request.analysis_type}, model={request.deep_research_model}, "
+            f"using_user_key={not has_hunren_access and user_api_key is not None})"
         )
 
-        return RunResponse(
-            run_id=run_id,
-            status="pending",
-            message="Analysis started"
-        )
+        return RunResponse(run_id=run_id, status="pending", message="Analysis started")
 
     except ConfigurationError as e:
         logger.error(f"Configuration error: {e.message}")
@@ -98,20 +111,17 @@ def run_analysis(
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@router.get(
-    "/runs",
-    response_model=PaginatedRunsResponse
-)
+@router.get("/runs", response_model=PaginatedRunsResponse)
 def list_runs(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
-    sort_field: str = Query("created_at", description="Field to sort by"),
-    sort_order: str = Query("desc", description="Sort order: asc or desc"),
-    status: Optional[str] = Query(None, description="Filter by status"),
-    analysis_type: Optional[str] = Query(None, description="Filter by analysis type"),
-    search: Optional[str] = Query(None, description="Search in filename and target variable"),
+    sort_field: SortField = Query(SortField.CREATED_AT, description="Field to sort by"),
+    sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order: asc or desc"),
+    status: str | None = Query(None, description="Filter by status"),
+    analysis_type: str | None = Query(None, description="Filter by analysis type"),
+    search: str | None = Query(None, description="Search in filename and target variable"),
     current_user: User = Depends(get_current_user),
-    run_service: RunService = Depends(get_run_service)
+    run_service: RunService = Depends(get_run_service),
 ):
     """
     List runs for the current user with filtering and pagination.
@@ -132,46 +142,47 @@ def list_runs(
         user_id=current_user.user_id,
         page=page,
         page_size=page_size,
-        sort_field=sort_field,
-        sort_order=sort_order,
+        sort_field=sort_field.value,
+        sort_order=sort_order.value,
         status=status,
         analysis_type=analysis_type,
-        search=search
+        search=search,
     )
 
     # Convert to response format
     items = []
     for run in result.items:
-        items.append(RunSummary(
-            id=str(run.id),
-            status=run.status,
-            created_at=run.created_at,
-            csv_filename=run.csv_filename,
-            target_variable=run.target_variable,
-            progress=run.progress or 0,
-            analysis_type=run.analysis_type or "quick"
-        ))
+        items.append(
+            RunSummary(
+                id=str(run.id),
+                status=run.status,
+                created_at=run.created_at,
+                csv_filename=run.csv_filename,
+                target_variable=run.target_variable,
+                progress=run.progress or 0,
+                analysis_type=run.analysis_type or "quick",
+                start_time=run.start_time,
+                finish_time=run.finish_time,
+            )
+        )
 
     return PaginatedRunsResponse(
         items=items,
         total=result.total,
         page=result.page,
         page_size=result.page_size,
-        total_pages=result.total_pages
+        total_pages=result.total_pages,
     )
 
 
-@router.get(
-    "/runs/{run_id}",
-    response_model=RunStatusResponse
-)
+@router.get("/runs/{run_id}", response_model=RunStatusResponse)
 def get_run(
     run_id: str,
     current_user: User = Depends(get_current_user),
-    run_service: RunService = Depends(get_run_service)
+    run_service: RunService = Depends(get_run_service),
 ):
     """
-    Get run status for polling.
+    Get run details and status.
 
     Args:
         run_id: The run UUID
@@ -188,14 +199,38 @@ def get_run(
         raise HTTPException(status_code=404, detail=e.message)
 
 
-@router.delete(
-    "/runs/{run_id}",
-    response_model=MessageResponse
-)
+@router.post("/runs/{run_id}/cancel", response_model=MessageResponse)
+async def cancel_run(
+    run_id: str,
+    current_user: User = Depends(get_current_user),
+    run_service: RunService = Depends(get_run_service),
+):
+    """
+    Cancel a running or pending analysis.
+
+    Returns success even if already completed (idempotent).
+
+    Args:
+        run_id: The run UUID
+
+    Returns:
+        MessageResponse with success message
+
+    Raises:
+        HTTPException: If run not found
+    """
+    try:
+        await run_service.cancel_run(run_id, current_user.user_id)
+        return MessageResponse(message="Run cancelled")
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=e.message)
+
+
+@router.delete("/runs/{run_id}", response_model=MessageResponse)
 def delete_run(
     run_id: str,
     current_user: User = Depends(get_current_user),
-    run_service: RunService = Depends(get_run_service)
+    run_service: RunService = Depends(get_run_service),
 ):
     """
     Permanently delete a run and all associated data.
@@ -216,14 +251,14 @@ def delete_run(
         raise HTTPException(status_code=404, detail=e.message)
     except Exception as e:
         logger.error(f"Failed to delete run {run_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete run: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete run: {e!s}")
 
 
 @router.get("/runs/{run_id}/details")
 def get_run_details(
     run_id: str,
     current_user: User = Depends(get_current_user),
-    run_service: RunService = Depends(get_run_service)
+    run_service: RunService = Depends(get_run_service),
 ):
     """
     Get comprehensive run details including CSV metadata.
@@ -248,7 +283,7 @@ def download_file(
     run_id: str,
     filename: str,
     current_user: User = Depends(get_current_user),
-    run_service: RunService = Depends(get_run_service)
+    run_service: RunService = Depends(get_run_service),
 ):
     """
     Download an artifact file from a run.
@@ -274,7 +309,7 @@ def download_file(
 def download_csv(
     run_id: str,
     current_user: User = Depends(get_current_user),
-    run_service: RunService = Depends(get_run_service)
+    run_service: RunService = Depends(get_run_service),
 ):
     """
     Download the original CSV file associated with a run.
@@ -293,7 +328,7 @@ def download_csv(
         return Response(
             content=db_file.content,
             media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={db_file.filename}"}
+            headers={"Content-Disposition": safe_content_disposition(db_file.filename)},
         )
     except EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)

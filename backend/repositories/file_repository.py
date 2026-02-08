@@ -5,7 +5,6 @@ Provides specialized queries for file management
 including user-scoped lookups and statistics.
 """
 
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -25,11 +24,7 @@ class FileRepository(BaseRepository[File]):
     def __init__(self, db: Session):
         super().__init__(File, db)
 
-    def get_latest_by_filename(
-        self,
-        filename: str,
-        user_id: UUID
-    ) -> Optional[File]:
+    def get_latest_by_filename(self, filename: str, user_id: UUID) -> File | None:
         """
         Get the most recently uploaded file with the given filename for a user.
 
@@ -40,16 +35,14 @@ class FileRepository(BaseRepository[File]):
         Returns:
             The most recent file if found, None otherwise
         """
-        return self.db.query(File).filter(
-            File.filename == filename,
-            File.user_id == user_id
-        ).order_by(File.created_at.desc()).first()
+        return (
+            self.db.query(File)
+            .filter(File.filename == filename, File.user_id == user_id)
+            .order_by(File.created_at.desc())
+            .first()
+        )
 
-    def get_by_filename(
-        self,
-        filename: str,
-        user_id: Optional[UUID] = None
-    ) -> Optional[File]:
+    def get_by_filename(self, filename: str, user_id: UUID | None = None) -> File | None:
         """
         Get a file by filename, optionally scoped to a user.
 
@@ -68,12 +61,7 @@ class FileRepository(BaseRepository[File]):
             query = query.filter(File.user_id == user_id)
         return query.order_by(File.created_at.desc()).first()
 
-    def get_user_files(
-        self,
-        user_id: UUID,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[File]:
+    def get_user_files(self, user_id: UUID, skip: int = 0, limit: int = 100) -> list[File]:
         """
         Get all files for a user with pagination.
 
@@ -85,11 +73,14 @@ class FileRepository(BaseRepository[File]):
         Returns:
             List of files
         """
-        return self.db.query(File).filter(
-            File.user_id == user_id
-        ).order_by(
-            File.created_at.desc()
-        ).offset(skip).limit(limit).all()
+        return (
+            self.db.query(File)
+            .filter(File.user_id == user_id)
+            .order_by(File.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
     def count_for_user(self, user_id: UUID) -> int:
         """
@@ -103,7 +94,7 @@ class FileRepository(BaseRepository[File]):
         """
         return self.db.query(File).filter(File.user_id == user_id).count()
 
-    def get_earliest_for_user(self, user_id: UUID) -> Optional[File]:
+    def get_earliest_for_user(self, user_id: UUID) -> File | None:
         """
         Get the earliest file for a user.
 
@@ -113,9 +104,12 @@ class FileRepository(BaseRepository[File]):
         Returns:
             Earliest file or None
         """
-        return self.db.query(File).filter(
-            File.user_id == user_id
-        ).order_by(File.created_at.asc()).first()
+        return (
+            self.db.query(File)
+            .filter(File.user_id == user_id)
+            .order_by(File.created_at.asc())
+            .first()
+        )
 
     def delete_all_for_user(self, user_id: UUID) -> int:
         """
@@ -132,11 +126,7 @@ class FileRepository(BaseRepository[File]):
         return count
 
     def create_file(
-        self,
-        filename: str,
-        content: bytes,
-        user_id: UUID,
-        media_type: Optional[str] = None
+        self, filename: str, content: bytes, user_id: UUID, media_type: str | None = None
     ) -> File:
         """
         Create a new file record.
@@ -150,10 +140,5 @@ class FileRepository(BaseRepository[File]):
         Returns:
             The created file entity
         """
-        file = File(
-            filename=filename,
-            content=content,
-            user_id=user_id,
-            media_type=media_type
-        )
+        file = File(filename=filename, content=content, user_id=user_id, media_type=media_type)
         return self.create(file)

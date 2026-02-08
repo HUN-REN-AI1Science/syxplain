@@ -4,9 +4,9 @@ Run service for managing analysis runs.
 Encapsulates business logic for creating, querying,
 and managing analysis runs.
 """
-import logging
 
-from typing import Any, Dict, Optional
+import logging
+from typing import Any
 from uuid import UUID
 
 from backend.core.config import get_settings
@@ -15,16 +15,17 @@ from backend.core.exceptions import (
     EntityNotFoundError,
     ValidationError,
 )
+from backend.infrastructure.database.models import Run
+from backend.infrastructure.slurm import get_slurm_backend
+from backend.repositories.artifact_repository import ArtifactRepository
+from backend.repositories.file_repository import FileRepository
 from backend.repositories.run_repository import (
     PaginatedResult,
     PaginationParams,
     RunFilters,
     RunRepository,
 )
-from backend.repositories.file_repository import FileRepository
-from backend.repositories.artifact_repository import ArtifactRepository
 from backend.services.file_service import FileService, get_file_service
-from backend.infrastructure.database.models import Run
 from backend.utils import parse_uuid
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class RunService:
         run_repo: RunRepository,
         file_repo: FileRepository,
         artifact_repo: ArtifactRepository,
-        file_service: Optional[FileService] = None
+        file_service: FileService | None = None,
     ):
         self.run_repo = run_repo
         self.file_repo = file_repo
@@ -51,11 +52,7 @@ class RunService:
         self.file_service = file_service or get_file_service()
         self.settings = get_settings()
 
-    def get_run_for_user(
-        self,
-        run_id: str,
-        user_id: str
-    ) -> Run:
+    def get_run_for_user(self, run_id: str, user_id: str) -> Run:
         """
         Get a run belonging to a specific user.
 
@@ -74,13 +71,9 @@ class RunService:
             raise EntityNotFoundError("Run", run_id)
         return run
 
-    def get_run_status(
-        self,
-        run_id: str,
-        user_id: str
-    ) -> Dict[str, Any]:
+    def get_run_status(self, run_id: str, user_id: str) -> dict[str, Any]:
         """
-        Get run status for polling.
+        Get run status and details.
 
         Args:
             run_id: The run UUID as string
@@ -95,7 +88,9 @@ class RunService:
             "progress": run.progress or 0,
             "error": run.error,
             "results": run.results,
-            "public_share_token": run.public_share_token
+            "public_share_token": run.public_share_token,
+            "start_time": run.start_time,
+            "finish_time": run.finish_time,
         }
 
     def list_runs(
@@ -105,9 +100,9 @@ class RunService:
         page_size: int = 10,
         sort_field: str = "created_at",
         sort_order: str = "desc",
-        status: Optional[str] = None,
-        analysis_type: Optional[str] = None,
-        search: Optional[str] = None
+        status: str | None = None,
+        analysis_type: str | None = None,
+        search: str | None = None,
     ) -> PaginatedResult:
         """
         List runs for a user with filtering and pagination.
@@ -125,25 +120,14 @@ class RunService:
         Returns:
             PaginatedResult with runs
         """
-        filters = RunFilters(
-            status=status,
-            analysis_type=analysis_type,
-            search=search
-        )
+        filters = RunFilters(status=status, analysis_type=analysis_type, search=search)
         pagination = PaginationParams(
-            page=page,
-            page_size=page_size,
-            sort_field=sort_field,
-            sort_order=sort_order
+            page=page, page_size=page_size, sort_field=sort_field, sort_order=sort_order
         )
 
         return self.run_repo.get_user_runs(parse_uuid(user_id), filters, pagination)
 
-    def get_run_details(
-        self,
-        run_id: str,
-        user_id: str
-    ) -> Dict[str, Any]:
+    def get_run_details(self, run_id: str, user_id: str) -> dict[str, Any]:
         """
         Get comprehensive run details including file metadata.
 
@@ -158,16 +142,10 @@ class RunService:
 
         # Get associated file metadata
         csv_metadata = None
-        db_file = self.file_repo.get_latest_by_filename(
-            run.csv_filename,
-            UUID(user_id)
-        )
+        db_file = self.file_repo.get_latest_by_filename(run.csv_filename, UUID(user_id))
 
         if db_file:
-            csv_metadata = self.file_service.get_csv_metadata(
-                db_file.content,
-                db_file.filename
-            )
+            csv_metadata = self.file_service.get_csv_metadata(db_file.content, db_file.filename)
 
         return {
             "id": str(run.id),
@@ -177,17 +155,19 @@ class RunService:
             "csv_filename": run.csv_filename,
             "csv_metadata": csv_metadata,
             "analysis_type": run.analysis_type or "quick",
-            "error": run.error
+            "error": run.error,
         }
 
     def validate_run_request(
         self,
         csv_filename: str,
         target_variable: str,
-        features: Dict[str, str],
+        features: dict[str, str],
         analysis_type: str,
-        deep_research_model: Optional[str],
-        user_id: str
+        deep_research_model: str | None,
+        user_id: str,
+        has_hunren_access: bool = True,
+        user_api_key: str | None = None,
     ) -> None:
         """
         Validate a run request before starting.
@@ -199,39 +179,60 @@ class RunService:
             analysis_type: 'quick' or 'deep'
             deep_research_model: Model for deep analysis
             user_id: User UUID as string
+            has_hunren_access: Whether user has HUN-REN key permission
+            user_api_key: User-provided API key (if any)
 
         Raises:
             EntityNotFoundError: If file not found
             ValidationError: If configuration is invalid
             ConfigurationError: If server configuration is missing
         """
-        # Check LLM API key
-        if not self.settings.llm.openai_api_key:
-            raise ConfigurationError(
-                "OPENAI_API_KEY not set on server",
-                config_key="OPENAI_API_KEY"
-            )
-
-        # Validate deep analysis configuration
-        if analysis_type == "deep":
-            if not self.settings.llm.deep_research_api_key:
+        # Check API key availability based on permissions
+        if has_hunren_access:
+            # User uses server keys - check server configuration
+            if not self.settings.llm.openai_api_key:
                 raise ConfigurationError(
-                    "Deep analysis is not configured on this server. DEEP_RESEARCH_API_KEY is missing.",
-                    config_key="DEEP_RESEARCH_API_KEY"
+                    "OPENAI_API_KEY not set on server", config_key="OPENAI_API_KEY"
                 )
 
-            if not deep_research_model:
+            # Validate deep analysis configuration for server keys
+            if analysis_type == "deep":
+                if not self.settings.llm.deep_research_api_key:
+                    raise ConfigurationError(
+                        "Deep analysis is not configured on this server. DEEP_RESEARCH_API_KEY is missing.",
+                        config_key="DEEP_RESEARCH_API_KEY",
+                    )
+
+                if not deep_research_model:
+                    raise ValidationError(
+                        "deep_research_model is required for deep analysis",
+                        field="deep_research_model",
+                    )
+
+                allowed_models = self.settings.llm.get_deep_research_model_list()
+                if deep_research_model not in allowed_models:
+                    raise ValidationError(
+                        f"Invalid deep_research_model '{deep_research_model}'. Allowed models: {', '.join(allowed_models)}",
+                        field="deep_research_model",
+                        value=deep_research_model,
+                    )
+        else:
+            # User must provide their own API key
+            if not user_api_key:
                 raise ValidationError(
-                    "deep_research_model is required for deep analysis",
-                    field="deep_research_model"
+                    "API key required. Please provide your OpenAI API key.", field="user_api_keys"
                 )
 
-            allowed_models = self.settings.llm.get_deep_research_model_list()
-            if deep_research_model not in allowed_models:
+            # For user keys with deep analysis, only o4-mini-deep-research is allowed
+            if (
+                analysis_type == "deep"
+                and deep_research_model
+                and deep_research_model != "o4-mini-deep-research"
+            ):
                 raise ValidationError(
-                    f"Invalid deep_research_model '{deep_research_model}'. Allowed models: {', '.join(allowed_models)}",
+                    "Deep research with user-provided keys only supports the o4-mini-deep-research model",
                     field="deep_research_model",
-                    value=deep_research_model
+                    value=deep_research_model,
                 )
 
         # Verify file exists and belongs to user
@@ -243,11 +244,52 @@ class RunService:
         df = self.file_service.parse_dataframe(db_file.content, csv_filename)
         self.file_service.validate_columns_exist(df, target_variable, features)
 
-    def delete_run(
-        self,
-        run_id: str,
-        user_id: str
-    ) -> None:
+    async def cancel_run(self, run_id: str, user_id: str) -> bool:
+        """
+        Cancel a running analysis.
+
+        - Cancels Slurm jobs if running
+        - Updates database status to 'cancelled'
+        - Idempotent: returns success if already complete/failed
+
+        Args:
+            run_id: The run UUID as string
+            user_id: The user UUID as string
+
+        Returns:
+            True if cancellation was successful
+
+        Raises:
+            EntityNotFoundError: If run not found or not owned by user
+        """
+        run = self.run_repo.get_by_id_for_user(parse_uuid(run_id), parse_uuid(user_id))
+        if not run:
+            raise EntityNotFoundError("Run", run_id)
+
+        # Already in terminal state - return success (idempotent)
+        if run.status in ("completed", "failed", "timeout", "cancelled"):
+            logger.info(f"Run {run_id} already in terminal state: {run.status}")
+            return True
+
+        # Cancel Slurm jobs if they exist
+        if run.slurm_job_ids:
+            backend = get_slurm_backend()
+            for job_type, job_id in run.slurm_job_ids.items():
+                try:
+                    await backend.cancel_task(job_id)
+                    logger.info(f"Cancelled {job_type}: {job_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to cancel {job_type} {job_id}: {e}")
+
+        # Update status in database and broadcast via WebSocket
+        from backend.services.analysis_service import update_run_status
+
+        update_run_status(run_id, status="cancelled", error="Analysis cancelled by user")
+
+        logger.info(f"User {user_id} cancelled run {run_id}")
+        return True
+
+    def delete_run(self, run_id: str, user_id: str) -> None:
         """
         Delete a run and all associated data.
 
@@ -268,12 +310,7 @@ class RunService:
 
         logger.info(f"User {user_id} deleted run {run_id}")
 
-    def get_artifact(
-        self,
-        run_id: str,
-        filename: str,
-        user_id: str
-    ):
+    def get_artifact(self, run_id: str, filename: str, user_id: str):
         """
         Get an artifact file for download.
 
@@ -297,11 +334,7 @@ class RunService:
 
         return artifact
 
-    def get_original_file(
-        self,
-        run_id: str,
-        user_id: str
-    ):
+    def get_original_file(self, run_id: str, user_id: str):
         """
         Get the original uploaded file for a run.
 
@@ -317,10 +350,7 @@ class RunService:
         """
         run = self.get_run_for_user(run_id, user_id)
 
-        db_file = self.file_repo.get_latest_by_filename(
-            run.csv_filename,
-            parse_uuid(user_id)
-        )
+        db_file = self.file_repo.get_latest_by_filename(run.csv_filename, parse_uuid(user_id))
         if not db_file:
             raise EntityNotFoundError("CSV file", run.csv_filename)
 

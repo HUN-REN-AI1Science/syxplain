@@ -1,5 +1,6 @@
 fastapi
-uvicorn
+uvicorn[standard]
+websockets
 python-multipart
 pandas
 numpy
@@ -21,3 +22,4 @@ openinference-instrumentation-dspy
 openpyxl
 rich
 httpx
+slowapi

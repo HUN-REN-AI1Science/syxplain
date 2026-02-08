@@ -33,20 +33,31 @@ export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({
 
             <h4>Writing a Good Description</h4>
             <ul>
-              <li>Describe the <strong>scientific domain</strong> (e.g., soil chemistry, materials science)</li>
-              <li>Explain your <strong>research goal</strong> and what you're trying to understand</li>
-              <li>Mention any <strong>known relationships</strong> or hypotheses you're testing</li>
+              <li>
+                Describe the <strong>scientific domain</strong> (e.g., soil chemistry, materials
+                science)
+              </li>
+              <li>
+                Explain your <strong>research goal</strong> and what you're trying to understand
+              </li>
+              <li>
+                Mention any <strong>known relationships</strong> or hypotheses you're testing
+              </li>
             </ul>
 
             <h4>Example</h4>
             <p>
-              <em>"We are studying soil health indicators to predict phosphorus availability.
-                The data comes from agricultural fields with varying fertilization histories.
-                We expect pH and organic matter to be key drivers."</em>
+              <em>
+                "We are studying soil health indicators to predict phosphorus availability. The data
+                comes from agricultural fields with varying fertilization histories. We expect pH
+                and organic matter to be key drivers."
+              </em>
             </p>
           </HelpButton>
         </div>
-        <p className="text-sm text-slate-500">Provide context for the AI to generate better explanations.</p>
+        <p className="text-sm text-slate-500">
+          Provide context for the AI to generate better explanations.
+        </p>
       </div>
     </div>
 

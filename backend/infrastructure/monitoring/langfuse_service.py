@@ -4,8 +4,8 @@ Langfuse tracing service.
 Handles initialization, decoration, and usage reporting for Langfuse tracing.
 Integrates with DSPy.
 """
-import logging
 
+import logging
 from typing import TYPE_CHECKING, Optional
 
 from backend.core.config import get_settings
@@ -45,9 +45,7 @@ def init_langfuse() -> bool:
 
         # Initialize client explicitly with settings
         _client = Langfuse(
-            public_key=settings.public_key,
-            secret_key=settings.secret_key,
-            host=settings.base_url
+            public_key=settings.public_key, secret_key=settings.secret_key, host=settings.base_url
         )
 
         if _client.auth_check():
@@ -86,8 +84,10 @@ def flush_traces() -> None:
 
 def _dummy_observe(*args, **kwargs):
     """Fallback decorator when tracing is disabled."""
+
     def decorator(func):
         return func
+
     return decorator if not args or not callable(args[0]) else decorator(args[0])
 
 
@@ -102,6 +102,7 @@ def observe(*args, **kwargs):
 
     try:
         from langfuse.decorators import observe as langfuse_observe
+
         return langfuse_observe(*args, **kwargs)
     except ImportError:
         return _dummy_observe(*args, **kwargs)
@@ -126,7 +127,7 @@ def _count_tokens_manually(messages: list, outputs: list) -> tuple[int, int]:
     return prompt_tokens, completion_tokens
 
 
-def report_usage(lm: "dspy.LM", model_name: str = None) -> None:
+def report_usage(lm: "dspy.LM", model_name: str | None = None) -> None:
     """
     Report token usage from DSPy to Langfuse.
 
@@ -160,7 +161,7 @@ def report_usage(lm: "dspy.LM", model_name: str = None) -> None:
                         "input": prompt_tokens,
                         "output": completion_tokens,
                         "total": total_tokens,
-                    }
+                    },
                 )
             except Exception as e:
                 logger.debug(f"Could not update generation usage: {e}")

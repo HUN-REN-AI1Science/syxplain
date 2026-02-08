@@ -1,6 +1,7 @@
 """
 Common validation utilities.
 """
+
 from typing import Any
 from uuid import UUID
 
@@ -30,5 +31,5 @@ def parse_uuid(value: Any, field_name: str = "id") -> UUID:
         raise ValidationError(
             f"Invalid {field_name} format: '{value}' is not a valid UUID",
             field=field_name,
-            value=str(value)
+            value=str(value),
         )

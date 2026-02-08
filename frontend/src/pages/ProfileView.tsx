@@ -36,7 +36,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
   const [sharedLoading, setSharedLoading] = useState(false);
   const [revokeRunId, setRevokeRunId] = useState<string | null>(null);
   const toast = useRef<Toast>(null);
-  const { signOut } = useAuth();
+  const { signOut, hasHunrenAccess, isAdmin } = useAuth();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -74,9 +74,10 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
     try {
       await profileService.delete();
       await signOut();
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Failed to delete account:', e);
-      setError(e.response?.data?.detail || 'Failed to delete account. Please try again.');
+      const err = e as { response?: { data?: { detail?: string } } };
+      setError(err.response?.data?.detail || 'Failed to delete account. Please try again.');
       setDeleting(false);
     }
   };
@@ -85,10 +86,18 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
     if (!revokeRunId) return;
     try {
       await sharingService.revokeShareLink(revokeRunId);
-      setSharedRuns(prev => prev.filter(r => r.id !== revokeRunId));
-      toast.current?.show({ severity: 'success', summary: 'Revoked', detail: 'Share link removed' });
+      setSharedRuns((prev) => prev.filter((r) => r.id !== revokeRunId));
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Revoked',
+        detail: 'Share link removed',
+      });
     } catch (e) {
-      toast.current?.show({ severity: 'error', summary: 'Error', detail: 'Failed to revoke share link' });
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to revoke share link',
+      });
     } finally {
       setRevokeRunId(null);
     }
@@ -97,7 +106,12 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
   const handleCopyUrl = async (url: string) => {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}${url}`);
-      toast.current?.show({ severity: 'success', summary: 'Copied', detail: 'Link copied to clipboard', life: 2000 });
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Copied',
+        detail: 'Link copied to clipboard',
+        life: 2000,
+      });
     } catch (e) {
       console.error('Failed to copy:', e);
     }
@@ -145,8 +159,8 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
 
                 <h4>Shared Runs</h4>
                 <p>
-                  Manage your publicly shared analysis results. You can copy share links
-                  or revoke access at any time.
+                  Manage your publicly shared analysis results. You can copy share links or revoke
+                  access at any time.
                 </p>
 
                 <h4>Danger Zone</h4>
@@ -167,11 +181,9 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
         </div>
       </div>
 
-      {error && (
-        <Message severity="error" text={error} className="w-full mb-6" />
-      )}
+      {error && <Message severity="error" text={error} className="w-full mb-6" />}
 
-      <AccountInfoSection profile={profile} />
+      <AccountInfoSection profile={profile} hasHunrenAccess={hasHunrenAccess} isAdmin={isAdmin} />
       <UsageStatsSection profile={profile} />
       <SharedRunsTable
         sharedRuns={sharedRuns}

@@ -346,7 +346,10 @@ function renderEquation(ctx: PdfContext, eq: Equation, idx: number, totalCount: 
       pdf.setFont('times', 'normal');
       pdf.setTextColor(60, 60, 60);
 
-      const explanationLines = pdf.splitTextToSize(term.explanation, contentWidth - prefixWidth - 4);
+      const explanationLines = pdf.splitTextToSize(
+        term.explanation,
+        contentWidth - prefixWidth - 4
+      );
       if (explanationLines.length > 0) {
         pdf.text(explanationLines[0], margin + 4 + prefixWidth, ctx.y);
         for (let i = 1; i < explanationLines.length; i++) {
@@ -480,10 +483,7 @@ function renderEquations(ctx: PdfContext, equations: Equation[]): void {
 /**
  * Generate a PDF report from equation analysis results
  */
-export async function generateResultsPdf(
-  data: EquationResults,
-  runId: string
-): Promise<void> {
+export async function generateResultsPdf(data: EquationResults, runId: string): Promise<void> {
   const { equations, summary, recommendation } = data;
   const ctx = createPdfContext();
 

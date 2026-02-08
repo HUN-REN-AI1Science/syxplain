@@ -4,21 +4,24 @@ Sharing endpoints router.
 Provides endpoints for creating and managing public share links,
 as well as public access to shared runs (no auth required).
 """
+
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
 from backend.api.dependencies import get_share_service
-from backend.core.security import User, get_current_user
 from backend.core.exceptions import EntityNotFoundError
-from backend.services.share_service import ShareService
+from backend.core.rate_limit import limiter
+from backend.core.security import User, get_current_user
 from backend.schemas.responses import (
     MessageResponse,
     PublicRunResponse,
-    ShareLinkResponse,
     SharedRunsResponse,
+    ShareLinkResponse,
 )
+from backend.services.share_service import ShareService
+from backend.utils.security_utils import safe_content_disposition
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +32,11 @@ router = APIRouter(tags=["Sharing"])
 # Authenticated Sharing Endpoints
 # ============================================================================
 
-@router.get(
-    "/api/runs/shared",
-    response_model=SharedRunsResponse
-)
+
+@router.get("/api/runs/shared", response_model=SharedRunsResponse)
 def get_shared_runs(
     current_user: User = Depends(get_current_user),
-    share_service: ShareService = Depends(get_share_service)
+    share_service: ShareService = Depends(get_share_service),
 ):
     """
     Get all runs shared by the current user.
@@ -47,14 +48,11 @@ def get_shared_runs(
     return SharedRunsResponse(items=items)
 
 
-@router.post(
-    "/api/runs/{run_id}/share",
-    response_model=ShareLinkResponse
-)
+@router.post("/api/runs/{run_id}/share", response_model=ShareLinkResponse)
 def create_share_link(
     run_id: str,
     current_user: User = Depends(get_current_user),
-    share_service: ShareService = Depends(get_share_service)
+    share_service: ShareService = Depends(get_share_service),
 ):
     """
     Generate a public share link for a run.
@@ -77,14 +75,11 @@ def create_share_link(
         raise HTTPException(status_code=404, detail=e.message)
 
 
-@router.delete(
-    "/api/runs/{run_id}/share",
-    response_model=MessageResponse
-)
+@router.delete("/api/runs/{run_id}/share", response_model=MessageResponse)
 def revoke_share_link(
     run_id: str,
     current_user: User = Depends(get_current_user),
-    share_service: ShareService = Depends(get_share_service)
+    share_service: ShareService = Depends(get_share_service),
 ):
     """
     Revoke a public share link for a run.
@@ -109,13 +104,13 @@ def revoke_share_link(
 # Public Endpoints (No Authentication Required)
 # ============================================================================
 
-@router.get(
-    "/api/public/{share_token}",
-    response_model=PublicRunResponse
-)
+
+@router.get("/api/public/{share_token}", response_model=PublicRunResponse)
+@limiter.limit("5/minute")  # Strict rate limit to prevent token enumeration attacks
 def get_public_run(
+    request: Request,  # Required for rate limiting
     share_token: str,
-    share_service: ShareService = Depends(get_share_service)
+    share_service: ShareService = Depends(get_share_service),
 ):
     """
     Get public run results by share token (no auth required).
@@ -136,9 +131,11 @@ def get_public_run(
 
 
 @router.get("/api/public/{share_token}/details")
+@limiter.limit("5/minute")  # Strict rate limit to prevent token enumeration attacks
 def get_public_run_details(
+    request: Request,  # Required for rate limiting
     share_token: str,
-    share_service: ShareService = Depends(get_share_service)
+    share_service: ShareService = Depends(get_share_service),
 ):
     """
     Get public run details by share token (no auth required).
@@ -159,9 +156,11 @@ def get_public_run_details(
 
 
 @router.get("/api/public/{share_token}/download-csv")
+@limiter.limit("5/minute")  # Strict rate limit to prevent token enumeration attacks
 def download_public_csv(
+    request: Request,  # Required for rate limiting
     share_token: str,
-    share_service: ShareService = Depends(get_share_service)
+    share_service: ShareService = Depends(get_share_service),
 ):
     """
     Download the CSV file for a public run (no auth required).
@@ -180,7 +179,7 @@ def download_public_csv(
         return Response(
             content=db_file.content,
             media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={db_file.filename}"}
+            headers={"Content-Disposition": safe_content_disposition(db_file.filename)},
         )
     except EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)

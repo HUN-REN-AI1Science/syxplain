@@ -4,7 +4,8 @@ Custom exception hierarchy for the Syxplain backend.
 Provides structured exceptions that map to appropriate HTTP status codes
 and include detailed error information for logging and debugging.
 """
-from typing import Any, Dict, Optional
+
+from typing import Any
 
 
 class SyxplainException(Exception):
@@ -16,13 +17,11 @@ class SyxplainException(Exception):
         details: Additional context for debugging
         status_code: HTTP status code to return
     """
+
     status_code: int = 500
 
     def __init__(
-        self,
-        message: str,
-        details: Optional[Dict[str, Any]] = None,
-        status_code: Optional[int] = None
+        self, message: str, details: dict[str, Any] | None = None, status_code: int | None = None
     ):
         self.message = message
         self.details = details or {}
@@ -30,13 +29,9 @@ class SyxplainException(Exception):
             self.status_code = status_code
         super().__init__(self.message)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert exception to dictionary for API response."""
-        return {
-            "error": self.__class__.__name__,
-            "message": self.message,
-            "details": self.details
-        }
+        return {"error": self.__class__.__name__, "message": self.message, "details": self.details}
 
 
 class EntityNotFoundError(SyxplainException):
@@ -45,19 +40,15 @@ class EntityNotFoundError(SyxplainException):
 
     Maps to HTTP 404 Not Found.
     """
+
     status_code = 404
 
-    def __init__(
-        self,
-        entity_type: str,
-        identifier: Any,
-        message: Optional[str] = None
-    ):
+    def __init__(self, entity_type: str, identifier: Any, message: str | None = None):
         self.entity_type = entity_type
         self.identifier = identifier
         super().__init__(
             message=message or f"{entity_type} not found",
-            details={"entity_type": entity_type, "identifier": str(identifier)}
+            details={"entity_type": entity_type, "identifier": str(identifier)},
         )
 
 
@@ -67,17 +58,13 @@ class AuthorizationError(SyxplainException):
 
     Maps to HTTP 403 Forbidden.
     """
+
     status_code = 403
 
     def __init__(
-        self,
-        message: str = "Not authorized to perform this action",
-        resource: Optional[str] = None
+        self, message: str = "Not authorized to perform this action", resource: str | None = None
     ):
-        super().__init__(
-            message=message,
-            details={"resource": resource} if resource else {}
-        )
+        super().__init__(message=message, details={"resource": resource} if resource else {})
 
 
 class AuthenticationError(SyxplainException):
@@ -86,17 +73,11 @@ class AuthenticationError(SyxplainException):
 
     Maps to HTTP 401 Unauthorized.
     """
+
     status_code = 401
 
-    def __init__(
-        self,
-        message: str = "Authentication required",
-        reason: Optional[str] = None
-    ):
-        super().__init__(
-            message=message,
-            details={"reason": reason} if reason else {}
-        )
+    def __init__(self, message: str = "Authentication required", reason: str | None = None):
+        super().__init__(message=message, details={"reason": reason} if reason else {})
 
 
 class ValidationError(SyxplainException):
@@ -105,14 +86,10 @@ class ValidationError(SyxplainException):
 
     Maps to HTTP 400 Bad Request.
     """
+
     status_code = 400
 
-    def __init__(
-        self,
-        message: str,
-        field: Optional[str] = None,
-        value: Any = None
-    ):
+    def __init__(self, message: str, field: str | None = None, value: Any = None):
         details = {}
         if field:
             details["field"] = field
@@ -124,12 +101,7 @@ class ValidationError(SyxplainException):
 class FileValidationError(ValidationError):
     """Raised when file validation fails."""
 
-    def __init__(
-        self,
-        message: str,
-        filename: Optional[str] = None,
-        file_type: Optional[str] = None
-    ):
+    def __init__(self, message: str, filename: str | None = None, file_type: str | None = None):
         details = {}
         if filename:
             details["filename"] = filename
@@ -141,23 +113,17 @@ class FileValidationError(ValidationError):
 
 class FileTooLargeError(ValidationError):
     """Raised when uploaded file exceeds size limit."""
+
     status_code = 413
 
-    def __init__(
-        self,
-        filename: str,
-        size_bytes: int,
-        max_size_bytes: int
-    ):
+    def __init__(self, filename: str, size_bytes: int, max_size_bytes: int):
         super().__init__(
-            message=f"File too large. Maximum size is {max_size_bytes // (1024*1024)}MB.",
-            field="file"
+            message=f"File too large. Maximum size is {max_size_bytes // (1024 * 1024)}MB.",
+            field="file",
         )
-        self.details.update({
-            "filename": filename,
-            "size_bytes": size_bytes,
-            "max_size_bytes": max_size_bytes
-        })
+        self.details.update(
+            {"filename": filename, "size_bytes": size_bytes, "max_size_bytes": max_size_bytes}
+        )
 
 
 class ExternalServiceError(SyxplainException):
@@ -166,20 +132,16 @@ class ExternalServiceError(SyxplainException):
 
     Maps to HTTP 502 Bad Gateway or 503 Service Unavailable.
     """
+
     status_code = 502
 
-    def __init__(
-        self,
-        service: str,
-        message: str,
-        original_error: Optional[Exception] = None
-    ):
+    def __init__(self, service: str, message: str, original_error: Exception | None = None):
         super().__init__(
             message=f"{service} error: {message}",
             details={
                 "service": service,
-                "original_error": str(original_error) if original_error else None
-            }
+                "original_error": str(original_error) if original_error else None,
+            },
         )
         self.service = service
         self.original_error = original_error
@@ -187,17 +149,13 @@ class ExternalServiceError(SyxplainException):
 
 class AnalysisError(SyxplainException):
     """Raised when analysis processing fails."""
+
     status_code = 500
 
-    def __init__(
-        self,
-        run_id: str,
-        message: str,
-        phase: Optional[str] = None
-    ):
+    def __init__(self, run_id: str, message: str, phase: str | None = None):
         super().__init__(
             message=message,
-            details={"run_id": run_id, "phase": phase} if phase else {"run_id": run_id}
+            details={"run_id": run_id, "phase": phase} if phase else {"run_id": run_id},
         )
         self.run_id = run_id
         self.phase = phase
@@ -205,17 +163,11 @@ class AnalysisError(SyxplainException):
 
 class ConfigurationError(SyxplainException):
     """Raised when required configuration is missing or invalid."""
+
     status_code = 500
 
-    def __init__(
-        self,
-        message: str,
-        config_key: Optional[str] = None
-    ):
-        super().__init__(
-            message=message,
-            details={"config_key": config_key} if config_key else {}
-        )
+    def __init__(self, message: str, config_key: str | None = None):
+        super().__init__(message=message, details={"config_key": config_key} if config_key else {})
 
 
 # ============================================================================
@@ -226,23 +178,14 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 
-async def syxplain_exception_handler(
-    request: Request,
-    exc: SyxplainException
-) -> JSONResponse:
+async def syxplain_exception_handler(request: Request, exc: SyxplainException) -> JSONResponse:
     """
     Global exception handler for SyxplainException and its subclasses.
 
     Converts exceptions to consistent JSON responses with appropriate
     HTTP status codes.
     """
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "detail": exc.message,
-            **exc.details
-        }
-    )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message, **exc.details})
 
 
 def register_exception_handlers(app):

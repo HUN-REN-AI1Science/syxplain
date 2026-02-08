@@ -12,7 +12,7 @@ import {
   PublicHeader,
   LoadingSpinner,
   ResultsHeader,
-  ResultContent
+  ResultContent,
 } from '@components/Results';
 import { publicService, type PublicRunData } from '@services/api';
 import type { EquationResults } from '@/types';
@@ -39,9 +39,10 @@ const PublicResultsView: React.FC = () => {
         if (response.data.status !== 'completed') {
           setError('This analysis is not yet complete');
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('Failed to fetch public run:', e);
-        if (e.response?.status === 404) {
+        const err = e as { response?: { status?: number } };
+        if (err.response?.status === 404) {
           setError('This share link is invalid or has been revoked');
         } else {
           setError('Failed to load shared results');
@@ -77,10 +78,7 @@ const PublicResultsView: React.FC = () => {
           <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
             {/* Loading State */}
             {loading && (
-              <LoadingSpinner
-                message="Loading shared results..."
-                className="min-h-[400px] p-6"
-              />
+              <LoadingSpinner message="Loading shared results..." className="min-h-[400px] p-6" />
             )}
 
             {/* Error State */}
@@ -91,9 +89,13 @@ const PublicResultsView: React.FC = () => {
                 </div>
                 <h2 className="text-xl font-bold text-slate-800 mb-2">Unable to Load Results</h2>
                 <p className="text-slate-600 text-center max-w-md mb-6">{error}</p>
-                <Message severity="warn" className="max-w-md" content={
-                  <span>The share link may have expired or been revoked by the owner.</span>
-                } />
+                <Message
+                  severity="warn"
+                  className="max-w-md"
+                  content={
+                    <span>The share link may have expired or been revoked by the owner.</span>
+                  }
+                />
               </div>
             )}
 

@@ -46,46 +46,46 @@ body {
 
 .prose p {
   @apply leading-relaxed mb-4;
-    color: #0f172a !important;
+  color: #0f172a !important;
 }
 
 .prose ul {
   @apply list-disc list-inside mb-4;
-    color: #0f172a !important;
+  color: #0f172a !important;
 }
 
 .prose ol {
   @apply list-decimal list-inside mb-4;
-    color: #0f172a !important;
-  }
+  color: #0f172a !important;
+}
 
-  .prose li {
-    color: #0f172a !important;
-  }
+.prose li {
+  color: #0f172a !important;
+}
 
-  .prose li::marker {
-    color: #0f172a !important;
-  }
+.prose li::marker {
+  color: #0f172a !important;
+}
 
-  .prose.prose-slate ul,
-  .prose.prose-slate ol,
-  .prose.prose-slate li {
-    color: #0f172a !important;
-  }
+.prose.prose-slate ul,
+.prose.prose-slate ol,
+.prose.prose-slate li {
+  color: #0f172a !important;
+}
 
-  .prose.prose-slate li::marker,
-  .prose.prose-slate ul li::marker,
-  .prose.prose-slate ol li::marker {
-    color: #0f172a !important;
-  }
+.prose.prose-slate li::marker,
+.prose.prose-slate ul li::marker,
+.prose.prose-slate ol li::marker {
+  color: #0f172a !important;
+}
 
-  /* Override all prose-slate text colors */
-  .prose.prose-slate p,
-  .prose.prose-slate strong,
-  .prose.prose-slate em,
-  .prose.prose-slate span,
-  .prose.prose-slate a {
-    color: #0f172a !important;
+/* Override all prose-slate text colors */
+.prose.prose-slate p,
+.prose.prose-slate strong,
+.prose.prose-slate em,
+.prose.prose-slate span,
+.prose.prose-slate a {
+  color: #0f172a !important;
 }
 
 /* Inline code - light grey background */
@@ -96,15 +96,15 @@ body {
 /* Code blocks - dark background */
 .prose pre {
   @apply p-4 rounded-lg overflow-x-auto mb-4;
-    background-color: #1e293b !important;
-    color: #e2e8f0 !important;
-  }
+  background-color: #1e293b !important;
+  color: #e2e8f0 !important;
+}
 
-  /* Code inside pre blocks - no background, inherit from pre */
-  .prose pre code {
-    background-color: transparent !important;
-    color: #e2e8f0 !important;
-    padding: 0 !important;
+/* Code inside pre blocks - no background, inherit from pre */
+.prose pre code {
+  background-color: transparent !important;
+  color: #e2e8f0 !important;
+  padding: 0 !important;
 }
 
 .prose blockquote {
@@ -113,8 +113,12 @@ body {
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fadeInUp {
@@ -137,7 +141,7 @@ body {
 }
 
 .animate-slide-up {
-    animation: fadeInUp 0.4s ease-out forwards;
+  animation: fadeInUp 0.4s ease-out forwards;
 }
 
 /* Custom Scrollbar Class (if needed for specific elements) */
@@ -366,7 +370,7 @@ body {
 /* Help Button - Constrain to icon size */
 .p-button.p-button-rounded.p-button-text.p-button-sm.p-button-icon-only {
   width: 1.5rem;
-    height: 1.5rem;
+  height: 1.5rem;
   padding: 0;
 }
 
@@ -416,4 +420,71 @@ body {
 .help-content strong {
   color: #1e293b;
   font-weight: 600;
+}
+
+/* ============================================================================
+   HPC Queue Phase Animations
+   ============================================================================ */
+
+/* Shimmer effect on progress bar during queue phase */
+.progress-bar-shimmer .p-progressbar-value {
+  background: linear-gradient(90deg, #0052cc 0%, #3b82f6 50%, #0052cc 100%) !important;
+  background-size: 200% 100%;
+  animation: progressShimmer 2s linear infinite;
+}
+
+@keyframes progressShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Message fade transition for rotating queue messages */
+@keyframes messageFade {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-animate {
+  animation: messageFade 0.4s ease-out forwards;
+}
+
+/* Subtle pulse animation for queue status indicator */
+@keyframes queuePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.queue-pulse {
+  animation: queuePulse 2s ease-in-out infinite;
+}
+
+/* Tips panel slide-in animation */
+@keyframes tipSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.tip-animate {
+  animation: tipSlideIn 0.5s ease-out forwards;
 }

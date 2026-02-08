@@ -18,7 +18,8 @@ export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({ onDeleteCl
     </div>
     <div className="border-2 border-red-200 bg-red-50 rounded-xl p-4 md:p-6">
       <p className="text-slate-700 mb-4 text-sm md:text-base">
-        Once you delete your account, there is no going back. All your data will be permanently removed from our servers.
+        Once you delete your account, there is no going back. All your data will be permanently
+        removed from our servers.
       </p>
       <Button
         label="Delete Account"

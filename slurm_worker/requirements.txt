@@ -1,0 +1,22 @@
+# Syxplain Slurm Worker Dependencies
+# Install in the Slurm compute environment
+
+# Core scientific computing
+numpy>=1.24.0,<2.0.0
+pandas>=2.0.0,<3.0.0
+scipy>=1.10.0,<2.0.0
+
+# Machine learning for SHAP
+scikit-learn>=1.2.0,<2.0.0
+
+# SHAP analysis
+shap>=0.42.0,<1.0.0
+
+# Symbolic regression
+pysr>=0.16.0,<1.0.0
+
+# Julia interface (required by PySR)
+juliacall>=0.9.0
+
+# HTTP client for progress callbacks
+requests>=2.28.0,<3.0.0

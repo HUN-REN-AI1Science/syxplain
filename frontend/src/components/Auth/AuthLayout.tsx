@@ -1,8 +1,3 @@
-/**
- * AuthLayout Component
- * Shared layout wrapper for authentication pages with logo header
- */
-
 import React from 'react';
 import { Card } from 'primereact/card';
 import { Toast } from 'primereact/toast';
@@ -15,12 +10,7 @@ interface AuthLayoutProps {
   toastRef?: React.RefObject<Toast>;
 }
 
-export const AuthLayout: React.FC<AuthLayoutProps> = ({
-  title,
-  subtitle,
-  children,
-  toastRef,
-}) => (
+export const AuthLayout: React.FC<AuthLayoutProps> = ({ title, subtitle, children, toastRef }) => (
   <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
     {toastRef && <Toast ref={toastRef} />}
 
@@ -34,8 +24,12 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
         </div>
         <h1 className="text-3xl font-bold text-slate-900">
           {title.includes('AI') ? (
-            <>Syxplain <span className="text-blue-600">AI</span></>
-          ) : title}
+            <>
+              Syxplain <span className="text-blue-600">AI</span>
+            </>
+          ) : (
+            title
+          )}
         </h1>
         <p className="text-slate-500 mt-2">{subtitle}</p>
       </div>

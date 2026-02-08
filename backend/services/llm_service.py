@@ -6,20 +6,21 @@ Orchestrates LLM interactions for the application, including:
 - Equation explanation
 - Deep research
 """
+
 import json
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 import dspy
 
+from backend.infrastructure.llm.client import create_deep_research_model, create_dspy_model
 from backend.infrastructure.llm.signatures import (
-    PySrConfigGenerator,
+    DeepResearchEquations,
     ExplainPySrEquations,
     ExplainPySrEquationsDeep,
-    DeepResearchEquations
+    PySrConfigGenerator,
 )
-from backend.infrastructure.llm.client import create_dspy_model, create_deep_research_model
-from backend.infrastructure.monitoring.langfuse_service import observe, report_usage, flush_traces
+from backend.infrastructure.monitoring.langfuse_service import flush_traces, observe, report_usage
 from backend.utils.json_utils import clean_and_fix_json_string
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,9 @@ logger = logging.getLogger(__name__)
 def generate_pysr_config(
     project_description: str,
     dataset_statistics: str,
-    visualizations_b64: List[str]
+    visualizations_b64: list[str],
+    user_api_key: str | None = None,
+    user_model: str | None = None,
 ) -> str:
     """
     Generates PySR configuration JSON using LLM.
@@ -38,12 +41,16 @@ def generate_pysr_config(
         project_description: Description of the project
         dataset_statistics: Statistics of the dataset
         visualizations_b64: List of base64 encoded images
+        user_api_key: Optional user-provided API key
+        user_model: Optional user-specified model
 
     Returns:
         JSON string containing PySR configuration
     """
-    lm = create_dspy_model()
-    visual_inputs = [dspy.Image(f"data:image/png;base64,{img_b64}") for img_b64 in visualizations_b64]
+    lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
+    visual_inputs = [
+        dspy.Image(f"data:image/png;base64,{img_b64}") for img_b64 in visualizations_b64
+    ]
 
     predictor = dspy.Predict(PySrConfigGenerator)
 
@@ -52,7 +59,7 @@ def generate_pysr_config(
             response = predictor(
                 project_description=project_description,
                 dataset_statistics=dataset_statistics,
-                visualizations=visual_inputs
+                visualizations=visual_inputs,
             )
 
         config_json = response.config_json
@@ -75,19 +82,22 @@ def generate_pysr_config(
 
 
 @observe(name="deep_research_equations", as_type="generation")
-def deep_research_equations(features_dict: Dict[str, str], model_name: str = None) -> Dict[str, Any]:
+def deep_research_equations(
+    features_dict: dict[str, str], model_name: str | None = None, user_api_key: str | None = None
+) -> dict[str, Any]:
     """
     Performs deep scientific research to find equations relating features.
 
     Args:
         features_dict: Dictionary mapping variable names to descriptions
-        model_name: Optional override for model name
+        model_name: Optional override for model name (only used with server keys)
+        user_api_key: Optional user-provided API key
 
     Returns:
         Dictionary with 'equations' list
     """
     try:
-        lm = create_deep_research_model(model_name)
+        lm = create_deep_research_model(model_name=model_name, user_api_key=user_api_key)
 
         features_json = json.dumps(features_dict, indent=2)
         predictor = dspy.Predict(DeepResearchEquations)
@@ -123,8 +133,10 @@ def deep_research_equations(features_dict: Dict[str, str], model_name: str = Non
 def generate_equation_explanation(
     project_spec_json: str,
     data_spec_json: str,
-    deep_research_context: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+    deep_research_context: dict[str, Any] | None = None,
+    user_api_key: str | None = None,
+    user_model: str | None = None,
+) -> dict[str, Any]:
     """
     Generates explanation for PySR equations as structured JSON.
 
@@ -132,6 +144,8 @@ def generate_equation_explanation(
         project_spec_json: JSON string of project specification
         data_spec_json: JSON string of equations data
         deep_research_context: Optional dict from deep research step
+        user_api_key: Optional user-provided API key
+        user_model: Optional user-specified model
 
     Returns:
         JSON string with structured equation explanations
@@ -141,28 +155,27 @@ def generate_equation_explanation(
     # Select appropriate model and signature
     if is_deep_analysis:
         lm = create_dspy_model(
-            extra_body={
-                "tools": [
-                    {
-                        "type": "web_search_preview",
-                        "search_context_size": "high"
-                    }
-                ]
-            }
+            user_api_key=user_api_key,
+            user_model=user_model,
+            extra_body={"tools": [{"type": "web_search_preview", "search_context_size": "high"}]},
         )
 
         # Enhance project spec with deep research results
         try:
             enhanced_project_spec = json.loads(project_spec_json)
-            enhanced_project_spec["deep_research_equations"] = deep_research_context.get("equations", [])
+            enhanced_project_spec["deep_research_equations"] = deep_research_context.get(
+                "equations", []
+            )
             project_spec_json = json.dumps(enhanced_project_spec, indent=2)
         except json.JSONDecodeError:
-            logger.warning("Failed to parse project_spec_json for enhancement, proceeding with original")
+            logger.warning(
+                "Failed to parse project_spec_json for enhancement, proceeding with original"
+            )
 
         predictor = dspy.Predict(ExplainPySrEquationsDeep)
 
     else:
-        lm = create_dspy_model()
+        lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
         predictor = dspy.Predict(ExplainPySrEquations)
 
     logger.info(f"Generating explanations. Deep Analysis: {is_deep_analysis}")
@@ -172,10 +185,7 @@ def generate_equation_explanation(
             logger.debug(f"Explain Equations Input - Project Spec: {project_spec_json}")
             logger.debug(f"Explain Equations Input - Data Spec: {data_spec_json}")
 
-            response = predictor(
-                project_spec_json=project_spec_json,
-                data_spec_json=data_spec_json
-            )
+            response = predictor(project_spec_json=project_spec_json, data_spec_json=data_spec_json)
         report_usage(lm)
 
         explanation_json = response.explanation_json
@@ -190,8 +200,12 @@ def generate_equation_explanation(
 
             # Ensure defaults
             parsed.setdefault("equations", [])
-            parsed.setdefault("summary", {"key_drivers": [], "secondary_drivers": [], "findings": ""})
-            parsed.setdefault("recommendation", {"equation_id": 1, "simplified_equation": "", "rationale": []})
+            parsed.setdefault(
+                "summary", {"key_drivers": [], "secondary_drivers": [], "findings": ""}
+            )
+            parsed.setdefault(
+                "recommendation", {"equation_id": 1, "simplified_equation": "", "rationale": []}
+            )
 
             # Post-process: Renumber equation IDs
             if parsed["equations"]:
@@ -212,10 +226,16 @@ def generate_equation_explanation(
 
         except json.JSONDecodeError as e:
             # Log detailed error information for debugging
-            error_pos = e.pos if hasattr(e, 'pos') else 'unknown'
+            error_pos = e.pos if hasattr(e, "pos") else "unknown"
             context_start = max(0, error_pos - 50) if isinstance(error_pos, int) else 0
-            context_end = min(len(cleaned_json), error_pos + 50) if isinstance(error_pos, int) else 100
-            context = cleaned_json[context_start:context_end] if isinstance(error_pos, int) else cleaned_json[:100]
+            context_end = (
+                min(len(cleaned_json), error_pos + 50) if isinstance(error_pos, int) else 100
+            )
+            context = (
+                cleaned_json[context_start:context_end]
+                if isinstance(error_pos, int)
+                else cleaned_json[:100]
+            )
             logger.error(
                 f"Failed to parse explanation JSON: {e}. "
                 f"Error at position {error_pos}. Context around error: ...{context}..."
@@ -223,9 +243,13 @@ def generate_equation_explanation(
             # Fallback
             fallback = {
                 "equations": [],
-                "summary": {"key_drivers": [], "secondary_drivers": [], "findings": explanation_json},
+                "summary": {
+                    "key_drivers": [],
+                    "secondary_drivers": [],
+                    "findings": explanation_json,
+                },
                 "recommendation": {"equation_id": 0, "simplified_equation": "", "rationale": []},
-                "_parse_error": str(e)
+                "_parse_error": str(e),
             }
             return fallback
 

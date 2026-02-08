@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { Panel } from 'primereact/panel';
+import { Panel, type PanelHeaderTemplateOptions, type PanelToggleEvent } from 'primereact/panel';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
 import { ProgressBar } from 'primereact/progressbar';
@@ -40,7 +40,7 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
     }
   };
 
-  const handleToggle = async (e: any) => {
+  const handleToggle = async (e: PanelToggleEvent) => {
     const isExpanding = !e.value;
 
     if (isExpanding && !hasFetched) {
@@ -63,7 +63,7 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
     }
   };
 
-  const headerTemplate = (options: any) => {
+  const headerTemplate = (options: PanelHeaderTemplateOptions) => {
     return (
       <div className="flex items-center justify-between w-full pr-2">
         <div className="flex items-center">
@@ -76,7 +76,9 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
           className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
           onClick={options.onTogglerClick}
         >
-          <i className={`pi ${options.collapsed ? 'pi-chevron-down' : 'pi-chevron-up'} text-slate-500 text-sm`}></i>
+          <i
+            className={`pi ${options.collapsed ? 'pi-chevron-down' : 'pi-chevron-up'} text-slate-500 text-sm`}
+          ></i>
         </button>
       </div>
     );
@@ -148,7 +150,10 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
                     </div>
                     <div className="min-w-0">
                       <h4 className="font-bold text-slate-800">Dataset</h4>
-                      <p className="text-sm text-slate-500 font-mono truncate" title={csv_metadata?.filename}>
+                      <p
+                        className="text-sm text-slate-500 font-mono truncate"
+                        title={csv_metadata?.filename}
+                      >
                         {csv_metadata?.filename || runDetails.csv_filename}
                       </p>
                     </div>
@@ -172,7 +177,9 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
                     <div className="text-2xl font-bold text-slate-800">
                       {csv_metadata?.column_count ?? '-'}
                     </div>
-                    <div className="text-xs text-slate-500 uppercase tracking-wider mt-1">Columns</div>
+                    <div className="text-xs text-slate-500 uppercase tracking-wider mt-1">
+                      Columns
+                    </div>
                   </div>
                   <div className="bg-white rounded-lg p-3 text-center border border-slate-100">
                     <div className="text-2xl font-bold text-slate-800">
@@ -205,16 +212,24 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
             </div>
 
             {/* Analysis Mode */}
-            <div className={`rounded-xl p-4 border ${runDetails.analysis_type === 'deep' ? 'bg-gradient-to-br from-blue-50 to-cyan-100 border-blue-200' : 'bg-gradient-to-br from-orange-50 to-amber-100 border-orange-200'}`}>
+            <div
+              className={`rounded-xl p-4 border ${runDetails.analysis_type === 'deep' ? 'bg-gradient-to-br from-blue-50 to-cyan-100 border-blue-200' : 'bg-gradient-to-br from-orange-50 to-amber-100 border-orange-200'}`}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-3 flex-shrink-0 ${runDetails.analysis_type === 'deep' ? 'bg-blue-100' : 'bg-orange-100'}`}>
-                    <i className={`pi ${runDetails.analysis_type === 'deep' ? 'pi-search text-blue-600' : 'pi-bolt text-orange-600'} text-lg`}></i>
+                  <div
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center mr-3 flex-shrink-0 ${runDetails.analysis_type === 'deep' ? 'bg-blue-100' : 'bg-orange-100'}`}
+                  >
+                    <i
+                      className={`pi ${runDetails.analysis_type === 'deep' ? 'pi-search text-blue-600' : 'pi-bolt text-orange-600'} text-lg`}
+                    ></i>
                   </div>
                   <div>
                     <h4 className="font-bold text-slate-800">Analysis Mode</h4>
                     <p className="text-sm text-slate-500">
-                      {runDetails.analysis_type === 'deep' ? 'Enhanced with scientific literature research' : 'Standard analysis workflow'}
+                      {runDetails.analysis_type === 'deep'
+                        ? 'Enhanced with scientific literature research'
+                        : 'Standard analysis workflow'}
                     </p>
                   </div>
                 </div>
@@ -248,7 +263,9 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
                   </div>
                   <div>
                     <h4 className="font-bold text-slate-800">Feature Descriptions</h4>
-                    <p className="text-sm text-slate-500">{featureEntries.length} features used in analysis</p>
+                    <p className="text-sm text-slate-500">
+                      {featureEntries.length} features used in analysis
+                    </p>
                   </div>
                 </div>
 
@@ -266,19 +283,25 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
                     {featureEntries.map(([featureName, description], index) => (
                       <div
                         key={featureName}
-                        className={`grid grid-cols-12 gap-4 px-4 py-3 items-center hover:bg-blue-50 transition-colors ${index !== featureEntries.length - 1 ? 'border-b border-slate-100' : ''
-                          }`}
+                        className={`grid grid-cols-12 gap-4 px-4 py-3 items-center hover:bg-blue-50 transition-colors ${
+                          index !== featureEntries.length - 1 ? 'border-b border-slate-100' : ''
+                        }`}
                       >
                         <div className="col-span-4 flex items-center min-w-0">
                           <div className="w-6 h-6 bg-slate-100 rounded flex items-center justify-center mr-2 flex-shrink-0">
                             <i className="pi pi-database text-slate-400 text-xs"></i>
                           </div>
-                          <code className="text-sm font-semibold text-blue-700 truncate" title={featureName}>
+                          <code
+                            className="text-sm font-semibold text-blue-700 truncate"
+                            title={featureName}
+                          >
                             {featureName}
                           </code>
                         </div>
                         <div className="col-span-8 text-sm text-slate-600">
-                          {description || <span className="text-slate-400 italic">No description provided</span>}
+                          {description || (
+                            <span className="text-slate-400 italic">No description provided</span>
+                          )}
                         </div>
                       </div>
                     ))}

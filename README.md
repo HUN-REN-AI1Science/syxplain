@@ -5,170 +5,209 @@
 [![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/release/python-3100/)
 [![Node.js 24.12.0](https://img.shields.io/badge/node.js-24.12.0_LTS-339933.svg)](https://nodejs.org/)
 [![React 18.3.1](https://img.shields.io/badge/react-18.3.1-61dafb.svg)](https://react.dev/)
+[![Slurm](https://img.shields.io/badge/Slurm-HPC-orange.svg)](https://slurm.schedmd.com/)
 
-This is a proof of concept system which uses state of the art symbolic regression models to predict a selected variable in a dataset and explain the predicted equations in natural language using large language models. Setting the hiperparameters of the symbolic regression can be tedious, so here we use an LLM withvision capabilities to analyze the dataset and suggest hiperparameters for the symbolic regression model.
+This is a proof of concept system which uses state of the art symbolic regression models to predict a selected variable in a dataset and explain the predicted equations in natural language using large language models. Setting the hiperparameters of the symbolic regression can be tedious, so here we use an LLM with vision capabilities to analyze the dataset and suggest hiperparameters for the symbolic regression model.
+
+## Quick Navigation
+
+| I want to... | Go to |
+|--------------|-------|
+| Run locally for development | [Quick Start](#quick-start-development) |
+| Deploy to production server | [Production Deployment](#production-deployment) |
+| Set up Slurm HPC compute | [SLURM.md](./SLURM.md) |
+| Develop the Slurm worker | [slurm_worker/README.md](./slurm_worker/README.md) |
+
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Quick Start (Development)](#quick-start-development)
+- [Docker Compose Configurations](#docker-compose-configurations)
+- [Environment Variables](#environment-variables)
+- [Production Deployment](#production-deployment)
+- [Slurm Integration](#slurm-integration)
+- [Admin Setup](#admin-setup)
+- [Feedback System](#feedback-system)
+
+## Architecture
+
+Syxplain uses a **Slurm-based compute architecture** that separates LLM operations from compute-intensive tasks:
+
+```
+┌─────────────┐     ┌─────────────────────────────────────────────┐
+│   Frontend  │────▶│              Backend API                    │
+│   (React)   │     │  ┌──────────────────────────────────────┐   │
+└─────────────┘     │  │         Orchestrator Service         │   │
+                    │  │  - Data summary & visualization      │   │
+                    │  │  - LLM config generation             │   │
+                    │  │  - LLM equation explanation          │   │
+                    │  └──────────────┬───────────────────────┘   │
+                    │                 │                           │
+                    │                 ▼                           │
+                    │  ┌──────────────────────────────────────┐   │
+                    │  │     Slurm Compute Backend            │   │
+                    │  │   (via slurmrestd REST API)          │   │
+                    │  └──────────────┬───────────────────────┘   │
+                    └─────────────────┼───────────────────────────┘
+                                      │ HTTP (port 6820)
+              ┌───────────────────────┴───────────────────────┐
+              ▼                                               ▼
+    ┌─────────────────┐                           ┌─────────────────┐
+    │   SHAP Task     │                           │   PySR Task     │
+    │ - Feature       │                           │ - Symbolic      │
+    │   interactions  │                           │   regression    │
+    └─────────────────┘                           └─────────────────┘
+```
+
+Compute-intensive tasks (SHAP analysis, PySR symbolic regression) are submitted to an external **Slurm cluster** at `slurm.science-cloud.hu` via the slurmrestd REST API.
 
 ## Prerequisites
 
-- Anaconda (Miniconda is suggested)
-- GNUPG for credential management
-- Gemini API Key (encrypted using gnupg and stored in `credentials/api_key_gemini.gpg`)
+- Docker and Docker Compose
+- An OpenAI-compatible LLM API key
+- Access to the Slurm cluster (SSH for token generation only)
 
-The system has been developed and tested on Linux and intented to be used on a Linux environment as a server behind a reverse proxy.
-
-## Installation
-After cloning the repository, create a conda environment and install the dependencies. The following lines works only if your current directory is the root of the cloned repository.
+## Quick Start (Development)
 
 ```bash
-conda env create -f syxplain_environment.yml
-conda activate syxplain
-```
-## Web Application
-
-The Syxplain application consists of a Python backend (FastAPI) and a React frontend.
-
-### Environment Variables
-
-Before running the application, you need to set up the environment variables.
-Copy `.env.example` to `.env` and fill in the values.
-
-```bash
+# 1. Copy and configure environment
 cp .env.example .env
+# Edit .env with your API keys and Slurm config
+
+# 2. Generate Slurm token (requires one-time SSH access)
+ssh <username>@slurm.science-cloud.hu "scontrol token username=<username> lifespan=3600"
+# Copy token to .env as SLURM_AUTH_TOKEN
+
+# 3. Start the development stack
+docker-compose up --build
 ```
 
-**Required Variables:**
-- `OPENAI_API_KEY`: Your API key for the LLM service.
-- `OPENAI_API_BASE`: Base URL for the LLM API.
-- `OPENAI_MODEL_NAME`: Name of the model to use.
-- `DEEP_RESEARCH_MODEL`: Comma-separated list of deep research models available for selection. Users can choose from these models when running Deep Analysis. Example: `o4-mini-deep-research,perplexity-deep-research,o3-deep-research`. If only one model is configured, it will be auto-selected.
-- `DEEP_RESEARCH_API_KEY`: API key for the deep research model (required for Deep Analysis mode).
-- `DEEP_RESEARCH_API_BASE`: Base URL for the deep research API (used in Deep Analysis mode).
-- `DATABASE_URL`: Connection string for your PostgreSQL database.
-- `SUPABASE_URL`: URL of your Supabase project.
-- `SUPABASE_JWT_SECRET`: JWT secret for Supabase authentication.
-- `SUPABASE_SERVICE_ROLE_KEY`: Service role key for GDPR account deletion.
-- `VITE_SUPABASE_URL`: Same as `SUPABASE_URL` (for frontend).
-- `VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY`: Supabase publishable key (for frontend).
-- `VITE_SUPABASE_ANON_KEY`: Supabase anon key (for frontend).
+The development stack includes:
+- PostgreSQL database on `localhost:5432`
+- Backend API on `http://localhost:8000` (with hot reload)
+- Frontend on `http://localhost:5173` (with hot reload via Vite)
 
-**Optional Variables (Performance Tuning):**
-- `SHAP_SUBSAMPLE_FRACTION`: Fraction of data to use for SHAP calculations (default: `0.1` = 10%).
-- `SHAP_SUBSAMPLE_MIN`: Minimum number of samples for SHAP (default: `1000`).
-- `SHAP_SUBSAMPLE_MAX`: Maximum number of samples for SHAP (default: `5000`).
-- `ANALYSIS_TIMEOUT_HOURS`: Maximum hours before an analysis is killed with timeout status (default: `24`). Set to `0` to disable.
-- `MAX_FILE_SIZE_MB`: Maximum file upload size in megabytes (default: `50`).
-- `CORS_ORIGINS`: Comma-separated list of allowed CORS origins (default: `*`).
-- `DB_POOL_SIZE`: Database connection pool size (default: `40`).
-- `DB_MAX_OVERFLOW`: Max overflow connections for database (default: `5`).
+## Docker Compose Configurations
 
-**Optional Variables (LLM Tracing with Langfuse):**
-- `LANGFUSE_PUBLIC_KEY`: Your Langfuse public key for tracing.
-- `LANGFUSE_SECRET_KEY`: Your Langfuse secret key for tracing.
-- `LANGFUSE_BASE_URL`: Langfuse API URL (default: `https://cloud.langfuse.com`).
+| File | Purpose | Use Case |
+|------|---------|----------|
+| `docker-compose.yml` | Development | Local development with hot reload |
+| `docker-compose.prod.yml` | Production | Production deployment |
 
-### Running with Docker Compose (Recommended)
-
-The easiest way to run the full stack is using Docker Compose.
+### Development
 
 ```bash
 docker-compose up --build
 ```
 
-This will start:
-- Backend on `http://localhost:8000`
-- Frontend on `http://localhost:8080`
-
-### Running Backend with Docker
-
-If you want to run only the backend container:
+### Production
 
 ```bash
-docker build -t syxplain-backend -f backend/Dockerfile .
-docker run -d \
-  --name syxplain-backend \
-  --env-file .env \
-  -p 8000:8000 \
-  syxplain-backend
+docker-compose -f docker-compose.prod.yml up -d
 ```
 
-### Running as a Systemd Service (Linux)
+## Environment Variables
 
-To run the backend as a systemd service using a Python virtual environment:
+Copy `.env.example` to `.env` and configure:
 
-1.  **Create a virtual environment:**
+**Required:**
+- `OPENAI_API_KEY` - LLM API key
+- `SLURM_API_URL` - Slurm REST API (`http://slurm.science-cloud.hu:6820`)
+- `SLURM_AUTH_TOKEN` - JWT token from `scontrol token`
+- `SLURM_USER_NAME` - Your Slurm username
+- `SLURM_STAGING_DIR` - Staging directory on cluster (`/storage/<username>/syxplain`)
 
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    pip install -r requirements.txt
-    python -c "import juliapkg; juliapkg.resolve()"
-    ```
+**Optional:**
+- `OPENAI_API_BASE` - Custom LLM endpoint
+- `OPENAI_MODEL_NAME` - Model name (default: `gpt-4o`)
+- `SLURM_PARTITION` - Slurm partition (default: `batch_cpu_m2.large`)
+- `SUPABASE_*` - For authentication
+- `LANGFUSE_*` - For LLM tracing
+- `GITHUB_FEEDBACK_TOKEN` - GitHub personal access token for creating feedback issues
+- `GITHUB_FEEDBACK_REPO_OWNER` - GitHub repository owner (e.g. `HUN-REN-AI1Science`)
+- `GITHUB_FEEDBACK_REPO_NAME` - GitHub repository name (e.g. `syxplain`)
 
-2.  **Create a systemd service file:**
-    Create `/etc/systemd/system/syxplain.service` with the following content (adjust paths and user):
+See `.env.example` for the complete list.
 
-    ```ini
-    [Unit]
-    Description=Syxplain Backend Service
-    After=network.target
+## Production Deployment
 
-    [Service]
-    User=your_user
-    Group=your_group
-    WorkingDirectory=/path/to/syxplain
-    EnvironmentFile=/path/to/syxplain/.env
-    ExecStart=/path/to/syxplain/venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8000
-    Restart=always
-
-    [Install]
-    WantedBy=multi-user.target
-    ```
-
-3.  **Enable and start the service:**
-
-    ```bash
-    sudo systemctl daemon-reload
-    sudo systemctl enable syxplain
-    sudo systemctl start syxplain
-    ```
-
-### Local Development
-
-For development, you can run the backend and frontend separately.
-
-**Database:**
-
-Start only the PostgreSQL database from docker-compose:
+### 1. Generate Long-Lived Token
 
 ```bash
-docker-compose up -d postgres
+ssh <username>@slurm.science-cloud.hu "scontrol token username=<username> lifespan=31536000"
 ```
 
-This will start PostgreSQL 18 on `localhost:5432` with:
-- User: `syxplain`
-- Password: `syxplain`
-- Database: `syxplain`
+### 2. Deploy Worker to Slurm Cluster
 
-**Backend:**
+Build and deploy the Singularity container:
 
-1.  Create and activate a virtual environment (or use Conda).
-2.  Install dependencies: `pip install -r requirements.txt`
-3.  Install Julia packages: `python -c "import juliapkg; juliapkg.resolve()"`
-4.  Run the server:
+```bash
+cd slurm_worker
+./build-singularity.sh
+scp syxplain-worker.sif <username>@slurm.science-cloud.hu:/storage/<username>/containers/
+```
 
-    ```bash
-    # Ensure .env variables are exported or use a tool like python-dotenv
-    export $(grep -v '^#' .env | xargs)
-    uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-    ```
+### 3. Configure Production Environment
 
-**Frontend:**
+Set all required environment variables in your deployment configuration.
 
-1.  Navigate to the frontend directory: `cd frontend`
-2.  Install dependencies: `npm install`
-3.  Start the development server:
+### 4. Start Services
 
-    ```bash
-    npm run dev
-    ```
-    The frontend will be available at `http://localhost:5173` (by default).
+```bash
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+## Slurm Integration
+
+The backend communicates with the Slurm cluster via the **slurmrestd REST API** - no SSH tunnel is required. The API is publicly accessible at `slurm.science-cloud.hu:6820`.
+
+**Key points:**
+- Input/output data is transferred via HTTP (base64 encoded JSON)
+- Job scripts are submitted via the REST API
+- The worker code must be pre-deployed on the cluster (Singularity container or conda environment)
+- SSH is only needed to generate authentication tokens
+
+For detailed Slurm setup, architecture diagrams, worker deployment, and troubleshooting, see:
+- **[SLURM.md](./SLURM.md)** - Complete Slurm integration guide
+- **[slurm_worker/README.md](./slurm_worker/README.md)** - Worker documentation
+
+### Quick Connectivity Test
+
+```bash
+curl -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
+     -H "Slurm-User-Name: $SLURM_USER_NAME" \
+     http://slurm.science-cloud.hu:6820/slurm/v0.0.41/ping
+```
+
+## Admin Setup
+
+### Granting HUN-REN API Key Access
+
+Add admin email addresses to the `ADMIN_EMAILS` environment variable:
+
+```bash
+ADMIN_EMAILS=admin@example.com,admin2@example.com
+```
+
+Admins can manage user permissions through the Admin UI at `/admin`.
+
+## Feedback System
+
+Users can report bugs and request features directly from the app via the **Feedback** button in the header. Submissions automatically include application context (current page, run ID, browser info) to help with diagnosis.
+
+### Without GitHub (default)
+
+Feedback is logged to the backend console. No additional configuration needed.
+
+### With GitHub Issues
+
+To automatically create GitHub issues from feedback, set these environment variables:
+
+```bash
+GITHUB_FEEDBACK_TOKEN=ghp_...        # Personal access token with `repo` scope
+GITHUB_FEEDBACK_REPO_OWNER=your-org  # Repository owner
+GITHUB_FEEDBACK_REPO_NAME=your-repo  # Repository name
+```
+
+Bug reports are labeled `bug`, feature requests are labeled `enhancement`. If the GitHub API is unreachable, feedback silently falls back to logging.

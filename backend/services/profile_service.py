@@ -3,16 +3,16 @@ Profile service for user profile management.
 
 Encapsulates business logic for profile data and GDPR deletion.
 """
-import logging
-from typing import Any, Dict
 
+import logging
+from typing import Any
 
 import httpx
 
 from backend.core.config import get_settings
 from backend.core.exceptions import ExternalServiceError
-from backend.repositories.run_repository import RunRepository
 from backend.repositories.file_repository import FileRepository
+from backend.repositories.run_repository import RunRepository
 from backend.utils import parse_uuid
 
 logger = logging.getLogger(__name__)
@@ -25,20 +25,12 @@ class ProfileService:
     Handles profile data retrieval and GDPR-compliant account deletion.
     """
 
-    def __init__(
-        self,
-        run_repo: RunRepository,
-        file_repo: FileRepository
-    ):
+    def __init__(self, run_repo: RunRepository, file_repo: FileRepository):
         self.run_repo = run_repo
         self.file_repo = file_repo
         self.settings = get_settings()
 
-    def get_profile(
-        self,
-        user_id: str,
-        email: str
-    ) -> Dict[str, Any]:
+    def get_profile(self, user_id: str, email: str) -> dict[str, Any]:
         """
         Get user profile information.
 
@@ -71,13 +63,10 @@ class ProfileService:
             "email": email,
             "created_at": created_at,
             "total_runs": total_runs,
-            "total_files": total_files
+            "total_files": total_files,
         }
 
-    async def delete_account(
-        self,
-        user_id: str
-    ) -> None:
+    async def delete_account(self, user_id: str) -> None:
         """
         GDPR-compliant account deletion.
 
@@ -107,10 +96,7 @@ class ProfileService:
 
         logger.info(f"GDPR deletion completed for user {user_id}")
 
-    async def _delete_supabase_user(
-        self,
-        user_id: str
-    ) -> None:
+    async def _delete_supabase_user(self, user_id: str) -> None:
         """
         Delete a user from Supabase Auth using the Admin API.
 
@@ -136,7 +122,7 @@ class ProfileService:
         headers = {
             "apikey": service_role_key,
             "Authorization": f"Bearer {service_role_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         async with httpx.AsyncClient() as client:
@@ -154,5 +140,5 @@ class ProfileService:
                 )
                 raise ExternalServiceError(
                     service="Supabase",
-                    message=f"Failed to delete user from authentication provider: {error_detail}"
+                    message=f"Failed to delete user from authentication provider: {error_detail}",
                 )

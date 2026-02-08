@@ -37,10 +37,8 @@ RUN chown -R appuser:appuser /app
 # Switch to non-root user
 USER appuser
 
-# Warmup step (ensure syxplain_lib is accessible)
-# We need to make sure PYTHONPATH includes the current directory if needed,
-# but usually . is in sys.path by default.
-# RUN python -c "from syxplain_lib import State, run_syxplain; print('Warmup complete')"
+# Note: Analysis now uses orchestrator service with compute backends (Slurm or local)
+# No warmup needed as Julia/PySR runs in separate worker processes
 
 EXPOSE 8000
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

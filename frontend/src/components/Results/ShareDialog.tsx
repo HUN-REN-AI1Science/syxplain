@@ -149,16 +149,14 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                     <i className="pi pi-globe text-blue-600 text-lg"></i>
                   </div>
-                  <p className="text-blue-800">This result is publicly accessible via the link below.</p>
+                  <p className="text-blue-800">
+                    This result is publicly accessible via the link below.
+                  </p>
                 </div>
               </div>
 
               <div className="flex gap-2">
-                <InputText
-                  value={getShareUrl()}
-                  readOnly
-                  className="flex-1 font-mono text-sm"
-                />
+                <InputText value={getShareUrl()} readOnly className="flex-1 font-mono text-sm" />
                 <Button
                   icon="pi pi-copy"
                   onClick={handleCopyLink}

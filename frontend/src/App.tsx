@@ -5,6 +5,7 @@ import ProblemView from '@pages/ProblemView';
 import ResultsView from '@pages/results/ResultsView';
 import HistoryView from '@pages/HistoryView';
 import ProfileView from '@pages/ProfileView';
+import AdminLayout from '@pages/admin/AdminLayout';
 import Login from '@pages/auth/Login';
 import SignUp from '@pages/auth/SignUp';
 import ForgotPassword from '@pages/auth/ForgotPassword';
@@ -17,15 +18,17 @@ import { SwitchTransition, CSSTransition } from 'react-transition-group';
 import AppHeader from '@components/AppHeader';
 import AppFooter from '@components/AppFooter';
 import WorkflowSteps from '@components/WorkflowSteps';
+import FeedbackDialog from '@components/FeedbackDialog';
+import type { FeedbackContext } from '@/types';
 
 const WORKFLOW_STEPS = [
   { label: 'Upload Data' },
   { label: 'Define Problem' },
-  { label: 'Analysis Results' }
+  { label: 'Analysis Results' },
 ];
 
 function MainApp() {
-  const [view, setView] = useState<'workflow' | 'history' | 'profile'>('workflow');
+  const [view, setView] = useState<'workflow' | 'history' | 'profile' | 'admin'>('workflow');
   const [activeIndex, setActiveIndex] = useState(0);
   const [filename, setFilename] = useState<string | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
@@ -33,11 +36,17 @@ function MainApp() {
   const [nanCounts, setNanCounts] = useState<Record<string, number>>({});
   const [runId, setRunId] = useState<string | null>(null);
   const [fromHistory, setFromHistory] = useState<boolean>(false);
+  const [feedbackVisible, setFeedbackVisible] = useState(false);
   const toast = useRef<Toast>(null);
   const nodeRef = useRef(null);
-  const { signOut, user } = useAuth();
+  const { signOut, user, isAdmin } = useAuth();
 
-  const handleUploadComplete = (fname: string, cols: string[], excludedCols: string[] = [], nanCountsData: Record<string, number> = {}) => {
+  const handleUploadComplete = (
+    fname: string,
+    cols: string[],
+    excludedCols: string[] = [],
+    nanCountsData: Record<string, number> = {}
+  ) => {
     setFilename(fname);
     setColumns(cols);
     setExcludedColumns(excludedCols);
@@ -45,21 +54,25 @@ function MainApp() {
     setActiveIndex(1);
   };
 
-  const handleStartAnalysis = async (problemData: any) => {
+  const handleStartAnalysis = async (problemData: Record<string, unknown>) => {
     setFromHistory(false);
     setActiveIndex(2);
 
     try {
-      const { analysis_type, deep_research_model, ...problemDescription } = problemData;
+      const { analysis_type, deep_research_model, user_api_keys, ...problemDescription } =
+        problemData;
       const response = await runsService.create({
         problem_description: problemDescription,
         csv_filename: filename!,
         analysis_type: analysis_type || 'quick',
         deep_research_model: deep_research_model || null,
+        user_api_keys: user_api_keys,
       });
       setRunId(response.data.run_id);
-    } catch (e) {
-      toast.current?.show({ severity: 'error', summary: 'Error', detail: 'Failed to start analysis' });
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      const errorMessage = err.response?.data?.detail || 'Failed to start analysis';
+      toast.current?.show({ severity: 'error', summary: 'Error', detail: errorMessage });
       console.error(e);
       setActiveIndex(1);
     }
@@ -91,6 +104,17 @@ function MainApp() {
     }
   };
 
+  const buildFeedbackContext = (): FeedbackContext => ({
+    current_view: view,
+    workflow_step: view === 'workflow' ? activeIndex : undefined,
+    current_run_id: runId || undefined,
+    csv_filename: filename || undefined,
+    browser_user_agent: navigator.userAgent,
+    screen_resolution: `${window.innerWidth}x${window.innerHeight}`,
+    app_url: window.location.href,
+    timestamp: new Date().toISOString(),
+  });
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
       <Toast ref={toast} />
@@ -100,42 +124,65 @@ function MainApp() {
         onLogoClick={handleReset}
         onHistoryClick={() => setView('history')}
         onProfileClick={() => setView('profile')}
+        onAdminClick={isAdmin ? () => setView('admin') : undefined}
+        onFeedbackClick={() => setFeedbackVisible(true)}
         onLogout={handleLogout}
+      />
+
+      <FeedbackDialog
+        visible={feedbackVisible}
+        onHide={() => setFeedbackVisible(false)}
+        context={buildFeedbackContext()}
       />
 
       <main className="flex-grow py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto">
-          {view === 'history' ? (
+          {view === 'admin' ? (
+            <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
+              <AdminLayout onBack={() => setView('workflow')} />
+            </Card>
+          ) : view === 'history' ? (
             <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
               <HistoryView onSelectRun={handleSelectRun} />
             </Card>
           ) : view === 'profile' ? (
             <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
-                <ProfileView onBack={() => setView('workflow')} onSelectRun={handleSelectRun} />
+              <ProfileView onBack={() => setView('workflow')} onSelectRun={handleSelectRun} />
             </Card>
           ) : (
             <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
-                  <div className="flex flex-col">
-                    <WorkflowSteps activeIndex={activeIndex} items={WORKFLOW_STEPS} />
+              <div className="flex flex-col">
+                <WorkflowSteps activeIndex={activeIndex} items={WORKFLOW_STEPS} />
 
-                    <div className="mt-6 min-h-[400px] relative overflow-hidden">
-                      <SwitchTransition mode="out-in">
-                        <CSSTransition
-                          key={activeIndex}
-                          nodeRef={nodeRef}
-                          timeout={300}
-                          classNames="fade"
-                          unmountOnExit
-                        >
-                          <div ref={nodeRef} className="w-full">
-                            {activeIndex === 0 && <UploadView onUploadComplete={handleUploadComplete} />}
-                            {activeIndex === 1 && <ProblemView columns={columns} excludedColumns={excludedColumns} nanCounts={nanCounts} onSubmit={handleStartAnalysis} />}
-                            {activeIndex === 2 && runId && <ResultsView runId={runId} fromHistory={fromHistory} />}
-                          </div>
-                        </CSSTransition>
-                      </SwitchTransition>
-                    </div>
-                  </div>
+                <div className="mt-6 min-h-[400px] relative overflow-hidden">
+                  <SwitchTransition mode="out-in">
+                    <CSSTransition
+                      key={activeIndex}
+                      nodeRef={nodeRef}
+                      timeout={300}
+                      classNames="fade"
+                      unmountOnExit
+                    >
+                      <div ref={nodeRef} className="w-full">
+                        {activeIndex === 0 && (
+                          <UploadView onUploadComplete={handleUploadComplete} />
+                        )}
+                        {activeIndex === 1 && (
+                          <ProblemView
+                            columns={columns}
+                            excludedColumns={excludedColumns}
+                            nanCounts={nanCounts}
+                            onSubmit={handleStartAnalysis}
+                          />
+                        )}
+                        {activeIndex === 2 && (
+                          <ResultsView runId={runId} fromHistory={fromHistory} />
+                        )}
+                      </div>
+                    </CSSTransition>
+                  </SwitchTransition>
+                </div>
+              </div>
             </Card>
           )}
         </div>
@@ -151,11 +198,14 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/share/:token" element={<PublicResultsView />} />
-        <Route path="*" element={
-          <AuthProvider>
-            <AuthGate />
-          </AuthProvider>
-        } />
+        <Route
+          path="*"
+          element={
+            <AuthProvider>
+              <AuthGate />
+            </AuthProvider>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );
@@ -181,10 +231,10 @@ function AuthGate() {
     return showSignUp ? (
       <SignUp onSwitchToLogin={() => setShowSignUp(false)} />
     ) : (
-        <Login
-          onSwitchToSignUp={() => setShowSignUp(true)}
-          onForgotPassword={() => setShowForgotPassword(true)}
-        />
+      <Login
+        onSwitchToSignUp={() => setShowSignUp(true)}
+        onForgotPassword={() => setShowForgotPassword(true)}
+      />
     );
   }
 

@@ -41,11 +41,11 @@ const SignUp: React.FC<SignUpProps> = ({ onSwitchToLogin }) => {
         life: 5000,
       });
       setTimeout(() => onSwitchToLogin(), 2000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.current?.show({
         severity: 'error',
         summary: 'Error',
-        detail: error.message || 'Failed to sign up',
+        detail: error instanceof Error ? error.message : 'Failed to sign up',
       });
     } finally {
       setLoading(false);
@@ -111,7 +111,13 @@ const SignUp: React.FC<SignUpProps> = ({ onSwitchToLogin }) => {
           label="Sign Up"
           loading={loading}
           className="w-full mt-4"
-          style={{ backgroundColor: '#0052cc', color: 'white', borderColor: '#0052cc', height: '48px', fontSize: '16px' }}
+          style={{
+            backgroundColor: '#0052cc',
+            color: 'white',
+            borderColor: '#0052cc',
+            height: '48px',
+            fontSize: '16px',
+          }}
         />
 
         <div className="text-center mt-4">

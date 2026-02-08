@@ -1,9 +1,9 @@
 /**
  * ResultsView Component
- * Displays analysis results with polling, progress visualization, and PDF export
+ * Displays analysis results with WebSocket-based real-time progress updates
  */
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Button } from 'primereact/button';
 import { Message } from 'primereact/message';
 import { Toast } from 'primereact/toast';
@@ -19,6 +19,7 @@ import {
 import type { ResultsStatus } from '@components/Results';
 import { runsService, configService } from '@services/api';
 import { useProgressInterpolation } from '@hooks/useProgressInterpolation';
+import { useRunProgress } from '@hooks/useRunProgress';
 import type { ProgressPhase, EquationResults } from '@/types';
 
 // ============================================================================
@@ -26,7 +27,7 @@ import type { ProgressPhase, EquationResults } from '@/types';
 // ============================================================================
 
 interface ResultsViewProps {
-  runId: string;
+  runId: string | null;
   fromHistory?: boolean;
 }
 
@@ -36,24 +37,79 @@ interface ResultsViewProps {
 
 const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false }) => {
   // State
-  const [status, setStatus] = useState<string>('pending');
-  const [backendProgress, setBackendProgress] = useState<number>(0);
   const [result, setResult] = useState<EquationResults | string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [progressPhases, setProgressPhases] = useState<ProgressPhase[]>([]);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
-  const [initialFetchDone, setInitialFetchDone] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [duration, setDuration] = useState<string | null>(null);
 
   // Refs
   const toast = useRef<Toast>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  // Callbacks for useRunProgress
+  // Note: we don't setResult here — the isCompleted useEffect always
+  // fetches the final results (with LLM explanations) from the API.
+  const handleComplete = useCallback((_results: EquationResults) => {
+    // Results will be fetched from API by the isCompleted effect
+  }, []);
+
+  const handleError = useCallback(() => {
+    // Error is already tracked by the hook
+  }, []);
+
+  // Real-time progress via WebSocket
+  const {
+    progress: backendProgress,
+    status,
+    error,
+    isReady: initialFetchDone,
+  } = useRunProgress({
+    runId,
+    onComplete: handleComplete,
+    onError: handleError,
+    enabled: !!runId,
+  });
+
+  // Derived state (declared early so hooks below can reference it)
+  const isCompleted = status === 'completed';
+
+  // Fetch final results from API when run completes.
+  // Always fetch from API on completion — WebSocket intermediate results
+  // (from compute phase) lack LLM explanations and summary.
+  useEffect(() => {
+    if (isCompleted && runId) {
+      runsService
+        .getById(runId)
+        .then((response) => {
+          if (response.data.results) {
+            setResult(response.data.results as EquationResults | string);
+          }
+          setShareToken(response.data.public_share_token || null);
+          // Compute duration from timing data
+          const { start_time, finish_time } = response.data;
+          if (start_time && finish_time) {
+            const seconds = Math.floor(
+              (new Date(finish_time).getTime() - new Date(start_time).getTime()) / 1000
+            );
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            if (hours > 0) setDuration(`${hours}h ${minutes}m`);
+            else if (minutes > 0) setDuration(`${minutes}m ${secs}s`);
+            else setDuration(`${secs}s`);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [isCompleted, runId]);
+
   // Custom hook for smooth progress interpolation and step description
-  const { displayProgress, currentStepDescription } = useProgressInterpolation({
+  const { displayProgress, currentStepDescription, isInQueuePhase } = useProgressInterpolation({
     phases: progressPhases,
     backendProgress,
     status,
@@ -72,50 +128,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     fetchConfig();
   }, []);
 
-  // Poll backend for actual progress
-  useEffect(() => {
-    if (!runId) return;
-
-    let intervalId: NodeJS.Timeout;
-
-    const poll = async () => {
-      try {
-        const response = await runsService.getById(runId);
-        setStatus(response.data.status);
-        setBackendProgress(response.data.progress || 0);
-
-        if (response.data.status === 'completed') {
-          // Handle both new direct format and old wrapper format
-          const results = response.data.results;
-          if (results) {
-            if ('equations' in results) {
-              // New format: results is the EquationResults object directly
-              setResult(results as EquationResults);
-            } else if ('pysr_explanations' in results) {
-              // Old format: results has pysr_explanations wrapper (string)
-              setResult(results.pysr_explanations);
-            }
-          }
-          setBackendProgress(100);
-          setShareToken(response.data.public_share_token || null);
-          clearInterval(intervalId);
-        } else if (response.data.status === 'failed' || response.data.status === 'timeout') {
-          setError(response.data.error || (response.data.status === 'timeout' ? 'Analysis timed out' : 'Unknown error'));
-          clearInterval(intervalId);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setInitialFetchDone(true);
-      }
-    };
-
-    poll();
-    intervalId = setInterval(poll, 2000);
-
-    return () => clearInterval(intervalId);
-  }, [runId]);
-
   // Handle PDF export (lazy loads the PDF library)
   const handleExportPdf = async () => {
     if (!result) return;
@@ -123,18 +135,43 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     setExportingPdf(true);
     try {
       // Handle both object (new format) and string (old format)
-      const parsedData: EquationResults = typeof result === 'object'
-        ? result
-        : JSON.parse(result);
+      const parsedData: EquationResults = typeof result === 'object' ? result : JSON.parse(result);
       // Dynamic import to reduce initial bundle size
       const { generateResultsPdf } = await import('@utils/pdfExport');
       await generateResultsPdf(parsedData, runId);
-      toast.current?.show({ severity: 'success', summary: 'Export Complete', detail: 'PDF saved successfully' });
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Export Complete',
+        detail: 'PDF saved successfully',
+      });
     } catch (e) {
       console.error('PDF export failed:', e);
-      toast.current?.show({ severity: 'error', summary: 'Export Failed', detail: 'Failed to generate PDF' });
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Export Failed',
+        detail: 'Failed to generate PDF',
+      });
     } finally {
       setExportingPdf(false);
+    }
+  };
+
+  // Handle run cancellation
+  const handleCancelRun = async () => {
+    if (!runId || cancelling) return;
+    setCancelling(true);
+    try {
+      await runsService.cancel(runId);
+      // Don't reset cancelling — WebSocket will deliver terminal status
+      // which hides the entire progress section
+    } catch (e) {
+      console.error('Failed to cancel:', e);
+      setCancelling(false); // Only reset on error so user can retry
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Cancel Failed',
+        detail: 'Failed to cancel the analysis',
+      });
     }
   };
 
@@ -143,36 +180,53 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     setDeleting(true);
     try {
       await runsService.delete(runId);
-      toast.current?.show({ severity: 'success', summary: 'Run Deleted', detail: 'The run has been permanently deleted' });
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Run Deleted',
+        detail: 'The run has been permanently deleted',
+      });
       // Navigate to history after short delay
       setTimeout(() => {
         window.location.href = '/history';
       }, 1500);
     } catch (e) {
       console.error('Failed to delete run:', e);
-      toast.current?.show({ severity: 'error', summary: 'Delete Failed', detail: 'Failed to delete the run' });
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Delete Failed',
+        detail: 'Failed to delete the run',
+      });
       setDeleting(false);
       setShowDeleteDialog(false);
     }
   };
 
-  // Derived state
-  const isCompleted = status === 'completed';
+  // Waiting for run to be created (runId not yet available)
+  const isStarting = !runId;
 
   // Actively processing (pending/running) - shows progress bar
-  const isProcessing = initialFetchDone && (!runId || status === 'pending' || status === 'running');
+  const isProcessing = initialFetchDone && (status === 'pending' || status === 'running');
 
   // Loading a completed run from history (fetching data but run is already complete)
-  const isFetchingCompletedRun = !initialFetchDone && fromHistory;
+  const isFetchingCompletedRun = !initialFetchDone && fromHistory && !!runId;
+
+  // Initial connection state - show progress bar immediately while connecting
+  const isConnecting = !initialFetchDone && !fromHistory && !!runId;
 
   // Check if result is in the new EquationResults format (not legacy markdown)
-  const isNewFormat = result !== null && typeof result === 'object' && 'equations' in result;
+  // Accounts for both direct EquationResults and backend combined format (explanations wrapper)
+  const isNewFormat =
+    result !== null &&
+    typeof result === 'object' &&
+    (('equations' in result && 'summary' in result) || 'explanations' in result);
 
   // Determine header status
   const getHeaderStatus = (): ResultsStatus => {
+    if (isStarting) return 'processing';
     if (isFetchingCompletedRun) return 'loading';
-    if (isProcessing && !error) return 'processing';
+    if ((isProcessing || isConnecting) && !error) return 'processing';
     if (isCompleted) return 'completed';
+    if (status === 'cancelled') return 'cancelled';
     return 'failed';
   };
 
@@ -183,15 +237,15 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     return (
       <>
         <Button
-          icon={shareToken ? "pi pi-link" : "pi pi-share-alt"}
+          icon={shareToken ? 'pi pi-link' : 'pi pi-share-alt'}
           onClick={() => setShowShareDialog(true)}
           size="large"
           className={`${shareToken ? '!bg-green-600 hover:!bg-green-700 !border-green-600' : '!bg-blue-600 hover:!bg-blue-700 !border-blue-600'} !text-white font-semibold px-3 py-2 shadow-sm`}
-          tooltip={shareToken ? "Shared - Manage Link" : "Share Results"}
+          tooltip={shareToken ? 'Shared - Manage Link' : 'Share Results'}
           tooltipOptions={{ position: 'bottom' }}
         />
         <Button
-          icon={exportingPdf ? "pi pi-spin pi-spinner" : "pi pi-file-pdf"}
+          icon={exportingPdf ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'}
           onClick={handleExportPdf}
           disabled={exportingPdf}
           size="large"
@@ -210,56 +264,88 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
       {/* Header */}
       <ResultsHeader
         title="Analysis Results"
-        subtitle={runId ? (
-          <>Run ID: <span className="font-mono">{runId.slice(0, 8)}...</span></>
-        ) : (
-          <>Starting analysis...</>
-        )}
+        subtitle={
+          runId ? (
+            <>
+              Run ID: <span className="font-mono">{runId.slice(0, 8)}...</span>
+              {duration && (
+                <span className="ml-3 text-slate-400">
+                  <i className="pi pi-clock mr-1"></i>
+                  {duration}
+                </span>
+              )}
+            </>
+          ) : (
+            <>Starting analysis...</>
+          )
+        }
         status={getHeaderStatus()}
         actions={renderHeaderActions()}
       />
 
       {/* Run Settings Panel - shown only when navigating from history */}
-      {fromHistory && <RunSettingsPanel runId={runId} />}
+      {fromHistory && runId && <RunSettingsPanel runId={runId} />}
 
       <div>
-        {/* Error State */}
+        {/* Error / Cancelled State */}
         {error && (
           <div className="mb-6">
-            <Message severity="error" text={`Analysis Failed: ${error}`} className="w-full" />
+            <Message
+              severity={status === 'cancelled' ? 'warn' : 'error'}
+              text={status === 'cancelled' ? error : `Analysis Failed: ${error}`}
+              className="w-full"
+            />
           </div>
         )}
 
-        {/* Loading State - Progress bar for active processing */}
-        {isProcessing && !error && (
-          <AnalysisProgressView
-            displayProgress={displayProgress}
-            stepDescription={currentStepDescription}
-          />
+        {/* Loading State - Progress bar for starting, processing, or initial connection */}
+        {(isStarting || isProcessing || isConnecting) && !error && (
+          <>
+            <AnalysisProgressView
+              displayProgress={isStarting || isConnecting ? 0 : displayProgress}
+              stepDescription={
+                isStarting
+                  ? 'Starting analysis...'
+                  : isConnecting
+                    ? 'Connecting to analysis server...'
+                    : currentStepDescription
+              }
+              isInQueuePhase={isStarting || isConnecting || isInQueuePhase}
+              isJobSubmitted={status === 'running' && !isStarting && !isConnecting}
+            />
+            {status === 'running' && !isStarting && !isConnecting && (
+              <div className="flex justify-center mt-4">
+                <Button
+                  label={cancelling ? 'Cancelling...' : 'Stop Analysis'}
+                  icon={cancelling ? 'pi pi-spin pi-spinner' : 'pi pi-stop'}
+                  className="!bg-red-600 hover:!bg-red-700 !border-red-600 !text-white font-semibold px-4 py-2 shadow-sm"
+                  onClick={handleCancelRun}
+                  disabled={cancelling}
+                />
+              </div>
+            )}
+          </>
         )}
 
         {/* Loading State - Simple spinner for fetching completed runs */}
         {isFetchingCompletedRun && !error && (
-          <LoadingSpinner
-            message="Loading results..."
-            className="py-20"
-          />
+          <LoadingSpinner message="Loading results..." className="py-20" />
         )}
 
-        {/* Results */}
-        {result && (
-          <ResultContent result={result} resultsRef={resultsRef} />
-        )}
+        {/* Results - only show after run completes to avoid flashing legacy format during processing */}
+        {result && isCompleted && <ResultContent result={result} resultsRef={resultsRef} />}
       </div>
 
       {/* Share Dialog */}
-      <ShareDialog
-        visible={showShareDialog}
-        onHide={() => setShowShareDialog(false)}
-        runId={runId}
-        currentShareToken={shareToken}
-        onShareStatusChange={setShareToken}
-      />
+      {runId && (
+        <ShareDialog
+          visible={showShareDialog}
+          onHide={() => setShowShareDialog(false)}
+          runId={runId}
+          currentShareToken={shareToken}
+          onShareStatusChange={setShareToken}
+        />
+      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog
@@ -299,12 +385,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
               This action cannot be undone.
             </p>
             <p className="text-red-600 text-sm">
-              All data related to this analysis run will be permanently removed, including results, configurations, and any shared links.
+              All data related to this analysis run will be permanently removed, including results,
+              configurations, and any shared links.
             </p>
           </div>
-          <p className="text-slate-600">
-            Are you sure you want to delete this run?
-          </p>
+          <p className="text-slate-600">Are you sure you want to delete this run?</p>
         </div>
       </Dialog>
 
@@ -314,7 +399,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           <div className="flex items-start justify-between">
             <div>
               <h4 className="text-sm font-semibold text-red-600 mb-1">Danger Zone</h4>
-              <p className="text-sm text-slate-500">Permanently delete this run and all associated data</p>
+              <p className="text-sm text-slate-500">
+                Permanently delete this run and all associated data
+              </p>
             </div>
             <Button
               label="Delete Run"

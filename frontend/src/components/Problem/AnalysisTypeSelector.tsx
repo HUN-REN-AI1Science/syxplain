@@ -6,7 +6,7 @@
 import React, { useRef } from 'react';
 import { Button } from 'primereact/button';
 import { Menu } from 'primereact/menu';
-import { Dropdown } from 'primereact/dropdown';
+import { Dropdown, type DropdownChangeEvent } from 'primereact/dropdown';
 import HelpButton from '@components/HelpButton';
 
 interface AnalysisTypeSelectorProps {
@@ -19,6 +19,7 @@ interface AnalysisTypeSelectorProps {
   onExportJson?: () => void;
   disabled: boolean;
   showExportButton: boolean;
+  hasHunrenAccess?: boolean;
 }
 
 export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
@@ -31,6 +32,7 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
   onExportJson,
   disabled,
   showExportButton,
+  hasHunrenAccess = true,
 }) => {
   const analysisMenuRef = useRef<Menu>(null);
 
@@ -64,9 +66,9 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
 
           <h4>Which should I choose?</h4>
           <p>
-            Start with <strong>Quick Analysis</strong> for initial exploration.
-            Use <strong>Deep Analysis</strong> when you need publication-quality results
-            with thorough scientific validation.
+            Start with <strong>Quick Analysis</strong> for initial exploration. Use{' '}
+            <strong>Deep Analysis</strong> when you need publication-quality results with thorough
+            scientific validation.
           </p>
         </HelpButton>
       </div>
@@ -91,14 +93,14 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
               label: 'Quick Analysis',
               icon: 'pi pi-bolt',
               command: () => onAnalysisTypeChange('quick'),
-              className: analysisType === 'quick' ? 'bg-blue-50' : ''
+              className: analysisType === 'quick' ? 'bg-blue-50' : '',
             },
             {
               label: 'Deep Analysis',
               icon: 'pi pi-search',
               command: () => onAnalysisTypeChange('deep'),
-              className: analysisType === 'deep' ? 'bg-blue-50' : ''
-            }
+              className: analysisType === 'deep' ? 'bg-blue-50' : '',
+            },
           ]}
         />
 
@@ -111,20 +113,22 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
             onClick={onSubmit}
             size="large"
             disabled={disabled}
-            className={`font-bold py-3 px-6 text-xl shadow-lg transition-all rounded-r-none ${disabled
-              ? 'bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed'
-              : 'bg-blue-500 hover:bg-blue-600 border-blue-500 text-white hover:shadow-xl'
-              }`}
+            className={`font-bold py-3 px-6 text-xl shadow-lg transition-all rounded-r-none ${
+              disabled
+                ? 'bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed'
+                : 'bg-blue-500 hover:bg-blue-600 border-blue-500 text-white hover:shadow-xl'
+            }`}
           />
           <Button
             icon="pi pi-chevron-down"
             onClick={(e) => analysisMenuRef.current?.toggle(e)}
             size="large"
             disabled={disabled}
-            className={`font-bold py-3 px-3 text-xl shadow-lg transition-all rounded-l-none border-l-0 ${disabled
-              ? 'bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 border-blue-500 text-white'
-              }`}
+            className={`font-bold py-3 px-3 text-xl shadow-lg transition-all rounded-l-none border-l-0 ${
+              disabled
+                ? 'bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 border-blue-500 text-white'
+            }`}
           />
         </div>
       </div>
@@ -132,53 +136,92 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
       {/* Deep Analysis Settings - shown when deep analysis is selected */}
       {analysisType === 'deep' && (
         <div className="mt-4 animate-fade-in">
-          {/* Deep Research Model Selection - right aligned */}
-          <div className="mb-4 flex flex-col items-end">
-            <Dropdown
-              value={selectedDeepModel}
-              onChange={(e: any) => onDeepModelChange(e.value)}
-              options={deepResearchModels.map(model => ({ label: model, value: model }))}
-              placeholder="Select a model..."
-              className="w-auto min-w-[200px] bg-slate-50"
-              disabled={deepResearchModels.length === 0}
-            />
-            {deepResearchModels.length === 0 && (
-              <p className="text-xs text-red-600 mt-2 w-full md:w-80 text-left">
-                <i className="pi pi-exclamation-circle mr-1"></i>
-                No deep research models configured. Contact administrator.
-              </p>
-            )}
-          </div>
-
-          {/* Warning - changes to danger for o3-deep-research */}
-          <div className={`rounded-lg p-4 flex items-start ${selectedDeepModel === 'o3-deep-research'
-            ? 'bg-red-50 border border-red-200'
-            : 'bg-amber-50 border border-amber-200'
-            }`}>
-            <i className={`pi pi-exclamation-triangle text-xl mr-3 mt-0.5 ${selectedDeepModel === 'o3-deep-research' ? 'text-red-600' : 'text-amber-600'
-              }`}></i>
-            <div>
-              <h4 className={`font-semibold text-sm ${selectedDeepModel === 'o3-deep-research' ? 'text-red-800' : 'text-amber-800'
-                }`}>
-                {selectedDeepModel === 'o3-deep-research' ? 'High Cost Warning' : 'Deep Analysis Notice'}
-              </h4>
-              <p className={`text-sm mt-1 ${selectedDeepModel === 'o3-deep-research' ? 'text-red-700' : 'text-amber-700'
-                }`}>
-                {selectedDeepModel === 'o3-deep-research' ? (
-                  <>
-                    <strong>This model has the highest cost.</strong> Only run if you know what you are doing and are sure about it.
-                    Deep Analysis performs additional scientific literature research which is expensive.
-                  </>
-                ) : (
-                  <>
-                    Deep Analysis is more expensive to run as it performs additional scientific literature research.
-                    This system is currently in <strong>experimental mode</strong> and is open for use,
-                    but this feature may be behind a paywall in the future.
-                  </>
-                )}
-              </p>
+          {/* Deep Research Model Selection - only shown for HUN-REN access users */}
+          {hasHunrenAccess && (
+            <div className="mb-4 flex flex-col items-end">
+              <Dropdown
+                value={selectedDeepModel}
+                onChange={(e: DropdownChangeEvent) => onDeepModelChange(e.value)}
+                options={deepResearchModels.map((model) => ({ label: model, value: model }))}
+                placeholder="Select a model..."
+                className="w-auto min-w-[200px] bg-slate-50"
+                disabled={deepResearchModels.length === 0}
+              />
+              {deepResearchModels.length === 0 && (
+                <p className="text-xs text-red-600 mt-2 w-full md:w-80 text-left">
+                  <i className="pi pi-exclamation-circle mr-1"></i>
+                  No deep research models configured. Contact administrator.
+                </p>
+              )}
             </div>
-          </div>
+          )}
+
+          {/* User keys deep research info */}
+          {!hasHunrenAccess && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <i className="pi pi-info-circle text-blue-600 mt-0.5" />
+                <div>
+                  <p className="text-blue-800 font-medium">Deep Research with your OpenAI key</p>
+                  <p className="text-blue-700 text-sm mt-1">
+                    Deep research requires the{' '}
+                    <code className="bg-blue-100 px-1 rounded">o4-mini-deep-research</code> model
+                    which includes web search capabilities. This model will be used for literature
+                    research to find relevant scientific equations. Your API key will be used for
+                    these requests directly to OpenAI.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Warning - only shown for HUN-REN users, changes to danger for o3-deep-research */}
+          {hasHunrenAccess && (
+            <div
+              className={`rounded-lg p-4 flex items-start ${
+                selectedDeepModel === 'o3-deep-research'
+                  ? 'bg-red-50 border border-red-200'
+                  : 'bg-amber-50 border border-amber-200'
+              }`}
+            >
+              <i
+                className={`pi pi-exclamation-triangle text-xl mr-3 mt-0.5 ${
+                  selectedDeepModel === 'o3-deep-research' ? 'text-red-600' : 'text-amber-600'
+                }`}
+              ></i>
+              <div>
+                <h4
+                  className={`font-semibold text-sm ${
+                    selectedDeepModel === 'o3-deep-research' ? 'text-red-800' : 'text-amber-800'
+                  }`}
+                >
+                  {selectedDeepModel === 'o3-deep-research'
+                    ? 'High Cost Warning'
+                    : 'Deep Analysis Notice'}
+                </h4>
+                <p
+                  className={`text-sm mt-1 ${
+                    selectedDeepModel === 'o3-deep-research' ? 'text-red-700' : 'text-amber-700'
+                  }`}
+                >
+                  {selectedDeepModel === 'o3-deep-research' ? (
+                    <>
+                      <strong>This model has the highest cost.</strong> Only run if you know what
+                      you are doing and are sure about it. Deep Analysis performs additional
+                      scientific literature research which is expensive.
+                    </>
+                  ) : (
+                    <>
+                      Deep Analysis is more expensive to run as it performs additional scientific
+                      literature research. This system is currently in{' '}
+                      <strong>experimental mode</strong> and is open for use, but this feature may
+                      be behind a paywall in the future.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </>

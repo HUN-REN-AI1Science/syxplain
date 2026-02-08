@@ -31,7 +31,7 @@ export const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
           border: '1px solid #cbd5e1',
           borderRadius: '8px',
           padding: '0.75rem 1.5rem',
-          fontWeight: 500
+          fontWeight: 500,
         }}
       />
       <Button
@@ -45,7 +45,7 @@ export const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
           border: 'none',
           borderRadius: '8px',
           padding: '0.75rem 1.5rem',
-          fontWeight: 500
+          fontWeight: 500,
         }}
       />
     </div>
@@ -68,7 +68,8 @@ export const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
     >
       <div className="py-4">
         <p className="text-slate-700 mb-4">
-          This action <span className="font-semibold text-red-600">cannot be undone</span>. Deleting your account will permanently remove:
+          This action <span className="font-semibold text-red-600">cannot be undone</span>. Deleting
+          your account will permanently remove:
         </p>
         <ul className="space-y-2 mb-4">
           <li className="flex items-center gap-2 text-slate-600">

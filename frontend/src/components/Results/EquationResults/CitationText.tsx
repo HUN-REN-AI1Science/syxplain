@@ -6,6 +6,7 @@
  */
 
 import React from 'react';
+import { sanitizeUrl, sanitizeText } from '@utils/security';
 
 interface CitationTextProps {
   text: string;
@@ -14,30 +15,43 @@ interface CitationTextProps {
 }
 
 /**
- * Creates a clickable citation link element
+ * Creates a clickable citation link element with URL sanitization
  */
 const createCitationLink = (
   citationNumber: number,
   citationUrl: string,
   key: string
-): JSX.Element => (
-  <a
-    key={key}
-    href={citationUrl}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="citation-link"
-    title={`Open citation: ${citationUrl}`}
-  >
-    {citationNumber}
-  </a>
-);
+): JSX.Element => {
+  // Sanitize URL to prevent javascript: and data: URI attacks
+  const safeUrl = sanitizeUrl(citationUrl);
+
+  // If URL is unsafe, render as plain text instead of link
+  if (!safeUrl) {
+    return <span key={key}>{citationNumber}</span>;
+  }
+
+  return (
+    <a
+      key={key}
+      href={safeUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="citation-link"
+      title={`Open citation: ${safeUrl}`}
+    >
+      {citationNumber}
+    </a>
+  );
+};
 
 /**
  * Parses text and converts [1], [2], [1, 2, 3], etc. patterns into clickable links
  * that open the corresponding citation URL in a new tab
  */
 const CitationText: React.FC<CitationTextProps> = ({ text, citations = [], className = '' }) => {
+  // Sanitize input text to prevent XSS (strips any HTML tags)
+  const safeText = sanitizeText(text);
+
   // Regex to match both single citations [1] and combined citations [1, 2, 3]
   // Matches: [1], [12], [1, 2], [1, 2, 3], [1,2,3], etc.
   const citationPattern = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
@@ -47,14 +61,14 @@ const CitationText: React.FC<CitationTextProps> = ({ text, citations = [], class
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = citationPattern.exec(text)) !== null) {
+  while ((match = citationPattern.exec(safeText)) !== null) {
     // Add text before the match
     if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
+      parts.push(safeText.slice(lastIndex, match.index));
     }
 
     const citationContent = match[1]; // Content inside brackets, e.g., "1" or "1, 2, 3"
-    const citationNumbers = citationContent.split(/\s*,\s*/).map(num => parseInt(num.trim(), 10));
+    const citationNumbers = citationContent.split(/\s*,\s*/).map((num) => parseInt(num.trim(), 10));
 
     // Check if this is a single citation or multiple
     if (citationNumbers.length === 1) {
@@ -65,9 +79,7 @@ const CitationText: React.FC<CitationTextProps> = ({ text, citations = [], class
         const citationUrl = citations[citationIndex];
         parts.push(
           <span key={`citation-group-${match.index}`} className="citation-group text-blue-600">
-            [
-            {createCitationLink(citationNumber, citationUrl, `citation-${match.index}`)}
-            ]
+            [{createCitationLink(citationNumber, citationUrl, `citation-${match.index}`)}]
           </span>
         );
       } else {
@@ -111,8 +123,8 @@ const CitationText: React.FC<CitationTextProps> = ({ text, citations = [], class
   }
 
   // Add remaining text after last match
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
+  if (lastIndex < safeText.length) {
+    parts.push(safeText.slice(lastIndex));
   }
 
   return <span className={className}>{parts}</span>;

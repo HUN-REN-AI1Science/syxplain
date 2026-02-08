@@ -29,11 +29,11 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignUp, onForgotPassword }) => 
         summary: 'Success',
         detail: 'Logged in successfully',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.current?.show({
         severity: 'error',
         summary: 'Error',
-        detail: error.message || 'Failed to log in',
+        detail: error instanceof Error ? error.message : 'Failed to log in',
       });
     } finally {
       setLoading(false);
@@ -91,9 +91,15 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignUp, onForgotPassword }) => 
           label="Sign In"
           loading={loading}
           className="w-full mt-4"
-          style={{ backgroundColor: '#0052cc', color: 'white', borderColor: '#0052cc', height: '48px', fontSize: '16px' }}
+          style={{
+            backgroundColor: '#0052cc',
+            color: 'white',
+            borderColor: '#0052cc',
+            height: '48px',
+            fontSize: '16px',
+          }}
           pt={{
-            loadingIcon: { className: 'ml-2' }
+            loadingIcon: { className: 'ml-2' },
           }}
         />
 

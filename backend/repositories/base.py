@@ -4,7 +4,8 @@ Base repository providing common CRUD operations.
 Implements the Repository Pattern for abstracting data access,
 enabling easier testing and separation of concerns.
 """
-from typing import Generic, List, Optional, Type, TypeVar
+
+from typing import Generic, TypeVar
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -28,7 +29,7 @@ class BaseRepository(Generic[T]):
                 super().__init__(Run, db)
     """
 
-    def __init__(self, model: Type[T], db: Session):
+    def __init__(self, model: type[T], db: Session):
         """
         Initialize the repository.
 
@@ -39,7 +40,7 @@ class BaseRepository(Generic[T]):
         self.model = model
         self.db = db
 
-    def get_by_id(self, id: UUID) -> Optional[T]:
+    def get_by_id(self, id: UUID) -> T | None:
         """
         Get an entity by its primary key.
 
@@ -51,7 +52,7 @@ class BaseRepository(Generic[T]):
         """
         return self.db.query(self.model).filter(self.model.id == id).first()
 
-    def get_all(self, skip: int = 0, limit: int = 100) -> List[T]:
+    def get_all(self, skip: int = 0, limit: int = 100) -> list[T]:
         """
         Get all entities with pagination.
 

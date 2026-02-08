@@ -107,7 +107,11 @@ export function validateJsonConfig(
   }
 
   // Validate project_description
-  if (!parsed.project_description || typeof parsed.project_description !== 'string' || !parsed.project_description.trim()) {
+  if (
+    !parsed.project_description ||
+    typeof parsed.project_description !== 'string' ||
+    !parsed.project_description.trim()
+  ) {
     errors.push({
       field: 'project_description',
       message: 'JSON must contain a valid "project_description".',
@@ -115,7 +119,11 @@ export function validateJsonConfig(
   }
 
   // Validate target_variable
-  if (!parsed.target_variable || typeof parsed.target_variable !== 'string' || !parsed.target_variable.trim()) {
+  if (
+    !parsed.target_variable ||
+    typeof parsed.target_variable !== 'string' ||
+    !parsed.target_variable.trim()
+  ) {
     errors.push({
       field: 'target_variable',
       message: 'JSON must contain a valid "target_variable".',
@@ -123,7 +131,12 @@ export function validateJsonConfig(
   }
 
   // Validate features
-  if (!parsed.features || typeof parsed.features !== 'object' || Array.isArray(parsed.features) || Object.keys(parsed.features).length === 0) {
+  if (
+    !parsed.features ||
+    typeof parsed.features !== 'object' ||
+    Array.isArray(parsed.features) ||
+    Object.keys(parsed.features).length === 0
+  ) {
     errors.push({
       field: 'features',
       message: 'JSON must contain "features" object with at least one feature.',

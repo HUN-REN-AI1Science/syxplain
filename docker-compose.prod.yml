@@ -1,0 +1,146 @@
+# Production Docker Compose
+# This configuration is for production deployment with an external Slurm cluster.
+#
+# Prerequisites:
+#   - External Slurm cluster with slurmrestd API enabled
+#   - Shared filesystem accessible by both backend and Slurm compute nodes
+#   - All environment variables set (no defaults for security)
+#   - Reverse proxy (Traefik, Caddy, etc.) for SSL termination recommended
+#
+# Required environment variables (set in .env or deployment config):
+#   - DATABASE_URL: PostgreSQL connection string
+#   - OPENAI_API_KEY: LLM API key
+#   - SLURM_API_URL: slurmrestd API URL
+#   - SLURM_AUTH_TOKEN: Slurm JWT token
+#   - SLURM_STAGING_DIR: Shared staging directory path
+#   - SUPABASE_JWT_SECRET: JWT secret for auth
+#   - SUPABASE_URL: Supabase project URL
+#
+# Usage:
+#   docker-compose -f docker-compose.prod.yml up -d
+
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/hun-ren-ai1science/syxplain-backend:latest}
+    container_name: syxplain-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      # LLM Configuration (REQUIRED)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-}
+      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4o}
+      - DEEP_RESEARCH_MODEL=${DEEP_RESEARCH_MODEL:-}
+      - DEEP_RESEARCH_API_KEY=${DEEP_RESEARCH_API_KEY:-}
+      - DEEP_RESEARCH_API_BASE=${DEEP_RESEARCH_API_BASE:-}
+      - USER_API_MODELS=${USER_API_MODELS:-gpt-4o,gpt-4.1}
+      # Admin Configuration
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-}
+      # GitHub Feedback (optional)
+      - GITHUB_FEEDBACK_TOKEN=${GITHUB_FEEDBACK_TOKEN:-}
+      - GITHUB_FEEDBACK_REPO_OWNER=${GITHUB_FEEDBACK_REPO_OWNER:-}
+      - GITHUB_FEEDBACK_REPO_NAME=${GITHUB_FEEDBACK_REPO_NAME:-}
+      # Database (REQUIRED)
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-40}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-5}
+      - DB_POOL_TIMEOUT=${DB_POOL_TIMEOUT:-30}
+      - DB_POOL_RECYCLE=${DB_POOL_RECYCLE:-300}
+      # Authentication (REQUIRED for production)
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?SUPABASE_JWT_SECRET is required}
+      - SUPABASE_URL=${SUPABASE_URL:?SUPABASE_URL is required}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      # Slurm Configuration (REQUIRED - connects to external cluster)
+      - SLURM_API_URL=${SLURM_API_URL:?SLURM_API_URL is required}
+      - SLURM_AUTH_TOKEN=${SLURM_AUTH_TOKEN:?SLURM_AUTH_TOKEN is required}
+      - SLURM_USER_NAME=${SLURM_USER_NAME:?SLURM_USER_NAME is required}
+      - SLURM_PARTITION=${SLURM_PARTITION:-compute}
+      - SLURM_DEFAULT_MEMORY=${SLURM_DEFAULT_MEMORY:-16G}
+      - SLURM_DEFAULT_CPUS=${SLURM_DEFAULT_CPUS:-8}
+      - SLURM_DEFAULT_TIME_LIMIT=${SLURM_DEFAULT_TIME_LIMIT:-04:00:00}
+      - SLURM_STAGING_DIR=${SLURM_STAGING_DIR:?SLURM_STAGING_DIR is required}
+      # Compute settings
+      - WORKER_CALLBACK_URL=${WORKER_CALLBACK_URL:-}
+      - WORKER_CALLBACK_TOKEN=${WORKER_CALLBACK_TOKEN:-}
+      - JOB_POLL_INTERVAL=${JOB_POLL_INTERVAL:-10}
+      - COMPUTE_MAX_RETRIES=${COMPUTE_MAX_RETRIES:-3}
+      # Analysis Settings
+      - SHAP_SUBSAMPLE_FRACTION=${SHAP_SUBSAMPLE_FRACTION:-0.1}
+      - SHAP_SUBSAMPLE_MIN=${SHAP_SUBSAMPLE_MIN:-1000}
+      - SHAP_SUBSAMPLE_MAX=${SHAP_SUBSAMPLE_MAX:-5000}
+      - ANALYSIS_TIMEOUT_HOURS=${ANALYSIS_TIMEOUT_HOURS:-24}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
+      # CORS (REQUIRED - set to your frontend domain)
+      - CORS_ORIGINS=${CORS_ORIGINS:?CORS_ORIGINS is required}
+      # Langfuse (optional tracing)
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+      - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
+    volumes:
+      - ${SLURM_STAGING_DIR}:${SLURM_STAGING_DIR}
+      - app_data:/app/data
+      - app_outputs:/app/outputs
+      - app_logs:/app/logs
+    networks:
+      - syxplain-network
+    deploy:
+      resources:
+        limits:
+          cpus: '${BACKEND_CPU_LIMIT:-4}'
+          memory: ${BACKEND_MEMORY_LIMIT:-4G}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/hun-ren-ai1science/syxplain-frontend:latest}
+    container_name: syxplain-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_HTTP_PORT:-80}:80"
+      - "${FRONTEND_HTTPS_PORT:-443}:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    networks:
+      - syxplain-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  syxplain-network:
+    driver: bridge
+
+volumes:
+  app_data:
+  app_outputs:
+  app_logs:
