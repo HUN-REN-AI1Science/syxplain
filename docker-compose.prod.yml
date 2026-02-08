@@ -130,6 +130,7 @@ services:
     tmpfs:
       - /var/cache/nginx
       - /var/run
+      - /etc/nginx/conf.d
     logging:
       driver: "json-file"
       options:

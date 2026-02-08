@@ -20,8 +20,13 @@ FROM nginx:alpine
 
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copy custom nginx config to handle React Router (SPA)
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy both nginx configs into the image
+COPY nginx.conf /etc/nginx/nginx-configs/nginx.conf
+COPY nginx.ssl.conf /etc/nginx/nginx-configs/nginx.ssl.conf
 
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+# Entrypoint picks the right config based on whether SSL certs exist
+COPY docker-entrypoint.sh /docker-entrypoint-custom.sh
+RUN chmod +x /docker-entrypoint-custom.sh
+
+EXPOSE 80 443
+ENTRYPOINT ["/docker-entrypoint-custom.sh"]
