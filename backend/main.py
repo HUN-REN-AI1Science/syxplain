@@ -67,7 +67,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Pragma"] = "no-cache"
         # Content Security Policy (skip for interactive docs which load external JS/CSS)
         if not request.url.path.startswith(("/docs", "/redoc", "/openapi.json")):
-            response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none'"
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; frame-ancestors 'none'"
+            )
         # Permissions Policy
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
