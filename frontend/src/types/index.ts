@@ -35,6 +35,8 @@ export interface RunDetails {
   id: string;
   status: RunStatus;
   created_at: string | null;
+  start_time: string | null;
+  finish_time: string | null;
   problem_description: ProblemDescription;
   csv_filename: string;
   csv_metadata: CsvMetadata | null;

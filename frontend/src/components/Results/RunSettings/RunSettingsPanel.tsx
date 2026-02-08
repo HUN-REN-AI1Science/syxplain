@@ -313,11 +313,29 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
               </div>
             )}
 
-            {/* Run timestamp */}
+            {/* Run timestamp and duration */}
             {runDetails.created_at && (
               <div className="flex items-center justify-center text-sm text-slate-400 pt-2">
                 <i className="pi pi-clock mr-2"></i>
                 <span>Run started: {new Date(runDetails.created_at).toLocaleString()}</span>
+                {runDetails.start_time && runDetails.finish_time && (
+                  <span className="ml-3">
+                    Duration:{' '}
+                    {(() => {
+                      const seconds = Math.floor(
+                        (new Date(runDetails.finish_time).getTime() -
+                          new Date(runDetails.start_time).getTime()) /
+                          1000
+                      );
+                      if (seconds < 60) return `${seconds}s`;
+                      const minutes = Math.floor(seconds / 60);
+                      const secs = seconds % 60;
+                      if (minutes < 60) return `${minutes}m ${secs}s`;
+                      const hours = Math.floor(minutes / 60);
+                      return `${hours}h ${minutes % 60}m`;
+                    })()}
+                  </span>
+                )}
               </div>
             )}
           </div>

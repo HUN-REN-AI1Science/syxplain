@@ -151,6 +151,8 @@ class RunService:
             "id": str(run.id),
             "status": run.status,
             "created_at": run.created_at.isoformat() if run.created_at else None,
+            "start_time": run.start_time.isoformat() if run.start_time else None,
+            "finish_time": run.finish_time.isoformat() if run.finish_time else None,
             "problem_description": run.problem_description,
             "csv_filename": run.csv_filename,
             "csv_metadata": csv_metadata,
