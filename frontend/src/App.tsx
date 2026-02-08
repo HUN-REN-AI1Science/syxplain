@@ -19,7 +19,7 @@ import AppHeader from '@components/AppHeader';
 import AppFooter from '@components/AppFooter';
 import WorkflowSteps from '@components/WorkflowSteps';
 import FeedbackDialog from '@components/FeedbackDialog';
-import type { FeedbackContext } from '@/types';
+import type { FeedbackContext, UserApiKeys } from '@/types';
 
 const WORKFLOW_STEPS = [
   { label: 'Upload Data' },
@@ -64,9 +64,9 @@ function MainApp() {
       const response = await runsService.create({
         problem_description: problemDescription,
         csv_filename: filename!,
-        analysis_type: analysis_type || 'quick',
-        deep_research_model: deep_research_model || null,
-        user_api_keys: user_api_keys,
+        analysis_type: (analysis_type as string) || 'quick',
+        deep_research_model: (deep_research_model as string | null) || null,
+        user_api_keys: user_api_keys as UserApiKeys | undefined,
       });
       setRunId(response.data.run_id);
     } catch (e: unknown) {

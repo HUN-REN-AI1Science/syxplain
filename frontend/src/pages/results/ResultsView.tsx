@@ -130,7 +130,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
 
   // Handle PDF export (lazy loads the PDF library)
   const handleExportPdf = async () => {
-    if (!result) return;
+    if (!result || !runId) return;
 
     setExportingPdf(true);
     try {
@@ -177,6 +177,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
 
   // Handle run deletion
   const handleDeleteRun = async () => {
+    if (!runId) return;
     setDeleting(true);
     try {
       await runsService.delete(runId);

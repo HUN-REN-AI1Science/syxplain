@@ -50,7 +50,7 @@ For detailed configuration and troubleshooting, continue reading.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Your Server / Local Machine                        │
+│                           Your Server / Local Machine                       │
 │  ┌─────────────┐     ┌─────────────────────────────────────────────────┐    │
 │  │   Frontend  │────▶│              Backend API                        │    │
 │  │   (React)   │     │                                                 │    │
@@ -67,48 +67,49 @@ For detailed configuration and troubleshooting, continue reading.
                                           │ (SSH tunnel needed for local dev)
                                           ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                     Slurm Cluster (slurm.science-cloud.hu)                   │
-│                                                                              │
+│                     Slurm Cluster (slurm.science-cloud.hu)                  │
+│                                                                             │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │                         slurmrestd API                                │   │
+│  │                         slurmrestd API                               │   │
 │  │                     http://slurm.science-cloud.hu:6820               │   │
-│  │                                                                       │   │
+│  │                                                                      │   │
 │  │  - Receives job submissions                                          │   │
 │  │  - Handles file upload/download (base64 over HTTP)                   │   │
 │  │  - Reports job status                                                │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                         │
-│                                    ▼                                         │
+│                                    │                                        │
+│                                    ▼                                        │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │                         Slurm Scheduler                               │   │
-│  │                                                                       │   │
+│  │                         Slurm Scheduler                              │   │
+│  │                                                                      │   │
 │  │  - Queues jobs                                                       │   │
 │  │  - Allocates resources                                               │   │
 │  │  - Dispatches to compute nodes                                       │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                         │
+│                                    │                                        │
 │                    ┌───────────────┴───────────────┐                        │
 │                    ▼                               ▼                        │
-│  ┌─────────────────────────────┐   ┌─────────────────────────────┐         │
-│  │      Compute Node 1         │   │      Compute Node N         │         │
-│  │                             │   │                             │         │
-│  │  ┌───────────────────────┐  │   │  ┌───────────────────────┐  │         │
-│  │  │  syxplain_worker      │  │   │  │  syxplain_worker      │  │         │
-│  │  │  (Singularity/Conda)  │  │   │  │  (Singularity/Conda)  │  │         │
-│  │  │                       │  │   │  │                       │  │         │
-│  │  │  - SHAP analysis      │  │   │  │  - PySR regression    │  │         │
-│  │  │  - PySR regression    │  │   │  │  - SHAP analysis      │  │         │
-│  │  └───────────────────────┘  │   │  └───────────────────────┘  │         │
-│  └─────────────────────────────┘   └─────────────────────────────┘         │
-│                                                                              │
+│  ┌─────────────────────────────┐   ┌─────────────────────────────┐          │
+│  │      Compute Node 1         │   │      Compute Node N         │          │
+│  │                             │   │                             │          │
+│  │  ┌───────────────────────┐  │   │  ┌───────────────────────┐  │          │
+│  │  │  syxplain_worker      │  │   │  │  syxplain_worker      │  │          │
+│  │  │  (Singularity)        │  │   │  │  (Singularity)        │  │          │
+│  │  │                       │  │   │  │                       │  │          │
+│  │  │  - SHAP analysis      │  │   │  │  - PySR regression    │  │          │
+│  │  │  - PySR regression    │  │   │  │  - SHAP analysis      │  │          │
+│  │  └───────────────────────┘  │   │  └───────────────────────┘  │          │
+│  └─────────────────────────────┘   └─────────────────────────────┘          │
+│                                                                             │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │                      Shared Storage (/storage/)                       │   │
-│  │                                                                       │   │
+│  │                      Shared Storage (/storage/)                      │   │
+│  │                                                                      │   │
 │  │  /storage/<username>/syxplain/           <- Staging directory        │   │
-│  │  ├── <job-uuid>/input.json               <- Input data               │   │
-│  │  ├── <job-uuid>/output.json              <- Results                  │   │
-│  │  └── <job-uuid>/output.json.stdout       <- Job logs                 │   │
-│  │                                                                       │   │
+│  │  ├── logs/                               <- Job logs                 │   │
+│  │  │   └── 2025-06-15/                     <- Date-organized           │   │
+│  │  │       ├── 143052_shap_a1b2c3d4_e5f6g7h8.stdout                    │   │
+│  │  │       └── 143052_shap_a1b2c3d4_e5f6g7h8.stderr                    │   │
+│  │                                                                      │   │
 │  │  /storage/<username>/containers/         <- Singularity containers   │   │
 │  │  └── syxplain-worker.sif                                             │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
@@ -256,18 +257,24 @@ curl -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
 
 ### Check Job Output
 
+Logs are organized in date-structured directories under `{staging_dir}/logs/`.
+Filenames encode the timestamp, task type, run ID, and job UUID:
+
+```
+logs/2025-06-15/143052_shap_a1b2c3d4_e5f6g7h8.stdout
+                HHMMSS_type_runid____jobuuid
+```
+
 ```bash
 # SSH to cluster
 ssh <username>@slurm.science-cloud.hu
 
-# View job stdout
-cat /storage/<username>/syxplain/<job-uuid>/output.json.stdout
+# List today's logs
+ls /storage/<username>/syxplain/logs/$(date +%Y-%m-%d)/
 
-# View job stderr
-cat /storage/<username>/syxplain/<job-uuid>/output.json.stderr
-
-# View results
-cat /storage/<username>/syxplain/<job-uuid>/output.json | python -m json.tool
+# View stdout/stderr for a specific job
+cat /storage/<username>/syxplain/logs/2025-06-15/143052_shap_a1b2c3d4_e5f6g7h8.stdout
+cat /storage/<username>/syxplain/logs/2025-06-15/143052_shap_a1b2c3d4_e5f6g7h8.stderr
 ```
 
 ## Troubleshooting
@@ -308,7 +315,7 @@ Common reasons:
 - `QOSMaxJobsPerUserLimit` - hit job limit
 
 **Job fails immediately:**
-- Check job stderr: `cat /storage/.../output.json.stderr`
+- Check job stderr: `cat /storage/<username>/syxplain/logs/<date>/<logfile>.stderr`
 - Verify worker is deployed correctly
 - Verify staging directory exists and is writable
 

@@ -130,7 +130,7 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
               className="p-button-outlined p-button-sm mt-3"
               onClick={() => {
                 setHasFetched(false);
-                handleToggle({ value: true });
+                handleToggle({ value: true } as PanelToggleEvent);
               }}
             />
           </div>

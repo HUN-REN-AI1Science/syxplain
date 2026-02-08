@@ -32,35 +32,32 @@ This is a proof of concept system which uses state of the art symbolic regressio
 
 ## Architecture
 
-Syxplain uses a **Slurm-based compute architecture** that separates LLM operations from compute-intensive tasks:
+Syxplain uses a **Slurm-based compute architecture** that separates LLM operations from compute-intensive tasks. The Backend API and the Slurm HPC cluster run on different servers:
 
 ```
-┌─────────────┐     ┌─────────────────────────────────────────────┐
-│   Frontend  │────▶│              Backend API                    │
-│   (React)   │     │  ┌──────────────────────────────────────┐   │
-└─────────────┘     │  │         Orchestrator Service         │   │
-                    │  │  - Data summary & visualization      │   │
-                    │  │  - LLM config generation             │   │
-                    │  │  - LLM equation explanation          │   │
-                    │  └──────────────┬───────────────────────┘   │
-                    │                 │                           │
-                    │                 ▼                           │
-                    │  ┌──────────────────────────────────────┐   │
-                    │  │     Slurm Compute Backend            │   │
-                    │  │   (via slurmrestd REST API)          │   │
-                    │  └──────────────┬───────────────────────┘   │
-                    └─────────────────┼───────────────────────────┘
-                                      │ HTTP (port 6820)
-              ┌───────────────────────┴───────────────────────┐
-              ▼                                               ▼
-    ┌─────────────────┐                           ┌─────────────────┐
-    │   SHAP Task     │                           │   PySR Task     │
-    │ - Feature       │                           │ - Symbolic      │
-    │   interactions  │                           │   regression    │
-    └─────────────────┘                           └─────────────────┘
+  Application Server                          Slurm HPC Cluster
+ ┌──────────────────┐                        (slurm.science-cloud.hu)
+ │     Frontend     │                  ┌──────────────────────────────────┐
+ │     (React)      │                  │                                  │
+ └────────┬─────────┘                  │  ┌────────────────────────────┐  │
+          │                            │  │    slurmrestd REST API     │  │
+          ▼                            │  │       (port 6820)          │  │
+ ┌──────────────────┐  HTTP (6820)     │  └─────────────┬──────────────┘  │
+ │   Backend API    │─────────────────▶│                │                 │
+ │                  │                  │                ▼                 │
+ │  - Orchestrator  │                  │  ┌──────────────────────────┐    │
+ │  - LLM calls     │  HTTP (callback) │  │     Slurm Scheduler      │    │
+ │  - WebSocket     │◀─────────────────│  └─────────┬──────────┬─────┘    │
+ └──────────────────┘                  │            │          │          │
+                                       │            ▼          ▼          │
+                                       │  ┌──────────┐ ┌────────────┐     │
+                                       │  │SHAP Task │ │ PySR Task  │     │
+                                       │  │(worker)  │ │ (worker)   │     │
+                                       │  └──────────┘ └────────────┘     │
+                                       └──────────────────────────────────┘
 ```
 
-Compute-intensive tasks (SHAP analysis, PySR symbolic regression) are submitted to an external **Slurm cluster** at `slurm.science-cloud.hu` via the slurmrestd REST API.
+Compute-intensive tasks (SHAP analysis, PySR symbolic regression) are submitted to an external **Slurm cluster** at `slurm.science-cloud.hu` via the slurmrestd REST API. The backend runs on a separate application server and communicates with the cluster over HTTP.
 
 ## Prerequisites
 
