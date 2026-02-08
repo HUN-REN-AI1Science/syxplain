@@ -114,6 +114,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onBack }) => {
             <button
               key={index}
               onClick={() => setActiveIndex(index)}
+              aria-label={tab.label}
+              aria-current={activeIndex === index ? 'true' : undefined}
               className={`
                 flex items-center gap-2 px-4 py-2.5 rounded-md font-medium text-sm
                 transition-all duration-200 ease-in-out

@@ -8,7 +8,9 @@
 import { supabase } from '@services/supabaseClient';
 import type { ConnectionState, ServerMessage, WebSocketOptions } from '@/types/websocket';
 
-const DEFAULT_OPTIONS: Required<Omit<WebSocketOptions, 'onMessage' | 'onStateChange' | 'onError' | 'onClose'>> = {
+const DEFAULT_OPTIONS: Required<
+  Omit<WebSocketOptions, 'onMessage' | 'onStateChange' | 'onError' | 'onClose'>
+> = {
   maxRetries: 5,
   initialDelay: 1000,
   maxDelay: 30000,
@@ -83,7 +85,9 @@ export class ProgressWebSocket {
   }
 
   private async getAuthToken(): Promise<string | null> {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     return session?.access_token ?? null;
   }
 
@@ -126,7 +130,13 @@ export class ProgressWebSocket {
     this.options.onClose(event.code, event.reason);
 
     // Don't reconnect if intentionally closed, normal server close, or auth failed
-    if (this.closed || event.code === 1000 || event.code === 4001 || event.code === 4003 || event.code === 4004) {
+    if (
+      this.closed ||
+      event.code === 1000 ||
+      event.code === 4001 ||
+      event.code === 4003 ||
+      event.code === 4004
+    ) {
       this.setState('disconnected');
       return;
     }
@@ -153,7 +163,9 @@ export class ProgressWebSocket {
       this.options.maxDelay
     );
 
-    console.log(`WebSocket reconnecting in ${Math.round(delay)}ms (attempt ${this.retryCount}/${this.options.maxRetries})`);
+    console.log(
+      `WebSocket reconnecting in ${Math.round(delay)}ms (attempt ${this.retryCount}/${this.options.maxRetries})`
+    );
 
     this.reconnectTimeout = setTimeout(() => {
       this.connect();

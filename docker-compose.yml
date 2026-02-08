@@ -27,7 +27,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - syxplain_pgdata:/var/lib/postgresql  # PostgreSQL 18+ uses this path
+      - syxplain_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U syxplain"]
       interval: 5s

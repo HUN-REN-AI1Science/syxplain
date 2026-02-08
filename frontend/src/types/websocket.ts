@@ -48,7 +48,12 @@ export type ClientMessage = PingMessage;
 // Connection State
 // ============================================================================
 
-export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'failed';
+export type ConnectionState =
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'disconnected'
+  | 'failed';
 
 // ============================================================================
 // WebSocket Service Options

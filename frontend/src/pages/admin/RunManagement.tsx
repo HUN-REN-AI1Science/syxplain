@@ -82,7 +82,18 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, sortField, sortOrder, statusFilter, typeFilter, searchFilter, dateFrom, dateTo, toast]);
+  }, [
+    page,
+    pageSize,
+    sortField,
+    sortOrder,
+    statusFilter,
+    typeFilter,
+    searchFilter,
+    dateFrom,
+    dateTo,
+    toast,
+  ]);
 
   useEffect(() => {
     fetchRuns();

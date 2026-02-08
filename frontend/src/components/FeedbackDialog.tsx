@@ -36,7 +36,11 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({ visible, onHide,
   const [submitting, setSubmitting] = useState(false);
   const toast = useRef<Toast>(null);
 
-  const isValid = title.trim().length >= 1 && title.length <= 100 && description.trim().length >= 10 && description.length <= 2000;
+  const isValid =
+    title.trim().length >= 1 &&
+    title.length <= 100 &&
+    description.trim().length >= 10 &&
+    description.length <= 2000;
 
   const resetForm = () => {
     setCategory('bug');
@@ -64,9 +68,10 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({ visible, onHide,
       onHide();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { status?: number } };
-      const detail = axiosErr.response?.status === 429
-        ? 'Too many submissions. Please wait a minute and try again.'
-        : 'Failed to submit feedback. Please try again.';
+      const detail =
+        axiosErr.response?.status === 429
+          ? 'Too many submissions. Please wait a minute and try again.'
+          : 'Failed to submit feedback. Please try again.';
       toast.current?.show({ severity: 'error', summary: 'Error', detail, life: 5000 });
     } finally {
       setSubmitting(false);
@@ -160,7 +165,9 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({ visible, onHide,
 
           <div className="flex items-center gap-2 text-sm text-slate-500 bg-slate-50 rounded p-2">
             <i className="pi pi-info-circle" />
-            <span>Technical context (current page, run ID, browser) will be automatically included.</span>
+            <span>
+              Technical context (current page, run ID, browser) will be automatically included.
+            </span>
           </div>
         </div>
       </Dialog>

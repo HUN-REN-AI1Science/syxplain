@@ -38,37 +38,49 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
   onErrorRef.current = onError;
 
   // Handle terminal state
-  const handleTerminalState = useCallback((newStatus: RunStatus, newError: string | null, newResults: EquationResults | null) => {
-    if (isTerminalRef.current) return;
-    isTerminalRef.current = true;
+  const handleTerminalState = useCallback(
+    (newStatus: RunStatus, newError: string | null, newResults: EquationResults | null) => {
+      if (isTerminalRef.current) return;
+      isTerminalRef.current = true;
 
-    if (newStatus === 'completed' && newResults) {
-      onCompleteRef.current?.(newResults);
-    } else if (newStatus === 'failed' || newStatus === 'timeout' || newStatus === 'cancelled') {
-      const errorMessage = newError || (newStatus === 'timeout' ? 'Analysis timed out' : newStatus === 'cancelled' ? 'Analysis was cancelled' : 'Unknown error');
-      onErrorRef.current?.(errorMessage);
-    }
-  }, []);
+      if (newStatus === 'completed' && newResults) {
+        onCompleteRef.current?.(newResults);
+      } else if (newStatus === 'failed' || newStatus === 'timeout' || newStatus === 'cancelled') {
+        const errorMessage =
+          newError ||
+          (newStatus === 'timeout'
+            ? 'Analysis timed out'
+            : newStatus === 'cancelled'
+              ? 'Analysis was cancelled'
+              : 'Unknown error');
+        onErrorRef.current?.(errorMessage);
+      }
+    },
+    []
+  );
 
   // Handle WebSocket message
-  const handleMessage = useCallback((message: ServerMessage) => {
-    if (message.type === 'pong') return;
+  const handleMessage = useCallback(
+    (message: ServerMessage) => {
+      if (message.type === 'pong') return;
 
-    if (message.type === 'initial_state' || message.type === 'progress_update') {
-      setProgress(message.progress);
-      setStatus(message.status);
-      setError(message.error);
-      setIsReady(true);
+      if (message.type === 'initial_state' || message.type === 'progress_update') {
+        setProgress(message.progress);
+        setStatus(message.status);
+        setError(message.error);
+        setIsReady(true);
 
-      if (message.results) {
-        setResults(message.results);
+        if (message.results) {
+          setResults(message.results);
+        }
+
+        if (TERMINAL_STATUSES.includes(message.status)) {
+          handleTerminalState(message.status, message.error, message.results);
+        }
       }
-
-      if (TERMINAL_STATUSES.includes(message.status)) {
-        handleTerminalState(message.status, message.error, message.results);
-      }
-    }
-  }, [handleTerminalState]);
+    },
+    [handleTerminalState]
+  );
 
   // Handle WebSocket state change
   const handleStateChange = useCallback((state: ConnectionState) => {

@@ -57,7 +57,7 @@ class Run(Base):
     csv_filename = Column(String, nullable=False)  # Store filename for reference
     error = Column(Text, nullable=True)
     results = Column(JSONB, nullable=True)
-    public_share_token = Column(String(32), nullable=True, unique=True, index=True)
+    public_share_token = Column(String(64), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     start_time = Column(DateTime, nullable=True)  # Set when status becomes "running"
     finish_time = Column(DateTime, nullable=True)  # Set when status becomes terminal

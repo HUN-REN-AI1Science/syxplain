@@ -11,10 +11,11 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from backend.api.websocket.connection_manager import get_connection_manager
 from backend.core.config import get_auth_settings
-from backend.core.exceptions import AuthenticationError
+from backend.core.exceptions import AuthenticationError, ValidationError
 from backend.core.security import decode_jwt_token
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
+from backend.utils import parse_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +59,15 @@ async def websocket_progress(
             return
 
         # Verify user owns the run
+        try:
+            parsed_run_id = parse_uuid(run_id, "run_id")
+        except ValidationError:
+            logger.warning(f"WebSocket: invalid run_id format: {run_id}")
+            await websocket.close(code=4004, reason="Invalid run ID")
+            return
+
         with get_db_session() as db:
-            run = db.query(Run).filter(Run.id == run_id).first()
+            run = db.query(Run).filter(Run.id == parsed_run_id).first()
 
             if not run:
                 logger.warning(f"WebSocket: run {run_id} not found")

@@ -32,14 +32,14 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
           style={{ height: '8px' }}
           className={`mb-2 ${isInQueuePhase ? 'progress-bar-shimmer' : ''}`}
         />
-        <p className="text-lg font-semibold text-blue-600">{Math.floor(displayProgress)}% complete</p>
+        <p className="text-lg font-semibold text-blue-600">
+          {Math.floor(displayProgress)}% complete
+        </p>
       </div>
 
       {/* Step Description */}
       <div className="h-8 mb-4">
-        <p className="text-base font-medium text-slate-400">
-          {stepDescription}
-        </p>
+        <p className="text-base font-medium text-slate-400">{stepDescription}</p>
       </div>
 
       {/* Subtle Separator */}
@@ -50,7 +50,8 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
         {isInQueuePhase && <span className="queue-pulse ml-2 text-blue-500">...</span>}
       </h3>
       <p className="text-slate-500 max-w-md mx-auto mb-4">
-        Discovering mathematical equations and computing feature importance using symbolic regression.
+        Discovering mathematical equations and computing feature importance using symbolic
+        regression.
       </p>
 
       {/* Only show "safe to leave" message when job is submitted to cluster */}

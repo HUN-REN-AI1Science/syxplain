@@ -69,7 +69,8 @@ export function useProgressInterpolation(
     if (status === 'failed' || status === 'timeout' || status === 'cancelled') {
       return {
         currentStepDescription: status === 'cancelled' ? 'Analysis cancelled' : 'Analysis stopped',
-        currentStepLabel: status === 'timeout' ? 'Timeout' : status === 'cancelled' ? 'Cancelled' : 'Failed',
+        currentStepLabel:
+          status === 'timeout' ? 'Timeout' : status === 'cancelled' ? 'Cancelled' : 'Failed',
       };
     }
     if (phases.length === 0) {

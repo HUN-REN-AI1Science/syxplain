@@ -83,25 +83,28 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   // (from compute phase) lack LLM explanations and summary.
   useEffect(() => {
     if (isCompleted && runId) {
-      runsService.getById(runId).then((response) => {
-        if (response.data.results) {
-          setResult(response.data.results as EquationResults | string);
-        }
-        setShareToken(response.data.public_share_token || null);
-        // Compute duration from timing data
-        const { start_time, finish_time } = response.data;
-        if (start_time && finish_time) {
-          const seconds = Math.floor(
-            (new Date(finish_time).getTime() - new Date(start_time).getTime()) / 1000
-          );
-          const hours = Math.floor(seconds / 3600);
-          const minutes = Math.floor((seconds % 3600) / 60);
-          const secs = seconds % 60;
-          if (hours > 0) setDuration(`${hours}h ${minutes}m`);
-          else if (minutes > 0) setDuration(`${minutes}m ${secs}s`);
-          else setDuration(`${secs}s`);
-        }
-      }).catch(console.error);
+      runsService
+        .getById(runId)
+        .then((response) => {
+          if (response.data.results) {
+            setResult(response.data.results as EquationResults | string);
+          }
+          setShareToken(response.data.public_share_token || null);
+          // Compute duration from timing data
+          const { start_time, finish_time } = response.data;
+          if (start_time && finish_time) {
+            const seconds = Math.floor(
+              (new Date(finish_time).getTime() - new Date(start_time).getTime()) / 1000
+            );
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            if (hours > 0) setDuration(`${hours}h ${minutes}m`);
+            else if (minutes > 0) setDuration(`${minutes}m ${secs}s`);
+            else setDuration(`${secs}s`);
+          }
+        })
+        .catch(console.error);
     }
   }, [isCompleted, runId]);
 
@@ -212,10 +215,10 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
 
   // Check if result is in the new EquationResults format (not legacy markdown)
   // Accounts for both direct EquationResults and backend combined format (explanations wrapper)
-  const isNewFormat = result !== null && typeof result === 'object' && (
-    ('equations' in result && 'summary' in result) ||
-    ('explanations' in result)
-  );
+  const isNewFormat =
+    result !== null &&
+    typeof result === 'object' &&
+    (('equations' in result && 'summary' in result) || 'explanations' in result);
 
   // Determine header status
   const getHeaderStatus = (): ResultsStatus => {
@@ -267,7 +270,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
               Run ID: <span className="font-mono">{runId.slice(0, 8)}...</span>
               {duration && (
                 <span className="ml-3 text-slate-400">
-                  <i className="pi pi-clock mr-1"></i>{duration}
+                  <i className="pi pi-clock mr-1"></i>
+                  {duration}
                 </span>
               )}
             </>
@@ -299,7 +303,13 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           <>
             <AnalysisProgressView
               displayProgress={isStarting || isConnecting ? 0 : displayProgress}
-              stepDescription={isStarting ? 'Starting analysis...' : isConnecting ? 'Connecting to analysis server...' : currentStepDescription}
+              stepDescription={
+                isStarting
+                  ? 'Starting analysis...'
+                  : isConnecting
+                    ? 'Connecting to analysis server...'
+                    : currentStepDescription
+              }
               isInQueuePhase={isStarting || isConnecting || isInQueuePhase}
               isJobSubmitted={status === 'running' && !isStarting && !isConnecting}
             />
