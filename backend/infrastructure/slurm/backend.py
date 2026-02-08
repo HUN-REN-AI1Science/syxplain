@@ -6,8 +6,8 @@ Executes compute tasks on a Slurm cluster via slurmrestd API.
 
 import logging
 import uuid
-from datetime import datetime
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from backend.core.config import get_slurm_settings

@@ -18,6 +18,9 @@ from backend.infrastructure.database.models import Run, RunArtifact
 
 logger = logging.getLogger(__name__)
 
+# Track broadcast tasks to prevent GC
+_background_tasks: set[asyncio.Task] = set()
+
 
 def _broadcast_progress_sync(
     run_id: str,
@@ -40,9 +43,8 @@ def _broadcast_progress_sync(
 
         # Try to get running event loop
         try:
-            loop = asyncio.get_running_loop()
-            # Schedule broadcast on the running loop
-            asyncio.ensure_future(
+            asyncio.get_running_loop()
+            task = asyncio.ensure_future(
                 manager.broadcast_progress(
                     run_id=run_id,
                     progress=progress,
@@ -52,6 +54,8 @@ def _broadcast_progress_sync(
                     results=results,
                 )
             )
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
         except RuntimeError:
             # No running event loop - skip broadcast
             # This happens during testing or non-async contexts

@@ -6,6 +6,7 @@ to all connected clients watching a specific run.
 """
 
 import asyncio
+import contextlib
 import logging
 from collections import defaultdict
 from typing import Any
@@ -149,10 +150,8 @@ class ConnectionManager:
         if status in TERMINAL_STATUSES:
             live_connections = [ws for ws in connections if ws not in dead_connections]
             for websocket in live_connections:
-                try:
+                with contextlib.suppress(Exception):
                     await websocket.close(code=1000, reason=f"Run {status}")
-                except Exception:
-                    pass
 
     async def send_initial_state(
         self,

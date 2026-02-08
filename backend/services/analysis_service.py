@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 # Track running analysis tasks (prevents GC of asyncio tasks)
 _running_tasks: dict[str, asyncio.Task] = {}
 
+# Track broadcast tasks to prevent GC
+_broadcast_tasks: set[asyncio.Task] = set()
+
 
 def update_run_status(
     run_id: str,
@@ -91,8 +94,8 @@ def _broadcast_status_update(
 
         # Try to get running event loop
         try:
-            loop = asyncio.get_running_loop()
-            asyncio.ensure_future(
+            asyncio.get_running_loop()
+            task = asyncio.ensure_future(
                 manager.broadcast_progress(
                     run_id=run_id,
                     progress=progress,
@@ -101,6 +104,8 @@ def _broadcast_status_update(
                     results=results,
                 )
             )
+            _broadcast_tasks.add(task)
+            task.add_done_callback(_broadcast_tasks.discard)
         except RuntimeError:
             # No running event loop - skip broadcast
             pass

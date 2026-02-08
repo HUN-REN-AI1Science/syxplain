@@ -8,7 +8,6 @@ moved to the service layer for cleaner separation of concerns.
 
 import logging
 
-# Third-party imports
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -17,11 +16,18 @@ from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-# Import routers
-from backend.api.routers import admin, config, feedback, files, permissions, profile, progress, runs, sharing
+from backend.api.routers import (
+    admin,
+    config,
+    feedback,
+    files,
+    permissions,
+    profile,
+    progress,
+    runs,
+    sharing,
+)
 from backend.api.websocket import progress_ws
-
-# Local imports
 from backend.core.config import get_settings
 from backend.core.exceptions import register_exception_handlers
 from backend.core.logging import configure_logging, configure_uvicorn_logging
