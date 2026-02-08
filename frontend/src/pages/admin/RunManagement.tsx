@@ -340,7 +340,6 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
           style={{ width: '120px' }}
         />
         <Column field="analysis_type" header="Type" sortable style={{ width: '80px' }} />
-        <Column field="csv_filename" header="File" sortable style={{ width: '200px' }} />
         <Column
           field="created_at"
           header="Created"

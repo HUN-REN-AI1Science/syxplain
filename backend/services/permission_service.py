@@ -144,18 +144,31 @@ class PermissionService:
             ]
 
         try:
-            # Supabase Admin API to list users
-            response = httpx.get(
-                f"{supabase_url}/auth/v1/admin/users",
-                headers={
-                    "apikey": service_role_key,
-                    "Authorization": f"Bearer {service_role_key}",
-                },
-                timeout=10.0,
-            )
-            response.raise_for_status()
-            data = response.json()
-            users = data.get("users", [])
+            # Supabase Admin API to list users (paginated)
+            users = []
+            page = 1
+            per_page = 100
+            while True:
+                response = httpx.get(
+                    f"{supabase_url}/auth/v1/admin/users",
+                    headers={
+                        "apikey": service_role_key,
+                        "Authorization": f"Bearer {service_role_key}",
+                    },
+                    params={"page": page, "per_page": per_page},
+                    timeout=10.0,
+                )
+                response.raise_for_status()
+                data = response.json()
+                page_users = data.get("users", [])
+                users.extend(page_users)
+
+                # Stop if we got fewer than requested (last page)
+                if len(page_users) < per_page:
+                    break
+                page += 1
+
+            logger.info(f"Fetched {len(users)} users from Supabase Admin API")
 
             # Merge with permissions
             result = []

@@ -45,21 +45,18 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [duration, setDuration] = useState<string | null>(null);
 
   // Refs
   const toast = useRef<Toast>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   // Callbacks for useRunProgress
-  const handleComplete = useCallback((results: EquationResults) => {
-    setResult(results);
-    // Fetch share token when completed
-    if (runId) {
-      runsService.getById(runId).then((response) => {
-        setShareToken(response.data.public_share_token || null);
-      }).catch(console.error);
-    }
-  }, [runId]);
+  // Note: we don't setResult here — the isCompleted useEffect always
+  // fetches the final results (with LLM explanations) from the API.
+  const handleComplete = useCallback((_results: EquationResults) => {
+    // Results will be fetched from API by the isCompleted effect
+  }, []);
 
   const handleError = useCallback(() => {
     // Error is already tracked by the hook
@@ -79,25 +76,35 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     enabled: !!runId,
   });
 
-  // Sync results from WebSocket if we got them there
-  useEffect(() => {
-    if (wsResults && !result) {
-      setResult(wsResults);
-    }
-  }, [wsResults, result]);
+  // Derived state (declared early so hooks below can reference it)
+  const isCompleted = status === 'completed';
 
-  // Fetch results from API when completion arrives without results
-  // (WebSocket broadcasts don't include results payload)
+  // Fetch final results from API when run completes.
+  // Always fetch from API on completion — WebSocket intermediate results
+  // (from compute phase) lack LLM explanations and summary.
   useEffect(() => {
-    if (isCompleted && !result && runId) {
+    if (isCompleted && runId) {
       runsService.getById(runId).then((response) => {
         if (response.data.results) {
           setResult(response.data.results as EquationResults | string);
         }
         setShareToken(response.data.public_share_token || null);
+        // Compute duration from timing data
+        const { start_time, finish_time } = response.data;
+        if (start_time && finish_time) {
+          const seconds = Math.floor(
+            (new Date(finish_time).getTime() - new Date(start_time).getTime()) / 1000
+          );
+          const hours = Math.floor(seconds / 3600);
+          const minutes = Math.floor((seconds % 3600) / 60);
+          const secs = seconds % 60;
+          if (hours > 0) setDuration(`${hours}h ${minutes}m`);
+          else if (minutes > 0) setDuration(`${minutes}m ${secs}s`);
+          else setDuration(`${secs}s`);
+        }
       }).catch(console.error);
     }
-  }, [isCompleted, result, runId]);
+  }, [isCompleted, runId]);
 
   // Custom hook for smooth progress interpolation and step description
   const { displayProgress, currentStepDescription, isInQueuePhase } = useProgressInterpolation({
@@ -192,9 +199,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     }
   };
 
-  // Derived state
-  const isCompleted = status === 'completed';
-
   // Waiting for run to be created (runId not yet available)
   const isStarting = !runId;
 
@@ -261,6 +265,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           runId ? (
             <>
               Run ID: <span className="font-mono">{runId.slice(0, 8)}...</span>
+              {duration && (
+                <span className="ml-3 text-slate-400">
+                  <i className="pi pi-clock mr-1"></i>{duration}
+                </span>
+              )}
             </>
           ) : (
             <>Starting analysis...</>

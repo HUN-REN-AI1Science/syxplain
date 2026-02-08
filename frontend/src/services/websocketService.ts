@@ -125,9 +125,9 @@ export class ProgressWebSocket {
     this.cleanup();
     this.options.onClose(event.code, event.reason);
 
-    // Don't reconnect if intentionally closed or auth failed
-    if (this.closed || event.code === 4001 || event.code === 4003 || event.code === 4004) {
-      this.setState('failed');
+    // Don't reconnect if intentionally closed, normal server close, or auth failed
+    if (this.closed || event.code === 1000 || event.code === 4001 || event.code === 4003 || event.code === 4004) {
+      this.setState('disconnected');
       return;
     }
 

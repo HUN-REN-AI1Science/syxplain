@@ -229,6 +229,10 @@ class AnalysisOrchestrator:
             logger.info(f"Analysis completed successfully for run {run_id}")
             return final_results
 
+        except AnalysisCancelledError:
+            logger.info(f"Analysis cancelled for run {run_id}")
+            # Don't overwrite — cancel_run already set status to "cancelled"
+            raise
         except Exception as e:
             logger.error(f"Analysis failed for run {run_id}: {e}", exc_info=True)
             self._update_run_status(run_id, "failed", error=str(e))
@@ -438,7 +442,10 @@ class AnalysisOrchestrator:
             on_state_change=on_job_state_change,
         )
 
-        # Check for failures
+        # Check for cancellation first, then failures
+        if shap_status.state == JobState.CANCELLED or pysr_status.state == JobState.CANCELLED:
+            raise AnalysisCancelledError("Analysis cancelled by user")
+
         if shap_status.state != JobState.COMPLETED:
             raise OrchestratorError(f"SHAP task failed: {shap_status.error}")
 
@@ -674,6 +681,12 @@ class AnalysisOrchestrator:
 
 class OrchestratorError(Exception):
     """Error during orchestration."""
+
+    pass
+
+
+class AnalysisCancelledError(OrchestratorError):
+    """Raised when the analysis is cancelled by the user."""
 
     pass
 

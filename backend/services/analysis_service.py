@@ -13,6 +13,7 @@ from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import File as DbFile
 from backend.infrastructure.database.models import Run
 from backend.services.file_service import FileService
+from backend.services.orchestrator_service import AnalysisCancelledError
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +178,9 @@ async def _run_analysis(
         logger.info(f"Run {run_id} was cancelled")
         update_run_status(run_id, "cancelled", error="Analysis cancelled by user")
         raise
+    except AnalysisCancelledError:
+        logger.info(f"Run {run_id} was cancelled by user")
+        # Don't overwrite — cancel_run already set status to "cancelled"
     except Exception as e:
         error_msg = str(e)
         update_run_status(run_id, "failed", error=error_msg)

@@ -105,6 +105,8 @@ export const runsService = {
       results?: EquationResults | { pysr_explanations: string };
       error?: string;
       public_share_token?: string | null;
+      start_time?: string | null;
+      finish_time?: string | null;
     }>(`/runs/${id}`),
 
   getDetails: (id: string) => api.get<RunDetails>(`/runs/${id}/details`),

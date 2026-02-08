@@ -142,6 +142,18 @@ class ConnectionManager:
         if dead_connections:
             logger.info(f"Cleaned up {len(dead_connections)} dead connections for run {run_id[:8]}...")
 
+        # Close connections after terminal status — the run is done,
+        # no more updates will be sent. The server-side close causes
+        # the handler's receive_json() to raise WebSocketDisconnect.
+        TERMINAL_STATUSES = ("completed", "failed", "timeout", "cancelled")
+        if status in TERMINAL_STATUSES:
+            live_connections = [ws for ws in connections if ws not in dead_connections]
+            for websocket in live_connections:
+                try:
+                    await websocket.close(code=1000, reason=f"Run {status}")
+                except Exception:
+                    pass
+
     async def send_initial_state(
         self,
         websocket: WebSocket,
