@@ -67,19 +67,7 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
         regression.
       </p>
 
-      {isInQueuePhase && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto mt-4">
-          <div className="flex items-center gap-2 text-blue-700">
-            <i className="pi pi-info-circle" />
-            <p className="text-sm">
-              Your analysis is queued and waiting for a free compute resource on the HPC cluster.
-              This usually takes a few moments.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Only show "safe to leave" message when job is submitted to cluster */}
+      {/* Only show "safe to leave" message once the job is actively running on the cluster */}
       {isJobSubmitted && (
         <p className="text-slate-600 text-sm max-w-md mx-auto">
           You can safely leave this page. Your results will be available in the{' '}

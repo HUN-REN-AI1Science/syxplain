@@ -330,7 +330,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
                     : currentStepDescription
               }
               isInQueuePhase={isStarting || isConnecting || isInQueuePhase}
-              isJobSubmitted={status === 'running' && !isStarting && !isConnecting}
+              isJobSubmitted={
+                status === 'running' && !isStarting && !isConnecting && !isInQueuePhase
+              }
             />
             {status === 'running' && !isStarting && !isConnecting && (
               <div className="flex justify-center mt-4">
