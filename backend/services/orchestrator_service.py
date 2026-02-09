@@ -321,29 +321,90 @@ class AnalysisOrchestrator:
         from backend.services.llm_service import generate_pysr_config
 
         try:
-            # Generate data summary CSV for LLM
-            summary_csv = pd.DataFrame(data_summary.get("target_stats", {}), index=[0]).to_csv()
+            # Generate enriched dataset statistics JSON for LLM
+            dataset_stats_for_llm = json.dumps(
+                {
+                    "n_rows": data_summary.get("n_rows"),
+                    "n_features": data_summary.get("n_columns", 0) - 1,
+                    "predictor_columns": data_summary.get("predictor_columns", []),
+                    "target_column": data_summary.get("target_column"),
+                    "target_stats": data_summary.get("target_stats", {}),
+                    "column_types": data_summary.get("column_types", {}),
+                },
+                indent=2,
+            )
 
             # Run synchronous LLM call in thread pool to avoid blocking event loop
             config_json = await asyncio.to_thread(
                 generate_pysr_config,
                 project_description=json.dumps(context.problem_description),
-                dataset_statistics=summary_csv,
+                dataset_statistics=dataset_stats_for_llm,
                 visualizations_b64=visualizations_b64 or [],
                 user_api_key=context.user_api_key,
                 user_model=context.user_model,
             )
-            return json.loads(config_json)
+            config = json.loads(config_json)
+            return self._validate_pysr_config(config)
         except Exception as e:
             logger.warning(f"LLM config generation failed, using defaults: {e}")
-            # Return default config
+            # Return default config (niterations=None lets worker auto-estimate)
             return {
-                "niterations": 40,
+                "niterations": None,
                 "populations": 15,
                 "binary_operators": ["+", "-", "*", "/"],
                 "unary_operators": ["exp", "log", "sqrt", "abs"],
                 "maxsize": 20,
+                "maxdepth": 10,
             }
+
+    def _validate_pysr_config(self, config: dict[str, Any]) -> dict[str, Any]:
+        """
+        Validate and clamp LLM-generated PySR search parameters to safe ranges.
+
+        Non-integer values are set to None (triggers worker defaults).
+
+        Args:
+            config: Raw config dict from LLM
+
+        Returns:
+            Config dict with clamped/validated values
+        """
+        clamp_ranges = {
+            "niterations": (50, 10000),
+            "maxsize": (7, 50),
+            "maxdepth": (4, 20),
+        }
+
+        for key, (lo, hi) in clamp_ranges.items():
+            val = config.get(key)
+            if val is None:
+                continue
+            if not isinstance(val, int):
+                # Try to convert string/float to int, otherwise null out
+                try:
+                    val = int(val)
+                except (TypeError, ValueError):
+                    logger.warning(
+                        f"PySR config: {key}={config[key]!r} is not an integer, setting to null"
+                    )
+                    config[key] = None
+                    continue
+            if val < lo or val > hi:
+                clamped = max(lo, min(hi, val))
+                logger.warning(f"PySR config: clamping {key}={val} to {clamped} (range {lo}–{hi})")
+                val = clamped
+            config[key] = val
+
+        # Ensure maxdepth <= maxsize when both are set
+        maxdepth = config.get("maxdepth")
+        maxsize = config.get("maxsize")
+        if isinstance(maxdepth, int) and isinstance(maxsize, int) and maxdepth > maxsize:
+            logger.warning(
+                f"PySR config: maxdepth ({maxdepth}) > maxsize ({maxsize}), clamping maxdepth"
+            )
+            config["maxdepth"] = maxsize
+
+        return config
 
     async def _run_compute_tasks(
         self,

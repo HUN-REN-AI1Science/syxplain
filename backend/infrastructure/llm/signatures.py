@@ -9,9 +9,9 @@ class PySrConfigGenerator(dspy.Signature):
     """
     You are a senior expert Data Scientist working on a high stakes project.
 
-    Your task is to select symbolic operators to initialize a PySRRegressor. Use ALL inputs:
+    Your task is to configure a PySRRegressor for symbolic regression. Use ALL inputs:
        1. **Project description json**: Use the physical context to inform your choices!
-       2. **Dataset statistics**: features and target variable distribution
+       2. **Dataset statistics**: JSON with row/feature counts, target stats, and column types
        3. **Dataset visualization**: features vs target variable
     to make your decision!
 
@@ -19,19 +19,32 @@ class PySrConfigGenerator(dspy.Signature):
     Select a SUBSET (possibly large or empty) from these allowed operators based on the data evidence:
     • Allowed unary: ["sin", "exp", "log", "sqrt"]
     • Allowed binary: ["+", "-", "*", "/", "^"]
-    Do not include operators without plausible support in the CSV/visualization. Do not default to selecting all operators.
+    Do not include operators without plausible support in the data/visualization. Do not default to selecting all operators.
+
+    ### SEARCH PARAMETERS
+    Set the following based on dataset size and expected complexity. Use null to accept defaults.
+    • niterations (int or null): Evolutionary iteration count. Range 100–5000.
+      Guidance: ~200 for small/simple datasets, ~500–1000 for medium, ~2000+ for large/complex. Null = let worker auto-estimate.
+    • maxsize (int or null): Max equation nodes (complexity limit). Range 10–40.
+      Guidance: 15–20 for linear relationships, 20–30 for moderate complexity, 30–40 for complex nonlinear. Null = default 20.
+    • maxdepth (int or null): Max expression tree depth. Range 4–20. Null = default 10.
 
     ### REQUIRED OUTPUT SCHEMA
     Return STRICT JSON only — no markdown, no code fences, no commentary. Output must parse with json.loads(). If unsure about a field, set it to null.
 
     {
         "unary_operators": ["<subset of allowed unary ops>"],
-        "binary_operators": ["<subset of allowed binary ops>"]
+        "binary_operators": ["<subset of allowed binary ops>"],
+        "niterations": "<int or null>",
+        "maxsize": "<int or null>",
+        "maxdepth": "<int or null>"
     }
     """
 
     project_description: str = dspy.InputField(desc="Project description json")
-    dataset_statistics: str = dspy.InputField(desc="Dataset statistics")
+    dataset_statistics: str = dspy.InputField(
+        desc="JSON string with row/feature counts, target stats, and column types"
+    )
     visualizations: list[dspy.Image] = dspy.InputField(desc="Dataset visualizations")
 
     config_json: str = dspy.OutputField(desc="JSON configuration string")

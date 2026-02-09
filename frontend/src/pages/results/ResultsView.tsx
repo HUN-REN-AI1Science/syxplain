@@ -134,8 +134,26 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
 
     setExportingPdf(true);
     try {
-      // Handle both object (new format) and string (old format)
-      const parsedData: EquationResults = typeof result === 'object' ? result : JSON.parse(result);
+      // Parse result the same way ResultContent does, extracting from
+      // the backend's combined format (enriched data lives inside `explanations`)
+      let parsedData: EquationResults;
+      const raw = typeof result === 'object' ? result : JSON.parse(result);
+
+      if (
+        raw &&
+        typeof raw === 'object' &&
+        'explanations' in raw &&
+        raw.explanations &&
+        typeof raw.explanations === 'object' &&
+        !Array.isArray(raw.explanations) &&
+        'equations' in raw.explanations
+      ) {
+        // Backend combined format: extract enriched data from explanations wrapper
+        parsedData = raw.explanations as EquationResults;
+      } else {
+        parsedData = raw as EquationResults;
+      }
+
       // Dynamic import to reduce initial bundle size
       const { generateResultsPdf } = await import('@utils/pdfExport');
       await generateResultsPdf(parsedData, runId);

@@ -95,6 +95,8 @@ function addText(
 ): void {
   const { pdf, margin, contentWidth, pageHeight } = ctx;
 
+  if (!text) return;
+
   pdf.setFontSize(fontSize);
   pdf.setFont('times', isBold ? 'bold' : 'normal');
   pdf.setTextColor(color[0], color[1], color[2]);
@@ -296,7 +298,9 @@ function renderEquation(ctx: PdfContext, eq: Equation, idx: number, totalCount: 
   pdf.setFontSize(9);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(80, 80, 80);
-  const metrics = `Loss: ${eq.loss.toFixed(4)}   |   Complexity: ${eq.complexity}`;
+  const lossStr = typeof eq.loss === 'number' ? eq.loss.toFixed(4) : 'N/A';
+  const complexityStr = eq.complexity != null ? String(eq.complexity) : 'N/A';
+  const metrics = `Loss: ${lossStr}   |   Complexity: ${complexityStr}`;
   pdf.text(metrics, pageWidth - margin, ctx.y + 1, { align: 'right' });
 
   ctx.y += 8;
@@ -321,8 +325,10 @@ function renderEquation(ctx: PdfContext, eq: Equation, idx: number, totalCount: 
   ctx.y += boxHeight + 6;
 
   // Overview
-  addText(ctx, eq.overview, 10, false, [40, 40, 40], 'justify');
-  ctx.y += 2;
+  if (eq.overview) {
+    addText(ctx, eq.overview, 10, false, [40, 40, 40], 'justify');
+    ctx.y += 2;
+  }
 
   // Term Breakdown
   if (eq.term_explanations && eq.term_explanations.length > 0) {
