@@ -50,7 +50,9 @@ router = APIRouter(prefix="/api", tags=["Permissions"])
 
 
 @router.get("/permissions/me", response_model=PermissionResponse)
+@limiter.limit("60/minute")
 def get_my_permissions(
+    request: Request,
     current_user: User = Depends(get_current_user),
     permission_service: PermissionService = Depends(get_permission_service),
 ):
@@ -66,7 +68,7 @@ def get_my_permissions(
 
 
 @router.post("/validate-keys", response_model=ValidateKeysResponse)
-@limiter.limit("10/minute")
+@limiter.limit("20/minute")
 async def validate_api_keys(
     request: Request, body: ValidateKeysRequest, current_user: User = Depends(get_current_user)
 ):

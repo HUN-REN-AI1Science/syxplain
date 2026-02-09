@@ -106,7 +106,7 @@ def get_client_ip(request: Request) -> str | None:
 
 
 @router.get("/users", response_model=UsersWithPermissionsResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def list_users_with_permissions(
     request: Request,
     admin: User = Depends(require_admin),
@@ -135,7 +135,7 @@ def list_users_with_permissions(
 
 
 @router.put("/users/{user_id}/permissions", response_model=UpdatePermissionResponse)
-@limiter.limit("20/minute")
+@limiter.limit("40/minute")
 def update_user_permission(
     request: Request,
     user_id: str,
@@ -188,7 +188,7 @@ def update_user_permission(
 
 
 @router.get("/dashboard/stats", response_model=DashboardStatsResponse)
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 def get_dashboard_stats(
     request: Request,
     admin: User = Depends(require_admin),
@@ -200,7 +200,7 @@ def get_dashboard_stats(
 
 
 @router.get("/dashboard/trends", response_model=RunTrendsResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_run_trends(
     request: Request,
     days: int = Query(default=30, ge=1, le=365),
@@ -213,7 +213,7 @@ def get_run_trends(
 
 
 @router.get("/dashboard/status-distribution", response_model=StatusDistributionResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_status_distribution(
     request: Request,
     admin: User = Depends(require_admin),
@@ -225,7 +225,7 @@ def get_status_distribution(
 
 
 @router.get("/dashboard/recent-activity", response_model=RecentActivityResponse)
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 def get_recent_activity(
     request: Request,
     limit: int = Query(default=10, ge=1, le=50),
@@ -243,7 +243,7 @@ def get_recent_activity(
 
 
 @router.get("/runs", response_model=PaginatedAdminRunsResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_all_runs(
     request: Request,
     page: int = Query(default=1, ge=1),
@@ -308,7 +308,7 @@ def get_all_runs(
 
 
 @router.get("/runs/{run_id}", response_model=AdminRunDetailResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_run_detail(
     request: Request,
     run_id: str,
@@ -351,7 +351,7 @@ def get_run_detail(
 
 
 @router.post("/runs/{run_id}/cancel", response_model=AdminRunActionResponse)
-@limiter.limit("20/minute")
+@limiter.limit("40/minute")
 def cancel_run(
     request: Request,
     run_id: str,
@@ -388,7 +388,7 @@ def cancel_run(
 
 
 @router.delete("/runs/{run_id}", response_model=AdminRunActionResponse)
-@limiter.limit("10/minute")
+@limiter.limit("20/minute")
 def delete_run(
     request: Request,
     run_id: str,
@@ -439,7 +439,7 @@ def delete_run(
 
 
 @router.get("/system/health", response_model=SystemHealthResponse)
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 def get_system_health(
     request: Request,
     admin: User = Depends(require_admin),
@@ -451,7 +451,7 @@ def get_system_health(
 
 
 @router.get("/system/slurm", response_model=SlurmStatusResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_slurm_status(
     request: Request,
     admin: User = Depends(require_admin),
@@ -490,7 +490,7 @@ def get_slurm_status(
 
 
 @router.get("/errors/runs", response_model=PaginatedAdminRunsResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_failed_runs(
     request: Request,
     page: int = Query(default=1, ge=1),
@@ -533,7 +533,7 @@ def get_failed_runs(
 
 
 @router.get("/errors/distribution", response_model=ErrorDistributionResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_error_distribution(
     request: Request,
     days: int = Query(default=30, ge=1, le=365),
@@ -546,7 +546,7 @@ def get_error_distribution(
 
 
 @router.get("/errors/trend", response_model=ErrorTrendResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_error_trend(
     request: Request,
     days: int = Query(default=30, ge=1, le=365),
@@ -564,7 +564,7 @@ def get_error_trend(
 
 
 @router.get("/audit-logs", response_model=PaginatedAuditLogsResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_audit_logs(
     request: Request,
     page: int = Query(default=1, ge=1),
@@ -610,7 +610,7 @@ def get_audit_logs(
 
 
 @router.get("/audit-logs/filters", response_model=AuditFilterOptionsResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_audit_filter_options(
     request: Request,
     admin: User = Depends(require_admin),
@@ -627,7 +627,7 @@ def get_audit_filter_options(
 
 
 @router.get("/analytics/users/growth", response_model=UserGrowthResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_user_growth(
     request: Request,
     days: int = Query(default=90, ge=1, le=365),
@@ -640,7 +640,7 @@ def get_user_growth(
 
 
 @router.get("/analytics/users/top", response_model=TopUsersResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_top_users(
     request: Request,
     limit: int = Query(default=10, ge=1, le=50),
@@ -670,7 +670,7 @@ def get_top_users(
 
 
 @router.get("/analytics/performance", response_model=PerformanceStatsResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_performance_stats(
     request: Request,
     admin: User = Depends(require_admin),
@@ -682,7 +682,7 @@ def get_performance_stats(
 
 
 @router.get("/analytics/performance/by-type", response_model=PerformanceByTypeResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_performance_by_type(
     request: Request,
     admin: User = Depends(require_admin),
@@ -699,7 +699,7 @@ def get_performance_by_type(
 
 
 @router.get("/config", response_model=ConfigResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def get_config(
     request: Request,
     admin: User = Depends(require_admin),

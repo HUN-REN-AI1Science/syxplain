@@ -237,6 +237,18 @@ class ProgressTracker:
 
     def _persist_progress(self, progress: int, step_name: str | None = None) -> None:
         """Persist progress to database and broadcast via WebSocket."""
+        run_status = self._persist_progress_db(progress)
+
+        # Broadcast to WebSocket clients
+        _broadcast_progress_sync(
+            run_id=self.run_id,
+            progress=progress,
+            status=run_status,
+            step_name=step_name,
+        )
+
+    def _persist_progress_db(self, progress: int) -> str:
+        """Write progress to database. Returns the current run status."""
         SessionLocal = get_session_factory()
         db = SessionLocal()
         run_status = "running"
@@ -251,14 +263,7 @@ class ProgressTracker:
             logger.error(f"Failed to update progress for {self.run_id}: {e}")
         finally:
             db.close()
-
-        # Broadcast to WebSocket clients
-        _broadcast_progress_sync(
-            run_id=self.run_id,
-            progress=progress,
-            status=run_status,
-            step_name=step_name,
-        )
+        return run_status
 
     def save_artifact(self, filename: str, content: bytes, media_type: str | None = None) -> None:
         """

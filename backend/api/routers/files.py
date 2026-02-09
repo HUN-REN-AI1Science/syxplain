@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api", tags=["Files"])
 
 
 @router.post("/upload", response_model=FileUploadResponse)
-@limiter.limit("10/minute")  # Rate limit: 10 uploads per minute per IP
+@limiter.limit("20/minute")  # Rate limit: 20 uploads per minute per IP
 def upload_file(
     request: Request,  # Required for rate limiting
     file: UploadFile = File(...),

@@ -5,6 +5,7 @@ Provides a WebSocket connection at /ws/progress/{run_id} that streams
 progress updates to authenticated clients.
 """
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
@@ -66,24 +67,44 @@ async def websocket_progress(
             await websocket.close(code=4004, reason="Invalid run ID")
             return
 
-        with get_db_session() as db:
-            run = db.query(Run).filter(Run.id == parsed_run_id).first()
+        def _fetch_run_from_db(run_uuid, uid):
+            """Fetch run data in a thread to avoid blocking the event loop."""
+            with get_db_session() as db:
+                run = db.query(Run).filter(Run.id == run_uuid).first()
+                if not run:
+                    return None, "not_found", None
+                if str(run.user_id) != str(uid):
+                    return None, "access_denied", None
+                return (
+                    run.id,
+                    "ok",
+                    {
+                        "status": run.status,
+                        "progress": run.progress or 0,
+                        "error": run.error,
+                        "results": run.results,
+                    },
+                )
 
-            if not run:
-                logger.warning(f"WebSocket: run {run_id} not found")
-                await websocket.close(code=4004, reason="Run not found")
-                return
+        _, check_result, run_data = await asyncio.to_thread(
+            _fetch_run_from_db, parsed_run_id, user_id
+        )
 
-            if str(run.user_id) != str(user_id):
-                logger.warning(f"WebSocket: user {user_id[:8]}... doesn't own run {run_id[:8]}...")
-                await websocket.close(code=4003, reason="Access denied")
-                return
+        if check_result == "not_found":
+            logger.warning(f"WebSocket: run {run_id} not found")
+            await websocket.close(code=4004, reason="Run not found")
+            return
 
-            # Get initial state
-            initial_status = run.status
-            initial_progress = run.progress or 0
-            initial_error = run.error
-            initial_results = run.results
+        if check_result == "access_denied":
+            logger.warning(f"WebSocket: user {user_id[:8]}... doesn't own run {run_id[:8]}...")
+            await websocket.close(code=4003, reason="Access denied")
+            return
+
+        # Get initial state
+        initial_status = run_data["status"]
+        initial_progress = run_data["progress"]
+        initial_error = run_data["error"]
+        initial_results = run_data["results"]
 
         # Accept connection and register
         await manager.connect(websocket, run_id, user_id)

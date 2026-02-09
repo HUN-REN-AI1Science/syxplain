@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api", tags=["Feedback"])
 
 
 @router.post("/feedback", response_model=FeedbackResponse)
-@limiter.limit("5/minute")
+@limiter.limit("10/minute")
 async def submit_feedback(
     request: Request,
     body: FeedbackRequest,

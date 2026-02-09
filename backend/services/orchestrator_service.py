@@ -189,7 +189,9 @@ class AnalysisOrchestrator:
 
             # Step 1.5: Generate feature visualizations for LLM
             progress.update_progress("visualization", status="Generating feature visualizations")
-            feature_visualizations = self._generate_feature_visualizations(context)
+            feature_visualizations = await asyncio.to_thread(
+                self._generate_feature_visualizations, context
+            )
 
             # Step 2: Generate PySR config using LLM
             progress.update_progress(
@@ -322,7 +324,9 @@ class AnalysisOrchestrator:
             # Generate data summary CSV for LLM
             summary_csv = pd.DataFrame(data_summary.get("target_stats", {}), index=[0]).to_csv()
 
-            config_json = generate_pysr_config(
+            # Run synchronous LLM call in thread pool to avoid blocking event loop
+            config_json = await asyncio.to_thread(
+                generate_pysr_config,
                 project_description=json.dumps(context.problem_description),
                 dataset_statistics=summary_csv,
                 visualizations_b64=visualizations_b64 or [],
@@ -484,7 +488,9 @@ class AnalysisOrchestrator:
                 "complexity": [eq.get("complexity", 0) for eq in equations],
             }
 
-            explanations = generate_equation_explanation(
+            # Run synchronous LLM call in thread pool to avoid blocking event loop
+            explanations = await asyncio.to_thread(
+                generate_equation_explanation,
                 project_spec_json=json.dumps(context.problem_description),
                 data_spec_json=json.dumps(data_spec),
                 deep_research_context=None,
@@ -523,8 +529,9 @@ class AnalysisOrchestrator:
                 logger.warning("No features defined for deep research")
                 return explanations
 
-            # Run deep research to find scientific equations
-            deep_result = deep_research_equations(
+            # Run synchronous LLM calls in thread pool to avoid blocking event loop
+            deep_result = await asyncio.to_thread(
+                deep_research_equations,
                 features_dict=features_dict,
                 model_name=context.deep_research_model,
                 user_api_key=context.user_api_key,
@@ -538,7 +545,8 @@ class AnalysisOrchestrator:
                 "complexity": [eq.get("complexity", 0) for eq in equations],
             }
 
-            enhanced_explanations = generate_equation_explanation(
+            enhanced_explanations = await asyncio.to_thread(
+                generate_equation_explanation,
                 project_spec_json=json.dumps(context.problem_description),
                 data_spec_json=json.dumps(data_spec),
                 deep_research_context=deep_result,
