@@ -165,15 +165,6 @@ export interface UserApiKeys {
   openai_model: string;
 }
 
-export interface UserPermissionInfo {
-  user_id: string;
-  email: string;
-  use_hunren_keys: boolean;
-  granted_by: string | null;
-  user_created_at: string | null;
-  permission_updated_at: string | null;
-}
-
 // ============================================================================
 // Admin Dashboard Types
 // ============================================================================

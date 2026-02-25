@@ -99,12 +99,6 @@ class ValidateKeysRequest(BaseModel):
     openai_api_key: str = Field(..., min_length=1, description="OpenAI API key to validate")
 
 
-class UpdatePermissionRequest(BaseModel):
-    """Request schema for updating user permissions."""
-
-    use_hunren_keys: bool = Field(..., description="Whether to grant HUN-REN key access")
-
-
 class FeedbackCategory(str, Enum):
     """Category of user feedback."""
 

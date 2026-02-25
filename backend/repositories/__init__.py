@@ -4,7 +4,6 @@
 from backend.repositories.artifact_repository import ArtifactRepository
 from backend.repositories.base import BaseRepository
 from backend.repositories.file_repository import FileRepository
-from backend.repositories.permission_repository import PermissionRepository
 from backend.repositories.run_repository import (
     PaginatedResult,
     PaginationParams,
@@ -18,7 +17,6 @@ __all__ = [
     "FileRepository",
     "PaginatedResult",
     "PaginationParams",
-    "PermissionRepository",
     "RunFilters",
     "RunRepository",
 ]

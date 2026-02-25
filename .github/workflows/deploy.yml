@@ -102,7 +102,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          source: "docker-compose.prod.yml,keycloak/"
+          source: "docker-compose.prod.yml,keycloak/,db/"
           target: "/opt/syxplain/"
 
       - name: Deploy with Docker Compose

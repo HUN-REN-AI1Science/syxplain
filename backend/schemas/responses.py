@@ -228,31 +228,6 @@ class ValidateKeysResponse(BaseModel):
     valid: bool
 
 
-class UserPermissionInfo(BaseModel):
-    """User permission info for admin listing."""
-
-    user_id: str
-    email: str
-    use_hunren_keys: bool
-    granted_by: str | None = None
-    user_created_at: datetime | None = None
-    permission_updated_at: datetime | None = None
-
-
-class UsersWithPermissionsResponse(BaseModel):
-    """List of users with their permissions."""
-
-    users: list[UserPermissionInfo]
-
-
-class UpdatePermissionResponse(BaseModel):
-    """Response for permission update."""
-
-    success: bool
-    user_id: str
-    use_hunren_keys: bool
-
-
 # ============================================================================
 # Admin Dashboard Responses
 # ============================================================================

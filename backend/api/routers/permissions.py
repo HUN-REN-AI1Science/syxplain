@@ -62,9 +62,7 @@ def get_my_permissions(
     Returns:
         PermissionResponse with use_hunren_keys and is_admin flags
     """
-    return permission_service.get_my_permissions(
-        user_id=current_user.user_id, email=current_user.email
-    )
+    return permission_service.get_my_permissions(user=current_user)
 
 
 @router.post("/validate-keys", response_model=ValidateKeysResponse)

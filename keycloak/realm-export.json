@@ -21,6 +21,18 @@
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      {
+        "name": "syxplain-admin",
+        "description": "Full admin access (admin panel, all endpoints)"
+      },
+      {
+        "name": "hunren-member",
+        "description": "HUN-REN API key access (built-in API keys)"
+      }
+    ]
+  },
   "clients": [
     {
       "clientId": "syxplain-frontend",

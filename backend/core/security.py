@@ -39,11 +39,23 @@ class User:
     Attributes:
         user_id: Unique identifier from Keycloak (sub claim)
         email: User's email address
+        roles: Realm roles from Keycloak JWT (realm_access.roles)
     """
 
-    def __init__(self, user_id: str, email: str):
+    def __init__(self, user_id: str, email: str, roles: list[str] | None = None):
         self.user_id = user_id
         self.email = email
+        self.roles = roles or []
+
+    @property
+    def is_admin(self) -> bool:
+        """Check if user has the syxplain-admin realm role."""
+        return "syxplain-admin" in self.roles
+
+    @property
+    def has_hunren_access(self) -> bool:
+        """Check if user has HUN-REN API key access (admin or hunren-member)."""
+        return "syxplain-admin" in self.roles or "hunren-member" in self.roles
 
     def __repr__(self) -> str:
         return f"User(id={self.user_id}, email={self.email})"
@@ -126,7 +138,8 @@ async def get_current_user(
                 detail="Email not verified. Please verify your email address.",
             )
 
-        return User(user_id=user_id, email=email)
+        roles = payload.get("realm_access", {}).get("roles", [])
+        return User(user_id=user_id, email=email, roles=roles)
 
     except AuthenticationError as e:
         raise HTTPException(

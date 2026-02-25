@@ -10,7 +10,6 @@ import { useAuth } from '@contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import AdminDashboard from './AdminDashboard';
 import RunManagement from './RunManagement';
-import AdminView from './AdminView';
 import ErrorMonitoring from './ErrorMonitoring';
 import SystemMonitor from './SystemMonitor';
 import AuditLogs from './AuditLogs';
@@ -35,7 +34,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onBack }) => {
   const tabs: TabItem[] = [
     { label: 'Dashboard', icon: 'pi pi-home' },
     { label: 'Runs', icon: 'pi pi-play' },
-    { label: 'Users', icon: 'pi pi-users' },
     { label: 'Errors', icon: 'pi pi-exclamation-triangle' },
     { label: 'System', icon: 'pi pi-server' },
     { label: 'Audit', icon: 'pi pi-history' },
@@ -63,14 +61,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onBack }) => {
       case 1:
         return <RunManagement toast={toast} />;
       case 2:
-        return <AdminView />;
-      case 3:
         return <ErrorMonitoring toast={toast} />;
-      case 4:
+      case 3:
         return <SystemMonitor toast={toast} />;
-      case 5:
+      case 4:
         return <AuditLogs toast={toast} />;
-      case 6:
+      case 5:
         // Analytics tab shows both user and performance analytics
         return (
           <div className="space-y-6">
@@ -78,7 +74,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onBack }) => {
             <PerformanceAnalytics toast={toast} />
           </div>
         );
-      case 7:
+      case 6:
         return <ConfigView toast={toast} />;
       default:
         return <AdminDashboard toast={toast} />;

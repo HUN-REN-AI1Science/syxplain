@@ -9,7 +9,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
-from backend.api.dependencies import get_permission_service, get_run_service
+from backend.api.dependencies import get_run_service
 from backend.core.exceptions import (
     ConfigurationError,
     EntityNotFoundError,
@@ -25,7 +25,6 @@ from backend.schemas.responses import (
     RunSummary,
 )
 from backend.services.analysis_service import start_analysis_run
-from backend.services.permission_service import PermissionService
 from backend.services.run_service import RunService
 from backend.utils.security_utils import safe_content_disposition
 
@@ -39,7 +38,6 @@ async def run_analysis(
     request: RunRequest,
     current_user: User = Depends(get_current_user),
     run_service: RunService = Depends(get_run_service),
-    permission_service: PermissionService = Depends(get_permission_service),
 ):
     """
     Start a new analysis run.
@@ -59,10 +57,8 @@ async def run_analysis(
     logger.info(f"User {current_user.user_id} requesting run for file: {request.csv_filename}")
 
     try:
-        # Check user's permission status (admins automatically have access)
-        has_hunren_access = permission_service.has_hunren_access(
-            current_user.user_id, current_user.email
-        )
+        # Check user's permission status from JWT roles
+        has_hunren_access = current_user.has_hunren_access
 
         # Extract user API keys if provided
         user_api_key = None

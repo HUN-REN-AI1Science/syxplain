@@ -12,7 +12,6 @@ from backend.infrastructure.database.connection import get_db
 from backend.repositories.artifact_repository import ArtifactRepository
 from backend.repositories.audit_repository import AuditRepository
 from backend.repositories.file_repository import FileRepository
-from backend.repositories.permission_repository import PermissionRepository
 from backend.repositories.run_repository import RunRepository
 from backend.services.admin_stats_service import AdminStatsService
 from backend.services.audit_service import AuditService
@@ -41,11 +40,6 @@ def get_file_repository(db: Session = Depends(get_db)) -> FileRepository:
 def get_artifact_repository(db: Session = Depends(get_db)) -> ArtifactRepository:
     """Provide ArtifactRepository instance."""
     return ArtifactRepository(db)
-
-
-def get_permission_repository(db: Session = Depends(get_db)) -> PermissionRepository:
-    """Provide PermissionRepository instance."""
-    return PermissionRepository(db)
 
 
 # ============================================================================
@@ -95,11 +89,9 @@ def get_profile_service(
     return ProfileService(run_repo=run_repo, file_repo=file_repo)
 
 
-def get_permission_service(
-    permission_repo: PermissionRepository = Depends(get_permission_repository),
-) -> PermissionService:
-    """Provide PermissionService instance with all dependencies."""
-    return PermissionService(permission_repo=permission_repo)
+def get_permission_service() -> PermissionService:
+    """Provide PermissionService instance."""
+    return PermissionService()
 
 
 # ============================================================================

@@ -119,7 +119,6 @@ Copy `.env.example` to `.env` and configure:
 - `OPENAI_API_BASE` - Custom LLM endpoint
 - `OPENAI_MODEL_NAME` - Model name (default: `gpt-4o`)
 - `SLURM_PARTITION` - Slurm partition (default: `batch_cpu_m2.large`)
-- `SUPABASE_*` - For authentication
 - `LANGFUSE_*` - For LLM tracing
 - `GITHUB_FEEDBACK_TOKEN` - GitHub personal access token for creating feedback issues
 - `GITHUB_FEEDBACK_REPO_OWNER` - GitHub repository owner (e.g. `HUN-REN-AI1Science`)
@@ -179,15 +178,17 @@ curl -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
 
 ## Admin Setup
 
-### Granting HUN-REN API Key Access
+### Managing Roles via Keycloak
 
-Add admin email addresses to the `ADMIN_EMAILS` environment variable:
+Admin and HUN-REN API key access are managed through Keycloak realm roles:
 
-```bash
-ADMIN_EMAILS=admin@example.com,admin2@example.com
-```
+1. Open the Keycloak admin console (e.g. `http://localhost:8080/keycloak/admin`)
+2. Navigate to **Users** → select a user → **Role mapping** tab
+3. Assign roles:
+   - `syxplain-admin` — full admin access (admin panel, all endpoints)
+   - `hunren-member` — HUN-REN API key access (built-in API keys)
 
-Admins can manage user permissions through the Admin UI at `/admin`.
+Admins can also manage HUN-REN access for users through the Admin UI at `/admin`.
 
 ## Feedback System
 

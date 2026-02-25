@@ -13,7 +13,6 @@ import type {
   ProgressPhase,
   EquationResults,
   UserPermissions,
-  UserPermissionInfo,
   UserApiKeys,
   DashboardStats,
   RunTrendItem,
@@ -275,15 +274,6 @@ export interface AuditLogsParams {
 }
 
 export const adminService = {
-  // User Management
-  getUsers: () => api.get<{ users: UserPermissionInfo[] }>('/admin/users'),
-
-  updateUserPermission: (userId: string, useHunrenKeys: boolean) =>
-    api.put<{ success: boolean; user_id: string; use_hunren_keys: boolean }>(
-      `/admin/users/${userId}/permissions`,
-      { use_hunren_keys: useHunrenKeys }
-    ),
-
   // Dashboard
   getDashboardStats: () => api.get<DashboardStats>('/admin/dashboard/stats'),
 

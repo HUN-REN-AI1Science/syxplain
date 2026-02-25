@@ -28,7 +28,7 @@ services:
       - "5432:5432"
     volumes:
       - syxplain_pgdata:/var/lib/postgresql
-      - ./db/init-keycloak-schema.sql:/docker-entrypoint-initdb.d/init-keycloak-schema.sql
+      - ./db/init-keycloak-schema.sh:/docker-entrypoint-initdb.d/init-keycloak-schema.sh
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U syxplain"]
       interval: 5s
@@ -51,8 +51,6 @@ services:
       - DEEP_RESEARCH_API_KEY=${DEEP_RESEARCH_API_KEY:-}
       - DEEP_RESEARCH_API_BASE=${DEEP_RESEARCH_API_BASE:-}
       - USER_API_MODELS=${USER_API_MODELS:-gpt-4o,gpt-4.1}
-      # Admin Configuration
-      - ADMIN_EMAILS=${ADMIN_EMAILS:-}
       # GitHub Feedback (optional)
       - GITHUB_FEEDBACK_TOKEN=${GITHUB_FEEDBACK_TOKEN:-}
       - GITHUB_FEEDBACK_REPO_OWNER=${GITHUB_FEEDBACK_REPO_OWNER:-}

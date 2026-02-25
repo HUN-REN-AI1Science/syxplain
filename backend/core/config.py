@@ -228,23 +228,6 @@ class GitHubSettings:
 
 
 @dataclass
-class AdminSettings:
-    """Admin access settings."""
-
-    admin_emails: str = field(default_factory=lambda: os.environ.get("ADMIN_EMAILS", ""))
-
-    def get_admin_email_list(self) -> list[str]:
-        """Parse comma-separated admin email list."""
-        if not self.admin_emails:
-            return []
-        return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]
-
-    def is_admin(self, email: str) -> bool:
-        """Check if an email is in the admin list."""
-        return email.lower() in self.get_admin_email_list()
-
-
-@dataclass
 class Settings:
     """
     Main settings class that aggregates all configuration groups.
@@ -264,7 +247,6 @@ class Settings:
     langfuse: LangfuseSettings = field(default_factory=LangfuseSettings)
     slurm: SlurmSettings = field(default_factory=SlurmSettings)
     compute: ComputeSettings = field(default_factory=ComputeSettings)
-    admin: AdminSettings = field(default_factory=AdminSettings)
     github: GitHubSettings = field(default_factory=GitHubSettings)
 
 
@@ -304,11 +286,6 @@ def get_slurm_settings() -> SlurmSettings:
 def get_compute_settings() -> ComputeSettings:
     """Get compute backend settings for dependency injection."""
     return get_settings().compute
-
-
-def get_admin_settings() -> AdminSettings:
-    """Get admin settings for dependency injection."""
-    return get_settings().admin
 
 
 def get_github_settings() -> GitHubSettings:

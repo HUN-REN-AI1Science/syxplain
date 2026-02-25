@@ -17,11 +17,10 @@ from backend.api.dependencies import (
     get_run_repository,
     get_system_monitor_service,
 )
-from backend.core.config import get_settings
 from backend.core.rate_limit import limiter
 from backend.core.security import User, get_current_user
 from backend.repositories.run_repository import AdminRunFilters, PaginationParams, RunRepository
-from backend.schemas.requests import SortField, SortOrder, UpdatePermissionRequest
+from backend.schemas.requests import SortField, SortOrder
 from backend.schemas.responses import (
     ActivityItem,
     AdminRunActionResponse,
@@ -60,13 +59,9 @@ from backend.schemas.responses import (
     SystemHealthResponse,
     TopUserItem,
     TopUsersResponse,
-    UpdatePermissionResponse,
     UserGrowthItem,
     # Analytics
     UserGrowthResponse,
-    UserPermissionInfo,
-    # User management
-    UsersWithPermissionsResponse,
 )
 from backend.services.admin_stats_service import AdminStatsService
 from backend.services.audit_service import AuditService
@@ -85,8 +80,7 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     Raises:
         HTTPException: If user is not an admin
     """
-    settings = get_settings()
-    if not settings.admin.is_admin(current_user.email):
+    if not current_user.is_admin:
         logger.warning(f"Non-admin user {current_user.email} attempted admin access")
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
@@ -98,88 +92,6 @@ def get_client_ip(request: Request) -> str | None:
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else None
-
-
-# ============================================================================
-# User Management Endpoints
-# ============================================================================
-
-
-@router.get("/users", response_model=UsersWithPermissionsResponse)
-@limiter.limit("60/minute")
-def list_users_with_permissions(
-    request: Request,
-    admin: User = Depends(require_admin),
-    permission_service: PermissionService = Depends(get_permission_service),
-):
-    """
-    List all users with their permissions.
-
-    Returns:
-        UsersWithPermissionsResponse with list of users and their permission status
-    """
-    users = permission_service.list_users_with_permissions()
-    return UsersWithPermissionsResponse(
-        users=[
-            UserPermissionInfo(
-                user_id=u["user_id"],
-                email=u["email"],
-                use_hunren_keys=u["use_hunren_keys"],
-                granted_by=u["granted_by"],
-                user_created_at=u["user_created_at"],
-                permission_updated_at=u["permission_updated_at"],
-            )
-            for u in users
-        ]
-    )
-
-
-@router.put("/users/{user_id}/permissions", response_model=UpdatePermissionResponse)
-@limiter.limit("40/minute")
-def update_user_permission(
-    request: Request,
-    user_id: str,
-    body: UpdatePermissionRequest,
-    admin: User = Depends(require_admin),
-    permission_service: PermissionService = Depends(get_permission_service),
-    audit_service: AuditService = Depends(get_audit_service),
-):
-    """
-    Grant or revoke HUN-REN key permission for a user.
-
-    Args:
-        user_id: The target user's UUID
-        request: Permission update request
-
-    Returns:
-        UpdatePermissionResponse with success status
-    """
-    from backend.utils import parse_uuid
-
-    try:
-        parse_uuid(user_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user ID format")
-
-    permission_service.set_permission(
-        user_id=user_id, use_hunren_keys=body.use_hunren_keys, granted_by=admin.email
-    )
-
-    action = "grant_permission" if body.use_hunren_keys else "revoke_permission"
-    audit_service.log_action(
-        admin_email=admin.email,
-        action=action,
-        target_type="user",
-        target_id=user_id,
-        details={"use_hunren_keys": body.use_hunren_keys},
-        ip_address=get_client_ip(request),
-    )
-
-    logger.info(f"Admin {admin.email} {action} for user {user_id}")
-
-    return UpdatePermissionResponse(
-        success=True, user_id=user_id, use_hunren_keys=body.use_hunren_keys
-    )
 
 
 # ============================================================================
@@ -279,7 +191,7 @@ def get_all_runs(
     result = run_repo.get_all_runs(filters=filters, pagination=pagination)
 
     # Get user emails for all runs
-    users = permission_service.list_users_with_permissions()
+    users = permission_service.list_users()
     user_emails = {u["user_id"]: u["email"] for u in users}
 
     return PaginatedAdminRunsResponse(
@@ -329,7 +241,7 @@ def get_run_detail(
         raise HTTPException(status_code=404, detail="Run not found")
 
     # Get user email
-    users = permission_service.list_users_with_permissions()
+    users = permission_service.list_users()
     user_emails = {u["user_id"]: u["email"] for u in users}
 
     return AdminRunDetailResponse(
@@ -504,7 +416,7 @@ def get_failed_runs(
     result = run_repo.get_failed_runs(days=days, page=page, page_size=page_size)
 
     # Get user emails
-    users = permission_service.list_users_with_permissions()
+    users = permission_service.list_users()
     user_emails = {u["user_id"]: u["email"] for u in users}
 
     return PaginatedAdminRunsResponse(
@@ -653,7 +565,7 @@ def get_top_users(
     top_users = stats_service.get_top_users(limit=limit, period_days=period_days)
 
     # Get user emails
-    users = permission_service.list_users_with_permissions()
+    users = permission_service.list_users()
     user_emails = {u["user_id"]: u["email"] for u in users}
 
     return TopUsersResponse(

@@ -8,7 +8,7 @@ Separated from connection management for cleaner architecture.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, LargeBinary, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -129,27 +129,6 @@ class RunArtifact(Base):
 
     def __repr__(self) -> str:
         return f"<RunArtifact(run_id={self.run_id}, filename='{self.filename}')>"
-
-
-class UserPermission(Base):
-    """
-    Represents user permissions for API key access.
-
-    Users with use_hunren_keys=True can use built-in HUN-REN API keys.
-    Users without this permission must provide their own OpenAI API key.
-    """
-
-    __tablename__ = "user_permissions"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), nullable=False, unique=True, index=True)
-    use_hunren_keys = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, onupdate=datetime.utcnow, nullable=True)
-    granted_by = Column(String(255), nullable=True)
-
-    def __repr__(self) -> str:
-        return f"<UserPermission(user_id={self.user_id}, use_hunren_keys={self.use_hunren_keys})>"
 
 
 class AuditLog(Base):
