@@ -161,8 +161,9 @@ export interface UserPermissions {
 }
 
 export interface UserApiKeys {
-  openai_api_key: string;
-  openai_model: string;
+  gemini_api_key: string;
+  gemini_model: string;
+  openai_api_key?: string;
 }
 
 // ============================================================================

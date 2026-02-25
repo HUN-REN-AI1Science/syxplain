@@ -154,11 +154,16 @@ def generate_equation_explanation(
 
     # Select appropriate model and signature
     if is_deep_analysis:
-        lm = create_dspy_model(
-            user_api_key=user_api_key,
-            user_model=user_model,
-            extra_body={"tools": [{"type": "web_search_preview", "search_context_size": "high"}]},
-        )
+        if user_api_key:
+            # User key = Gemini, no OpenAI-specific extra_body
+            lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
+        else:
+            # Server key = OpenAI proxy, can use web search tool
+            lm = create_dspy_model(
+                extra_body={
+                    "tools": [{"type": "web_search_preview", "search_context_size": "high"}]
+                },
+            )
 
         # Enhance project spec with deep research results
         try:

@@ -242,7 +242,7 @@ export const publicService = {
 export const permissionsService = {
   getMyPermissions: () => api.get<UserPermissions>('/permissions/me'),
 
-  validateKeys: (data: { openai_api_key: string }) =>
+  validateKeys: (data: { gemini_api_key?: string; openai_api_key?: string }) =>
     api.post<{ valid: boolean }>('/validate-keys', data),
 };
 

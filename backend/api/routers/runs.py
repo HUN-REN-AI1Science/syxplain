@@ -63,9 +63,11 @@ async def run_analysis(
         # Extract user API keys if provided
         user_api_key = None
         user_model = None
+        user_openai_key = None
         if request.user_api_keys:
-            user_api_key = request.user_api_keys.openai_api_key
-            user_model = request.user_api_keys.openai_model
+            user_api_key = request.user_api_keys.gemini_api_key
+            user_model = request.user_api_keys.gemini_model
+            user_openai_key = request.user_api_keys.openai_api_key
 
         # Validate the request with permission context
         run_service.validate_run_request(
@@ -77,6 +79,7 @@ async def run_analysis(
             user_id=current_user.user_id,
             has_hunren_access=has_hunren_access,
             user_api_key=user_api_key,
+            user_openai_key=user_openai_key,
         )
 
         # Start the analysis run with user keys if applicable
@@ -88,6 +91,7 @@ async def run_analysis(
             deep_research_model=request.deep_research_model,
             user_api_key=user_api_key if not has_hunren_access else None,
             user_model=user_model if not has_hunren_access else None,
+            user_openai_key=user_openai_key if not has_hunren_access else None,
         )
 
         logger.info(

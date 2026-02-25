@@ -1,7 +1,7 @@
 /**
  * ApiKeyInputSection Component
- * Displays API key input fields for users without HUN-REN access
- * Includes help information about key security and usage
+ * Displays API key input fields for users without HUN-REN access.
+ * Always shows Gemini key input; conditionally shows OpenAI key for deep research.
  */
 
 import React from 'react';
@@ -11,13 +11,21 @@ import { Message } from 'primereact/message';
 import HelpButton from '../HelpButton';
 
 interface ApiKeyInputSectionProps {
-  apiKey: string;
-  model: string;
-  models: string[];
-  onApiKeyChange: (value: string) => void;
-  onModelChange: (value: string) => void;
-  error?: string | null;
-  validationStatus?: 'idle' | 'validating' | 'valid' | 'invalid';
+  geminiApiKey: string;
+  geminiModel: string;
+  geminiModels: string[];
+  onGeminiApiKeyChange: (value: string) => void;
+  onGeminiModelChange: (value: string) => void;
+  geminiError?: string | null;
+  geminiValidationStatus?: 'idle' | 'validating' | 'valid' | 'invalid';
+  showOpenAiInput: boolean;
+  openaiApiKey: string;
+  onOpenaiApiKeyChange: (value: string) => void;
+  openaiModel: string;
+  openaiModels: string[];
+  onOpenaiModelChange: (value: string) => void;
+  openaiError?: string | null;
+  openaiValidationStatus?: 'idle' | 'validating' | 'valid' | 'invalid';
 }
 
 const ApiKeyHelpContent = () => (
@@ -26,11 +34,11 @@ const ApiKeyHelpContent = () => (
       <h4 className="font-semibold text-slate-700 mb-2">Security & Privacy</h4>
       <ul className="list-disc pl-5 space-y-1">
         <li>
-          <strong>Your key is never stored</strong> - It exists only in memory during the analysis
-          and is discarded immediately after.
+          <strong>Your keys are never stored</strong> - They exist only in memory during the
+          analysis and are discarded immediately after.
         </li>
         <li>
-          <strong>No logging</strong> - Your API key is never written to any logs or databases.
+          <strong>No logging</strong> - Your API keys are never written to any logs or databases.
         </li>
         <li>
           <strong>Encrypted in transit</strong> - All communication uses HTTPS encryption.
@@ -57,15 +65,23 @@ const ApiKeyHelpContent = () => (
 );
 
 export const ApiKeyInputSection: React.FC<ApiKeyInputSectionProps> = ({
-  apiKey,
-  model,
-  models,
-  onApiKeyChange,
-  onModelChange,
-  error,
-  validationStatus = 'idle',
+  geminiApiKey,
+  geminiModel,
+  geminiModels,
+  onGeminiApiKeyChange,
+  onGeminiModelChange,
+  geminiError,
+  geminiValidationStatus = 'idle',
+  showOpenAiInput,
+  openaiApiKey,
+  onOpenaiApiKeyChange,
+  openaiModel,
+  openaiModels,
+  onOpenaiModelChange,
+  openaiError,
+  openaiValidationStatus = 'idle',
 }) => {
-  const modelOptions = models.map((m, index) => ({
+  const modelOptions = geminiModels.map((m, index) => ({
     label: index === 0 ? `${m} (Recommended)` : m,
     value: m,
   }));
@@ -76,8 +92,8 @@ export const ApiKeyInputSection: React.FC<ApiKeyInputSectionProps> = ({
         <i className="pi pi-key text-blue-500 mr-3 mt-1 text-xl" />
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h4 className="font-semibold text-slate-700">OpenAI API Key Required</h4>
-            <HelpButton title="How Your API Key Is Used">
+            <h4 className="font-semibold text-slate-700">Google Gemini API Key Required</h4>
+            <HelpButton title="How Your API Keys Are Used">
               <ApiKeyHelpContent />
             </HelpButton>
           </div>
@@ -92,35 +108,37 @@ export const ApiKeyInputSection: React.FC<ApiKeyInputSectionProps> = ({
         </div>
       </div>
 
-      {error && <Message severity="error" text={error} className="mb-4 w-full" />}
+      {geminiError && <Message severity="error" text={geminiError} className="mb-4 w-full" />}
 
-      {validationStatus === 'valid' && (
+      {geminiValidationStatus === 'valid' && (
         <Message
           severity="success"
-          text="API key validated successfully. Your key will be used for this analysis only."
+          text="Gemini API key validated successfully."
           className="mb-4 w-full"
         />
       )}
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">OpenAI API Key</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Google Gemini API Key
+          </label>
           <InputText
             type="password"
-            value={apiKey}
-            onChange={(e) => onApiKeyChange(e.target.value)}
-            placeholder="sk-..."
+            value={geminiApiKey}
+            onChange={(e) => onGeminiApiKeyChange(e.target.value)}
+            placeholder="AIza..."
             className="w-full"
           />
           <small className="text-slate-500">
             Get your API key from{' '}
             <a
-              href="https://platform.openai.com/api-keys"
+              href="https://aistudio.google.com/apikey"
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-600 hover:underline"
             >
-              platform.openai.com
+              aistudio.google.com/apikey
             </a>
           </small>
         </div>
@@ -128,17 +146,79 @@ export const ApiKeyInputSection: React.FC<ApiKeyInputSectionProps> = ({
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Model</label>
           <Dropdown
-            value={model}
+            value={geminiModel}
             options={modelOptions}
-            onChange={(e) => onModelChange(e.value)}
+            onChange={(e) => onGeminiModelChange(e.value)}
             className="w-full"
-            disabled={models.length === 0}
+            disabled={geminiModels.length === 0}
           />
-          {models.length > 0 && (
-            <small className="text-slate-500">{models[0]} is recommended for best results</small>
-          )}
         </div>
       </div>
+
+      {/* OpenAI API Key for Deep Research */}
+      {showOpenAiInput && (
+        <div className="mt-6 pt-4 border-t border-slate-200">
+          <div className="flex items-start mb-3">
+            <i className="pi pi-search text-amber-500 mr-3 mt-1 text-lg" />
+            <div>
+              <h4 className="font-semibold text-slate-700">OpenAI API Key for Deep Research</h4>
+              <p className="text-sm text-slate-600 mt-1">
+                Deep research performs scientific literature search using an OpenAI model.
+              </p>
+            </div>
+          </div>
+
+          {openaiError && <Message severity="error" text={openaiError} className="mb-4 w-full" />}
+
+          {openaiValidationStatus === 'valid' && (
+            <Message
+              severity="success"
+              text="OpenAI API key validated successfully."
+              className="mb-4 w-full"
+            />
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                OpenAI API Key
+              </label>
+              <InputText
+                type="password"
+                value={openaiApiKey}
+                onChange={(e) => onOpenaiApiKeyChange(e.target.value)}
+                placeholder="sk-..."
+                className="w-full"
+              />
+              <small className="text-slate-500">
+                Get your API key from{' '}
+                <a
+                  href="https://platform.openai.com/api-keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  platform.openai.com/api-keys
+                </a>
+              </small>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Model</label>
+              <Dropdown
+                value={openaiModel}
+                options={openaiModels.map((m, index) => ({
+                  label: index === 0 ? `${m} (Recommended)` : m,
+                  value: m,
+                }))}
+                onChange={(e) => onOpenaiModelChange(e.value)}
+                className="w-full"
+                disabled={openaiModels.length === 0}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

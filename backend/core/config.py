@@ -84,7 +84,9 @@ class LLMSettings:
 
     # User-provided key model options (comma-separated)
     user_api_models: str = field(
-        default_factory=lambda: os.environ.get("USER_API_MODELS", "gpt-5.2-thinking,gpt-4o")
+        default_factory=lambda: os.environ.get(
+            "USER_API_MODELS", "gemini-3.1-pro-preview,gemini-3-pro,gemini-2.5-pro"
+        )
     )
 
     def get_deep_research_model_list(self) -> list[str]:
@@ -96,7 +98,7 @@ class LLMSettings:
     def get_user_api_model_list(self) -> list[str]:
         """Parse comma-separated user API model list."""
         if not self.user_api_models:
-            return ["gpt-5.2-thinking", "gpt-4o"]
+            return ["gemini-3.1-pro-preview", "gemini-3-pro", "gemini-2.5-pro"]
         return [m.strip() for m in self.user_api_models.split(",") if m.strip()]
 
 

@@ -170,6 +170,7 @@ class RunService:
         user_id: str,
         has_hunren_access: bool = True,
         user_api_key: str | None = None,
+        user_openai_key: str | None = None,
     ) -> None:
         """
         Validate a run request before starting.
@@ -182,7 +183,8 @@ class RunService:
             deep_research_model: Model for deep analysis
             user_id: User UUID as string
             has_hunren_access: Whether user has HUN-REN key permission
-            user_api_key: User-provided API key (if any)
+            user_api_key: User-provided Gemini API key (if any)
+            user_openai_key: User-provided OpenAI API key for deep research (if any)
 
         Raises:
             EntityNotFoundError: If file not found
@@ -219,23 +221,25 @@ class RunService:
                         value=deep_research_model,
                     )
         else:
-            # User must provide their own API key
+            # User must provide their Gemini API key
             if not user_api_key:
                 raise ValidationError(
-                    "API key required. Please provide your OpenAI API key.", field="user_api_keys"
+                    "API key required. Please provide your Google Gemini API key.",
+                    field="user_api_keys",
                 )
 
-            # For user keys with deep analysis, only o4-mini-deep-research is allowed
-            if (
-                analysis_type == "deep"
-                and deep_research_model
-                and deep_research_model != "o4-mini-deep-research"
-            ):
-                raise ValidationError(
-                    "Deep research with user-provided keys only supports the o4-mini-deep-research model",
-                    field="deep_research_model",
-                    value=deep_research_model,
-                )
+            # Deep analysis requires an OpenAI key and a model selection
+            if analysis_type == "deep":
+                if not user_openai_key:
+                    raise ValidationError(
+                        "Deep research requires an OpenAI API key in addition to your Gemini key.",
+                        field="user_api_keys",
+                    )
+                if not deep_research_model:
+                    raise ValidationError(
+                        "deep_research_model is required for deep analysis",
+                        field="deep_research_model",
+                    )
 
         # Verify file exists and belongs to user
         db_file = self.file_repo.get_latest_by_filename(csv_filename, parse_uuid(user_id))

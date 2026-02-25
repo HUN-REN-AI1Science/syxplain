@@ -121,6 +121,7 @@ async def _run_analysis(
     deep_research_model: str | None = None,
     user_api_key: str | None = None,
     user_model: str | None = None,
+    user_openai_key: str | None = None,
 ) -> None:
     """
     Async function that runs the orchestrated analysis.
@@ -175,6 +176,7 @@ async def _run_analysis(
             deep_research_model=deep_research_model,
             user_api_key=user_api_key,
             user_model=user_model,
+            user_openai_key=user_openai_key,
         )
 
         logger.info(f"Run {run_id} completed successfully")
@@ -200,6 +202,7 @@ def start_analysis_run(
     deep_research_model: str | None = None,
     user_api_key: str | None = None,
     user_model: str | None = None,
+    user_openai_key: str | None = None,
 ) -> str:
     """
     Create a run record and start background processing.
@@ -210,8 +213,9 @@ def start_analysis_run(
         user_id: Owner's UUID as string
         analysis_type: 'quick' or 'deep'
         deep_research_model: Model for deep analysis
-        user_api_key: Optional user-provided API key (not stored, only in memory)
-        user_model: Optional user-specified model
+        user_api_key: Optional user-provided Gemini API key (not stored, only in memory)
+        user_model: Optional user-specified Gemini model
+        user_openai_key: Optional user-provided OpenAI API key for deep research
 
     Returns:
         The run UUID as string
@@ -245,6 +249,7 @@ def start_analysis_run(
             deep_research_model,
             user_api_key=user_api_key,
             user_model=user_model,
+            user_openai_key=user_openai_key,
         )
     )
     _running_tasks[run_id] = task

@@ -50,8 +50,11 @@ class ProblemDescription(BaseModel):
 class UserApiKeys(BaseModel):
     """User-provided API keys (not stored)."""
 
-    openai_api_key: str = Field(..., min_length=1, description="OpenAI API key for analysis")
-    openai_model: str = Field(default="gpt-4o", description="OpenAI model to use")
+    gemini_api_key: str = Field(..., min_length=1, description="Google Gemini API key for analysis")
+    gemini_model: str = Field(default="gemini-3.1-pro-preview", description="Gemini model to use")
+    openai_api_key: str | None = Field(
+        default=None, description="OpenAI API key for deep research (optional)"
+    )
 
 
 class RunRequest(BaseModel):
@@ -96,7 +99,10 @@ class RunRequest(BaseModel):
 class ValidateKeysRequest(BaseModel):
     """Request schema for API key validation."""
 
-    openai_api_key: str = Field(..., min_length=1, description="OpenAI API key to validate")
+    gemini_api_key: str | None = Field(
+        default=None, description="Google Gemini API key to validate"
+    )
+    openai_api_key: str | None = Field(default=None, description="OpenAI API key to validate")
 
 
 class FeedbackCategory(str, Enum):

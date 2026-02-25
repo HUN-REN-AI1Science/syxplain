@@ -156,25 +156,6 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
             </div>
           )}
 
-          {/* User keys deep research info */}
-          {!hasHunrenAccess && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-start gap-2">
-                <i className="pi pi-info-circle text-blue-600 mt-0.5" />
-                <div>
-                  <p className="text-blue-800 font-medium">Deep Research with your OpenAI key</p>
-                  <p className="text-blue-700 text-sm mt-1">
-                    Deep research requires the{' '}
-                    <code className="bg-blue-100 px-1 rounded">o4-mini-deep-research</code> model
-                    which includes web search capabilities. This model will be used for literature
-                    research to find relevant scientific equations. Your API key will be used for
-                    these requests directly to OpenAI.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Warning - only shown for HUN-REN users, changes to danger for o3-deep-research */}
           {hasHunrenAccess && (
             <div

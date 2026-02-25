@@ -48,12 +48,20 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   const [targetVariable, setTargetVariable] = useState('');
   const [featureDescriptions, setFeatureDescriptions] = useState<Record<string, string>>({});
 
-  // User API key state (for users without HUN-REN access)
-  const [userApiKey, setUserApiKey] = useState('');
-  const [userModel, setUserModel] = useState('');
-  const [userApiModels, setUserApiModels] = useState<string[]>([]);
-  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
-  const [apiKeyValidationStatus, setApiKeyValidationStatus] = useState<
+  // Gemini API key state (for users without HUN-REN access)
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [geminiModel, setGeminiModel] = useState('');
+  const [geminiModels, setGeminiModels] = useState<string[]>([]);
+  const [geminiKeyError, setGeminiKeyError] = useState<string | null>(null);
+  const [geminiValidationStatus, setGeminiValidationStatus] = useState<
+    'idle' | 'validating' | 'valid' | 'invalid'
+  >('idle');
+
+  // OpenAI API key state (for deep research only)
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
+  const [openaiModel, setOpenaiModel] = useState('');
+  const [openaiKeyError, setOpenaiKeyError] = useState<string | null>(null);
+  const [openaiValidationStatus, setOpenaiValidationStatus] = useState<
     'idle' | 'validating' | 'valid' | 'invalid'
   >('idle');
 
@@ -67,6 +75,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
         // Auto-select first model if available
         if (models.length > 0) {
           setSelectedDeepModel(models[0]);
+          setOpenaiModel(models[0]);
         }
       } catch (e) {
         console.error('Failed to fetch deep research models:', e);
@@ -75,22 +84,22 @@ const ProblemView: React.FC<ProblemViewProps> = ({
     fetchModels();
   }, []);
 
-  // Fetch available user API models on mount
+  // Fetch available Gemini models on mount
   useEffect(() => {
-    const fetchUserModels = async () => {
+    const fetchGeminiModels = async () => {
       try {
         const response = await configService.getUserApiModels();
         const models = response.data.models || [];
-        setUserApiModels(models);
+        setGeminiModels(models);
         // Auto-select first model if available
         if (models.length > 0) {
-          setUserModel(models[0]);
+          setGeminiModel(models[0]);
         }
       } catch (e) {
-        console.error('Failed to fetch user API models:', e);
+        console.error('Failed to fetch Gemini models:', e);
       }
     };
-    fetchUserModels();
+    fetchGeminiModels();
   }, []);
 
   const validateAndGetPayload = () => {
@@ -167,39 +176,75 @@ const ProblemView: React.FC<ProblemViewProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  // Validate user API key with backend
-  const validateApiKey = async (): Promise<boolean> => {
+  // Validate Gemini API key with backend (format check)
+  const validateGeminiKey = async (): Promise<boolean> => {
     if (hasHunrenAccess) return true;
 
-    if (!userApiKey.trim()) {
-      setApiKeyError('API key is required');
+    if (!geminiApiKey.trim()) {
+      setGeminiKeyError('Gemini API key is required');
       return false;
     }
 
-    setApiKeyValidationStatus('validating');
-    setApiKeyError(null);
+    setGeminiValidationStatus('validating');
+    setGeminiKeyError(null);
 
     try {
-      await permissionsService.validateKeys({ openai_api_key: userApiKey });
-      setApiKeyValidationStatus('valid');
+      await permissionsService.validateKeys({ gemini_api_key: geminiApiKey });
+      setGeminiValidationStatus('valid');
       return true;
     } catch (error: unknown) {
       const err = error as { response?: { data?: { detail?: string } } };
-      const errorMessage = err.response?.data?.detail || 'API key validation failed';
-      setApiKeyError(errorMessage);
-      setApiKeyValidationStatus('invalid');
+      const errorMessage = err.response?.data?.detail || 'Gemini API key validation failed';
+      setGeminiKeyError(errorMessage);
+      setGeminiValidationStatus('invalid');
+      return false;
+    }
+  };
+
+  // Validate OpenAI API key with backend (format + live check)
+  const validateOpenaiKey = async (): Promise<boolean> => {
+    if (!openaiApiKey.trim()) {
+      setOpenaiKeyError('OpenAI API key is required for deep research');
+      return false;
+    }
+
+    setOpenaiValidationStatus('validating');
+    setOpenaiKeyError(null);
+
+    try {
+      await permissionsService.validateKeys({ openai_api_key: openaiApiKey });
+      setOpenaiValidationStatus('valid');
+      return true;
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } } };
+      const errorMessage = err.response?.data?.detail || 'OpenAI API key validation failed';
+      setOpenaiKeyError(errorMessage);
+      setOpenaiValidationStatus('invalid');
       return false;
     }
   };
 
   const handleSubmit = async () => {
-    // Validate API key for users without HUN-REN access
+    // Validate API keys for users without HUN-REN access
     if (!hasHunrenAccess) {
-      const isKeyValid = await validateApiKey();
-      if (!isKeyValid) {
-        return;
+      const isGeminiValid = await validateGeminiKey();
+      if (!isGeminiValid) return;
+
+      // Also validate OpenAI key if deep analysis is selected
+      if (analysisType === 'deep') {
+        const isOpenaiValid = await validateOpenaiKey();
+        if (!isOpenaiValid) return;
       }
     }
+
+    // Build user_api_keys payload
+    const userApiKeys = !hasHunrenAccess
+      ? {
+          gemini_api_key: geminiApiKey,
+          gemini_model: geminiModel,
+          ...(analysisType === 'deep' && openaiApiKey ? { openai_api_key: openaiApiKey } : {}),
+        }
+      : undefined;
 
     if (mode === 'json') {
       try {
@@ -285,11 +330,11 @@ const ProblemView: React.FC<ProblemViewProps> = ({
           return;
         }
 
-        // Validate deep research model selection (only for HUN-REN users)
+        // Validate deep research model selection
         const deepModel = hasHunrenAccess
           ? selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null)
-          : 'o4-mini-deep-research';
-        if (analysisType === 'deep' && hasHunrenAccess && !deepModel) {
+          : openaiModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null);
+        if (analysisType === 'deep' && !deepModel) {
           toast.current?.show({
             severity: 'error',
             summary: 'Model Required',
@@ -302,9 +347,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
           ...parsed,
           analysis_type: analysisType,
           deep_research_model: analysisType === 'deep' ? deepModel : null,
-          user_api_keys: !hasHunrenAccess
-            ? { openai_api_key: userApiKey, openai_model: userModel }
-            : undefined,
+          user_api_keys: userApiKeys,
         });
       } catch (e) {
         toast.current?.show({
@@ -317,11 +360,11 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       // Validation for Form Mode
       const payload = validateAndGetPayload();
       if (payload) {
-        // Validate deep research model selection (only for HUN-REN users)
+        // Validate deep research model selection
         const deepModel = hasHunrenAccess
           ? selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null)
-          : 'o4-mini-deep-research';
-        if (analysisType === 'deep' && hasHunrenAccess && !deepModel) {
+          : openaiModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null);
+        if (analysisType === 'deep' && !deepModel) {
           toast.current?.show({
             severity: 'error',
             summary: 'Model Required',
@@ -334,9 +377,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
           ...payload,
           analysis_type: analysisType,
           deep_research_model: analysisType === 'deep' ? deepModel : null,
-          user_api_keys: !hasHunrenAccess
-            ? { openai_api_key: userApiKey, openai_model: userModel }
-            : undefined,
+          user_api_keys: userApiKeys,
         });
       }
     }
@@ -348,7 +389,9 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   ];
 
   const isSubmitDisabled =
-    mode === 'form' && Boolean(targetVariable && nanCounts && nanCounts[targetVariable] > 0);
+    (mode === 'form' && Boolean(targetVariable && nanCounts && nanCounts[targetVariable] > 0)) ||
+    geminiValidationStatus === 'validating' ||
+    openaiValidationStatus === 'validating';
 
   return (
     <div className="p-4">
@@ -406,17 +449,29 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       {!hasHunrenAccess && (
         <div className="mt-6">
           <ApiKeyInputSection
-            apiKey={userApiKey}
-            model={userModel}
-            models={userApiModels}
-            onApiKeyChange={(value) => {
-              setUserApiKey(value);
-              setApiKeyError(null);
-              setApiKeyValidationStatus('idle');
+            geminiApiKey={geminiApiKey}
+            geminiModel={geminiModel}
+            geminiModels={geminiModels}
+            onGeminiApiKeyChange={(value) => {
+              setGeminiApiKey(value);
+              setGeminiKeyError(null);
+              setGeminiValidationStatus('idle');
             }}
-            onModelChange={setUserModel}
-            error={apiKeyError}
-            validationStatus={apiKeyValidationStatus}
+            onGeminiModelChange={setGeminiModel}
+            geminiError={geminiKeyError}
+            geminiValidationStatus={geminiValidationStatus}
+            showOpenAiInput={analysisType === 'deep'}
+            openaiApiKey={openaiApiKey}
+            onOpenaiApiKeyChange={(value) => {
+              setOpenaiApiKey(value);
+              setOpenaiKeyError(null);
+              setOpenaiValidationStatus('idle');
+            }}
+            openaiModel={openaiModel}
+            openaiModels={deepResearchModels}
+            onOpenaiModelChange={setOpenaiModel}
+            openaiError={openaiKeyError}
+            openaiValidationStatus={openaiValidationStatus}
           />
         </div>
       )}
@@ -429,7 +484,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
         onDeepModelChange={setSelectedDeepModel}
         onSubmit={handleSubmit}
         onExportJson={handleExportJson}
-        disabled={isSubmitDisabled || apiKeyValidationStatus === 'validating'}
+        disabled={isSubmitDisabled}
         showExportButton={mode === 'form'}
         hasHunrenAccess={hasHunrenAccess}
       />

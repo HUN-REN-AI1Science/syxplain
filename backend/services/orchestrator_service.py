@@ -31,6 +31,46 @@ from backend.services.progress_service import ProgressTracker
 logger = logging.getLogger(__name__)
 
 
+def _is_user_api_key_error(exc: Exception) -> bool:
+    """Check if an exception is an API key authentication, quota, or rate limit error."""
+    try:
+        import litellm
+
+        return isinstance(
+            exc,
+            (litellm.AuthenticationError, litellm.RateLimitError, litellm.BudgetExceededError),
+        )
+    except ImportError:
+        return False
+
+
+def _format_user_facing_error(exc: Exception) -> str:
+    """Convert an exception into a user-friendly error message."""
+    try:
+        import litellm
+
+        if isinstance(exc, litellm.AuthenticationError):
+            return (
+                "API key authentication failed. "
+                "Please check that your API key is valid and has not been revoked."
+            )
+        if isinstance(exc, litellm.RateLimitError):
+            return (
+                "API rate limit or quota exceeded. "
+                "Your API account may have insufficient credits or has hit its usage limit. "
+                "Please check your account balance and try again."
+            )
+        if isinstance(exc, litellm.BudgetExceededError):
+            return (
+                "API budget exceeded. "
+                "Your API account has reached its spending limit. "
+                "Please increase your budget or add credits and try again."
+            )
+    except ImportError:
+        pass
+    return str(exc)
+
+
 @dataclass
 class OrchestratorConfig:
     """Configuration for the orchestrator."""
@@ -56,6 +96,7 @@ class AnalysisContext:
     # User-provided API keys (not stored, only in memory)
     user_api_key: str | None = None
     user_model: str | None = None
+    user_openai_key: str | None = None
 
 
 class AnalysisOrchestrator:
@@ -235,8 +276,9 @@ class AnalysisOrchestrator:
             raise
         except Exception as e:
             logger.error(f"Analysis failed for run {run_id}: {e}", exc_info=True)
-            self._update_run_status(run_id, "failed", error=str(e))
-            raise OrchestratorError(f"Analysis failed: {e}") from e
+            error_msg = _format_user_facing_error(e)
+            self._update_run_status(run_id, "failed", error=error_msg)
+            raise OrchestratorError(f"Analysis failed: {error_msg}") from e
 
     def _generate_data_summary(self, context: AnalysisContext) -> dict[str, Any]:
         """Generate a summary of the input data."""
@@ -348,6 +390,9 @@ class AnalysisOrchestrator:
             logger.info(f"LLM-generated PySR config: {validated}")
             return validated
         except Exception as e:
+            # Re-raise API key errors so the user gets a clear failure message
+            if context.user_api_key and _is_user_api_key_error(e):
+                raise
             logger.warning(f"LLM config generation failed, using defaults: {e}")
             # Return default config (niterations=None lets worker auto-estimate)
             return {
@@ -562,6 +607,9 @@ class AnalysisOrchestrator:
             )
             return explanations
         except Exception as e:
+            # Re-raise API key errors so the user gets a clear failure message
+            if context.user_api_key and _is_user_api_key_error(e):
+                raise
             logger.error(f"Explanation generation failed: {e}")
             return {
                 "error": str(e),
@@ -593,11 +641,12 @@ class AnalysisOrchestrator:
                 return explanations
 
             # Run synchronous LLM calls in thread pool to avoid blocking event loop
+            # Deep research uses OpenAI (o4-mini-deep-research), so pass user_openai_key
             deep_result = await asyncio.to_thread(
                 deep_research_equations,
                 features_dict=features_dict,
                 model_name=context.deep_research_model,
-                user_api_key=context.user_api_key,
+                user_api_key=context.user_openai_key,
             )
 
             # Re-generate explanations with deep research context
@@ -619,6 +668,9 @@ class AnalysisOrchestrator:
 
             return enhanced_explanations
         except Exception as e:
+            # Re-raise API key errors so the user gets a clear failure message
+            if (context.user_api_key or context.user_openai_key) and _is_user_api_key_error(e):
+                raise
             logger.error(f"Deep research failed: {e}")
             return explanations
 
@@ -765,6 +817,7 @@ async def run_orchestrated_analysis(
     deep_research_model: str | None = None,
     user_api_key: str | None = None,
     user_model: str | None = None,
+    user_openai_key: str | None = None,
 ) -> dict[str, Any]:
     """
     Convenience function to run analysis with orchestrator.
@@ -776,8 +829,9 @@ async def run_orchestrated_analysis(
         user_id: Owner user ID
         analysis_type: 'quick' or 'deep'
         deep_research_model: Model for deep analysis
-        user_api_key: Optional user-provided API key
-        user_model: Optional user-specified model
+        user_api_key: Optional user-provided Gemini API key
+        user_model: Optional user-specified Gemini model
+        user_openai_key: Optional user-provided OpenAI API key for deep research
 
     Returns:
         Analysis results
@@ -803,6 +857,7 @@ async def run_orchestrated_analysis(
         deep_research_model=deep_research_model,
         user_api_key=user_api_key,
         user_model=user_model,
+        user_openai_key=user_openai_key,
     )
 
     orchestrator = AnalysisOrchestrator()
