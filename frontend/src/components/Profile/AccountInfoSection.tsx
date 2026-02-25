@@ -1,6 +1,6 @@
 /**
  * AccountInfoSection Component
- * Displays user email, member since date, and role/permissions
+ * Displays user info, role/permissions, and Keycloak account management actions
  */
 
 import React from 'react';
@@ -11,12 +11,14 @@ interface AccountInfoSectionProps {
   profile: ProfileData | null;
   hasHunrenAccess?: boolean;
   isAdmin?: boolean;
+  userName?: string;
 }
 
 export const AccountInfoSection: React.FC<AccountInfoSectionProps> = ({
   profile,
   hasHunrenAccess = false,
   isAdmin = false,
+  userName,
 }) => (
   <div className="mb-6">
     <div className="flex items-center gap-2 mb-4">
@@ -24,6 +26,12 @@ export const AccountInfoSection: React.FC<AccountInfoSectionProps> = ({
       <h3 className="text-lg font-semibold text-slate-700">Account Information</h3>
     </div>
     <div className="bg-slate-50 rounded-xl p-4 md:p-6 space-y-4">
+      {userName && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
+          <span className="text-slate-500 text-sm sm:w-32 font-medium">Name</span>
+          <span className="font-medium text-slate-800">{userName}</span>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
         <span className="text-slate-500 text-sm sm:w-32 font-medium">Email</span>
         <span className="font-medium text-slate-800 break-all">{profile?.email}</span>
@@ -68,6 +76,7 @@ export const AccountInfoSection: React.FC<AccountInfoSectionProps> = ({
           )}
         </div>
       </div>
+
     </div>
   </div>
 );

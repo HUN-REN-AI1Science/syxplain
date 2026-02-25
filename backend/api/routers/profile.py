@@ -43,7 +43,7 @@ async def delete_profile(
     GDPR-compliant account deletion.
 
     Removes all user data from the database and
-    deletes the user from Supabase.
+    deletes the user from Keycloak.
 
     Returns:
         ProfileDeleteResponse with success message

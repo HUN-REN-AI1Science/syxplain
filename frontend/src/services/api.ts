@@ -4,7 +4,6 @@
  */
 
 import axios, { AxiosInstance } from 'axios';
-import { supabase } from '@services/supabaseClient';
 import type {
   PaginatedResponse,
   RunSummary,
@@ -39,6 +38,26 @@ import type {
 } from '@/types';
 
 // ============================================================================
+// Token getter (set by AuthContext)
+// ============================================================================
+
+let tokenGetter: (() => string | null) | null = null;
+let signOutHandler: (() => void) | null = null;
+let isRedirecting = false;
+
+export function setTokenGetter(getter: () => string | null) {
+  tokenGetter = getter;
+}
+
+export function setSignOutHandler(handler: () => void) {
+  signOutHandler = handler;
+}
+
+export function getToken(): string | null {
+  return tokenGetter ? tokenGetter() : null;
+}
+
+// ============================================================================
 // Base API Instance
 // ============================================================================
 
@@ -48,14 +67,10 @@ const api: AxiosInstance = axios.create({
 
 // Add request interceptor to inject auth token
 api.interceptors.request.use(async (config) => {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (session?.access_token) {
-    config.headers.Authorization = `Bearer ${session.access_token}`;
+  const token = getToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-
   return config;
 });
 
@@ -63,8 +78,14 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      await supabase.auth.signOut();
+    if (error.response?.status === 401 && !isRedirecting) {
+      // Token is invalid — trigger OIDC re-authentication (once)
+      isRedirecting = true;
+      if (signOutHandler) {
+        signOutHandler();
+      } else {
+        window.location.href = '/';
+      }
     }
     return Promise.reject(error);
   }

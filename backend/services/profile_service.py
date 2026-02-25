@@ -11,6 +11,7 @@ import httpx
 
 from backend.core.config import get_settings
 from backend.core.exceptions import ExternalServiceError
+from backend.infrastructure.keycloak.admin_client import get_keycloak_admin_token
 from backend.repositories.file_repository import FileRepository
 from backend.repositories.run_repository import RunRepository
 from backend.utils import parse_uuid
@@ -71,13 +72,13 @@ class ProfileService:
         GDPR-compliant account deletion.
 
         Removes all user data from the database and
-        deletes the user from Supabase.
+        deletes the user from Keycloak.
 
         Args:
             user_id: The user's UUID as string
 
         Raises:
-            ExternalServiceError: If Supabase deletion fails
+            ExternalServiceError: If Keycloak deletion fails
         """
         user_uuid = parse_uuid(user_id)
 
@@ -91,14 +92,14 @@ class ProfileService:
         files_deleted = self.file_repo.delete_all_for_user(user_uuid)
         logger.info(f"Deleted {files_deleted} files for user {user_id}")
 
-        # Delete user from Supabase Auth
-        await self._delete_supabase_user(user_id)
+        # Delete user from Keycloak
+        await self._delete_keycloak_user(user_id)
 
         logger.info(f"GDPR deletion completed for user {user_id}")
 
-    async def _delete_supabase_user(self, user_id: str) -> None:
+    async def _delete_keycloak_user(self, user_id: str) -> None:
         """
-        Delete a user from Supabase Auth using the Admin API.
+        Delete a user from Keycloak using the Admin REST API.
 
         Args:
             user_id: The user's UUID as string
@@ -106,39 +107,39 @@ class ProfileService:
         Raises:
             ExternalServiceError: If deletion fails
         """
-        service_role_key = self.settings.auth.supabase_service_role_key
-        supabase_url = self.settings.auth.supabase_url
-
-        if not service_role_key:
-            logger.warning("SUPABASE_SERVICE_ROLE_KEY not set, skipping Supabase user deletion")
+        admin_token = get_keycloak_admin_token()
+        if not admin_token:
+            logger.warning("Keycloak admin token unavailable, skipping user deletion")
             return
 
-        if not supabase_url:
-            logger.warning("SUPABASE_URL not set, skipping Supabase user deletion")
-            return
+        auth = self.settings.auth
 
-        url = f"{supabase_url}/auth/v1/admin/users/{user_id}"
-
-        headers = {
-            "apikey": service_role_key,
-            "Authorization": f"Bearer {service_role_key}",
-            "Content-Type": "application/json",
-        }
-
-        async with httpx.AsyncClient() as client:
-            response = await client.delete(url, headers=headers)
-
-            if response.status_code in (200, 204):
-                logger.info(f"Successfully deleted Supabase user: {user_id}")
-            elif response.status_code == 404:
-                logger.warning(f"Supabase user not found (may already be deleted): {user_id}")
-            else:
-                error_detail = response.text
-                logger.error(
-                    f"Failed to delete Supabase user {user_id}: "
-                    f"{response.status_code} - {error_detail}"
+        try:
+            async with httpx.AsyncClient() as client:
+                delete_response = await client.delete(
+                    f"{auth.admin_api_url}/users/{user_id}",
+                    headers={"Authorization": f"Bearer {admin_token}"},
+                    timeout=10.0,
                 )
-                raise ExternalServiceError(
-                    service="Supabase",
-                    message=f"Failed to delete user from authentication provider: {error_detail}",
-                )
+
+                if delete_response.status_code in (200, 204):
+                    logger.info(f"Successfully deleted Keycloak user: {user_id}")
+                elif delete_response.status_code == 404:
+                    logger.warning(f"Keycloak user not found (may already be deleted): {user_id}")
+                else:
+                    error_detail = delete_response.text
+                    logger.error(
+                        f"Failed to delete Keycloak user {user_id}: "
+                        f"{delete_response.status_code} - {error_detail}"
+                    )
+                    raise ExternalServiceError(
+                        service="Keycloak",
+                        message=f"Failed to delete user from authentication provider: {error_detail}",
+                    )
+
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error deleting Keycloak user {user_id}: {e}")
+            raise ExternalServiceError(
+                service="Keycloak",
+                message=f"Failed to connect to authentication provider: {e}",
+            )

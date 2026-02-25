@@ -1,14 +1,13 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider as OidcProvider } from 'react-oidc-context';
+import { WebStorageStateStore } from 'oidc-client-ts';
 import UploadView from '@pages/UploadView';
 import ProblemView from '@pages/ProblemView';
 import ResultsView from '@pages/results/ResultsView';
 import HistoryView from '@pages/HistoryView';
 import ProfileView from '@pages/ProfileView';
 import AdminLayout from '@pages/admin/AdminLayout';
-import Login from '@pages/auth/Login';
-import SignUp from '@pages/auth/SignUp';
-import ForgotPassword from '@pages/auth/ForgotPassword';
 import PublicResultsView from '@pages/results/PublicResultsView';
 import { AuthProvider, useAuth } from '@contexts/AuthContext';
 import { runsService } from '@services/api';
@@ -26,6 +25,22 @@ const WORKFLOW_STEPS = [
   { label: 'Define Problem' },
   { label: 'Analysis Results' },
 ];
+
+// OIDC configuration for Keycloak
+const keycloakUrl = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8080/keycloak';
+const keycloakRealm = import.meta.env.VITE_KEYCLOAK_REALM || 'syxplain';
+const keycloakClientId = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'syxplain-frontend';
+
+const oidcConfig = {
+  authority: `${keycloakUrl}/realms/${keycloakRealm}`,
+  client_id: keycloakClientId,
+  redirect_uri: window.location.origin + '/',
+  post_logout_redirect_uri: window.location.origin + '/',
+  response_type: 'code',
+  scope: 'openid email profile',
+  automaticSilentRenew: true,
+  userStore: new WebStorageStateStore({ store: window.sessionStorage }),
+};
 
 function MainApp() {
   const [view, setView] = useState<'workflow' | 'history' | 'profile' | 'admin'>('workflow');
@@ -201,9 +216,11 @@ function App() {
         <Route
           path="*"
           element={
-            <AuthProvider>
-              <AuthGate />
-            </AuthProvider>
+            <OidcProvider {...oidcConfig}>
+              <AuthProvider>
+                <AuthGate />
+              </AuthProvider>
+            </OidcProvider>
           }
         />
       </Routes>
@@ -212,29 +229,19 @@ function App() {
 }
 
 function AuthGate() {
-  const { user, loading } = useAuth();
-  const [showSignUp, setShowSignUp] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const { user, loading, signIn } = useAuth();
 
-  if (loading) {
+  useEffect(() => {
+    if (!loading && !user) {
+      signIn();
+    }
+  }, [loading, user, signIn]);
+
+  if (loading || !user) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <i className="pi pi-spin pi-spinner text-blue-600 text-4xl"></i>
       </div>
-    );
-  }
-
-  if (!user) {
-    if (showForgotPassword) {
-      return <ForgotPassword onBackToLogin={() => setShowForgotPassword(false)} />;
-    }
-    return showSignUp ? (
-      <SignUp onSwitchToLogin={() => setShowSignUp(false)} />
-    ) : (
-      <Login
-        onSwitchToSignUp={() => setShowSignUp(true)}
-        onForgotPassword={() => setShowForgotPassword(true)}
-      />
     );
   }
 

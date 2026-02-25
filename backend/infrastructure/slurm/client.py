@@ -161,8 +161,16 @@ class SlurmClient:
         client = await self._get_client()
         payload = submission.to_slurm_request()
 
-        logger.info(f"Submitting job '{submission.name}' to partition '{submission.partition}'")
-        logger.info(f"Job submission payload:\n{json.dumps(payload, indent=2)}")
+        job_spec = payload.get("job", {})
+        logger.info(
+            f"Submitting job '{submission.name}' "
+            f"partition={submission.partition} "
+            f"nodes={job_spec.get('nodes')} tasks={job_spec.get('tasks')} "
+            f"cpus={job_spec.get('cpus_per_task')} "
+            f"memory={job_spec.get('memory_per_node', {}).get('number')}MB "
+            f"time_limit={job_spec.get('time_limit', {}).get('number')}min "
+            f"gres={job_spec.get('tres_per_job')}"
+        )
 
         try:
             response = await client.post(self._api_path("job/submit"), json=payload)

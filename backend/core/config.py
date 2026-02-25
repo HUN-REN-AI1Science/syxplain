@@ -29,15 +29,36 @@ class DatabaseSettings:
 
 @dataclass
 class AuthSettings:
-    """Authentication settings for Supabase integration."""
+    """Authentication settings for Keycloak integration."""
 
-    supabase_jwt_secret: str = field(
-        default_factory=lambda: os.environ.get("SUPABASE_JWT_SECRET", "")
+    keycloak_url: str = field(
+        default_factory=lambda: os.environ.get("KEYCLOAK_URL", "http://localhost:8080/keycloak")
     )
-    supabase_url: str = field(default_factory=lambda: os.environ.get("SUPABASE_URL", ""))
-    supabase_service_role_key: str = field(
-        default_factory=lambda: os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    keycloak_realm: str = field(
+        default_factory=lambda: os.environ.get("KEYCLOAK_REALM", "syxplain")
     )
+    keycloak_client_id: str = field(
+        default_factory=lambda: os.environ.get("KEYCLOAK_CLIENT_ID", "syxplain-frontend")
+    )
+    keycloak_admin_username: str = field(
+        default_factory=lambda: os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
+    )
+    keycloak_admin_password: str = field(
+        default_factory=lambda: os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
+    )
+    keycloak_issuer: str = field(default_factory=lambda: os.environ.get("KEYCLOAK_ISSUER", ""))
+
+    @property
+    def jwks_url(self) -> str:
+        return f"{self.keycloak_url}/realms/{self.keycloak_realm}/protocol/openid-connect/certs"
+
+    @property
+    def admin_api_url(self) -> str:
+        return f"{self.keycloak_url}/admin/realms/{self.keycloak_realm}"
+
+    @property
+    def token_url(self) -> str:
+        return f"{self.keycloak_url}/realms/master/protocol/openid-connect/token"
 
 
 @dataclass

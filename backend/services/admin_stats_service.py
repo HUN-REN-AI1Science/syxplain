@@ -44,7 +44,7 @@ class AdminStatsService:
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         yesterday = now - timedelta(hours=24)
 
-        # Total users (from permissions or Supabase)
+        # Total users (from permissions or Keycloak)
         total_users = self.db.query(func.count(func.distinct(Run.user_id))).scalar() or 0
 
         # Active users in last 24 hours

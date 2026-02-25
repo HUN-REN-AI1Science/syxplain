@@ -344,7 +344,9 @@ class AnalysisOrchestrator:
                 user_model=context.user_model,
             )
             config = json.loads(config_json)
-            return self._validate_pysr_config(config)
+            validated = self._validate_pysr_config(config)
+            logger.info(f"LLM-generated PySR config: {validated}")
+            return validated
         except Exception as e:
             logger.warning(f"LLM config generation failed, using defaults: {e}")
             # Return default config (niterations=None lets worker auto-estimate)
@@ -391,7 +393,7 @@ class AnalysisOrchestrator:
                     continue
             if val < lo or val > hi:
                 clamped = max(lo, min(hi, val))
-                logger.warning(f"PySR config: clamping {key}={val} to {clamped} (range {lo}–{hi})")
+                logger.warning(f"PySR config: clamping {key}={val} to {clamped} (range {lo}-{hi})")
                 val = clamped
             config[key] = val
 

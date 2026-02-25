@@ -50,9 +50,9 @@ export default defineConfig({
             if (id.includes('chart.js') || id.includes('react-chartjs-2')) {
               return 'vendor-charts';
             }
-            // Supabase
-            if (id.includes('@supabase')) {
-              return 'vendor-supabase';
+            // OIDC
+            if (id.includes('oidc-client-ts') || id.includes('react-oidc-context')) {
+              return 'vendor-oidc';
             }
             // PrimeReact - split into its own chunk
             if (id.includes('primereact') || id.includes('primeicons')) {

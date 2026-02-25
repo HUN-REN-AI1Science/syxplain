@@ -1,0 +1,325 @@
+/* Syxplain Keycloak Theme - Replicates the React frontend auth design */
+
+/* Reset and base */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: #f8fafc;
+    color: #0f172a;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Container - full-screen centered */
+.syxplain-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+/* Card */
+.syxplain-card {
+    width: 100%;
+    max-width: 28rem;
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+}
+
+/* Header */
+.syxplain-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.syxplain-logo-circle {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background-color: #0052cc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.syxplain-logo-img {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+}
+
+.syxplain-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+}
+
+.syxplain-title-ai {
+    color: #2563eb;
+}
+
+.syxplain-subtitle {
+    color: #64748b;
+    margin-top: 0.5rem;
+    font-size: 0.95rem;
+}
+
+/* Alert messages */
+.syxplain-alert {
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+}
+
+.syxplain-alert-error {
+    background-color: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.syxplain-alert-success {
+    background-color: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+.syxplain-alert-warning {
+    background-color: #fffbeb;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+
+.syxplain-alert-info {
+    background-color: #eff6ff;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+/* Form elements */
+.syxplain-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.syxplain-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.syxplain-label {
+    font-weight: 600;
+    color: #334155;
+    font-size: 0.875rem;
+}
+
+.syxplain-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background-color: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    font-size: 0.95rem;
+    color: #0f172a;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.syxplain-input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.syxplain-input::placeholder {
+    color: #94a3b8;
+}
+
+.syxplain-input.input-error {
+    border-color: #ef4444;
+}
+
+.syxplain-field-error {
+    color: #ef4444;
+    font-size: 0.75rem;
+}
+
+/* Forgot password link */
+.syxplain-forgot-password {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.syxplain-forgot-password a {
+    font-size: 0.875rem;
+    color: #2563eb;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.syxplain-forgot-password a:hover {
+    text-decoration: underline;
+}
+
+/* Submit button */
+.syxplain-btn-primary {
+    width: 100%;
+    height: 48px;
+    background-color: #0052cc;
+    color: white;
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    margin-top: 0.5rem;
+}
+
+.syxplain-btn-primary:hover {
+    background-color: #003d99;
+}
+
+.syxplain-btn-primary:active {
+    background-color: #002e73;
+}
+
+.syxplain-btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Bottom links (toggle login/signup) */
+.syxplain-bottom-link {
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+.syxplain-bottom-link span {
+    color: #475569;
+}
+
+.syxplain-bottom-link a {
+    color: #2563eb;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.syxplain-bottom-link a:hover {
+    text-decoration: underline;
+}
+
+/* Back to login link */
+.syxplain-back-link {
+    text-align: center;
+    margin-top: 1rem;
+}
+
+.syxplain-back-link a {
+    color: #475569;
+    font-weight: 500;
+    text-decoration: none;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: color 0.2s;
+}
+
+.syxplain-back-link a:hover {
+    color: #1e293b;
+}
+
+.syxplain-back-link a::before {
+    content: "\2190";
+}
+
+/* Info section */
+.syxplain-info {
+    margin-top: 1rem;
+    font-size: 0.875rem;
+    color: #475569;
+    text-align: center;
+}
+
+.syxplain-info a {
+    color: #2563eb;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.syxplain-info a:hover {
+    text-decoration: underline;
+}
+
+/* Social / IDP providers */
+.syxplain-social-providers {
+    margin-top: 1.5rem;
+}
+
+.syxplain-separator {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    color: #94a3b8;
+    font-size: 0.875rem;
+}
+
+.syxplain-separator::before,
+.syxplain-separator::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background-color: #e2e8f0;
+}
+
+.syxplain-social-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    width: 100%;
+    height: 48px;
+    padding: 0 1rem;
+    background-color: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #334155;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    margin-bottom: 0.5rem;
+}
+
+.syxplain-social-btn:hover {
+    background-color: #f8fafc;
+    border-color: #cbd5e1;
+}
+
+.syxplain-social-btn i {
+    font-size: 1.25rem;
+}
+
+/* Required fields indicator */
+.syxplain-required::after {
+    content: " *";
+    color: #ef4444;
+}

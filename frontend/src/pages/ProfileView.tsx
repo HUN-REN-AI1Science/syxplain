@@ -36,7 +36,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
   const [sharedLoading, setSharedLoading] = useState(false);
   const [revokeRunId, setRevokeRunId] = useState<string | null>(null);
   const toast = useRef<Toast>(null);
-  const { signOut, hasHunrenAccess, isAdmin } = useAuth();
+  const { user: authUser, signOut, hasHunrenAccess, isAdmin } = useAuth();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -183,7 +183,12 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
 
       {error && <Message severity="error" text={error} className="w-full mb-6" />}
 
-      <AccountInfoSection profile={profile} hasHunrenAccess={hasHunrenAccess} isAdmin={isAdmin} />
+      <AccountInfoSection
+        profile={profile}
+        hasHunrenAccess={hasHunrenAccess}
+        isAdmin={isAdmin}
+        userName={authUser?.name}
+      />
       <UsageStatsSection profile={profile} />
       <SharedRunsTable
         sharedRuns={sharedRuns}

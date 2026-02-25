@@ -15,7 +15,7 @@ shap
 sqlalchemy
 psycopg2-binary
 alembic
-pyjwt
+pyjwt[crypto]
 dspy
 langfuse
 openinference-instrumentation-dspy

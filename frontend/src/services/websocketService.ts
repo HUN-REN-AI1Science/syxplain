@@ -5,7 +5,7 @@
  * exponential backoff, and keepalive ping/pong.
  */
 
-import { supabase } from '@services/supabaseClient';
+import { getToken } from '@services/api';
 import type { ConnectionState, ServerMessage, WebSocketOptions } from '@/types/websocket';
 
 const DEFAULT_OPTIONS: Required<
@@ -40,7 +40,7 @@ export class ProgressWebSocket {
 
   /**
    * Connect to the WebSocket server.
-   * Gets the JWT token from Supabase and establishes connection.
+   * Gets the JWT token from the shared token getter and establishes connection.
    */
   async connect(): Promise<void> {
     if (this.closed) {
@@ -50,7 +50,7 @@ export class ProgressWebSocket {
     this.setState('connecting');
 
     try {
-      const token = await this.getAuthToken();
+      const token = this.getAuthToken();
       if (!token) {
         throw new Error('No authentication token available');
       }
@@ -84,11 +84,8 @@ export class ProgressWebSocket {
     return this.state;
   }
 
-  private async getAuthToken(): Promise<string | null> {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
+  private getAuthToken(): string | null {
+    return getToken();
   }
 
   private buildWebSocketUrl(token: string): string {

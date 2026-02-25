@@ -28,6 +28,7 @@ services:
       - "5432:5432"
     volumes:
       - syxplain_pgdata:/var/lib/postgresql
+      - ./db/init-keycloak-schema.sql:/docker-entrypoint-initdb.d/init-keycloak-schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U syxplain"]
       interval: 5s
@@ -58,10 +59,13 @@ services:
       - GITHUB_FEEDBACK_REPO_NAME=${GITHUB_FEEDBACK_REPO_NAME:-}
       # Database (defaults to local postgres container)
       - DATABASE_URL=postgresql://syxplain:syxplain@postgres:5432/syxplain
-      # Authentication (optional for local dev - set for Supabase auth)
-      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:-dev-jwt-secret-not-for-production}
-      - SUPABASE_URL=${SUPABASE_URL:-}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      # Authentication (Keycloak - internal Docker URL for backend)
+      - KEYCLOAK_URL=http://keycloak:8080/keycloak
+      - KEYCLOAK_REALM=syxplain
+      - KEYCLOAK_CLIENT_ID=syxplain-frontend
+      - KEYCLOAK_ADMIN_USERNAME=${KEYCLOAK_ADMIN_USERNAME:-admin}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      - KEYCLOAK_ISSUER=${KEYCLOAK_ISSUER:-}
       # Slurm Configuration - set these in .env (see README for setup)
       - SLURM_API_URL=${SLURM_API_URL}
       - SLURM_AUTH_TOKEN=${SLURM_AUTH_TOKEN}
@@ -113,15 +117,38 @@ services:
       - "5173:5173"
     environment:
       - VITE_API_URL=http://backend:8000
-      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-}
-      - VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=${VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY:-}
-      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY:-}
+      - VITE_KEYCLOAK_URL=http://localhost:8080/keycloak
+      - VITE_KEYCLOAK_REALM=syxplain
+      - VITE_KEYCLOAK_CLIENT_ID=syxplain-frontend
+      - VITE_ENABLE_MICROSOFT_SSO=${VITE_ENABLE_MICROSOFT_SSO:-false}
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules  # Persist node_modules
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     depends_on:
       backend:
+        condition: service_healthy
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1.4
+    container_name: syxplain-keycloak
+    environment:
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://postgres:5432/syxplain
+      - KC_DB_USERNAME=keycloak_user
+      - KC_DB_PASSWORD=keycloak
+      - KC_DB_SCHEMA=keycloak
+      - KC_HTTP_RELATIVE_PATH=/keycloak
+      - KC_BOOTSTRAP_ADMIN_USERNAME=${KEYCLOAK_ADMIN_USERNAME:-admin}
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    command: start-dev --import-realm
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
+      - ./keycloak/themes/syxplain:/opt/keycloak/themes/syxplain
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
         condition: service_healthy
 
 volumes:

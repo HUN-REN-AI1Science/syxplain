@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from backend.core.config import get_settings
+from backend.infrastructure.keycloak.admin_client import get_keycloak_admin_token
 from backend.repositories.permission_repository import PermissionRepository
 from backend.utils import parse_uuid
 
@@ -107,11 +108,22 @@ class PermissionService:
         action = "granted" if use_hunren_keys else "revoked"
         logger.info(f"HUN-REN key access {action} for user {user_id} by {granted_by}")
 
+    def _get_keycloak_admin_token(self) -> str | None:
+        """
+        Obtain an admin access token from Keycloak using the master realm.
+
+        Delegates to the shared cached helper in admin_client.
+
+        Returns:
+            Admin access token string, or None on failure
+        """
+        return get_keycloak_admin_token()
+
     def list_users_with_permissions(self) -> list[dict]:
         """
         Get all users with their permission status.
 
-        Fetches users from Supabase Admin API and joins with local permissions.
+        Fetches users from Keycloak Admin API and joins with local permissions.
 
         Returns:
             List of users with permission info (includes email)
@@ -121,15 +133,9 @@ class PermissionService:
         # Get permissions from local database
         permissions = self.permission_repo.get_all_permissions_dict()
 
-        # Fetch users from Supabase Admin API
-        supabase_url = self.settings.auth.supabase_url
-        service_role_key = self.settings.auth.supabase_service_role_key
-
-        if not supabase_url or not service_role_key:
-            logger.debug(
-                "Supabase service role key not configured, returning only users with permissions"
-            )
-            # Fallback: return only users who have permission records
+        admin_token = self._get_keycloak_admin_token()
+        if not admin_token:
+            logger.debug("Keycloak admin token unavailable, returning only users with permissions")
             all_permissions = self.permission_repo.get_all_permissions()
             return [
                 {
@@ -144,31 +150,27 @@ class PermissionService:
             ]
 
         try:
-            # Supabase Admin API to list users (paginated)
+            admin_api_url = self.settings.auth.admin_api_url
             users = []
-            page = 1
-            per_page = 100
+            first = 0
+            max_results = 100
+
             while True:
                 response = httpx.get(
-                    f"{supabase_url}/auth/v1/admin/users",
-                    headers={
-                        "apikey": service_role_key,
-                        "Authorization": f"Bearer {service_role_key}",
-                    },
-                    params={"page": page, "per_page": per_page},
+                    f"{admin_api_url}/users",
+                    headers={"Authorization": f"Bearer {admin_token}"},
+                    params={"first": first, "max": max_results},
                     timeout=10.0,
                 )
                 response.raise_for_status()
-                data = response.json()
-                page_users = data.get("users", [])
+                page_users = response.json()
                 users.extend(page_users)
 
-                # Stop if we got fewer than requested (last page)
-                if len(page_users) < per_page:
+                if len(page_users) < max_results:
                     break
-                page += 1
+                first += max_results
 
-            logger.info(f"Fetched {len(users)} users from Supabase Admin API")
+            logger.info(f"Fetched {len(users)} users from Keycloak Admin API")
 
             # Merge with permissions
             result = []
@@ -179,7 +181,7 @@ class PermissionService:
                     {
                         "user_id": user_id,
                         "email": user.get("email", ""),
-                        "user_created_at": user.get("created_at"),
+                        "user_created_at": user.get("createdTimestamp"),
                         "use_hunren_keys": perm.get("use_hunren_keys", False),
                         "granted_by": perm.get("granted_by"),
                         "permission_updated_at": perm.get("permission_updated_at"),
@@ -189,8 +191,7 @@ class PermissionService:
             return result
 
         except Exception as e:
-            logger.error(f"Failed to fetch users from Supabase: {e}")
-            # Fallback: return only users who have permission records
+            logger.error(f"Failed to fetch users from Keycloak: {e}")
             all_permissions = self.permission_repo.get_all_permissions()
             return [
                 {

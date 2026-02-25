@@ -1,13 +1,13 @@
 """
 Security utilities for authentication and authorization.
 
-Provides JWT validation for Supabase tokens and user extraction.
-Refactored from the original auth.py for cleaner separation of concerns.
+Provides JWT validation for Keycloak tokens (RS256 via JWKS) and user extraction.
 """
 
 import logging
 
 import jwt
+from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -20,13 +20,24 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
 
+# Cached JWKS client (initialized lazily)
+_jwks_client: PyJWKClient | None = None
+
+
+def _get_jwks_client(settings: AuthSettings) -> PyJWKClient:
+    """Get or create a cached JWKS client for Keycloak public key retrieval."""
+    global _jwks_client
+    if _jwks_client is None:
+        _jwks_client = PyJWKClient(settings.jwks_url, cache_keys=True, lifespan=3600)
+    return _jwks_client
+
 
 class User:
     """
     Represents an authenticated user.
 
     Attributes:
-        user_id: Unique identifier from Supabase
+        user_id: Unique identifier from Keycloak (sub claim)
         email: User's email address
     """
 
@@ -40,11 +51,11 @@ class User:
 
 def decode_jwt_token(token: str, settings: AuthSettings) -> dict:
     """
-    Decode and validate a JWT token.
+    Decode and validate a Keycloak JWT token using RS256 via JWKS.
 
     Args:
         token: The JWT token string
-        settings: Auth settings with JWT secret
+        settings: Auth settings with Keycloak JWKS endpoint
 
     Returns:
         Decoded token payload
@@ -52,20 +63,33 @@ def decode_jwt_token(token: str, settings: AuthSettings) -> dict:
     Raises:
         AuthenticationError: If token is invalid or expired
     """
-    if not settings.supabase_jwt_secret:
-        raise AuthenticationError(
-            message="Authentication not configured", reason="JWT secret not set"
-        )
-
     try:
+        jwks_client = _get_jwks_client(settings)
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+
+        decode_options = {"verify_aud": False}
+        decode_kwargs: dict = {
+            "algorithms": ["RS256"],
+            "options": decode_options,
+        }
+        if settings.keycloak_issuer:
+            decode_kwargs["issuer"] = settings.keycloak_issuer
+
         payload = jwt.decode(
-            token, settings.supabase_jwt_secret, algorithms=["HS256"], audience="authenticated"
+            token,
+            signing_key.key,
+            **decode_kwargs,
         )
         return payload
     except jwt.ExpiredSignatureError:
+        logger.warning("JWT decode failed: token expired")
         raise AuthenticationError(message="Token has expired", reason="expired")
     except jwt.InvalidTokenError as e:
+        logger.warning(f"JWT decode failed: InvalidTokenError: {e}")
         raise AuthenticationError(message="Invalid authentication credentials", reason=str(e))
+    except Exception as e:
+        logger.error(f"JWT decode failed: {type(e).__name__}: {e}")
+        raise AuthenticationError(message="Authentication service unavailable", reason=str(e))
 
 
 async def get_current_user(
@@ -94,6 +118,12 @@ async def get_current_user(
         if not user_id:
             raise AuthenticationError(
                 message="Invalid authentication credentials", reason="Missing user ID in token"
+            )
+
+        if email and not payload.get("email_verified", False):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Email not verified. Please verify your email address.",
             )
 
         return User(user_id=user_id, email=email)
