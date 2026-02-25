@@ -76,7 +76,6 @@ export const AccountInfoSection: React.FC<AccountInfoSectionProps> = ({
           )}
         </div>
       </div>
-
     </div>
   </div>
 );

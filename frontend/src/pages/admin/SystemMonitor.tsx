@@ -23,7 +23,7 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
   const [slurmStatus, setSlurmStatus] = useState<SlurmStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false);
-  const refreshInterval = useRef<NodeJS.Timeout | null>(null);
+  const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchSystemStatus = useCallback(async () => {
     try {

@@ -7,9 +7,9 @@ Provides JWT validation for Keycloak tokens (RS256 via JWKS) and user extraction
 import logging
 
 import jwt
-from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWKClient
 
 from backend.core.config import AuthSettings, get_auth_settings
 from backend.core.exceptions import AuthenticationError

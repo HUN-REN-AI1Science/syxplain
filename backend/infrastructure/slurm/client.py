@@ -8,7 +8,6 @@ Compatible with slurmrestd API v0.0.41+
 """
 
 import asyncio
-import json
 import logging
 from collections.abc import Callable
 
