@@ -120,9 +120,7 @@ class PermissionService:
             logger.error(f"Failed to fetch users from Keycloak: {e}")
             return []
 
-    def _get_user_realm_roles(
-        self, admin_api_url: str, headers: dict, user_id: str
-    ) -> list[dict]:
+    def _get_user_realm_roles(self, admin_api_url: str, headers: dict, user_id: str) -> list[dict]:
         """Fetch realm role mappings for a specific user."""
         try:
             response = httpx.get(
