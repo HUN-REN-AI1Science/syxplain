@@ -143,7 +143,7 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({ visible, onHide,
               className="w-full"
               maxLength={100}
             />
-            <small className="text-right text-slate-400">{title.length}/100</small>
+            <small className="text-right text-muted">{title.length}/100</small>
           </div>
 
           <div className="flex flex-col gap-1">
@@ -160,10 +160,10 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({ visible, onHide,
               maxLength={2000}
               autoResize
             />
-            <small className="text-right text-slate-400">{description.length}/2000</small>
+            <small className="text-right text-muted">{description.length}/2000</small>
           </div>
 
-          <div className="flex items-center gap-2 text-sm text-slate-500 bg-slate-50 rounded p-2">
+          <div className="flex items-center gap-2 text-sm text-secondary bg-surface-alt rounded p-2">
             <i className="pi pi-info-circle" />
             <span>
               Technical context (current page, run ID, browser) will be automatically included.

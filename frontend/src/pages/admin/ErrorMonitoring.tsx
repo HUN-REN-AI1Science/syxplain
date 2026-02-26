@@ -241,7 +241,7 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
             loading={loading}
           />
         </div>
-        <div className="flex flex-wrap gap-3 text-sm text-slate-600">
+        <div className="flex flex-wrap gap-3 text-sm text-secondary">
           <span>
             Failures: <strong className="text-red-600">{totalFailures}</strong>
           </span>
@@ -255,20 +255,20 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Error Trend Chart */}
         <Card className="shadow-md lg:col-span-2">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Error Trend</h3>
-          <div className="h-64">
+          <h3 className="text-lg font-semibold font-heading text-primary mb-4">Error Trend</h3>
+          <div className="h-48 sm:h-64">
             <Chart type="line" data={trendChartData} options={trendChartOptions} />
           </div>
         </Card>
 
         {/* Error Distribution Chart */}
         <Card className="shadow-md">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Error Distribution</h3>
-          <div className="h-64">
+          <h3 className="text-lg font-semibold font-heading text-primary mb-4">Error Distribution</h3>
+          <div className="h-48 sm:h-64">
             {distribution.length > 0 ? (
               <Chart type="pie" data={distributionChartData} options={distributionChartOptions} />
             ) : (
-              <div className="flex items-center justify-center h-full text-slate-400">
+              <div className="flex items-center justify-center h-full text-muted">
                 No errors in this period
               </div>
             )}
@@ -278,7 +278,7 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
 
       {/* Failed Runs Table */}
       <Card className="shadow-md">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">Failed Runs</h3>
+        <h3 className="text-lg font-semibold font-heading text-primary mb-4">Failed Runs</h3>
         <div className="overflow-x-auto">
           <DataTable
             value={failedRuns}
@@ -299,23 +299,20 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
               field="id"
               header="ID"
               body={(row) => row.id.substring(0, 8) + '...'}
-              style={{ width: '100px' }}
             />
-            <Column header="User" body={userTemplate} style={{ width: '180px' }} />
+            <Column header="User" body={userTemplate} />
             <Column
               field="status"
               header="Status"
               body={statusTemplate}
-              style={{ width: '100px' }}
             />
-            <Column header="Error" body={errorTemplate} style={{ width: '250px' }} />
+            <Column header="Error" body={errorTemplate} />
             <Column
               field="created_at"
               header="Date"
               body={dateTemplate}
-              style={{ width: '160px' }}
             />
-            <Column header="" body={actionsTemplate} style={{ width: '60px' }} />
+            <Column header="" body={actionsTemplate} />
           </DataTable>
         </div>
       </Card>
@@ -332,15 +329,15 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-slate-500">Run ID</label>
+                <label className="text-sm text-secondary">Run ID</label>
                 <p className="font-mono text-sm">{selectedError.id}</p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">User</label>
+                <label className="text-sm text-secondary">User</label>
                 <p>{selectedError.user_email || selectedError.user_id}</p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">Status</label>
+                <label className="text-sm text-secondary">Status</label>
                 <p>
                   <Tag
                     value={selectedError.status}
@@ -349,15 +346,15 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
                 </p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">File</label>
+                <label className="text-sm text-secondary">File</label>
                 <p>{selectedError.csv_filename}</p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">Analysis Type</label>
+                <label className="text-sm text-secondary">Analysis Type</label>
                 <p>{selectedError.analysis_type}</p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">Created</label>
+                <label className="text-sm text-secondary">Created</label>
                 <p>{new Date(selectedError.created_at).toLocaleString()}</p>
               </div>
             </div>

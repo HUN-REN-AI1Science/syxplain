@@ -8,22 +8,19 @@ import syxplainLogo from '@assets/syxplain_logo.png';
 
 const PublicHeader: React.FC = () => {
   return (
-    <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-50">
+    <header className="bg-surface shadow-sm border-b border-[var(--color-border)] sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div
-            className="rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden"
-            style={{ backgroundColor: '#0052cc', width: '40px', height: '40px' }}
-          >
+          <div className="w-10 h-10 rounded-full bg-brand-500 flex-shrink-0 flex items-center justify-center overflow-hidden">
             <img src={syxplainLogo} alt="Syxplain Logo" className="w-7 h-7 object-contain" />
           </div>
-          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
-            Syxplain <span className="text-blue-600">AI</span>
+          <h1 className="text-xl md:text-2xl font-bold text-primary tracking-tight">
+            Syxplain <span className="text-brand-500">AI</span>
           </h1>
         </div>
         <div className="flex items-center space-x-2">
-          <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">
-            <i className="pi pi-globe mr-1"></i>
+          <span className="px-3 py-1 bg-brand-100 text-brand-500 text-sm font-medium rounded-full">
+            <i className="pi pi-globe mr-1" />
             Shared Results
           </span>
         </div>

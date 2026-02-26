@@ -210,7 +210,7 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
   const userTemplate = (rowData: AdminRunSummary) => (
     <div className="flex flex-col">
       <span className="text-sm">{rowData.user_email || 'Unknown'}</span>
-      <span className="text-xs text-slate-400">{rowData.user_id.substring(0, 8)}...</span>
+      <span className="text-xs text-muted">{rowData.user_id.substring(0, 8)}...</span>
     </div>
   );
 
@@ -251,7 +251,7 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
     <div className="flex flex-col gap-4">
       {/* Search Row */}
       <div className="w-full">
-        <label className="block text-sm text-slate-600 mb-1">Search</label>
+        <label className="block text-sm text-secondary mb-1">Search</label>
         <div className="p-inputgroup">
           <InputText
             value={searchFilter}
@@ -266,7 +266,7 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
       {/* Filters Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 items-end w-full">
         <div>
-          <label className="block text-sm text-slate-600 mb-1">Status</label>
+          <label className="block text-sm text-secondary mb-1">Status</label>
           <Dropdown
             value={statusFilter}
             options={statusOptions}
@@ -275,7 +275,7 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
           />
         </div>
         <div>
-          <label className="block text-sm text-slate-600 mb-1">Type</label>
+          <label className="block text-sm text-secondary mb-1">Type</label>
           <Dropdown
             value={typeFilter}
             options={typeOptions}
@@ -284,7 +284,7 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
           />
         </div>
         <div>
-          <label className="block text-sm text-slate-600 mb-1">Date From</label>
+          <label className="block text-sm text-secondary mb-1">Date From</label>
           <Calendar
             value={dateFrom}
             onChange={(e) => setDateFrom(e.value as Date)}
@@ -293,7 +293,7 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
           />
         </div>
         <div>
-          <label className="block text-sm text-slate-600 mb-1">Date To</label>
+          <label className="block text-sm text-secondary mb-1">Date To</label>
           <Calendar
             value={dateTo}
             onChange={(e) => setDateTo(e.value as Date)}
@@ -340,26 +340,23 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
           field="id"
           header="ID"
           body={(row) => row.id.substring(0, 8) + '...'}
-          style={{ width: '100px' }}
         />
-        <Column header="User" body={userTemplate} style={{ width: '200px' }} />
+        <Column header="User" body={userTemplate} />
         <Column
           field="status"
           header="Status"
           body={statusTemplate}
           sortable
-          style={{ width: '120px' }}
         />
-        <Column field="analysis_type" header="Type" sortable style={{ width: '80px' }} />
+        <Column field="analysis_type" header="Type" sortable />
         <Column
           field="created_at"
           header="Created"
           body={dateTemplate}
           sortable
-          style={{ width: '160px' }}
         />
-        <Column header="Duration" body={durationTemplate} style={{ width: '100px' }} />
-        <Column header="Actions" body={actionsTemplate} style={{ width: '140px' }} />
+        <Column header="Duration" body={durationTemplate} />
+        <Column header="Actions" body={actionsTemplate} />
       </DataTable>
 
       {/* Run Detail Dialog */}
@@ -374,15 +371,15 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-slate-500">Run ID</label>
+                <label className="text-sm text-secondary">Run ID</label>
                 <p className="font-mono text-sm">{selectedRun.id}</p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">User</label>
+                <label className="text-sm text-secondary">User</label>
                 <p>{selectedRun.user_email || selectedRun.user_id}</p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">Status</label>
+                <label className="text-sm text-secondary">Status</label>
                 <p>
                   <Tag
                     value={selectedRun.status}
@@ -391,25 +388,25 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
                 </p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">Analysis Type</label>
+                <label className="text-sm text-secondary">Analysis Type</label>
                 <p>{selectedRun.analysis_type}</p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">File</label>
+                <label className="text-sm text-secondary">File</label>
                 <p>{selectedRun.csv_filename}</p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">Progress</label>
+                <label className="text-sm text-secondary">Progress</label>
                 <p>{selectedRun.progress}%</p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">Created</label>
+                <label className="text-sm text-secondary">Created</label>
                 <p>
                   {selectedRun.created_at ? new Date(selectedRun.created_at).toLocaleString() : '-'}
                 </p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">Duration</label>
+                <label className="text-sm text-secondary">Duration</label>
                 <p>{formatDuration(selectedRun.start_time, selectedRun.finish_time)}</p>
               </div>
             </div>
@@ -424,16 +421,16 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
             )}
 
             <div>
-              <label className="text-sm text-slate-500">Problem Description</label>
-              <pre className="bg-slate-50 p-3 rounded text-sm overflow-auto max-h-48">
+              <label className="text-sm text-secondary">Problem Description</label>
+              <pre className="bg-surface-alt p-3 rounded text-sm overflow-auto max-h-48">
                 {JSON.stringify(selectedRun.problem_description, null, 2)}
               </pre>
             </div>
 
             {selectedRun.slurm_job_ids && (
               <div>
-                <label className="text-sm text-slate-500">Slurm Job IDs</label>
-                <pre className="bg-slate-50 p-3 rounded text-sm">
+                <label className="text-sm text-secondary">Slurm Job IDs</label>
+                <pre className="bg-surface-alt p-3 rounded text-sm">
                   {JSON.stringify(selectedRun.slurm_job_ids, null, 2)}
                 </pre>
               </div>

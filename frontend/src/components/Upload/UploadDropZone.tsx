@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Button } from 'primereact/button';
+import { Upload } from 'lucide-react';
 
 interface UploadDropZoneProps {
   dragActive: boolean;
@@ -28,10 +28,10 @@ export const UploadDropZone: React.FC<UploadDropZoneProps> = ({
   onFileChange,
 }) => (
   <div
-    className={`w-full relative border-2 border-dashed rounded-2xl p-6 md:p-12 text-center transition-all duration-300 ease-in-out group ${
+    className={`w-full relative border-2 border-dashed rounded-2xl p-8 md:p-14 text-center transition-all duration-300 ease-in-out group ${
       dragActive
-        ? 'border-blue-500 bg-blue-50 scale-[1.01] shadow-inner'
-        : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50'
+        ? 'border-brand-500 bg-brand-50 scale-[1.02] shadow-inner'
+        : 'border-[var(--color-border-hover)] hover:border-brand-400 hover:bg-surface-alt'
     }`}
     onDragEnter={onDragEnter}
     onDragLeave={onDragLeave}
@@ -47,31 +47,35 @@ export const UploadDropZone: React.FC<UploadDropZoneProps> = ({
       disabled={uploading || processing}
     />
 
-    <div className="flex flex-col items-center justify-center space-y-6 pointer-events-none">
+    <div className="flex flex-col items-center justify-center space-y-5 pointer-events-none">
       <div
-        className={`p-6 rounded-full transition-colors duration-300 ${dragActive ? 'bg-blue-100' : 'bg-slate-100 group-hover:bg-white group-hover:shadow-md'}`}
+        className={`p-5 rounded-full transition-all duration-300 ${
+          dragActive
+            ? 'bg-brand-100'
+            : 'bg-surface-alt group-hover:bg-surface group-hover:shadow-md'
+        }`}
       >
-        <i
-          className={`pi pi-cloud-upload text-5xl ${dragActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-500'} transition-colors duration-300`}
-        ></i>
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-xl font-semibold text-slate-700">
-          {uploading ? 'Uploading...' : 'Drag & Drop your file here'}
-        </p>
-        <p className="text-sm text-slate-500">or click to browse from your computer</p>
-      </div>
-
-      <div className="pt-2">
-        <Button
-          label="Browse Files"
-          icon="pi pi-folder-open"
-          className="p-button-outlined p-button-rounded"
+        <Upload
+          className={`w-12 h-12 transition-colors duration-300 ${
+            dragActive ? 'text-brand-500' : 'text-muted group-hover:text-brand-500'
+          }`}
+          strokeWidth={1.5}
         />
       </div>
 
-      <p className="text-xs text-slate-400 mt-4">Maximum file size: 50MB</p>
+      <div className="space-y-2">
+        <p className="font-heading text-2xl font-semibold text-primary">
+          {uploading ? 'Uploading...' : 'Drag & Drop your file here'}
+        </p>
+        <p className="text-sm text-secondary">
+          or <span className="underline underline-offset-2 text-brand-500">click to browse</span>{' '}
+          from your computer
+        </p>
+      </div>
+
+      <p className="text-xs text-muted">
+        Supports CSV, XLSX, XLS &middot; Maximum 50MB
+      </p>
     </div>
   </div>
 );

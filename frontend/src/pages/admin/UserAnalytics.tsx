@@ -148,7 +148,7 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
     if (rank === 1) className += 'bg-yellow-500';
     else if (rank === 2) className += 'bg-slate-400';
     else if (rank === 3) className += 'bg-amber-600';
-    else className += 'bg-slate-300 text-slate-700';
+    else className += 'bg-slate-300 text-primary';
 
     return <div className={className}>{rank}</div>;
   };
@@ -156,7 +156,7 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
   const userTemplate = (rowData: TopUserItem) => (
     <div className="flex flex-col">
       <span className="font-medium">{rowData.email || 'Unknown User'}</span>
-      <span className="text-xs text-slate-400 font-mono">{rowData.user_id.substring(0, 8)}...</span>
+      <span className="text-xs text-muted font-mono">{rowData.user_id.substring(0, 8)}...</span>
     </div>
   );
 
@@ -164,7 +164,7 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
         <span className="font-bold text-lg">{rowData.run_count}</span>
-        <span className="text-sm text-slate-500">runs</span>
+        <span className="text-sm text-secondary">runs</span>
       </div>
       <ProgressBar
         value={(rowData.run_count / maxRunCount) * 100}
@@ -182,7 +182,7 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
           value={`${rate.toFixed(0)}%`}
           severity={rate >= 80 ? 'success' : rate >= 60 ? 'warning' : 'danger'}
         />
-        <span className="text-xs text-slate-500">({rowData.completed} completed)</span>
+        <span className="text-xs text-secondary">({rowData.completed} completed)</span>
       </div>
     );
   };
@@ -190,7 +190,7 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
   if (loading && !stats) {
     return (
       <div className="flex items-center justify-center p-8">
-        <i className="pi pi-spin pi-spinner text-4xl text-blue-600" />
+        <i className="pi pi-spin pi-spinner text-4xl text-brand-500" />
       </div>
     );
   }
@@ -205,11 +205,11 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
         <Card className="shadow-md">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-blue-100 rounded-lg">
-              <i className="pi pi-users text-2xl text-blue-600" />
+              <i className="pi pi-users text-2xl text-brand-500" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">Total Users</p>
-              <p className="text-2xl font-bold text-slate-800">{stats?.total_users || 0}</p>
+              <p className="text-sm text-secondary">Total Users</p>
+              <p className="text-2xl font-bold font-heading text-primary">{stats?.total_users || 0}</p>
             </div>
           </div>
         </Card>
@@ -220,8 +220,8 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
               <i className="pi pi-user-plus text-2xl text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">New ({growthDays}d)</p>
-              <p className="text-2xl font-bold text-slate-800">{totalNewUsers}</p>
+              <p className="text-sm text-secondary">New ({growthDays}d)</p>
+              <p className="text-2xl font-bold font-heading text-primary">{totalNewUsers}</p>
             </div>
           </div>
         </Card>
@@ -232,8 +232,8 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
               <i className="pi pi-bolt text-2xl text-purple-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">Active (24h)</p>
-              <p className="text-2xl font-bold text-slate-800">{stats?.active_users_24h || 0}</p>
+              <p className="text-sm text-secondary">Active (24h)</p>
+              <p className="text-2xl font-bold font-heading text-primary">{stats?.active_users_24h || 0}</p>
             </div>
           </div>
         </Card>
@@ -244,8 +244,8 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
               <i className="pi pi-chart-line text-2xl text-orange-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">Avg Runs/Day</p>
-              <p className="text-2xl font-bold text-slate-800">
+              <p className="text-sm text-secondary">Avg Runs/Day</p>
+              <p className="text-2xl font-bold font-heading text-primary">
                 {growthDays > 0 ? ((stats?.total_runs || 0) / growthDays).toFixed(1) : 0}
               </p>
             </div>
@@ -256,7 +256,7 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
       {/* Growth Chart */}
       <Card className="shadow-md">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-          <h3 className="text-lg font-semibold text-slate-800">User Growth</h3>
+          <h3 className="text-lg font-semibold font-heading text-primary">User Growth</h3>
           <div className="flex items-center gap-2">
             <Dropdown
               value={growthDays}
@@ -276,7 +276,7 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
           {growth.length > 0 ? (
             <Chart type="bar" data={growthChartData} options={growthChartOptions} />
           ) : (
-            <div className="flex items-center justify-center h-full text-slate-400">
+            <div className="flex items-center justify-center h-full text-muted">
               No user growth data available
             </div>
           )}
@@ -286,7 +286,7 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
       {/* Top Users */}
       <Card className="shadow-md">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-          <h3 className="text-lg font-semibold text-slate-800">Top Users</h3>
+          <h3 className="text-lg font-semibold font-heading text-primary">Top Users</h3>
           <Dropdown
             value={topUsersDays}
             options={topUsersPeriodOptions}
@@ -303,8 +303,8 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
           >
             <Column header="Rank" body={rankTemplate} style={{ width: '60px' }} />
             <Column header="User" body={userTemplate} />
-            <Column header="Activity" body={runsTemplate} style={{ width: '180px' }} />
-            <Column header="Success Rate" body={successTemplate} style={{ width: '180px' }} />
+            <Column header="Activity" body={runsTemplate} />
+            <Column header="Success Rate" body={successTemplate} />
           </DataTable>
         </div>
       </Card>

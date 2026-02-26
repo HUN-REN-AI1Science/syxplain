@@ -19,7 +19,7 @@ export const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
   onConfirm,
 }) => {
   const footer = (
-    <div className="flex flex-col sm:flex-row gap-3 sm:justify-end pt-4 border-t border-slate-200 mt-4">
+    <div className="flex flex-col sm:flex-row gap-3 sm:justify-end pt-4 border-t border-[var(--color-border)] mt-4">
       <Button
         label="Cancel"
         icon="pi pi-times"
@@ -67,25 +67,25 @@ export const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
       draggable={false}
     >
       <div className="py-4">
-        <p className="text-slate-700 mb-4">
+        <p className="text-primary mb-4">
           This action <span className="font-semibold text-red-600">cannot be undone</span>. Deleting
           your account will permanently remove:
         </p>
         <ul className="space-y-2 mb-4">
-          <li className="flex items-center gap-2 text-slate-600">
+          <li className="flex items-center gap-2 text-secondary">
             <i className="pi pi-check-circle text-red-400"></i>
             All your analysis runs and results
           </li>
-          <li className="flex items-center gap-2 text-slate-600">
+          <li className="flex items-center gap-2 text-secondary">
             <i className="pi pi-check-circle text-red-400"></i>
             All uploaded files and datasets
           </li>
-          <li className="flex items-center gap-2 text-slate-600">
+          <li className="flex items-center gap-2 text-secondary">
             <i className="pi pi-check-circle text-red-400"></i>
             Your account and login credentials
           </li>
         </ul>
-        <p className="text-slate-700 font-medium">
+        <p className="text-primary font-medium">
           You will need to register again to use Syxplain.
         </p>
       </div>

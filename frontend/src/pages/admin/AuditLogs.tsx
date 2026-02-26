@@ -162,7 +162,7 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
   const targetTemplate = (rowData: AuditLogEntry) => (
     <div className="flex flex-col">
       <span className="text-sm">{rowData.target_type}</span>
-      <span className="text-xs text-slate-400 font-mono">
+      <span className="text-xs text-muted font-mono">
         {rowData.target_id.substring(0, 12)}...
       </span>
     </div>
@@ -175,7 +175,7 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
   const adminTemplate = (rowData: AuditLogEntry) => (
     <div className="flex flex-col">
       <span className="text-sm">{rowData.admin_email}</span>
-      {rowData.ip_address && <span className="text-xs text-slate-400">{rowData.ip_address}</span>}
+      {rowData.ip_address && <span className="text-xs text-muted">{rowData.ip_address}</span>}
     </div>
   );
 
@@ -188,7 +188,7 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
         tooltip="View Details"
       />
     ) : (
-      <span className="text-slate-400">-</span>
+      <span className="text-muted">-</span>
     );
 
   const actionOptions = filterOptions?.actions.map((a) => ({ label: a, value: a })) || [];
@@ -199,7 +199,7 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
       {/* Filters Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
         <div>
-          <label className="block text-sm text-slate-600 mb-1">Action</label>
+          <label className="block text-sm text-secondary mb-1">Action</label>
           <Dropdown
             value={actionFilter}
             options={[{ label: 'All Actions', value: null }, ...actionOptions]}
@@ -213,7 +213,7 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
           />
         </div>
         <div>
-          <label className="block text-sm text-slate-600 mb-1">Admin</label>
+          <label className="block text-sm text-secondary mb-1">Admin</label>
           <Dropdown
             value={adminFilter}
             options={[{ label: 'All Admins', value: null }, ...adminOptions]}
@@ -227,7 +227,7 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
           />
         </div>
         <div>
-          <label className="block text-sm text-slate-600 mb-1">Target</label>
+          <label className="block text-sm text-secondary mb-1">Target</label>
           <Dropdown
             value={targetTypeFilter}
             options={targetTypeOptions}
@@ -239,7 +239,7 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
           />
         </div>
         <div>
-          <label className="block text-sm text-slate-600 mb-1">From</label>
+          <label className="block text-sm text-secondary mb-1">From</label>
           <Calendar
             value={dateFrom}
             onChange={(e) => {
@@ -251,7 +251,7 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
           />
         </div>
         <div>
-          <label className="block text-sm text-slate-600 mb-1">To</label>
+          <label className="block text-sm text-secondary mb-1">To</label>
           <Calendar
             value={dateTo}
             onChange={(e) => {
@@ -308,11 +308,11 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
         paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
         currentPageReportTemplate="Showing {first} to {last} of {totalRecords} logs"
       >
-        <Column field="created_at" header="Date" body={dateTemplate} style={{ width: '160px' }} />
-        <Column header="Admin" body={adminTemplate} style={{ width: '220px' }} />
-        <Column header="Action" body={actionTemplate} style={{ width: '180px' }} />
-        <Column header="Target" body={targetTemplate} style={{ width: '180px' }} />
-        <Column header="Details" body={detailsTemplate} style={{ width: '80px' }} />
+        <Column field="created_at" header="Date" body={dateTemplate} />
+        <Column header="Admin" body={adminTemplate} />
+        <Column header="Action" body={actionTemplate} />
+        <Column header="Target" body={targetTemplate} />
+        <Column header="Details" body={detailsTemplate} />
       </DataTable>
 
       {/* Detail Dialog */}
@@ -326,15 +326,15 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-slate-500">Date</label>
+                <label className="text-sm text-secondary">Date</label>
                 <p>{new Date(selectedLog.created_at).toLocaleString()}</p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">Admin</label>
+                <label className="text-sm text-secondary">Admin</label>
                 <p>{selectedLog.admin_email}</p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">Action</label>
+                <label className="text-sm text-secondary">Action</label>
                 <p>
                   <Tag
                     value={selectedLog.action}
@@ -343,14 +343,14 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
                 </p>
               </div>
               <div>
-                <label className="text-sm text-slate-500">Target</label>
+                <label className="text-sm text-secondary">Target</label>
                 <p>
                   {selectedLog.target_type}/{selectedLog.target_id}
                 </p>
               </div>
               {selectedLog.ip_address && (
                 <div>
-                  <label className="text-sm text-slate-500">IP Address</label>
+                  <label className="text-sm text-secondary">IP Address</label>
                   <p className="font-mono">{selectedLog.ip_address}</p>
                 </div>
               )}
@@ -358,8 +358,8 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
 
             {selectedLog.details && (
               <div>
-                <label className="text-sm text-slate-500">Details</label>
-                <pre className="bg-slate-50 p-3 rounded text-sm overflow-auto max-h-48 font-mono">
+                <label className="text-sm text-secondary">Details</label>
+                <pre className="bg-surface-alt p-3 rounded text-sm overflow-auto max-h-48 font-mono">
                   {JSON.stringify(selectedLog.details, null, 2)}
                 </pre>
               </div>

@@ -47,10 +47,10 @@ export const ResultsHeader: React.FC<ResultsHeaderProps> = ({
   const statusConfig = getStatusConfig(status, statusMessage);
 
   return (
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-4 border-b border-slate-100 gap-4">
+    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-4 border-b border-[var(--color-border)] gap-4">
       <div>
         <div className="flex items-center gap-2">
-          <h2 className="text-xl font-bold text-slate-800">{title}</h2>
+          <h2 className="font-heading text-xl font-bold text-primary">{title}</h2>
           <HelpButton title="Understanding Analysis Results">
             <h4>What's in the Results?</h4>
             <p>
@@ -86,7 +86,7 @@ export const ResultsHeader: React.FC<ResultsHeaderProps> = ({
             </ul>
           </HelpButton>
         </div>
-        {subtitle && <p className="text-sm text-slate-500">{subtitle}</p>}
+        {subtitle && <p className="text-sm text-secondary">{subtitle}</p>}
       </div>
 
       <div className="flex items-center space-x-3 w-full md:w-auto">

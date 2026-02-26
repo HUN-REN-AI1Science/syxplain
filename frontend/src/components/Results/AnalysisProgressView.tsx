@@ -25,54 +25,58 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
 }) => {
   return (
     <div className="text-center py-20">
-      <div className="max-w-md mx-auto mb-6">
+      {/* Hero: percentage number */}
+      <div aria-live="polite" className="mb-6">
         {isInQueuePhase ? (
-          <>
-            <ProgressBar
-              mode="indeterminate"
-              style={{ height: '8px' }}
-              className="mb-2 progress-bar-shimmer"
-            />
-            <p className="text-lg font-semibold text-blue-600">Waiting in queue...</p>
-          </>
+          <p className="text-4xl font-heading font-bold text-brand-500 mb-2">
+            Queued<span className="queue-pulse">...</span>
+          </p>
         ) : (
-          <>
-            <ProgressBar
-              value={displayProgress}
-              showValue={false}
-              style={{ height: '8px' }}
-              className="mb-2"
-            />
-            <p className="text-lg font-semibold text-blue-600">
-              {Math.floor(displayProgress)}% complete
-            </p>
-          </>
+          <p className="text-4xl font-heading font-bold text-brand-500 mb-2">
+            {Math.floor(displayProgress)}%
+          </p>
         )}
       </div>
 
-      {/* Step Description */}
-      <div className="h-8 mb-4">
-        <p className="text-base font-medium text-slate-400">{stepDescription}</p>
+      {/* Progress bar */}
+      <div className="max-w-md mx-auto mb-6">
+        {isInQueuePhase ? (
+          <ProgressBar
+            mode="indeterminate"
+            style={{ height: '6px', borderRadius: '9999px' }}
+            className="progress-bar-shimmer"
+          />
+        ) : (
+          <ProgressBar
+            value={displayProgress}
+            showValue={false}
+            style={{ height: '6px', borderRadius: '9999px' }}
+          />
+        )}
       </div>
 
-      {/* Subtle Separator */}
-      <hr className="max-w-md mx-auto border-slate-200 mb-6" />
+      {/* Step Description with crossfade */}
+      <div className="h-8 mb-4" aria-live="polite">
+        <p key={stepDescription} className="text-base font-medium text-muted step-description-animate">
+          {stepDescription}
+        </p>
+      </div>
 
-      <h3 className="text-xl font-semibold text-slate-800 mt-4 mb-2">
+      <hr className="max-w-md mx-auto border-[var(--color-border)] mb-6" />
+
+      <h3 className="font-heading text-xl font-semibold text-primary mt-4 mb-2">
         {isInQueuePhase ? 'Waiting for resources...' : 'AI is analyzing your data'}
-        {isInQueuePhase && <span className="queue-pulse ml-2 text-blue-500">...</span>}
       </h3>
-      <p className="text-slate-500 max-w-md mx-auto mb-4">
+      <p className="text-secondary max-w-md mx-auto mb-4">
         Discovering mathematical equations and computing feature importance using symbolic
         regression.
       </p>
 
-      {/* Only show "safe to leave" message once the job is actively running on the cluster */}
       {isJobSubmitted && (
-        <p className="text-slate-600 text-sm max-w-md mx-auto">
+        <div className="max-w-md mx-auto bg-surface-alt rounded-lg px-4 py-3 text-sm text-secondary">
           You can safely leave this page. Your results will be available in the{' '}
           <span className="font-semibold">History</span> menu once completed.
-        </p>
+        </div>
       )}
     </div>
   );

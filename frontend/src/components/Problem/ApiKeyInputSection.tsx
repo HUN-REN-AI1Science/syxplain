@@ -31,7 +31,7 @@ interface ApiKeyInputSectionProps {
 const ApiKeyHelpContent = () => (
   <div className="space-y-4">
     <div>
-      <h4 className="font-semibold text-slate-700 mb-2">Security & Privacy</h4>
+      <h4 className="font-heading font-semibold text-secondary mb-2">Security & Privacy</h4>
       <ul className="list-disc pl-5 space-y-1">
         <li>
           <strong>Your keys are never stored</strong> - They exist only in memory during the
@@ -47,16 +47,16 @@ const ApiKeyHelpContent = () => (
     </div>
 
     <div>
-      <h4 className="font-semibold text-slate-700 mb-2">Estimated Token Usage</h4>
+      <h4 className="font-heading font-semibold text-secondary mb-2">Estimated Token Usage</h4>
       <p className="text-sm">
         A typical analysis uses approximately <strong>5,000-15,000 tokens</strong> depending on data
         complexity. Deep research may use additional tokens.
       </p>
     </div>
 
-    <div className="bg-blue-50 p-3 rounded">
-      <h4 className="font-semibold text-blue-800 mb-1">Want to Use Built-in API Keys?</h4>
-      <p className="text-sm text-blue-700">
+    <div className="bg-brand-50 p-3 rounded">
+      <h4 className="font-heading font-semibold text-primary mb-1">Want to Use Built-in API Keys?</h4>
+      <p className="text-sm text-secondary">
         If you'd like access to the built-in HUN-REN API keys (no personal key required), please
         contact the system administrators to request access privileges.
       </p>
@@ -87,102 +87,103 @@ export const ApiKeyInputSection: React.FC<ApiKeyInputSectionProps> = ({
   }));
 
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
-      <div className="flex items-start mb-4">
-        <i className="pi pi-key text-blue-500 mr-3 mt-1 text-xl" />
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h4 className="font-semibold text-slate-700">Google Gemini API Key Required</h4>
-            <HelpButton title="How Your API Keys Are Used">
-              <ApiKeyHelpContent />
-            </HelpButton>
-          </div>
-          <p className="text-sm text-slate-600 mt-1">
-            Your API key is used only for this analysis session and is <strong>never stored</strong>{' '}
-            on our servers.
+    <div className="space-y-3 mb-4">
+      {/* Security disclaimer — standalone banner, applies to all keys */}
+      <div className="flex items-start gap-3 bg-brand-50 border border-[var(--color-border)] rounded-lg px-4 py-3">
+        <i className="pi pi-shield text-brand-500 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-secondary">
+            Your API keys are used only for this analysis session and are{' '}
+            <strong>never stored</strong> on our servers.
           </p>
-          <p className="text-sm text-slate-500 mt-2">
-            <i className="pi pi-info-circle mr-1" />
+          <p className="text-xs text-muted mt-1">
             Want to use built-in API keys instead? Contact your administrator to request access.
           </p>
         </div>
+        <HelpButton title="How Your API Keys Are Used">
+          <ApiKeyHelpContent />
+        </HelpButton>
       </div>
 
-      {geminiError && <Message severity="error" text={geminiError} className="mb-4 w-full" />}
-
-      {geminiValidationStatus === 'valid' && (
-        <Message
-          severity="success"
-          text="Gemini API key validated successfully."
-          className="mb-4 w-full"
-        />
-      )}
-
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Google Gemini API Key
-          </label>
-          <InputText
-            type="password"
-            value={geminiApiKey}
-            onChange={(e) => onGeminiApiKeyChange(e.target.value)}
-            placeholder="AIza..."
-            className="w-full"
-          />
-          <small className="text-slate-500">
-            Get your API key from{' '}
-            <a
-              href="https://aistudio.google.com/apikey"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
-            >
-              aistudio.google.com/apikey
-            </a>
-          </small>
+      {/* Google Gemini card */}
+      <div className="bg-surface-alt border border-[var(--color-border)] rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-0.5">
+          <h4 className="font-heading font-semibold text-secondary">Google Gemini</h4>
         </div>
+        <p className="text-sm text-muted mb-4">Default LLM for running Syxplain.</p>
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Model</label>
-          <Dropdown
-            value={geminiModel}
-            options={modelOptions}
-            onChange={(e) => onGeminiModelChange(e.value)}
-            className="w-full"
-            disabled={geminiModels.length === 0}
+        {geminiError && <Message severity="error" text={geminiError} className="mb-3 w-full" />}
+
+        {geminiValidationStatus === 'valid' && (
+          <Message
+            severity="success"
+            text="Gemini API key validated successfully."
+            className="mb-3 w-full"
           />
-        </div>
-      </div>
+        )}
 
-      {/* OpenAI API Key for Deep Research */}
-      {showOpenAiInput && (
-        <div className="mt-6 pt-4 border-t border-slate-200">
-          <div className="flex items-start mb-3">
-            <i className="pi pi-search text-amber-500 mr-3 mt-1 text-lg" />
-            <div>
-              <h4 className="font-semibold text-slate-700">OpenAI API Key for Deep Research</h4>
-              <p className="text-sm text-slate-600 mt-1">
-                Deep research performs scientific literature search using an OpenAI model.
-              </p>
-            </div>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-secondary mb-1">API Key</label>
+            <InputText
+              type="password"
+              value={geminiApiKey}
+              onChange={(e) => onGeminiApiKeyChange(e.target.value)}
+              placeholder="AIza..."
+              className="w-full"
+            />
+            <small className="text-muted">
+              Get your key from{' '}
+              <a
+                href="https://aistudio.google.com/apikey"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-link hover:underline"
+              >
+                aistudio.google.com/apikey
+              </a>
+            </small>
           </div>
 
-          {openaiError && <Message severity="error" text={openaiError} className="mb-4 w-full" />}
+          <div>
+            <label className="block text-sm font-medium text-secondary mb-1">Model</label>
+            <Dropdown
+              value={geminiModel}
+              options={modelOptions}
+              onChange={(e) => onGeminiModelChange(e.value)}
+              className="w-full"
+              disabled={geminiModels.length === 0}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* OpenAI card — only when deep research is selected */}
+      {showOpenAiInput && (
+        <div className="bg-surface-alt border border-[var(--color-border)] rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-0.5">
+            <h4 className="font-heading font-semibold text-secondary">OpenAI</h4>
+            <span className="text-xs font-medium text-muted bg-[var(--color-border)] rounded-full px-2 py-0.5">
+              Deep Research
+            </span>
+          </div>
+          <p className="text-sm text-muted mb-4">
+            Scientific literature search using an OpenAI model.
+          </p>
+
+          {openaiError && <Message severity="error" text={openaiError} className="mb-3 w-full" />}
 
           {openaiValidationStatus === 'valid' && (
             <Message
               severity="success"
               text="OpenAI API key validated successfully."
-              className="mb-4 w-full"
+              className="mb-3 w-full"
             />
           )}
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                OpenAI API Key
-              </label>
+              <label className="block text-sm font-medium text-secondary mb-1">API Key</label>
               <InputText
                 type="password"
                 value={openaiApiKey}
@@ -190,13 +191,13 @@ export const ApiKeyInputSection: React.FC<ApiKeyInputSectionProps> = ({
                 placeholder="sk-..."
                 className="w-full"
               />
-              <small className="text-slate-500">
-                Get your API key from{' '}
+              <small className="text-muted">
+                Get your key from{' '}
                 <a
                   href="https://platform.openai.com/api-keys"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
+                  className="text-link hover:underline"
                 >
                   platform.openai.com/api-keys
                 </a>
@@ -204,7 +205,7 @@ export const ApiKeyInputSection: React.FC<ApiKeyInputSectionProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Model</label>
+              <label className="block text-sm font-medium text-secondary mb-1">Model</label>
               <Dropdown
                 value={openaiModel}
                 options={openaiModels.map((m, index) => ({

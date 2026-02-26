@@ -9,9 +9,12 @@ import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
 import { Tooltip } from 'primereact/tooltip';
+import { History } from 'lucide-react';
 import { runsService } from '@services/api';
 import { HistoryFilterBar } from '@components/History';
+import EmptyState from '@components/EmptyState';
 import HelpButton from '@components/HelpButton';
+import { useIsMobile } from '@hooks/useIsMobile';
 import type { RunSummary } from '@/types';
 
 // ============================================================================
@@ -52,6 +55,8 @@ const formatDuration = (startTime?: string | null, finishTime?: string | null): 
 // ============================================================================
 
 const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
+  const isMobile = useIsMobile();
+
   // Data state
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,7 +191,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-2">
-          <h2 className="text-2xl font-bold text-slate-800">Run History</h2>
+          <h2 className="font-heading text-2xl font-bold text-primary">Run History</h2>
           <HelpButton title="Run History">
             <h4>Run Statuses</h4>
             <ul>
@@ -214,7 +219,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
             </p>
           </HelpButton>
         </div>
-        <p className="text-slate-500">View your past analysis runs</p>
+        <p className="text-secondary">View your past analysis runs</p>
       </div>
 
       {/* Filter Bar */}
@@ -251,17 +256,17 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
           sortField={sortField}
           sortOrder={sortOrder}
           onSort={onSort}
-          emptyMessage="No runs found"
-          className="w-full min-w-[600px]"
+          emptyMessage={<EmptyState icon={History} title="No analysis runs yet" subtitle="Start a new analysis from the Upload step to see your results here." />}
+          className="w-full"
           paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport"
           currentPageReportTemplate="Showing {first} to {last} of {totalRecords} runs"
         >
           <Column field="created_at" header="Date" body={dateTemplate} sortable />
           <Column field="csv_filename" header="Dataset" sortable />
-          <Column field="target_variable" header="Target Variable" sortable />
+          {!isMobile && <Column field="target_variable" header="Target Variable" sortable />}
           <Column field="analysis_type" header="Type" body={analysisTypeTemplate} sortable />
           <Column field="status" header="Status" body={statusTemplate} sortable />
-          <Column header="Duration" body={durationTemplate} />
+          {!isMobile && <Column header="Duration" body={durationTemplate} />}
           <Column header="Actions" body={actionTemplate} />
         </DataTable>
       </div>

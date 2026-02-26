@@ -65,19 +65,17 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
 
   const headerTemplate = (options: PanelHeaderTemplateOptions) => {
     return (
-      <div className="flex items-center justify-between w-full pr-2">
+      <div className="flex items-center justify-between w-full px-4 py-3">
         <div className="flex items-center">
-          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg flex items-center justify-center mr-3">
-            <i className="pi pi-cog text-white text-lg"></i>
-          </div>
-          <span className="text-lg font-bold text-slate-800">Run Configuration</span>
+          <i className="pi pi-cog text-muted text-lg mr-3"></i>
+          <span className="text-lg font-bold text-primary font-heading">Run Configuration</span>
         </div>
         <button
-          className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
+          className="w-8 h-8 rounded-lg bg-surface-alt hover:bg-surface-alt flex items-center justify-center transition-colors"
           onClick={options.onTogglerClick}
         >
           <i
-            className={`pi ${options.collapsed ? 'pi-chevron-down' : 'pi-chevron-up'} text-slate-500 text-sm`}
+            className={`pi ${options.collapsed ? 'pi-chevron-down' : 'pi-chevron-up'} text-secondary text-sm`}
           ></i>
         </button>
       </div>
@@ -105,7 +103,7 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
         toggleable
         collapsed={collapsed}
         onToggle={handleToggle}
-        className="run-settings-panel bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
+        className="run-settings-panel bg-surface rounded-xl border border-[var(--color-border)] shadow-sm overflow-hidden"
       >
         {/* Loading State */}
         {loading && (
@@ -114,7 +112,7 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
               <div className="w-full max-w-md mb-4">
                 <ProgressBar mode="indeterminate" style={{ height: '6px' }} />
               </div>
-              <p className="text-slate-500 text-sm">Loading run configuration...</p>
+              <p className="text-secondary text-sm">Loading run configuration...</p>
             </div>
           </div>
         )}
@@ -142,16 +140,14 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
             {/* Top row: Dataset Info and Target Variable */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Dataset Info Card */}
-              <div className="lg:col-span-2 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-5 border border-slate-200">
+              <div className="lg:col-span-2 bg-surface-alt rounded-xl p-5 border border-[var(--color-border)]">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
-                      <i className="pi pi-file text-blue-600 text-lg"></i>
-                    </div>
+                    <i className="pi pi-file text-muted text-lg mr-3 flex-shrink-0"></i>
                     <div className="min-w-0">
-                      <h4 className="font-bold text-slate-800">Dataset</h4>
+                      <h4 className="font-bold text-primary">Dataset</h4>
                       <p
-                        className="text-sm text-slate-500 font-mono truncate"
+                        className="text-sm text-secondary font-mono truncate"
                         title={csv_metadata?.filename}
                       >
                         {csv_metadata?.filename || runDetails.csv_filename}
@@ -166,37 +162,35 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
                     onClick={handleDownloadCsv}
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-white rounded-lg p-3 text-center border border-slate-100">
-                    <div className="text-2xl font-bold text-slate-800">
+                <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                  <div className="bg-surface rounded-lg p-3 text-center border border-[var(--color-border)]">
+                    <div className="text-xl sm:text-2xl font-bold text-primary">
                       {csv_metadata?.row_count?.toLocaleString() ?? '-'}
                     </div>
-                    <div className="text-xs text-slate-500 uppercase tracking-wider mt-1">Rows</div>
+                    <div className="text-xs text-secondary uppercase tracking-wider mt-1">Rows</div>
                   </div>
-                  <div className="bg-white rounded-lg p-3 text-center border border-slate-100">
-                    <div className="text-2xl font-bold text-slate-800">
+                  <div className="bg-surface rounded-lg p-3 text-center border border-[var(--color-border)]">
+                    <div className="text-xl sm:text-2xl font-bold text-primary">
                       {csv_metadata?.column_count ?? '-'}
                     </div>
-                    <div className="text-xs text-slate-500 uppercase tracking-wider mt-1">
+                    <div className="text-xs text-secondary uppercase tracking-wider mt-1">
                       Columns
                     </div>
                   </div>
-                  <div className="bg-white rounded-lg p-3 text-center border border-slate-100">
-                    <div className="text-2xl font-bold text-slate-800">
+                  <div className="bg-surface rounded-lg p-3 text-center border border-[var(--color-border)]">
+                    <div className="text-xl sm:text-2xl font-bold text-primary">
                       {csv_metadata?.size_bytes ? formatFileSize(csv_metadata.size_bytes) : '-'}
                     </div>
-                    <div className="text-xs text-slate-500 uppercase tracking-wider mt-1">Size</div>
+                    <div className="text-xs text-secondary uppercase tracking-wider mt-1">Size</div>
                   </div>
                 </div>
               </div>
 
               {/* Target Variable Card */}
-              <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl p-5 border border-green-200">
+              <div className="bg-surface-alt rounded-xl p-5 border border-[var(--color-border)]">
                 <div className="flex items-center mb-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
-                    <i className="pi pi-compass text-green-600 text-lg"></i>
-                  </div>
-                  <h4 className="font-bold text-slate-800">Target Variable</h4>
+                  <i className="pi pi-flag text-muted text-lg mr-3 flex-shrink-0"></i>
+                  <h4 className="font-bold text-primary">Target Variable</h4>
                 </div>
                 <div className="flex items-center justify-center py-4">
                   <Tag
@@ -205,7 +199,7 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
                     className="text-lg px-4 py-2 font-mono"
                   />
                 </div>
-                <p className="text-center text-sm text-slate-500 mt-2">
+                <p className="text-center text-sm text-secondary mt-2">
                   The variable being predicted
                 </p>
               </div>
@@ -213,20 +207,16 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
 
             {/* Analysis Mode - Compact */}
             <div
-              className={`rounded-xl p-4 border ${runDetails.analysis_type === 'deep' ? 'bg-gradient-to-br from-blue-50 to-cyan-100 border-blue-200' : 'bg-gradient-to-br from-orange-50 to-amber-100 border-orange-200'}`}
+              className="rounded-xl p-4 border bg-surface-alt border-[var(--color-border)]"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <div
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center mr-3 flex-shrink-0 ${runDetails.analysis_type === 'deep' ? 'bg-blue-100' : 'bg-orange-100'}`}
-                  >
-                    <i
-                      className={`pi ${runDetails.analysis_type === 'deep' ? 'pi-search text-blue-600' : 'pi-bolt text-orange-600'} text-lg`}
-                    ></i>
-                  </div>
+                  <i
+                    className={`pi ${runDetails.analysis_type === 'deep' ? 'pi-search' : 'pi-bolt'} text-muted text-lg mr-3 flex-shrink-0`}
+                  ></i>
                   <div>
-                    <h4 className="font-bold text-slate-800">Analysis Mode</h4>
-                    <p className="text-sm text-slate-500">
+                    <h4 className="font-bold text-primary">Analysis Mode</h4>
+                    <p className="text-sm text-secondary">
                       {runDetails.analysis_type === 'deep'
                         ? 'Enhanced with scientific literature research'
                         : 'Standard analysis workflow'}
@@ -242,41 +232,37 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
             </div>
 
             {/* Project Description */}
-            <div className="bg-gradient-to-br from-blue-50 to-slate-50 rounded-xl p-5 border border-blue-100">
+            <div className="bg-surface-alt rounded-xl p-5 border border-[var(--color-border)]">
               <div className="flex items-center mb-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
-                  <i className="pi pi-info-circle text-blue-600 text-lg"></i>
-                </div>
-                <h4 className="font-bold text-slate-800">Project Description</h4>
+                <i className="pi pi-pencil text-muted text-lg mr-3 flex-shrink-0"></i>
+                <h4 className="font-bold text-primary">Project Description</h4>
               </div>
-              <p className="text-slate-700 leading-relaxed whitespace-pre-wrap pl-[52px]">
+              <p className="text-primary leading-relaxed whitespace-pre-wrap">
                 {problem_description?.project_description || 'No description provided.'}
               </p>
             </div>
 
             {/* Features - Table Layout */}
             {featureEntries.length > 0 && (
-              <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl p-5 border border-slate-200">
+              <div className="bg-surface-alt rounded-xl p-5 border border-[var(--color-border)]">
                 <div className="flex items-center mb-4">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
-                    <i className="pi pi-list text-blue-600 text-lg"></i>
-                  </div>
+                  <i className="pi pi-list text-muted text-lg mr-3 flex-shrink-0"></i>
                   <div>
-                    <h4 className="font-bold text-slate-800">Feature Descriptions</h4>
-                    <p className="text-sm text-slate-500">
+                    <h4 className="font-bold text-primary">Feature Descriptions</h4>
+                    <p className="text-sm text-secondary">
                       {featureEntries.length} features used in analysis
                     </p>
                   </div>
                 </div>
 
                 {/* Table-like feature list */}
-                <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div className="bg-surface rounded-lg border border-[var(--color-border)] overflow-hidden">
                   {/* Table Header */}
-                  <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-slate-50 border-b border-slate-200">
-                    <div className="col-span-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  <div className="hidden sm:grid grid-cols-12 gap-2 sm:gap-4 px-4 py-3 bg-surface-alt border-b border-[var(--color-border)]">
+                    <div className="sm:col-span-4 text-xs font-semibold text-secondary uppercase tracking-wider">
                       Feature Name
                     </div>
-                    <div className="col-span-8 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                    <div className="sm:col-span-8 text-xs font-semibold text-secondary uppercase tracking-wider">
                       Description
                     </div>
                   </div>
@@ -286,24 +272,24 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
                     {featureEntries.map(([featureName, description], index) => (
                       <div
                         key={featureName}
-                        className={`grid grid-cols-12 gap-4 px-4 py-3 items-center hover:bg-blue-50 transition-colors ${
-                          index !== featureEntries.length - 1 ? 'border-b border-slate-100' : ''
+                        className={`grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 px-4 py-3 items-center hover:bg-brand-50 transition-colors ${
+                          index !== featureEntries.length - 1 ? 'border-b border-[var(--color-border)]' : ''
                         }`}
                       >
-                        <div className="col-span-4 flex items-center min-w-0">
-                          <div className="w-6 h-6 bg-slate-100 rounded flex items-center justify-center mr-2 flex-shrink-0">
-                            <i className="pi pi-database text-slate-400 text-xs"></i>
+                        <div className="sm:col-span-4 flex items-center min-w-0">
+                          <div className="w-6 h-6 bg-surface-alt rounded flex items-center justify-center mr-2 flex-shrink-0">
+                            <i className="pi pi-database text-muted text-xs"></i>
                           </div>
                           <code
-                            className="text-sm font-semibold text-blue-700 truncate"
+                            className="text-sm font-semibold text-link truncate"
                             title={featureName}
                           >
                             {featureName}
                           </code>
                         </div>
-                        <div className="col-span-8 text-sm text-slate-600">
+                        <div className="sm:col-span-8 text-sm text-secondary">
                           {description || (
-                            <span className="text-slate-400 italic">No description provided</span>
+                            <span className="text-muted italic">No description provided</span>
                           )}
                         </div>
                       </div>
@@ -315,7 +301,7 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
 
             {/* Run timestamp and duration */}
             {runDetails.created_at && (
-              <div className="flex items-center justify-center text-sm text-slate-400 pt-2">
+              <div className="flex items-center justify-center text-sm text-muted pt-2">
                 <i className="pi pi-clock mr-2"></i>
                 <span>Run started: {new Date(runDetails.created_at).toLocaleString()}</span>
                 {runDetails.start_time && runDetails.finish_time && (

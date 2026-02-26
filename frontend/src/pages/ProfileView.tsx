@@ -121,7 +121,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
     return (
       <div className="flex flex-col items-center justify-center p-6 min-h-[400px]">
         <ProgressSpinner style={{ width: '50px', height: '50px' }} />
-        <p className="mt-4 text-slate-500">Loading profile...</p>
+        <p className="mt-4 text-secondary">Loading profile...</p>
       </div>
     );
   }
@@ -130,8 +130,8 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
     return (
       <div className="flex flex-col items-center justify-center p-6 min-h-[400px]">
         <ProgressSpinner style={{ width: '60px', height: '60px' }} />
-        <p className="mt-4 text-lg text-slate-600">Deleting your account...</p>
-        <p className="text-sm text-slate-500">This may take a moment.</p>
+        <p className="mt-4 text-lg text-primary">Deleting your account...</p>
+        <p className="text-sm text-secondary">This may take a moment.</p>
       </div>
     );
   }
@@ -149,7 +149,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <h2 className="text-2xl font-bold text-slate-800">Profile</h2>
+              <h2 className="font-heading text-2xl font-bold text-primary">Profile</h2>
               <HelpButton title="Your Profile">
                 <h4>Usage Statistics</h4>
                 <p>
@@ -170,7 +170,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
                 </p>
               </HelpButton>
             </div>
-            <p className="text-slate-500">Manage your account settings</p>
+            <p className="text-secondary">Manage your account settings</p>
           </div>
           <Button
             label="Back"

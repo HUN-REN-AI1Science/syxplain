@@ -20,14 +20,12 @@ export const FeaturesSection: React.FC<FeaturesSectionProps> = ({
   featureDescriptions,
   onChange,
 }) => (
-  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-full">
-    <div className="flex items-center mb-4">
-      <div className="bg-purple-100 p-2 rounded-lg mr-3 flex-shrink-0">
-        <i className="pi pi-list text-purple-600 text-lg"></i>
-      </div>
-      <div className="flex-1">
+  <div className="bg-surface p-6 rounded-xl border border-[var(--color-border)] shadow-sm h-full">
+    <div className="flex items-start gap-3 mb-4">
+      <i className="pi pi-list text-muted text-lg mt-1 shrink-0"></i>
+      <div>
         <div className="flex items-center gap-2">
-          <h3 className="text-lg font-bold text-slate-800">Features</h3>
+          <h3 className="text-lg font-heading font-bold text-primary">Features</h3>
           <HelpButton title="Feature Descriptions">
             <h4>Why provide descriptions?</h4>
             <p>
@@ -63,7 +61,7 @@ export const FeaturesSection: React.FC<FeaturesSectionProps> = ({
             </ul>
           </HelpButton>
         </div>
-        <p className="text-sm text-slate-500">Describe your data columns.</p>
+        <p className="text-sm text-secondary">Describe your data columns.</p>
       </div>
     </div>
 
@@ -73,14 +71,14 @@ export const FeaturesSection: React.FC<FeaturesSectionProps> = ({
           col !== targetVariable && (
             <div
               key={col}
-              className="flex flex-col sm:flex-row sm:items-start space-y-2 sm:space-y-0 sm:space-x-4 p-3 bg-slate-50 rounded-lg border border-slate-100 hover:border-blue-200 transition-colors"
+              className="flex flex-col sm:flex-row sm:items-start space-y-2 sm:space-y-0 sm:space-x-4 p-3 bg-surface-alt rounded-lg border border-[var(--color-border)] hover:border-blue-200 transition-colors"
             >
               <div className="w-full sm:w-1/3 flex items-center sm:self-center">
-                <div className="bg-slate-100 p-2 rounded-lg mr-3 flex-shrink-0 w-8 h-8 flex items-center justify-center">
-                  <i className="pi pi-database text-slate-400 text-sm"></i>
+                <div className="bg-surface-alt p-2 rounded-lg mr-3 flex-shrink-0 w-8 h-8 flex items-center justify-center">
+                  <i className="pi pi-database text-muted text-sm"></i>
                 </div>
                 <span
-                  className="text-sm font-mono font-semibold text-slate-700 truncate"
+                  className="text-sm font-mono font-semibold text-secondary truncate"
                   title={col}
                 >
                   {col}
@@ -88,7 +86,7 @@ export const FeaturesSection: React.FC<FeaturesSectionProps> = ({
               </div>
               <div className="w-full sm:w-2/3">
                 <InputTextarea
-                  className="w-full p-inputtext-sm bg-white border-slate-200 resize-none"
+                  className="w-full p-inputtext-sm bg-surface border-[var(--color-border)] resize-none"
                   placeholder={`Description for ${col}`}
                   value={featureDescriptions[col] || ''}
                   onChange={(e) => onChange({ ...featureDescriptions, [col]: e.target.value })}

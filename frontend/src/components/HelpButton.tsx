@@ -1,11 +1,11 @@
 /**
  * HelpButton Component
- * Reusable help button that displays contextual help in a dialog
- * Matches the existing style used in JsonConfigUpload
+ * Inline help icon that opens a contextual help dialog.
+ * Renders as a lightweight inline trigger — not a PrimeReact Button —
+ * so it sits tight against adjacent text without extra spacing.
  */
 
 import React, { useState } from 'react';
-import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
 
 interface HelpButtonProps {
@@ -22,12 +22,18 @@ export const HelpButton: React.FC<HelpButtonProps> = ({ title, children, classNa
 
   return (
     <>
-      <Button
-        icon="pi pi-question-circle"
-        className={`p-button-rounded p-button-text p-button-sm ${className}`}
+      <button
+        type="button"
         onClick={() => setVisible(true)}
         aria-label={`Help: ${title}`}
-      />
+        className={`inline-flex items-center justify-center w-5 h-5 shrink-0
+          text-muted hover:text-brand-500 rounded-full
+          transition-colors duration-fast cursor-pointer
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200
+          ${className}`}
+      >
+        <i className="pi pi-question-circle text-sm" />
+      </button>
 
       <Dialog
         visible={visible}
@@ -38,7 +44,7 @@ export const HelpButton: React.FC<HelpButtonProps> = ({ title, children, classNa
         draggable={false}
         resizable={false}
       >
-        <div className="help-content text-slate-600 leading-relaxed pt-2">{children}</div>
+        <div className="help-content text-secondary leading-relaxed pt-2">{children}</div>
       </Dialog>
     </>
   );

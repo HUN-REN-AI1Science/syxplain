@@ -105,7 +105,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadComplete }) => {
       >
         <div className="text-center mb-6">
           <div className="flex items-center justify-center gap-2 mb-2">
-            <h2 className="text-2xl font-bold text-slate-800">Upload your Dataset</h2>
+            <h2 className="text-2xl font-bold text-primary">Upload your Dataset</h2>
             <HelpButton title="Data Upload Requirements">
               <h4>Supported File Formats</h4>
               <ul>
@@ -146,7 +146,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadComplete }) => {
               </ul>
             </HelpButton>
           </div>
-          <p className="text-slate-500">Supported formats: .csv, .xlsx, .xls</p>
+          <p className="text-secondary text-sm">Supported formats: .csv, .xlsx, .xls</p>
         </div>
 
         <UploadDropZone

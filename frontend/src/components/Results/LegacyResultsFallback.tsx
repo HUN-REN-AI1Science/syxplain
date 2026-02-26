@@ -30,12 +30,12 @@ export const LegacyResultsFallback: React.FC<LegacyResultsFallbackProps> = ({
   };
 
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
+    <div className="bg-surface-alt border border-[var(--color-border)] rounded-xl p-8 text-center">
       <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-        <i className="pi pi-history text-amber-600 text-2xl"></i>
+        <i className="pi pi-history text-amber-600 text-2xl" />
       </div>
-      <h3 className="text-xl font-bold text-slate-800 mb-2">Legacy Run Format</h3>
-      <p className="text-slate-600 max-w-md mx-auto mb-6">
+      <h3 className="font-heading text-xl font-bold text-primary mb-2">Legacy Run Format</h3>
+      <p className="text-secondary max-w-md mx-auto mb-6">
         This analysis was generated using an older format that is no longer displayed in the
         application. You can download the original results as a Markdown file.
       </p>
@@ -43,7 +43,7 @@ export const LegacyResultsFallback: React.FC<LegacyResultsFallbackProps> = ({
         label="Download Results (Markdown)"
         icon="pi pi-download"
         size="large"
-        className="!bg-blue-600 hover:!bg-blue-700 !border-blue-600 !text-white font-semibold px-6 py-3 shadow-lg"
+        className="!bg-brand-500 hover:!bg-brand-600 !border-brand-500 !text-white font-semibold px-6 py-3 shadow-lg"
         onClick={handleDownload}
       />
     </div>

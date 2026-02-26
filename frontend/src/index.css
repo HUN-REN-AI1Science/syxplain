@@ -1,106 +1,185 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@import './styles/design-tokens.css';
+@import './styles/primereact-overrides.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: 'Inter', sans-serif;
-  background-color: #f8fafc;
-  color: #1e293b;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ==========================================================================
+   Base Layer
+   ========================================================================== */
+
+@layer base {
+  body {
+    font-family: var(--font-body);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Global focus-visible */
+  *:focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+
+  /* Skip-to-content link */
+  .skip-to-content {
+    position: absolute;
+    left: -9999px;
+    z-index: 9999;
+    padding: 0.75rem 1.5rem;
+    background: var(--color-brand-500);
+    color: white;
+    font-weight: 600;
+    border-radius: 0 0 var(--radius-md) 0;
+    text-decoration: none;
+  }
+
+  .skip-to-content:focus {
+    left: 0;
+    top: 0;
+  }
+
+  /* Interactive elements cursor */
+  button,
+  [role="button"],
+  a,
+  label[for],
+  select,
+  summary,
+  [tabindex]:not([tabindex="-1"]) {
+    cursor: pointer;
+  }
+
+  /* Button press effect */
+  button:active:not(:disabled),
+  [role="button"]:active:not(:disabled) {
+    transform: scale(0.97);
+  }
 }
 
-/* Custom Scrollbar */
+/* ==========================================================================
+   Scrollbar
+   ========================================================================== */
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--color-surface-alt);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--color-border-hover);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--color-text-muted);
 }
 
-/* Markdown Styles */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: var(--color-surface-alt);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-border-hover);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* ==========================================================================
+   Prose / Markdown
+   ========================================================================== */
+
 .prose h1 {
-  @apply text-2xl font-bold text-slate-900 mb-4;
+  @apply text-2xl font-bold mb-4;
+  font-family: var(--font-heading);
+  color: var(--color-text);
 }
 
 .prose h2 {
-  @apply text-xl font-semibold text-slate-800 mt-6 mb-3;
+  @apply text-xl font-semibold mt-6 mb-3;
+  font-family: var(--font-heading);
+  color: var(--color-text);
 }
 
 .prose h3 {
-  @apply text-lg font-medium text-slate-800 mt-4 mb-2;
+  @apply text-lg font-medium mt-4 mb-2;
+  font-family: var(--font-heading);
+  color: var(--color-text);
 }
 
 .prose p {
   @apply leading-relaxed mb-4;
-  color: #0f172a !important;
+  color: var(--color-text) !important;
 }
 
 .prose ul {
   @apply list-disc list-inside mb-4;
-  color: #0f172a !important;
+  color: var(--color-text) !important;
 }
 
 .prose ol {
   @apply list-decimal list-inside mb-4;
-  color: #0f172a !important;
+  color: var(--color-text) !important;
 }
 
 .prose li {
-  color: #0f172a !important;
+  color: var(--color-text) !important;
 }
 
 .prose li::marker {
-  color: #0f172a !important;
+  color: var(--color-text) !important;
 }
 
 .prose.prose-slate ul,
 .prose.prose-slate ol,
 .prose.prose-slate li {
-  color: #0f172a !important;
+  color: var(--color-text) !important;
 }
 
 .prose.prose-slate li::marker,
 .prose.prose-slate ul li::marker,
 .prose.prose-slate ol li::marker {
-  color: #0f172a !important;
+  color: var(--color-text) !important;
 }
 
-/* Override all prose-slate text colors */
 .prose.prose-slate p,
 .prose.prose-slate strong,
 .prose.prose-slate em,
 .prose.prose-slate span,
 .prose.prose-slate a {
-  color: #0f172a !important;
+  color: var(--color-text) !important;
 }
 
-/* Inline code - light grey background */
 .prose code {
-  @apply bg-slate-100 text-slate-800 px-1 py-0.5 rounded text-sm font-mono;
+  @apply px-1 py-0.5 rounded text-sm;
+  font-family: var(--font-mono);
+  background-color: var(--color-surface-alt);
+  color: var(--color-text);
 }
 
-/* Code blocks - dark background */
 .prose pre {
   @apply p-4 rounded-lg overflow-x-auto mb-4;
   background-color: #1e293b !important;
   color: #e2e8f0 !important;
 }
 
-/* Code inside pre blocks - no background, inherit from pre */
 .prose pre code {
   background-color: transparent !important;
   color: #e2e8f0 !important;
@@ -108,284 +187,137 @@ body {
 }
 
 .prose blockquote {
-  @apply border-l-4 border-blue-500 pl-4 italic text-slate-500 my-4;
+  @apply border-l-4 pl-4 italic my-4;
+  border-color: var(--color-brand-500);
+  color: var(--color-text-secondary);
 }
 
-/* Animations */
+/* ==========================================================================
+   Animations
+   ========================================================================== */
+
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.5s ease-out forwards;
+  animation: fadeIn var(--duration-slow) var(--ease-default) forwards;
 }
 
 .animate-fade-in-up {
-  animation: fadeInUp 0.5s ease-out forwards;
+  animation: fadeInUp var(--duration-slow) var(--ease-spring) forwards;
 }
 
 .animate-slide-up {
-  animation: fadeInUp 0.4s ease-out forwards;
+  animation: fadeInUp var(--duration-slow) var(--ease-spring) forwards;
 }
 
-/* Custom Scrollbar Class (if needed for specific elements) */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
+/* CSSTransition classes for SwitchTransition */
+.fade-enter {
+  opacity: 0;
+  transform: translateY(12px);
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
+.fade-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity var(--duration-normal) var(--ease-default),
+              transform var(--duration-normal) var(--ease-spring);
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+.fade-exit {
+  opacity: 1;
+  transform: translateY(0);
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+.fade-exit-active {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity var(--duration-fast) var(--ease-default),
+              transform var(--duration-fast) var(--ease-default);
 }
 
-/* Steps Customization */
-.custom-steps .p-steps-item:before {
-  border-top: 2px solid #e2e8f0 !important;
-  top: 50% !important;
-}
-
-.custom-steps .p-steps-item.p-highlight:before {
-  border-top: 2px solid #0052cc !important;
-}
-
-.custom-steps .p-steps-item.p-highlight .p-steps-number {
-  background: #0052cc !important;
-  border-color: #0052cc !important;
-  color: white !important;
-}
-
-.custom-steps .p-steps-item .p-steps-number {
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-.custom-steps .p-steps-item.p-highlight .p-steps-title {
-  font-weight: 600;
-  color: #0052cc !important;
-}
-.custom-steps .p-steps-title {
-  font-weight: 500;
-  margin-top: 0.5rem;
-}
-
-/* Force Password component to be full width */
-.p-password {
-  width: 100% !important;
-  display: block !important;
-}
-
-.p-password .p-inputtext {
-  width: 100% !important;
-}
-
-/* Add more padding to input fields */
-.p-inputtext {
-  padding: 0.875rem 1rem !important;
-}
-
-.p-password .p-inputtext {
-  padding: 0.875rem 1rem !important;
-}
-
-/* SelectButton Customization */
-.p-selectbutton .p-button.p-highlight {
-  background: #0052cc !important;
-  border-color: #0052cc !important;
-  color: white !important;
-}
-
-.p-selectbutton .p-button.p-highlight:hover {
-  background: #0047b3 !important;
-  border-color: #0047b3 !important;
-}
-
-.p-selectbutton .p-button:not(.p-highlight) {
-  background: #f8fafc !important;
-  border-color: #e2e8f0 !important;
-  color: #475569 !important;
-}
-
-.p-selectbutton .p-button:not(.p-highlight):hover {
-  background: #f1f5f9 !important;
-  border-color: #cbd5e1 !important;
-}
-
-/* Run Settings Panel */
-.run-settings-panel .p-panel-header {
-  background: transparent !important;
-  border: none !important;
-  padding: 1rem 1.25rem !important;
-}
-
-.run-settings-panel .p-panel-content {
-  padding: 0 1.25rem 1.25rem !important;
-  border: none !important;
-}
-
-.run-settings-panel .p-panel-toggler {
-  background: #f1f5f9 !important;
-  border-radius: 0.5rem !important;
-  width: 2rem !important;
-  height: 2rem !important;
-}
-
-.run-settings-panel .p-panel-toggler:hover {
-  background: #e2e8f0 !important;
-}
-
-/* Custom Progress Bar - Blue color */
-.p-progressbar .p-progressbar-value {
-  background: linear-gradient(90deg, #0052cc, #0066ff) !important;
-}
-
-.p-progressbar {
-  background: #e2e8f0 !important;
-}
-
-/* Indeterminate progress bar - ensure animation loops infinitely */
-.p-progressbar-indeterminate .p-progressbar-value {
-  background: transparent !important;
-}
-
-.p-progressbar-indeterminate .p-progressbar-value::before {
-  background: linear-gradient(90deg, #0052cc, #0066ff) !important;
-  animation: p-progressbar-indeterminate-anim 3s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
-}
-
-@keyframes p-progressbar-indeterminate-anim {
-  0% {
-    left: -35%;
-    right: 100%;
-  }
-
-  60% {
-    left: 100%;
-    right: -90%;
-  }
-
-  100% {
-    left: 100%;
-    right: -90%;
-  }
-}
-
-/* Citation Reference Links */
-.citation-link {
-  color: #0052cc;
-  cursor: pointer;
-  text-decoration: none;
-  transition: all 0.15s ease;
-}
-
-.citation-link:hover {
-  text-decoration: underline;
-  color: #0047b3;
-}
-
-/* Data Export SplitButton Styling */
-.data-export-button .p-button {
-  background: #059669 !important;
-  border-color: #059669 !important;
-  color: white !important;
-  font-weight: 600;
-  padding: 0.5rem 0.75rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.data-export-button .p-button:hover {
-  background: #047857 !important;
-  border-color: #047857 !important;
-}
-
-.data-export-button .p-button:focus {
-  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2) !important;
-}
-
-.data-export-button .p-splitbutton-menubutton {
-  border-left-color: rgba(255, 255, 255, 0.3) !important;
-}
-
-/* Per-Equation Export Button - Smaller variant */
-.equation-export-button .p-button {
-  background: #059669 !important;
-  border-color: #059669 !important;
-  color: white !important;
-  font-weight: 500;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-}
-
-.equation-export-button .p-button:hover {
-  background: #047857 !important;
-  border-color: #047857 !important;
-}
-
-.equation-export-button .p-splitbutton-menubutton {
-  border-left-color: rgba(255, 255, 255, 0.3) !important;
-  padding: 0.25rem 0.35rem;
-}
-
-/* Step Description Animation */
+/* Step description crossfade */
 @keyframes stepDescriptionEnter {
-  0% {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 .step-description-animate {
-  animation: stepDescriptionEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: stepDescriptionEnter var(--duration-slow) var(--ease-spring) forwards;
 }
 
-/* Help Button - Constrain to icon size */
-.p-button.p-button-rounded.p-button-text.p-button-sm.p-button-icon-only {
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
+/* ==========================================================================
+   HPC Queue Phase Animations
+   ========================================================================== */
+
+.progress-bar-shimmer .p-progressbar-value {
+  background: linear-gradient(90deg, var(--color-brand-500) 0%, #3b82f6 50%, var(--color-brand-500) 100%) !important;
+  background-size: 200% 100%;
+  animation: progressShimmer 2s linear infinite;
 }
 
-/* Help Dialog Styling */
-.help-dialog .p-dialog-header {
-  padding: 1rem 1.25rem;
+.progress-bar-shimmer .p-progressbar-indeterminate-container .p-progressbar-value {
+  background: linear-gradient(90deg, var(--color-brand-500), #3b82f6) !important;
 }
 
-.help-dialog .p-dialog-content {
-  padding: 0 1.25rem 1rem;
+@keyframes progressShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
+
+@keyframes messageFade {
+  0% { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.message-animate {
+  animation: messageFade var(--duration-slow) var(--ease-spring) forwards;
+}
+
+@keyframes queuePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.queue-pulse {
+  animation: queuePulse 2s ease-in-out infinite;
+}
+
+@keyframes tipSlideIn {
+  0% { opacity: 0; transform: translateX(-10px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+.tip-animate {
+  animation: tipSlideIn var(--duration-slow) var(--ease-spring) forwards;
+}
+
+@keyframes p-progressbar-indeterminate-anim {
+  0% { left: -35%; right: 100%; }
+  60% { left: 100%; right: -90%; }
+  100% { left: 100%; right: -90%; }
+}
+
+/* ==========================================================================
+   Help Content
+   ========================================================================== */
 
 .help-content h4 {
+  font-family: var(--font-heading);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--color-text);
   margin-bottom: 0.5rem;
   margin-top: 1rem;
 }
@@ -410,86 +342,83 @@ body {
 }
 
 .help-content code {
-  background-color: #f1f5f9;
+  background-color: var(--color-surface-alt);
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
   font-size: 0.875rem;
-  color: #0f172a;
+  font-family: var(--font-mono);
+  color: var(--color-text);
 }
 
 .help-content strong {
-  color: #1e293b;
+  color: var(--color-text);
   font-weight: 600;
 }
 
-/* ============================================================================
-   HPC Queue Phase Animations
-   ============================================================================ */
+/* ==========================================================================
+   Citation Links
+   ========================================================================== */
 
-/* Shimmer effect on progress bar during queue phase */
-.progress-bar-shimmer .p-progressbar-value {
-  background: linear-gradient(90deg, #0052cc 0%, #3b82f6 50%, #0052cc 100%) !important;
-  background-size: 200% 100%;
-  animation: progressShimmer 2s linear infinite;
+.citation-link {
+  color: var(--color-brand-500);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all var(--duration-fast) var(--ease-default);
 }
 
-/* Indeterminate progress bar shimmer - brand blue */
-.progress-bar-shimmer .p-progressbar-indeterminate-container .p-progressbar-value {
-  background: linear-gradient(90deg, #0052cc, #3b82f6) !important;
+.citation-link:hover {
+  text-decoration: underline;
+  color: var(--color-brand-600);
 }
 
-@keyframes progressShimmer {
-  0% {
-    background-position: 200% 0;
+/* ==========================================================================
+   Card hover effect
+   ========================================================================== */
+
+.card-hover {
+  transition: box-shadow var(--duration-normal) var(--ease-default),
+              transform var(--duration-normal) var(--ease-default);
+}
+
+.card-hover:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   Dark Mode — Semantic color overrides
+   Light-tinted backgrounds (bg-red-50, bg-amber-50, etc.) need darker
+   equivalents so they don't look washed out on dark backgrounds.
+   ========================================================================== */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tw-bg-opacity: 1;
   }
-  100% {
-    background-position: -200% 0;
-  }
+
+  :root:not([data-theme="light"]) .bg-red-50 { background-color: rgba(153, 27, 27, 0.15) !important; }
+  :root:not([data-theme="light"]) .bg-amber-50 { background-color: rgba(180, 83, 9, 0.15) !important; }
+  :root:not([data-theme="light"]) .bg-amber-100 { background-color: rgba(180, 83, 9, 0.2) !important; }
+  :root:not([data-theme="light"]) .bg-yellow-50 { background-color: rgba(161, 98, 7, 0.15) !important; }
+  :root:not([data-theme="light"]) .bg-orange-100 { background-color: rgba(194, 65, 12, 0.2) !important; }
+  :root:not([data-theme="light"]) .bg-green-50 { background-color: rgba(6, 95, 70, 0.15) !important; }
+  :root:not([data-theme="light"]) .bg-blue-100 { background-color: rgba(29, 78, 216, 0.2) !important; }
+
+  :root:not([data-theme="light"]) .border-red-200 { border-color: rgba(153, 27, 27, 0.4) !important; }
+  :root:not([data-theme="light"]) .border-amber-200,
+  :root:not([data-theme="light"]) .border-amber-300 { border-color: rgba(180, 83, 9, 0.4) !important; }
+  :root:not([data-theme="light"]) .border-yellow-200 { border-color: rgba(161, 98, 7, 0.4) !important; }
 }
 
-/* Message fade transition for rotating queue messages */
-@keyframes messageFade {
-  0% {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+[data-theme="dark"] .bg-red-50 { background-color: rgba(153, 27, 27, 0.15) !important; }
+[data-theme="dark"] .bg-amber-50 { background-color: rgba(180, 83, 9, 0.15) !important; }
+[data-theme="dark"] .bg-amber-100 { background-color: rgba(180, 83, 9, 0.2) !important; }
+[data-theme="dark"] .bg-yellow-50 { background-color: rgba(161, 98, 7, 0.15) !important; }
+[data-theme="dark"] .bg-orange-100 { background-color: rgba(194, 65, 12, 0.2) !important; }
+[data-theme="dark"] .bg-green-50 { background-color: rgba(6, 95, 70, 0.15) !important; }
+[data-theme="dark"] .bg-blue-100 { background-color: rgba(29, 78, 216, 0.2) !important; }
 
-.message-animate {
-  animation: messageFade 0.4s ease-out forwards;
-}
-
-/* Subtle pulse animation for queue status indicator */
-@keyframes queuePulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
-
-.queue-pulse {
-  animation: queuePulse 2s ease-in-out infinite;
-}
-
-/* Tips panel slide-in animation */
-@keyframes tipSlideIn {
-  0% {
-    opacity: 0;
-    transform: translateX(-10px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.tip-animate {
-  animation: tipSlideIn 0.5s ease-out forwards;
-}
+[data-theme="dark"] .border-red-200 { border-color: rgba(153, 27, 27, 0.4) !important; }
+[data-theme="dark"] .border-amber-200,
+[data-theme="dark"] .border-amber-300 { border-color: rgba(180, 83, 9, 0.4) !important; }
+[data-theme="dark"] .border-yellow-200 { border-color: rgba(161, 98, 7, 0.4) !important; }

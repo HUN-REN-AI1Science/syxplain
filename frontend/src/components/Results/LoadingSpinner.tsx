@@ -22,7 +22,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 }) => (
   <div className={`flex flex-col items-center justify-center ${className}`}>
     <ProgressSpinner style={{ width: `${size}px`, height: `${size}px` }} />
-    {message && <p className="mt-4 text-slate-500">{message}</p>}
+    {message && <p className="mt-4 text-secondary">{message}</p>}
   </div>
 );
 

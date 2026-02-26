@@ -151,7 +151,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <i className="pi pi-spin pi-spinner text-4xl text-blue-600" />
+        <i className="pi pi-spin pi-spinner text-4xl text-brand-500" />
       </div>
     );
   }
@@ -163,11 +163,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
         <Card className="shadow-md">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-blue-100 rounded-lg">
-              <i className="pi pi-users text-2xl text-blue-600" />
+              <i className="pi pi-users text-2xl text-brand-500" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">Total Users</p>
-              <p className="text-2xl font-bold text-slate-800">{stats?.total_users || 0}</p>
+              <p className="text-sm text-secondary">Total Users</p>
+              <p className="text-2xl font-bold font-heading text-primary">{stats?.total_users || 0}</p>
               <p className="text-xs text-green-600">{stats?.active_users_24h || 0} active today</p>
             </div>
           </div>
@@ -179,8 +179,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
               <i className="pi pi-play text-2xl text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">Total Runs</p>
-              <p className="text-2xl font-bold text-slate-800">{stats?.total_runs || 0}</p>
+              <p className="text-sm text-secondary">Total Runs</p>
+              <p className="text-2xl font-bold font-heading text-primary">{stats?.total_runs || 0}</p>
               <p className="text-xs text-green-600">{stats?.runs_today || 0} today</p>
             </div>
           </div>
@@ -192,8 +192,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
               <i className="pi pi-percentage text-2xl text-purple-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">Success Rate</p>
-              <p className="text-2xl font-bold text-slate-800">{stats?.success_rate || 0}%</p>
+              <p className="text-sm text-secondary">Success Rate</p>
+              <p className="text-2xl font-bold font-heading text-primary">{stats?.success_rate || 0}%</p>
               <ProgressBar
                 value={stats?.success_rate || 0}
                 showValue={false}
@@ -216,11 +216,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
               <i className="pi pi-clock text-2xl text-orange-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">Avg Duration</p>
-              <p className="text-2xl font-bold text-slate-800">
+              <p className="text-sm text-secondary">Avg Duration</p>
+              <p className="text-2xl font-bold font-heading text-primary">
                 {formatDuration(stats?.avg_duration_seconds || 0)}
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-secondary">
                 {stats?.pending_runs || 0} pending, {stats?.running_runs || 0} running
               </p>
             </div>
@@ -232,16 +232,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Run Trends Chart */}
         <Card className="shadow-md lg:col-span-2">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Run Trends (30 Days)</h3>
-          <div className="h-64">
+          <h3 className="text-lg font-semibold font-heading text-primary mb-4">Run Trends (30 Days)</h3>
+          <div className="h-48 sm:h-64">
             <Chart type="line" data={trendChartData} options={trendChartOptions} />
           </div>
         </Card>
 
         {/* Status Distribution Chart */}
         <Card className="shadow-md">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Status Distribution</h3>
-          <div className="h-64">
+          <h3 className="text-lg font-semibold font-heading text-primary mb-4">Status Distribution</h3>
+          <div className="h-48 sm:h-64">
             <Chart
               type="doughnut"
               data={distributionChartData}
@@ -253,17 +253,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
 
       {/* Recent Activity */}
       <Card className="shadow-md">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">Recent Admin Activity</h3>
+        <h3 className="text-lg font-semibold font-heading text-primary mb-4">Recent Admin Activity</h3>
         {activity.length === 0 ? (
-          <p className="text-slate-500 text-center py-4">No recent activity</p>
+          <p className="text-secondary text-center py-4">No recent activity</p>
         ) : (
           <div className="space-y-3">
             {activity.map((item) => (
-              <div key={item.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+              <div key={item.id} className="flex items-center gap-3 p-3 bg-surface-alt rounded-lg">
                 <i className={`${getActionIcon(item.action)} text-lg`} />
                 <div className="flex-grow">
-                  <p className="text-sm font-medium text-slate-800">
-                    <span className="text-slate-600">{item.admin_email}</span> performed{' '}
+                  <p className="text-sm font-medium text-primary">
+                    <span className="text-secondary">{item.admin_email}</span> performed{' '}
                     <Tag
                       value={item.action}
                       severity={getActionSeverity(item.action)}
@@ -271,7 +271,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
                     />{' '}
                     on {item.target_type}/{item.target_id.substring(0, 8)}...
                   </p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-secondary">
                     {new Date(item.created_at).toLocaleString()}
                   </p>
                 </div>

@@ -29,12 +29,10 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
-    // Update state so next render shows fallback UI
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // Log error to console for debugging
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     this.setState({ errorInfo });
   }
@@ -56,47 +54,19 @@ class ErrorBoundary extends Component<Props, State> {
       const isDevelopment = import.meta.env.DEV;
 
       return (
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            minHeight: '100vh',
-            padding: '2rem',
-            backgroundColor: '#f8f9fa',
-          }}
-        >
-          <Card
-            style={{
-              maxWidth: '600px',
-              width: '100%',
-              textAlign: 'center',
-            }}
-          >
-            <div style={{ marginBottom: '1.5rem' }}>
-              <i
-                className="pi pi-exclamation-triangle"
-                style={{
-                  fontSize: '4rem',
-                  color: '#f59e0b',
-                  marginBottom: '1rem',
-                  display: 'block',
-                }}
-              />
-              <h2 style={{ margin: '0 0 0.5rem 0', color: '#1f2937' }}>Something went wrong</h2>
-              <p style={{ color: '#6b7280', margin: 0 }}>
+        <div className="flex justify-center items-center min-h-screen p-8 bg-page">
+          <Card className="max-w-[600px] w-full text-center">
+            <div className="mb-6">
+              <i className="pi pi-exclamation-triangle text-6xl text-accent-500 block mb-4" />
+              <h2 className="font-heading text-xl font-bold text-primary mb-2">
+                Something went wrong
+              </h2>
+              <p className="text-secondary">
                 We're sorry, but something unexpected happened. Please try again or reload the page.
               </p>
             </div>
 
-            <div
-              style={{
-                display: 'flex',
-                gap: '1rem',
-                justifyContent: 'center',
-                marginBottom: isDevelopment ? '1.5rem' : 0,
-              }}
-            >
+            <div className={`flex gap-4 justify-center ${isDevelopment ? 'mb-6' : ''}`}>
               <Button
                 label="Try Again"
                 icon="pi pi-refresh"
@@ -106,30 +76,12 @@ class ErrorBoundary extends Component<Props, State> {
               <Button label="Reload Page" icon="pi pi-replay" onClick={this.handleReload} />
             </div>
 
-            {/* Show stack trace in development mode */}
             {isDevelopment && this.state.error && (
-              <div
-                style={{
-                  marginTop: '1rem',
-                  padding: '1rem',
-                  backgroundColor: '#fef2f2',
-                  borderRadius: '0.5rem',
-                  textAlign: 'left',
-                  overflow: 'auto',
-                }}
-              >
-                <h4 style={{ margin: '0 0 0.5rem 0', color: '#dc2626' }}>
+              <div className="mt-4 p-4 bg-red-50 rounded-lg text-left overflow-auto">
+                <h4 className="font-heading font-semibold text-semantic-error mb-2">
                   Error Details (Development Only)
                 </h4>
-                <pre
-                  style={{
-                    margin: 0,
-                    fontSize: '0.75rem',
-                    color: '#991b1b',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                  }}
-                >
+                <pre className="m-0 text-xs text-red-800 whitespace-pre-wrap break-words font-mono">
                   {this.state.error.toString()}
                   {this.state.errorInfo?.componentStack}
                 </pre>

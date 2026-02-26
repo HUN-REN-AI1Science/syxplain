@@ -107,7 +107,7 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
         onHide={onHide}
         header={
           <div className="flex items-center gap-3">
-            <i className="pi pi-share-alt text-blue-600 text-xl"></i>
+            <i className="pi pi-share-alt text-brand-500 text-xl"></i>
             <span>Share Results</span>
           </div>
         }
@@ -144,10 +144,10 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
           ) : (
             // Already shared - show link and revoke option
             <div className="space-y-5">
-              <div className="border border-blue-200 bg-blue-50 rounded-xl p-4">
+              <div className="border border-blue-200 bg-brand-50 rounded-xl p-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <i className="pi pi-globe text-blue-600 text-lg"></i>
+                    <i className="pi pi-globe text-brand-500 text-lg"></i>
                   </div>
                   <p className="text-blue-800">
                     This result is publicly accessible via the link below.
@@ -162,12 +162,12 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
                   onClick={handleCopyLink}
                   tooltip="Copy to clipboard"
                   tooltipOptions={{ position: 'top' }}
-                  className="!bg-slate-100 !text-slate-700 !border-slate-300 hover:!bg-slate-200"
+                  className="!bg-surface-alt !text-primary !border-[var(--color-border)] hover:!bg-surface-alt"
                 />
               </div>
 
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-4">
-                <p className="text-sm text-slate-600 mb-3">
+              <div className="bg-surface-alt border border-[var(--color-border)] rounded-xl p-4 mt-4">
+                <p className="text-sm text-secondary mb-3">
                   Want to make this result private again?
                 </p>
                 <Button

@@ -232,6 +232,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   // Initial connection state - show progress bar immediately while connecting
   const isConnecting = !initialFetchDone && !fromHistory && !!runId;
 
+  // True while we've reached 'completed' but are still fetching final results from API
+  const isLoadingResults = isCompleted && !result;
+
   // Check if result is in the new EquationResults format (not legacy markdown)
   // Accounts for both direct EquationResults and backend combined format (explanations wrapper)
   const isNewFormat =
@@ -239,14 +242,20 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     typeof result === 'object' &&
     (('equations' in result && 'summary' in result) || 'explanations' in result);
 
+  // Only show error for terminal failure states, not transient WebSocket messages
+  const isTerminalError =
+    !!error && (status === 'failed' || status === 'timeout' || status === 'cancelled');
+
   // Determine header status
   const getHeaderStatus = (): ResultsStatus => {
     if (isStarting) return 'processing';
     if (isFetchingCompletedRun) return 'loading';
-    if ((isProcessing || isConnecting) && !error) return 'processing';
+    if (isLoadingResults) return 'loading';
+    if ((isProcessing || isConnecting) && !isTerminalError) return 'processing';
     if (isCompleted) return 'completed';
     if (status === 'cancelled') return 'cancelled';
-    return 'failed';
+    if (status === 'failed' || status === 'timeout') return 'failed';
+    return 'processing';
   };
 
   // Header action buttons
@@ -288,7 +297,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
             <>
               Run ID: <span className="font-mono">{runId.slice(0, 8)}...</span>
               {duration && (
-                <span className="ml-3 text-slate-400">
+                <span className="ml-3 text-muted">
                   <i className="pi pi-clock mr-1"></i>
                   {duration}
                 </span>
@@ -306,8 +315,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
       {fromHistory && runId && <RunSettingsPanel runId={runId} />}
 
       <div>
-        {/* Error / Cancelled State */}
-        {error && (
+        {/* Error / Cancelled State - only for terminal failures, not transient messages */}
+        {isTerminalError && (
           <div className="mb-6">
             <Message
               severity={status === 'cancelled' ? 'warn' : 'error'}
@@ -318,7 +327,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
         )}
 
         {/* Loading State - Progress bar for starting, processing, or initial connection */}
-        {(isStarting || isProcessing || isConnecting) && !error && (
+        {(isStarting || isProcessing || isConnecting) && !isTerminalError && (
           <>
             <AnalysisProgressView
               displayProgress={isStarting || isConnecting ? 0 : displayProgress}
@@ -348,8 +357,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           </>
         )}
 
-        {/* Loading State - Simple spinner for fetching completed runs */}
-        {isFetchingCompletedRun && !error && (
+        {/* Loading State - Simple spinner for fetching completed runs or waiting for API after completion */}
+        {(isFetchingCompletedRun || isLoadingResults) && !isTerminalError && (
           <LoadingSpinner message="Loading results..." className="py-20" />
         )}
 
@@ -378,16 +387,16 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
             <span>Delete Run Permanently</span>
           </div>
         }
-        className="w-full max-w-md"
+        className="w-full max-w-md mx-4"
         closable={!deleting}
         footer={
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
             <Button
               label="Cancel"
               icon="pi pi-times"
               onClick={() => setShowDeleteDialog(false)}
               disabled={deleting}
-              className="!bg-slate-100 hover:!bg-slate-200 !border-slate-200 !text-slate-700 font-medium px-4 py-2"
+              className="!bg-surface-alt hover:!bg-surface-alt !border-[var(--color-border)] !text-primary font-medium px-4 py-2"
             />
             <Button
               label={deleting ? 'Deleting...' : 'Delete Permanently'}
@@ -410,17 +419,17 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
               configurations, and any shared links.
             </p>
           </div>
-          <p className="text-slate-600">Are you sure you want to delete this run?</p>
+          <p className="text-secondary">Are you sure you want to delete this run?</p>
         </div>
       </Dialog>
 
       {/* Danger Zone - Delete Button */}
       {isCompleted && (
-        <div className="mt-12 pt-6 border-t border-slate-200">
-          <div className="flex items-start justify-between">
+        <div className="mt-12 pt-6 border-t border-[var(--color-border)]">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
               <h4 className="text-sm font-semibold text-red-600 mb-1">Danger Zone</h4>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-secondary">
                 Permanently delete this run and all associated data
               </p>
             </div>

@@ -20,14 +20,12 @@ export const TargetVariableSection: React.FC<TargetVariableSectionProps> = ({
   nanCounts,
   onChange,
 }) => (
-  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-full">
-    <div className="flex items-center mb-4">
-      <div className="bg-green-100 p-2 rounded-lg mr-3 flex-shrink-0">
-        <i className="pi pi-compass text-green-600 text-lg"></i>
-      </div>
-      <div className="flex-1">
+  <div className="bg-surface p-6 rounded-xl border border-[var(--color-border)] shadow-sm h-full">
+    <div className="flex items-start gap-3 mb-4">
+      <i className="pi pi-flag text-muted text-lg mt-1 shrink-0"></i>
+      <div>
         <div className="flex items-center gap-2">
-          <h3 className="text-lg font-bold text-slate-800">Target</h3>
+          <h3 className="text-lg font-heading font-bold text-primary">Target</h3>
           <HelpButton title="Target Variable">
             <h4>What is a Target Variable?</h4>
             <p>
@@ -54,18 +52,18 @@ export const TargetVariableSection: React.FC<TargetVariableSectionProps> = ({
             </p>
           </HelpButton>
         </div>
-        <p className="text-sm text-slate-500">What to predict?</p>
+        <p className="text-sm text-secondary">What to predict?</p>
       </div>
     </div>
 
     <div className="mt-4">
-      <label className="block text-sm font-semibold text-slate-700 mb-2">Target Variable</label>
+      <label className="block text-sm font-semibold text-secondary mb-2">Target Variable</label>
       <Dropdown
         value={targetVariable}
         onChange={(e: DropdownChangeEvent) => onChange(e.value)}
         options={columns.map((col) => ({ label: col, value: col }))}
         placeholder="Select Target..."
-        className="w-full bg-slate-50 border-slate-200"
+        className="w-full bg-surface-alt border-[var(--color-border)]"
       />
       {targetVariable && nanCounts && nanCounts[targetVariable] > 0 && (
         <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start animate-fade-in">

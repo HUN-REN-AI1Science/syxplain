@@ -1,325 +1,460 @@
-/* Syxplain Keycloak Theme - Replicates the React frontend auth design */
+/* Syxplain Keycloak Theme
+   Matches the React frontend design system (design-tokens.css) */
 
-/* Reset and base */
+/* ==========================================================================
+   Design Tokens (mirrored from frontend)
+   ========================================================================== */
+
+:root {
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --color-brand-500: #0052cc;
+  --color-brand-600: #003d99;
+  --color-brand-700: #002e73;
+  --color-bg: #f8f9fc;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f1f3f9;
+  --color-border: #e2e5f0;
+  --color-border-hover: #c7cbe0;
+  --color-text: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748b;
+  --color-error: #dc2626;
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-info: #0284c7;
+  --shadow-card: 0 1px 3px rgba(15,23,42,0.05), 0 10px 40px rgba(15,23,42,0.04);
+  --shadow-xl: 0 8px 32px rgba(15,23,42,0.10), 0 4px 8px rgba(15,23,42,0.04);
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+}
+
+/* Dark mode tokens */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0f172a;
+    --color-surface: #1e293b;
+    --color-surface-alt: #334155;
+    --color-border: #475569;
+    --color-border-hover: #64748b;
+    --color-text: #f1f5f9;
+    --color-text-secondary: #cbd5e1;
+    --color-text-muted: #94a3b8;
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.25), 0 10px 40px rgba(0,0,0,0.2);
+    --shadow-xl: 0 8px 32px rgba(0,0,0,0.4), 0 4px 8px rgba(0,0,0,0.2);
+  }
+}
+
+/* ==========================================================================
+   Reset & Base
+   ========================================================================== */
+
 *, *::before, *::after {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background-color: #f8fafc;
-    color: #0f172a;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
+  font-family: var(--font-body);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Container - full-screen centered */
+/* ==========================================================================
+   Container — full-screen centered
+   ========================================================================== */
+
 .syxplain-container {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
 }
 
-/* Card */
+/* ==========================================================================
+   Card
+   ========================================================================== */
+
 .syxplain-card {
-    width: 100%;
-    max-width: 28rem;
-    background: white;
-    border-radius: 1rem;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-    padding: 2rem;
+  width: 100%;
+  max-width: 28rem;
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  padding: 2rem;
+  border: 1px solid var(--color-border);
 }
 
-/* Header */
+/* ==========================================================================
+   Header
+   ========================================================================== */
+
 .syxplain-header {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.5rem;
 }
 
 .syxplain-logo-circle {
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    background-color: #0052cc;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    margin-bottom: 1rem;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background-color: var(--color-brand-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: 1rem;
 }
 
 .syxplain-logo-img {
-    width: 48px;
-    height: 48px;
-    object-fit: contain;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
 }
 
 .syxplain-title {
-    font-size: 1.875rem;
-    font-weight: 700;
-    color: #0f172a;
-    margin: 0;
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
 }
 
 .syxplain-title-ai {
-    color: #2563eb;
+  color: var(--color-brand-500);
 }
 
 .syxplain-subtitle {
-    color: #64748b;
-    margin-top: 0.5rem;
-    font-size: 0.95rem;
+  color: var(--color-text-muted);
+  margin-top: 0.5rem;
+  font-size: 0.95rem;
 }
 
-/* Alert messages */
+/* ==========================================================================
+   Alert Messages
+   ========================================================================== */
+
 .syxplain-alert {
-    padding: 0.75rem 1rem;
-    border-radius: 0.5rem;
-    margin-bottom: 1rem;
-    font-size: 0.875rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
 }
 
 .syxplain-alert-error {
-    background-color: #fef2f2;
-    color: #991b1b;
-    border: 1px solid #fecaca;
+  background-color: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
 }
 
 .syxplain-alert-success {
-    background-color: #f0fdf4;
-    color: #166534;
-    border: 1px solid #bbf7d0;
+  background-color: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
 }
 
 .syxplain-alert-warning {
-    background-color: #fffbeb;
-    color: #92400e;
-    border: 1px solid #fde68a;
+  background-color: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
 }
 
 .syxplain-alert-info {
-    background-color: #eff6ff;
-    color: #1e40af;
-    border: 1px solid #bfdbfe;
+  background-color: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
 }
 
-/* Form elements */
+/* Dark mode alert overrides */
+@media (prefers-color-scheme: dark) {
+  .syxplain-alert-error {
+    background-color: rgba(153, 27, 27, 0.15);
+    color: #fca5a5;
+    border-color: rgba(153, 27, 27, 0.4);
+  }
+  .syxplain-alert-success {
+    background-color: rgba(6, 95, 70, 0.15);
+    color: #6ee7b7;
+    border-color: rgba(6, 95, 70, 0.4);
+  }
+  .syxplain-alert-warning {
+    background-color: rgba(180, 83, 9, 0.15);
+    color: #fcd34d;
+    border-color: rgba(180, 83, 9, 0.4);
+  }
+  .syxplain-alert-info {
+    background-color: rgba(29, 78, 216, 0.15);
+    color: #93c5fd;
+    border-color: rgba(29, 78, 216, 0.4);
+  }
+}
+
+/* ==========================================================================
+   Form Elements
+   ========================================================================== */
+
 .syxplain-form {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .syxplain-form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .syxplain-label {
-    font-weight: 600;
-    color: #334155;
-    font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
 }
 
 .syxplain-input {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    background-color: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    font-size: 0.95rem;
-    color: #0f172a;
-    outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background-color: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
 }
 
 .syxplain-input:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3px rgba(0, 82, 204, 0.15);
 }
 
 .syxplain-input::placeholder {
-    color: #94a3b8;
+  color: var(--color-text-muted);
 }
 
 .syxplain-input.input-error {
-    border-color: #ef4444;
+  border-color: var(--color-error);
 }
 
 .syxplain-field-error {
-    color: #ef4444;
-    font-size: 0.75rem;
+  color: var(--color-error);
+  font-size: 0.75rem;
 }
 
-/* Forgot password link */
+/* ==========================================================================
+   Forgot Password Link
+   ========================================================================== */
+
 .syxplain-forgot-password {
-    display: flex;
-    justify-content: flex-end;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .syxplain-forgot-password a {
-    font-size: 0.875rem;
-    color: #2563eb;
-    font-weight: 500;
-    text-decoration: none;
+  font-size: 0.875rem;
+  color: var(--color-brand-500);
+  font-weight: 500;
+  text-decoration: none;
+  transition: color var(--duration-fast);
 }
 
 .syxplain-forgot-password a:hover {
-    text-decoration: underline;
+  text-decoration: underline;
+  color: var(--color-brand-600);
 }
 
-/* Submit button */
+/* ==========================================================================
+   Submit Button
+   ========================================================================== */
+
 .syxplain-btn-primary {
-    width: 100%;
-    height: 48px;
-    background-color: #0052cc;
-    color: white;
-    border: none;
-    border-radius: 0.5rem;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.2s;
-    margin-top: 0.5rem;
+  width: 100%;
+  height: 48px;
+  background-color: var(--color-brand-500);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: background-color var(--duration-fast), transform var(--duration-fast);
+  margin-top: 0.5rem;
 }
 
 .syxplain-btn-primary:hover {
-    background-color: #003d99;
+  background-color: var(--color-brand-600);
 }
 
 .syxplain-btn-primary:active {
-    background-color: #002e73;
+  background-color: var(--color-brand-700);
+  transform: scale(0.97);
 }
 
 .syxplain-btn-primary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-/* Bottom links (toggle login/signup) */
+/* ==========================================================================
+   Bottom Links (toggle login/signup)
+   ========================================================================== */
+
 .syxplain-bottom-link {
-    text-align: center;
-    margin-top: 1rem;
-    font-size: 0.9rem;
+  text-align: center;
+  margin-top: 1rem;
+  font-size: 0.9rem;
 }
 
 .syxplain-bottom-link span {
-    color: #475569;
+  color: var(--color-text-secondary);
 }
 
 .syxplain-bottom-link a {
-    color: #2563eb;
-    font-weight: 600;
-    text-decoration: none;
+  color: var(--color-brand-500);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--duration-fast);
 }
 
 .syxplain-bottom-link a:hover {
-    text-decoration: underline;
+  text-decoration: underline;
+  color: var(--color-brand-600);
 }
 
-/* Back to login link */
+/* ==========================================================================
+   Back to Login Link
+   ========================================================================== */
+
 .syxplain-back-link {
-    text-align: center;
-    margin-top: 1rem;
+  text-align: center;
+  margin-top: 1rem;
 }
 
 .syxplain-back-link a {
-    color: #475569;
-    font-weight: 500;
-    text-decoration: none;
-    font-size: 0.9rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: color 0.2s;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  text-decoration: none;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: color var(--duration-fast);
 }
 
 .syxplain-back-link a:hover {
-    color: #1e293b;
+  color: var(--color-text);
 }
 
 .syxplain-back-link a::before {
-    content: "\2190";
+  content: "\2190";
 }
 
-/* Info section */
+/* ==========================================================================
+   Info Section
+   ========================================================================== */
+
 .syxplain-info {
-    margin-top: 1rem;
-    font-size: 0.875rem;
-    color: #475569;
-    text-align: center;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  text-align: center;
 }
 
 .syxplain-info a {
-    color: #2563eb;
-    font-weight: 600;
-    text-decoration: none;
+  color: var(--color-brand-500);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--duration-fast);
 }
 
 .syxplain-info a:hover {
-    text-decoration: underline;
+  text-decoration: underline;
+  color: var(--color-brand-600);
 }
 
-/* Social / IDP providers */
+/* ==========================================================================
+   Social / IDP Providers
+   ========================================================================== */
+
 .syxplain-social-providers {
-    margin-top: 1.5rem;
+  margin-top: 1.5rem;
 }
 
 .syxplain-separator {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1rem;
-    color: #94a3b8;
-    font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
 }
 
 .syxplain-separator::before,
 .syxplain-separator::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background-color: #e2e8f0;
+  content: "";
+  flex: 1;
+  height: 1px;
+  background-color: var(--color-border);
 }
 
 .syxplain-social-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    width: 100%;
-    height: 48px;
-    padding: 0 1rem;
-    background-color: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    font-size: 0.95rem;
-    font-weight: 500;
-    color: #334155;
-    text-decoration: none;
-    cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
-    margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  height: 48px;
+  padding: 0 1rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--duration-fast), border-color var(--duration-fast);
+  margin-bottom: 0.5rem;
 }
 
 .syxplain-social-btn:hover {
-    background-color: #f8fafc;
-    border-color: #cbd5e1;
+  background-color: var(--color-surface-alt);
+  border-color: var(--color-border-hover);
 }
 
 .syxplain-social-btn i {
-    font-size: 1.25rem;
+  font-size: 1.25rem;
 }
 
-/* Required fields indicator */
+/* ==========================================================================
+   Required Fields Indicator
+   ========================================================================== */
+
 .syxplain-required::after {
-    content: " *";
-    color: #ef4444;
+  content: " *";
+  color: var(--color-error);
+}
+
+/* ==========================================================================
+   Focus Visible
+   ========================================================================== */
+
+*:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+.syxplain-input:focus-visible {
+  outline: none;
 }

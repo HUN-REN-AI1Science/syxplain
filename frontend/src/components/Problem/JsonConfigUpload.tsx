@@ -27,7 +27,7 @@ export const JsonConfigUpload: React.FC<JsonConfigUploadProps> = ({ jsonContent,
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="border-2 border-dashed border-slate-300 rounded-2xl p-12 text-center hover:border-blue-400 hover:bg-slate-50 transition-colors cursor-pointer relative group">
+      <div className="border-2 border-dashed border-[var(--color-border)] rounded-2xl p-12 text-center hover:border-blue-400 hover:bg-surface-alt transition-colors cursor-pointer relative group">
         <input
           type="file"
           accept=".json"
@@ -35,20 +35,20 @@ export const JsonConfigUpload: React.FC<JsonConfigUploadProps> = ({ jsonContent,
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
           id="json-upload"
         />
-        <div className="bg-slate-100 p-4 rounded-full inline-block mb-4 group-hover:bg-white group-hover:shadow-sm transition-all">
-          <i className="pi pi-file text-4xl text-slate-400 group-hover:text-blue-500 transition-colors"></i>
+        <div className="bg-surface-alt p-4 rounded-full inline-block mb-4 group-hover:bg-surface group-hover:shadow-sm transition-all">
+          <i className="pi pi-file text-4xl text-muted group-hover:text-blue-500 transition-colors"></i>
         </div>
-        <p className="text-lg font-semibold text-slate-700">Click to upload JSON configuration</p>
-        <p className="text-sm text-slate-500 mt-1">or drag and drop here</p>
+        <p className="text-lg font-semibold text-secondary">Click to upload JSON configuration</p>
+        <p className="text-sm text-secondary mt-1">or drag and drop here</p>
       </div>
 
       <div className="relative">
         <div className="flex justify-between items-center mb-2">
-          <label className="block text-sm font-bold text-slate-700 ml-1">
+          <label className="block text-sm font-bold text-secondary ml-1">
             Configuration Preview
           </label>
           <HelpButton title="Example Configuration">
-            <p className="text-sm text-slate-600 mb-3">
+            <p className="text-sm text-secondary mb-3">
               Your JSON file should follow this structure:
             </p>
             <pre className="bg-slate-800 text-slate-100 p-3 rounded text-xs font-mono overflow-x-auto">
@@ -65,7 +65,7 @@ export const JsonConfigUpload: React.FC<JsonConfigUploadProps> = ({ jsonContent,
           </HelpButton>
         </div>
         <InputTextarea
-          className="w-full font-mono text-sm bg-slate-50"
+          className="w-full font-mono text-sm bg-surface-alt"
           rows={12}
           value={jsonContent}
           onChange={(e) => onChange(e.target.value)}

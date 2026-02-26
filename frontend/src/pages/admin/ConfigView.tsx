@@ -42,13 +42,13 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <i className="pi pi-spin pi-spinner text-4xl text-blue-600" />
+        <i className="pi pi-spin pi-spinner text-4xl text-brand-500" />
       </div>
     );
   }
 
   if (!config) {
-    return <div className="text-center py-8 text-slate-500">Failed to load configuration</div>;
+    return <div className="text-center py-8 text-secondary">Failed to load configuration</div>;
   }
 
   const ConfigItem: React.FC<{
@@ -56,16 +56,16 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
     value: string | number | boolean;
     icon?: string;
   }> = ({ label, value, icon }) => (
-    <div className="flex items-center justify-between py-3 border-b border-slate-100 last:border-0">
+    <div className="flex items-center justify-between py-3 border-b border-[var(--color-border)] last:border-0">
       <div className="flex items-center gap-2">
-        {icon && <i className={`${icon} text-slate-400`} />}
-        <span className="text-slate-600">{label}</span>
+        {icon && <i className={`${icon} text-muted`} />}
+        <span className="text-secondary">{label}</span>
       </div>
       <div>
         {typeof value === 'boolean' ? (
           <Tag value={value ? 'Enabled' : 'Disabled'} severity={value ? 'success' : 'secondary'} />
         ) : (
-          <span className="font-mono text-slate-800">{value}</span>
+          <span className="font-mono text-primary">{value}</span>
         )}
       </div>
     </div>
@@ -76,8 +76,8 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold text-slate-800">System Configuration</h3>
-          <p className="text-sm text-slate-500">Read-only view of current settings</p>
+          <h3 className="text-lg font-semibold font-heading text-primary">System Configuration</h3>
+          <p className="text-sm text-secondary">Read-only view of current settings</p>
         </div>
         <Button
           icon="pi pi-refresh"
@@ -91,7 +91,7 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Compute Configuration */}
         <Card className="shadow-md">
-          <h4 className="text-md font-semibold text-slate-700 mb-4">
+          <h4 className="text-md font-semibold font-heading text-primary mb-4">
             <i className="pi pi-server mr-2 text-blue-500" />
             Compute Configuration
           </h4>
@@ -110,7 +110,7 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
 
         {/* Features */}
         <Card className="shadow-md">
-          <h4 className="text-md font-semibold text-slate-700 mb-4">
+          <h4 className="text-md font-semibold font-heading text-primary mb-4">
             <i className="pi pi-sliders-h mr-2 text-purple-500" />
             Feature Flags
           </h4>
@@ -133,7 +133,7 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
 
         {/* Rate Limits */}
         <Card className="shadow-md">
-          <h4 className="text-md font-semibold text-slate-700 mb-4">
+          <h4 className="text-md font-semibold font-heading text-primary mb-4">
             <i className="pi pi-gauge mr-2 text-orange-500" />
             Rate Limits
           </h4>
@@ -156,21 +156,21 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
 
         {/* Secrets & API Keys */}
         <Card className="shadow-md">
-          <h4 className="text-md font-semibold text-slate-700 mb-4">
+          <h4 className="text-md font-semibold font-heading text-primary mb-4">
             <i className="pi pi-lock mr-2 text-red-500" />
             Secrets & API Keys
           </h4>
           <div className="space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 border-b border-slate-100 gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 border-b border-[var(--color-border)] gap-2">
               <div className="flex items-center gap-2">
-                <i className="pi pi-key text-slate-400" />
-                <span className="text-slate-600 text-sm">OpenAI API Key</span>
+                <i className="pi pi-key text-muted" />
+                <span className="text-secondary text-sm">OpenAI API Key</span>
               </div>
-              <div className="flex items-center gap-2 ml-6 sm:ml-0">
+              <div className="flex items-center gap-2 sm:ml-0">
                 {config.secrets.openai_api_key ? (
                   <>
                     <Tag value="Set" severity="success" />
-                    <code className="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">
+                    <code className="font-mono text-xs bg-surface-alt px-2 py-1 rounded text-secondary">
                       {config.secrets.openai_api_key}
                     </code>
                   </>
@@ -179,16 +179,16 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
                 )}
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 border-b border-slate-100 gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 border-b border-[var(--color-border)] gap-2">
               <div className="flex items-center gap-2">
-                <i className="pi pi-search text-slate-400" />
-                <span className="text-slate-600 text-sm">Deep Research Key</span>
+                <i className="pi pi-search text-muted" />
+                <span className="text-secondary text-sm">Deep Research Key</span>
               </div>
-              <div className="flex items-center gap-2 ml-6 sm:ml-0">
+              <div className="flex items-center gap-2 sm:ml-0">
                 {config.secrets.deep_research_api_key ? (
                   <>
                     <Tag value="Set" severity="success" />
-                    <code className="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">
+                    <code className="font-mono text-xs bg-surface-alt px-2 py-1 rounded text-secondary">
                       {config.secrets.deep_research_api_key}
                     </code>
                   </>
@@ -197,16 +197,16 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
                 )}
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 border-b border-slate-100 gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 border-b border-[var(--color-border)] gap-2">
               <div className="flex items-center gap-2">
-                <i className="pi pi-sitemap text-slate-400" />
-                <span className="text-slate-600 text-sm">Slurm Token</span>
+                <i className="pi pi-sitemap text-muted" />
+                <span className="text-secondary text-sm">Slurm Token</span>
               </div>
-              <div className="flex items-center gap-2 ml-6 sm:ml-0">
+              <div className="flex items-center gap-2 sm:ml-0">
                 {config.secrets.slurm_auth_token ? (
                   <>
                     <Tag value="Set" severity="success" />
-                    <code className="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">
+                    <code className="font-mono text-xs bg-surface-alt px-2 py-1 rounded text-secondary">
                       {config.secrets.slurm_auth_token}
                     </code>
                   </>
@@ -217,14 +217,14 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 gap-2">
               <div className="flex items-center gap-2">
-                <i className="pi pi-database text-slate-400" />
-                <span className="text-slate-600 text-sm">Database Host</span>
+                <i className="pi pi-database text-muted" />
+                <span className="text-secondary text-sm">Database Host</span>
               </div>
-              <div className="flex items-center gap-2 ml-6 sm:ml-0">
+              <div className="flex items-center gap-2 sm:ml-0">
                 {config.secrets.database_host ? (
                   <>
                     <Tag value="OK" severity="success" />
-                    <code className="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">
+                    <code className="font-mono text-xs bg-surface-alt px-2 py-1 rounded text-secondary">
                       {config.secrets.database_host}
                     </code>
                   </>
@@ -239,52 +239,52 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
 
       {/* Connection Status */}
       <Card className="shadow-md">
-        <h4 className="text-md font-semibold text-slate-700 mb-4">
+        <h4 className="text-md font-semibold font-heading text-primary mb-4">
           <i className="pi pi-wifi mr-2 text-green-500" />
           Connection Status
         </h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+          <div className="flex items-center gap-3 p-3 bg-surface-alt rounded-lg">
             <i
               className={`pi ${config.features.slurm_configured ? 'pi-check-circle text-green-500' : 'pi-exclamation-circle text-yellow-500'}`}
             />
             <div>
-              <p className="font-medium text-slate-700">Slurm Cluster</p>
-              <p className="text-sm text-slate-500">
+              <p className="font-medium text-primary">Slurm Cluster</p>
+              <p className="text-sm text-secondary">
                 {config.features.slurm_configured ? 'slurm.science-cloud.hu' : 'Connection issue'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+          <div className="flex items-center gap-3 p-3 bg-surface-alt rounded-lg">
             <i
-              className={`pi ${config.features.deep_research_enabled ? 'pi-check-circle text-green-500' : 'pi-minus-circle text-slate-400'}`}
+              className={`pi ${config.features.deep_research_enabled ? 'pi-check-circle text-green-500' : 'pi-minus-circle text-muted'}`}
             />
             <div>
-              <p className="font-medium text-slate-700">Deep Research</p>
-              <p className="text-sm text-slate-500">
+              <p className="font-medium text-primary">Deep Research</p>
+              <p className="text-sm text-secondary">
                 {config.features.deep_research_enabled
                   ? 'API key configured'
                   : 'Optional - not enabled'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+          <div className="flex items-center gap-3 p-3 bg-surface-alt rounded-lg">
             <i className="pi pi-check-circle text-green-500" />
             <div>
-              <p className="font-medium text-slate-700">User API Keys</p>
-              <p className="text-sm text-slate-500">Users can use own keys</p>
+              <p className="font-medium text-primary">User API Keys</p>
+              <p className="text-sm text-secondary">Users can use own keys</p>
             </div>
           </div>
         </div>
       </Card>
 
       {/* Info Box */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="bg-brand-50 border border-[var(--color-border)] rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <i className="pi pi-info-circle text-blue-600 mt-0.5" />
+          <i className="pi pi-info-circle text-link mt-0.5" />
           <div>
-            <h3 className="font-semibold text-blue-800 mb-2">Configuration Notes</h3>
-            <ul className="text-sm text-blue-700 list-disc pl-5 space-y-1">
+            <h3 className="font-semibold font-heading text-primary mb-2">Configuration Notes</h3>
+            <ul className="text-sm text-secondary list-disc pl-5 space-y-1">
               <li>This is a read-only view of system configuration</li>
               <li>
                 Configuration changes require updating environment variables and restarting the

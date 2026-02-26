@@ -93,13 +93,13 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
               label: 'Quick Analysis',
               icon: 'pi pi-bolt',
               command: () => onAnalysisTypeChange('quick'),
-              className: analysisType === 'quick' ? 'bg-blue-50' : '',
+              className: analysisType === 'quick' ? 'bg-brand-50' : '',
             },
             {
               label: 'Deep Analysis',
               icon: 'pi pi-search',
               command: () => onAnalysisTypeChange('deep'),
-              className: analysisType === 'deep' ? 'bg-blue-50' : '',
+              className: analysisType === 'deep' ? 'bg-brand-50' : '',
             },
           ]}
         />
@@ -115,7 +115,7 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
             disabled={disabled}
             className={`font-bold py-3 px-6 text-xl shadow-lg transition-all rounded-r-none ${
               disabled
-                ? 'bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed'
+                ? 'bg-slate-300 border-slate-300 text-secondary cursor-not-allowed'
                 : 'bg-blue-500 hover:bg-blue-600 border-blue-500 text-white hover:shadow-xl'
             }`}
           />
@@ -126,7 +126,7 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
             disabled={disabled}
             className={`font-bold py-3 px-3 text-xl shadow-lg transition-all rounded-l-none border-l-0 ${
               disabled
-                ? 'bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed'
+                ? 'bg-slate-300 border-slate-300 text-secondary cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-700 border-blue-500 text-white'
             }`}
           />
@@ -144,7 +144,7 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
                 onChange={(e: DropdownChangeEvent) => onDeepModelChange(e.value)}
                 options={deepResearchModels.map((model) => ({ label: model, value: model }))}
                 placeholder="Select a model..."
-                className="w-auto min-w-[200px] bg-slate-50"
+                className="w-auto min-w-[200px] bg-surface-alt"
                 disabled={deepResearchModels.length === 0}
               />
               {deepResearchModels.length === 0 && (

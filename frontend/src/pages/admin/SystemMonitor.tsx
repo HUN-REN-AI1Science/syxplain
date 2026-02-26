@@ -94,14 +94,14 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
           <i className={`${icon} text-2xl ${healthy ? 'text-green-600' : 'text-red-600'}`} />
         </div>
         <div className="flex-grow">
-          <p className="text-sm text-slate-500">{title}</p>
+          <p className="text-sm text-secondary">{title}</p>
           <div className="flex items-center gap-2">
             <Tag
               value={healthy ? 'Healthy' : 'Unhealthy'}
               severity={healthy ? 'success' : 'danger'}
             />
           </div>
-          {description && <p className="text-xs text-slate-400 mt-1">{description}</p>}
+          {description && <p className="text-xs text-muted mt-1">{description}</p>}
         </div>
       </div>
     </Card>
@@ -110,7 +110,7 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
   if (loading && !health) {
     return (
       <div className="flex items-center justify-center p-8">
-        <i className="pi pi-spin pi-spinner text-4xl text-blue-600" />
+        <i className="pi pi-spin pi-spinner text-4xl text-brand-500" />
       </div>
     );
   }
@@ -129,11 +129,11 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
           />
           <div className="flex items-center gap-2">
             <InputSwitch checked={autoRefresh} onChange={(e) => setAutoRefresh(e.value)} />
-            <span className="text-sm text-slate-600">Auto (30s)</span>
+            <span className="text-sm text-secondary">Auto (30s)</span>
           </div>
         </div>
         {health && (
-          <span className="text-xs sm:text-sm text-slate-500">
+          <span className="text-xs sm:text-sm text-secondary">
             Last: {new Date(health.checked_at).toLocaleTimeString()}
           </span>
         )}
@@ -163,7 +163,7 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
       {/* Slurm Status */}
       {health?.slurm_connected && slurmStatus && (
         <Card className="shadow-md">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Slurm Cluster Status</h3>
+          <h3 className="text-lg font-semibold font-heading text-primary mb-4">Slurm Cluster Status</h3>
 
           {slurmStatus.error ? (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -173,31 +173,31 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
             <>
               {/* Cluster Overview */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <p className="text-sm text-slate-500">Cluster Status</p>
+                <div className="bg-surface-alt rounded-lg p-4">
+                  <p className="text-sm text-secondary">Cluster Status</p>
                   <Tag
                     value={slurmStatus.cluster_status}
                     severity={slurmStatus.cluster_status === 'healthy' ? 'success' : 'warning'}
                   />
                 </div>
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <p className="text-sm text-slate-500">Active Jobs</p>
-                  <p className="text-2xl font-bold text-blue-600">{slurmStatus.active_jobs}</p>
+                <div className="bg-surface-alt rounded-lg p-4">
+                  <p className="text-sm text-secondary">Active Jobs</p>
+                  <p className="text-2xl font-bold font-heading text-brand-500">{slurmStatus.active_jobs}</p>
                 </div>
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <p className="text-sm text-slate-500">Queue Length</p>
-                  <p className="text-2xl font-bold text-orange-600">{slurmStatus.queue_length}</p>
+                <div className="bg-surface-alt rounded-lg p-4">
+                  <p className="text-sm text-secondary">Queue Length</p>
+                  <p className="text-2xl font-bold font-heading text-orange-600">{slurmStatus.queue_length}</p>
                 </div>
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <p className="text-sm text-slate-500">Total Nodes</p>
-                  <p className="text-2xl font-bold text-slate-800">{slurmStatus.total_nodes}</p>
+                <div className="bg-surface-alt rounded-lg p-4">
+                  <p className="text-sm text-secondary">Total Nodes</p>
+                  <p className="text-2xl font-bold font-heading text-primary">{slurmStatus.total_nodes}</p>
                 </div>
               </div>
 
               {/* Node Status */}
               {Object.keys(slurmStatus.node_status).length > 0 && (
                 <div className="mb-6">
-                  <h4 className="text-sm font-medium text-slate-600 mb-2">Node Status</h4>
+                  <h4 className="text-sm font-medium font-heading text-secondary mb-2">Node Status</h4>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(slurmStatus.node_status).map(([state, count]) => (
                       <Tag
@@ -221,14 +221,14 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
               {/* Partitions Table */}
               {slurmStatus.partitions.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-medium text-slate-600 mb-2">Partitions</h4>
+                  <h4 className="text-sm font-medium font-heading text-secondary mb-2">Partitions</h4>
                   <DataTable
                     value={slurmStatus.partitions}
                     size="small"
                     className="text-sm"
                     rowClassName={(row: PartitionInfo) =>
                       row.name === slurmStatus.configured_partition
-                        ? 'bg-blue-50 font-semibold'
+                        ? 'bg-brand-50 font-semibold'
                         : ''
                     }
                   >
@@ -260,22 +260,22 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
 
                   {/* Job Configuration Info */}
                   {slurmStatus.configured_partition && (
-                    <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div className="mt-4 bg-brand-50 border border-[var(--color-border)] rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
-                        <i className="pi pi-cog text-blue-600" />
-                        <span className="font-medium text-blue-800">Job Configuration</span>
+                        <i className="pi pi-cog text-link" />
+                        <span className="font-medium text-primary">Job Configuration</span>
                       </div>
-                      <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                         <div>
-                          <span className="text-slate-500">Partition:</span>{' '}
+                          <span className="text-secondary">Partition:</span>{' '}
                           <span className="font-medium">{slurmStatus.configured_partition}</span>
                         </div>
                         <div>
-                          <span className="text-slate-500">CPUs per job:</span>{' '}
+                          <span className="text-secondary">CPUs per job:</span>{' '}
                           <span className="font-medium">{slurmStatus.configured_cpus}</span>
                         </div>
                         <div>
-                          <span className="text-slate-500">Memory per job:</span>{' '}
+                          <span className="text-secondary">Memory per job:</span>{' '}
                           <span className="font-medium">{slurmStatus.configured_memory}</span>
                         </div>
                       </div>
@@ -289,12 +289,12 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
       )}
 
       {/* Info Box */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="bg-brand-50 border border-[var(--color-border)] rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <i className="pi pi-info-circle text-blue-600 mt-0.5" />
+          <i className="pi pi-info-circle text-link mt-0.5" />
           <div>
-            <h3 className="font-semibold text-blue-800 mb-2">System Monitoring</h3>
-            <ul className="text-sm text-blue-700 list-disc pl-5 space-y-1">
+            <h3 className="font-semibold font-heading text-primary mb-2">System Monitoring</h3>
+            <ul className="text-sm text-secondary list-disc pl-5 space-y-1">
               <li>Health checks verify database and Slurm connectivity</li>
               <li>Auto-refresh polls the system every 30 seconds when enabled</li>
               <li>Slurm status shows real-time cluster information when available</li>

@@ -198,7 +198,7 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
   if (loading && !stats) {
     return (
       <div className="flex items-center justify-center p-8">
-        <i className="pi pi-spin pi-spinner text-4xl text-blue-600" />
+        <i className="pi pi-spin pi-spinner text-4xl text-brand-500" />
       </div>
     );
   }
@@ -210,8 +210,8 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
         <Card className="shadow-md">
           <div className="text-center">
             <i className="pi pi-clock text-3xl text-blue-500 mb-2" />
-            <p className="text-sm text-slate-500">Avg Duration</p>
-            <p className="text-xl font-bold text-slate-800">
+            <p className="text-sm text-secondary">Avg Duration</p>
+            <p className="text-xl font-bold font-heading text-primary">
               {formatDuration(stats?.avg_duration || 0)}
             </p>
           </div>
@@ -220,8 +220,8 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
         <Card className="shadow-md">
           <div className="text-center">
             <i className="pi pi-stopwatch text-3xl text-purple-500 mb-2" />
-            <p className="text-sm text-slate-500">Median Duration</p>
-            <p className="text-xl font-bold text-slate-800">
+            <p className="text-sm text-secondary">Median Duration</p>
+            <p className="text-xl font-bold font-heading text-primary">
               {formatDuration(stats?.median_duration || 0)}
             </p>
           </div>
@@ -230,8 +230,8 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
         <Card className="shadow-md">
           <div className="text-center">
             <i className="pi pi-chart-bar text-3xl text-orange-500 mb-2" />
-            <p className="text-sm text-slate-500">P95 Duration</p>
-            <p className="text-xl font-bold text-slate-800">
+            <p className="text-sm text-secondary">P95 Duration</p>
+            <p className="text-xl font-bold font-heading text-primary">
               {formatDuration(stats?.p95_duration || 0)}
             </p>
           </div>
@@ -240,16 +240,16 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
         <Card className="shadow-md">
           <div className="text-center">
             <i className="pi pi-check-circle text-3xl text-green-500 mb-2" />
-            <p className="text-sm text-slate-500">Success Rate</p>
-            <p className="text-xl font-bold text-slate-800">{stats?.success_rate.toFixed(1)}%</p>
+            <p className="text-sm text-secondary">Success Rate</p>
+            <p className="text-xl font-bold font-heading text-primary">{stats?.success_rate.toFixed(1)}%</p>
           </div>
         </Card>
 
         <Card className="shadow-md">
           <div className="text-center">
             <i className="pi pi-check text-3xl text-teal-500 mb-2" />
-            <p className="text-sm text-slate-500">Completed</p>
-            <p className="text-xl font-bold text-slate-800">{stats?.total_completed || 0}</p>
+            <p className="text-sm text-secondary">Completed</p>
+            <p className="text-xl font-bold font-heading text-primary">{stats?.total_completed || 0}</p>
           </div>
         </Card>
       </div>
@@ -259,7 +259,7 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
         {/* Performance Trend */}
         <Card className="shadow-md">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-            <h3 className="text-base sm:text-lg font-semibold text-slate-800">
+            <h3 className="text-base sm:text-lg font-semibold font-heading text-primary">
               Performance Trend (30d)
             </h3>
             <Button
@@ -276,7 +276,7 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
 
         {/* Quick vs Deep Comparison */}
         <Card className="shadow-md">
-          <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-4">Quick vs Deep</h3>
+          <h3 className="text-base sm:text-lg font-semibold font-heading text-primary mb-4">Quick vs Deep</h3>
           <div className="h-56 sm:h-64">
             <Chart type="bar" data={comparisonChartData} options={comparisonChartOptions} />
           </div>
@@ -285,14 +285,14 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
 
       {/* Performance by Type Table */}
       <Card className="shadow-md">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">Performance by Analysis Type</h3>
+        <h3 className="text-lg font-semibold font-heading text-primary mb-4">Performance by Analysis Type</h3>
         <div className="overflow-x-auto">
           <DataTable value={byType} loading={loading} className="text-sm">
-            <Column header="Type" body={typeTemplate} style={{ width: '100px' }} />
-            <Column field="total_runs" header="Runs" style={{ width: '80px' }} />
-            <Column field="completed" header="Done" style={{ width: '80px' }} />
-            <Column field="failed" header="Fail" style={{ width: '70px' }} />
-            <Column header="Avg Time" body={durationTemplate} style={{ width: '100px' }} />
+            <Column header="Type" body={typeTemplate} />
+            <Column field="total_runs" header="Runs" />
+            <Column field="completed" header="Done" />
+            <Column field="failed" header="Fail" />
+            <Column header="Avg Time" body={durationTemplate} />
             <Column header="Success" body={successRateTemplate} />
           </DataTable>
         </div>
@@ -300,23 +300,23 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
 
       {/* Insights */}
       <Card className="shadow-md bg-gradient-to-r from-blue-50 to-purple-50">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">
+        <h3 className="text-lg font-semibold font-heading text-primary mb-4">
           <i className="pi pi-lightbulb mr-2 text-yellow-500" />
           Performance Insights
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {byType.map((type) => (
-            <div key={type.type} className="bg-white rounded-lg p-4 shadow-sm">
-              <h4 className="font-medium text-slate-700 mb-2">
+            <div key={type.type} className="bg-surface rounded-lg p-4 shadow-sm">
+              <h4 className="font-medium font-heading text-primary mb-2">
                 {type.type.charAt(0).toUpperCase() + type.type.slice(1)} Analysis
               </h4>
-              <ul className="text-sm text-slate-600 space-y-1">
+              <ul className="text-sm text-secondary space-y-1">
                 <li>
-                  <span className="text-slate-400">Avg completion time:</span>{' '}
+                  <span className="text-muted">Avg completion time:</span>{' '}
                   <strong>{formatDuration(type.avg_duration)}</strong>
                 </li>
                 <li>
-                  <span className="text-slate-400">Success rate:</span>{' '}
+                  <span className="text-muted">Success rate:</span>{' '}
                   <strong
                     className={
                       type.success_rate >= 80
@@ -330,7 +330,7 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
                   </strong>
                 </li>
                 <li>
-                  <span className="text-slate-400">Failure rate:</span>{' '}
+                  <span className="text-muted">Failure rate:</span>{' '}
                   <strong>{((type.failed / type.total_runs) * 100).toFixed(1)}%</strong>
                 </li>
               </ul>

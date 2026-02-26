@@ -16,14 +16,12 @@ export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({
   projectDescription,
   onChange,
 }) => (
-  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-    <div className="flex items-center mb-4">
-      <div className="bg-blue-100 p-2 rounded-lg mr-3 flex-shrink-0">
-        <i className="pi pi-info-circle text-blue-600 text-lg"></i>
-      </div>
-      <div className="flex-1">
+  <div className="bg-surface p-6 rounded-xl border border-[var(--color-border)] shadow-sm">
+    <div className="flex items-start gap-3 mb-4">
+      <i className="pi pi-pencil text-muted text-lg mt-1 shrink-0"></i>
+      <div>
         <div className="flex items-center gap-2">
-          <h3 className="text-lg font-bold text-slate-800">Project Details</h3>
+          <h3 className="text-lg font-heading font-bold text-primary">Project Details</h3>
           <HelpButton title="Project Description">
             <h4>What is this for?</h4>
             <p>
@@ -55,16 +53,16 @@ export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({
             </p>
           </HelpButton>
         </div>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-secondary">
           Provide context for the AI to generate better explanations.
         </p>
       </div>
     </div>
 
-    <div className="pl-0 md:pl-12">
-      <label className="block text-sm font-semibold text-slate-700 mb-2">Project Description</label>
+    <div>
+      <label className="block text-sm font-semibold text-secondary mb-2">Project Description</label>
       <InputTextarea
-        className="w-full bg-slate-50 border-slate-200 focus:border-blue-500 focus:ring-blue-500 resize-none h-30"
+        className="w-full bg-surface-alt border-[var(--color-border)] focus:border-blue-500 focus:ring-blue-500 resize-none h-30"
         rows={6}
         value={projectDescription}
         onChange={(e) => onChange(e.target.value)}

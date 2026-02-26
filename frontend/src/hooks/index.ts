@@ -10,3 +10,5 @@ export type {
 
 export { useRunProgress } from './useRunProgress';
 export type { UseRunProgressOptions, UseRunProgressReturn } from './useRunProgress';
+
+export { useIsMobile } from './useIsMobile';

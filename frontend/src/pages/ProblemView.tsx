@@ -397,8 +397,8 @@ const ProblemView: React.FC<ProblemViewProps> = ({
     <div className="p-4">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">Define the Problem</h2>
-          <p className="text-slate-500">Tell the AI what you want to predict and explain.</p>
+          <h2 className="text-2xl font-bold text-primary font-heading mb-2">Define the Problem</h2>
+          <p className="text-secondary">Tell the AI what you want to predict and explain.</p>
         </div>
 
         <div className="mt-4 md:mt-0">

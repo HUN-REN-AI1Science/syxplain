@@ -46,7 +46,7 @@ export const HistoryFilterBar: React.FC<HistoryFilterBarProps> = ({
   onRefresh,
   hasActiveFilters,
 }) => (
-  <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200 w-full">
+  <div className="mb-4 p-4 bg-surface-alt rounded-lg border border-[var(--color-border)] w-full">
     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full">
       {/* Search */}
       <div className="p-inputgroup w-full sm:flex-1 sm:min-w-[200px]">

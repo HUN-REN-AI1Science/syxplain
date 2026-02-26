@@ -13,35 +13,26 @@ const LoginPage: React.FC = () => {
         <Button
           label="Sign In with Email"
           onClick={() => signIn()}
-          className="w-full"
-          style={{
-            backgroundColor: '#0052cc',
-            color: 'white',
-            borderColor: '#0052cc',
-            height: '48px',
-            fontSize: '16px',
-          }}
+          className="w-full h-12 text-base bg-brand-500 border-brand-500 text-white hover:bg-brand-600"
         />
 
         {enableMicrosoftSSO && (
           <>
             <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-slate-200"></div>
-              <span className="text-slate-400 text-sm">or</span>
-              <div className="flex-1 h-px bg-slate-200"></div>
+              <div className="flex-1 h-px bg-[var(--color-border)]" />
+              <span className="text-muted text-sm">or</span>
+              <div className="flex-1 h-px bg-[var(--color-border)]" />
             </div>
 
             <Button
               label="Sign In with Microsoft"
               icon="pi pi-microsoft"
               onClick={() => signInWithSSO()}
-              className="w-full"
+              className="w-full h-12 text-base"
               outlined
               style={{
-                height: '48px',
-                fontSize: '16px',
-                borderColor: '#e2e8f0',
-                color: '#334155',
+                borderColor: 'var(--color-border)',
+                color: 'var(--color-text-secondary)',
               }}
             />
           </>

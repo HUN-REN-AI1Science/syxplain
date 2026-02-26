@@ -70,7 +70,7 @@ const PublicResultsView: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
+    <div className="min-h-screen bg-surface-alt font-sans flex flex-col">
       <PublicHeader />
 
       <main className="flex-grow py-10 px-4 sm:px-6 lg:px-8">
@@ -87,8 +87,8 @@ const PublicResultsView: React.FC = () => {
                 <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-4">
                   <i className="pi pi-exclamation-triangle text-red-500 text-3xl"></i>
                 </div>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">Unable to Load Results</h2>
-                <p className="text-slate-600 text-center max-w-md mb-6">{error}</p>
+                <h2 className="text-xl font-bold text-primary font-heading mb-2">Unable to Load Results</h2>
+                <p className="text-secondary text-center max-w-md mb-6">{error}</p>
                 <Message
                   severity="warn"
                   className="max-w-md"
@@ -124,8 +124,8 @@ const PublicResultsView: React.FC = () => {
         </div>
       </main>
 
-      <footer className="bg-white border-t border-slate-200 py-6 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 text-center text-slate-400 text-sm">
+      <footer className="bg-surface border-t border-[var(--color-border)] py-6 mt-auto">
+        <div className="max-w-7xl mx-auto px-4 text-center text-muted text-sm">
           &copy; {new Date().getFullYear()} Syxplain AI. All rights reserved.
         </div>
       </footer>

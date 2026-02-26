@@ -10,6 +10,7 @@ import ProfileView from '@pages/ProfileView';
 import AdminLayout from '@pages/admin/AdminLayout';
 import PublicResultsView from '@pages/results/PublicResultsView';
 import { AuthProvider, useAuth } from '@contexts/AuthContext';
+import { ThemeProvider } from '@contexts/ThemeContext';
 import { runsService } from '@services/api';
 import { Toast } from 'primereact/toast';
 import { Card } from 'primereact/card';
@@ -131,7 +132,11 @@ function MainApp() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
+    <div className="min-h-screen bg-page font-body flex flex-col">
+      <a href="#main-content" className="skip-to-content">
+        Skip to main content
+      </a>
+
       <Toast ref={toast} />
 
       <AppHeader
@@ -150,22 +155,22 @@ function MainApp() {
         context={buildFeedbackContext()}
       />
 
-      <main className="flex-grow py-10 px-4 sm:px-6 lg:px-8">
+      <main id="main-content" className="flex-grow py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto">
           {view === 'admin' ? (
-            <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
+            <Card className="shadow-card border-round-2xl overflow-hidden border-none">
               <AdminLayout onBack={() => setView('workflow')} />
             </Card>
           ) : view === 'history' ? (
-            <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
+            <Card className="shadow-card border-round-2xl overflow-hidden border-none">
               <HistoryView onSelectRun={handleSelectRun} />
             </Card>
           ) : view === 'profile' ? (
-            <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
+            <Card className="shadow-card border-round-2xl overflow-hidden border-none">
               <ProfileView onBack={() => setView('workflow')} onSelectRun={handleSelectRun} />
             </Card>
           ) : (
-            <Card className="shadow-xl border-round-2xl overflow-hidden border-none">
+            <Card className="shadow-card border-round-2xl overflow-hidden border-none">
               <div className="flex flex-col">
                 <WorkflowSteps activeIndex={activeIndex} items={WORKFLOW_STEPS} />
 
@@ -211,19 +216,21 @@ function MainApp() {
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/share/:token" element={<PublicResultsView />} />
-        <Route
-          path="*"
-          element={
-            <OidcProvider {...oidcConfig}>
-              <AuthProvider>
-                <AuthGate />
-              </AuthProvider>
-            </OidcProvider>
-          }
-        />
-      </Routes>
+      <ThemeProvider>
+        <Routes>
+          <Route path="/share/:token" element={<PublicResultsView />} />
+          <Route
+            path="*"
+            element={
+              <OidcProvider {...oidcConfig}>
+                <AuthProvider>
+                  <AuthGate />
+                </AuthProvider>
+              </OidcProvider>
+            }
+          />
+        </Routes>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }
@@ -239,8 +246,8 @@ function AuthGate() {
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <i className="pi pi-spin pi-spinner text-blue-600 text-4xl"></i>
+      <div className="min-h-screen bg-page flex items-center justify-center">
+        <i className="pi pi-spin pi-spinner text-brand-500 text-4xl" />
       </div>
     );
   }
