@@ -32,7 +32,7 @@ def update_run_status(
     progress: int | None = None,
 ) -> None:
     """
-    Update run status in the database and broadcast via WebSocket.
+    Update run status in the database and broadcast via SSE.
 
     Args:
         run_id: The run UUID as string
@@ -75,7 +75,7 @@ def update_run_status(
         logger.error(f"Failed to update run status for {run_id}: {e}")
         return
 
-    # Broadcast via WebSocket
+    # Broadcast via SSE
     _broadcast_status_update(run_id, status, final_progress or 0, error, results)
 
 
@@ -86,9 +86,9 @@ def _broadcast_status_update(
     error: str | None = None,
     results: dict[str, Any] | None = None,
 ) -> None:
-    """Broadcast status update via WebSocket."""
+    """Broadcast status update via SSE."""
     try:
-        from backend.api.websocket.connection_manager import get_connection_manager
+        from backend.api.sse.connection_manager import get_connection_manager
 
         manager = get_connection_manager()
 

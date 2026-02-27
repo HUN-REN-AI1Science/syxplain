@@ -1,6 +1,6 @@
 /**
  * ResultsView Component
- * Displays analysis results with WebSocket-based real-time progress updates
+ * Displays analysis results with SSE-based real-time progress updates
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';

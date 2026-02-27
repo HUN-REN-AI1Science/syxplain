@@ -27,7 +27,7 @@ from backend.api.routers import (
     runs,
     sharing,
 )
-from backend.api.websocket import progress_ws
+from backend.api.sse.progress_sse import router as progress_sse_router
 from backend.core.config import get_settings
 from backend.core.exceptions import register_exception_handlers
 from backend.core.logging import configure_logging, configure_uvicorn_logging
@@ -151,7 +151,7 @@ def create_app() -> FastAPI:
     app.include_router(permissions.router)
     app.include_router(profile.router)
     app.include_router(progress.router)
-    app.include_router(progress_ws.router)  # WebSocket for real-time progress
+    app.include_router(progress_sse_router)  # SSE for real-time progress
     app.include_router(sharing.router)  # Before runs to capture /api/runs/shared
     app.include_router(runs.router)
 

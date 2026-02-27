@@ -1,18 +1,18 @@
 /**
  * useRunProgress Hook
  *
- * Provides real-time progress updates for a run using WebSocket connection.
+ * Provides real-time progress updates for a run using SSE connection.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ProgressWebSocket } from '@services/websocketService';
+import { ProgressSSE } from '@services/sseService';
 import type { EquationResults, RunStatus } from '@/types';
 import type {
   ConnectionState,
   ServerMessage,
   UseRunProgressOptions,
   UseRunProgressReturn,
-} from '@/types/websocket';
+} from '@/types/sse';
 
 const TERMINAL_STATUSES: RunStatus[] = ['completed', 'failed', 'timeout', 'cancelled'];
 
@@ -28,7 +28,7 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
   const [isReady, setIsReady] = useState(false);
 
   // Refs
-  const wsRef = useRef<ProgressWebSocket | null>(null);
+  const sseRef = useRef<ProgressSSE | null>(null);
   const isTerminalRef = useRef(false);
   const onCompleteRef = useRef(onComplete);
   const onErrorRef = useRef(onError);
@@ -59,11 +59,9 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
     []
   );
 
-  // Handle WebSocket message
+  // Handle SSE message
   const handleMessage = useCallback(
     (message: ServerMessage) => {
-      if (message.type === 'pong') return;
-
       if (message.type === 'initial_state' || message.type === 'progress_update') {
         setProgress(message.progress);
         setStatus(message.status);
@@ -82,38 +80,38 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
     [handleTerminalState]
   );
 
-  // Handle WebSocket state change
+  // Handle SSE state change
   const handleStateChange = useCallback((state: ConnectionState) => {
     setConnectionState(state);
   }, []);
 
-  // Main effect: manage WebSocket connection
+  // Main effect: manage SSE connection
   useEffect(() => {
     if (!enabled || !runId) return;
 
     isTerminalRef.current = false;
 
-    const ws = new ProgressWebSocket(runId, {
+    const sse = new ProgressSSE(runId, {
       onMessage: handleMessage,
       onStateChange: handleStateChange,
       onError: (err) => {
-        console.error('WebSocket error:', err);
+        console.error('SSE error:', err);
       },
     });
 
-    wsRef.current = ws;
-    ws.connect();
+    sseRef.current = sse;
+    sse.connect();
 
     return () => {
-      ws.close();
-      wsRef.current = null;
+      sse.close();
+      sseRef.current = null;
     };
   }, [enabled, runId, handleMessage, handleStateChange]);
 
   // Cleanup on terminal state
   useEffect(() => {
     if (TERMINAL_STATUSES.includes(status)) {
-      wsRef.current?.close();
+      sseRef.current?.close();
     }
   }, [status]);
 

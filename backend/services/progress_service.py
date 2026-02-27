@@ -31,13 +31,13 @@ def _broadcast_progress_sync(
     results: dict | None = None,
 ) -> None:
     """
-    Broadcast progress update via WebSocket (sync wrapper for async broadcast).
+    Broadcast progress update via SSE (sync wrapper for async broadcast).
 
     This is safe to call from sync code - it will schedule the broadcast
     on the event loop if one is running, or skip if not.
     """
     try:
-        from backend.api.websocket.connection_manager import get_connection_manager
+        from backend.api.sse.connection_manager import get_connection_manager
 
         manager = get_connection_manager()
 
@@ -211,7 +211,7 @@ class ProgressTracker:
             summary = {k: type(v).__name__ for k, v in details.items()}
             logger.debug(f"  Details: {summary}")
 
-        # Update database and broadcast via WebSocket
+        # Update database and broadcast via SSE
         self._persist_progress(progress, step_name=step_name)
 
     def set_progress(self, progress: int, status: str | None = None) -> None:
@@ -236,10 +236,10 @@ class ProgressTracker:
         self._persist_progress(progress)
 
     def _persist_progress(self, progress: int, step_name: str | None = None) -> None:
-        """Persist progress to database and broadcast via WebSocket."""
+        """Persist progress to database and broadcast via SSE."""
         run_status = self._persist_progress_db(progress)
 
-        # Broadcast to WebSocket clients
+        # Broadcast to SSE clients
         _broadcast_progress_sync(
             run_id=self.run_id,
             progress=progress,

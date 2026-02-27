@@ -45,7 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loading = oidc.isLoading;
 
-  // Set up token getter for api.ts and websocketService.ts
+  // Set up token getter for api.ts and sseService.ts
   useEffect(() => {
     if (!tokenGetterSet.current) {
       setTokenGetter(() => oidc.user?.access_token ?? null);

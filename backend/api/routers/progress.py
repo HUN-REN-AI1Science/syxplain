@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
-from backend.api.websocket.connection_manager import get_connection_manager
+from backend.api.sse.connection_manager import get_connection_manager
 from backend.core.config import get_compute_settings
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
@@ -129,7 +129,7 @@ async def receive_progress(
                     + (f" - {progress.status}" if progress.status else "")
                 )
 
-                # Broadcast progress update via WebSocket
+                # Broadcast progress update via SSE
                 manager = get_connection_manager()
                 await manager.broadcast_progress(
                     run_id=run_id,
@@ -194,7 +194,7 @@ async def receive_error(
             db.commit()
             logger.info(f"[Run {run_id[:8]}] Marked as failed: {error.error}")
 
-            # Broadcast error via WebSocket
+            # Broadcast error via SSE
             manager = get_connection_manager()
             await manager.broadcast_progress(
                 run_id=run_id,
@@ -269,7 +269,7 @@ async def receive_completion(
             db.commit()
             logger.info(f"[Run {run_id[:8]}] Compute results stored, progress at {run.progress}%")
 
-            # Broadcast completion via WebSocket
+            # Broadcast completion via SSE
             manager = get_connection_manager()
             await manager.broadcast_progress(
                 run_id=run_id,
