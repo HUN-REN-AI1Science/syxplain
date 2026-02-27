@@ -9,7 +9,7 @@ import logging
 from fastapi import APIRouter, Depends, Request
 
 from backend.core.rate_limit import limiter
-from backend.core.security import User, get_current_user
+from backend.core.security import User, get_current_user_jwt_only
 from backend.schemas.requests import FeedbackRequest
 from backend.schemas.responses import FeedbackResponse
 from backend.services.feedback_service import FeedbackService
@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api", tags=["Feedback"])
 async def submit_feedback(
     request: Request,
     body: FeedbackRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
 ):
     """
     Submit user feedback (bug report or feature request).

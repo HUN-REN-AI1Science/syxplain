@@ -8,7 +8,7 @@ Separated from connection management for cleaner architecture.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, LargeBinary, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -129,6 +129,39 @@ class RunArtifact(Base):
 
     def __repr__(self) -> str:
         return f"<RunArtifact(run_id={self.run_id}, filename='{self.filename}')>"
+
+
+class ApiKey(Base):
+    """
+    Represents a user's API key for programmatic access.
+
+    The full key is never stored — only a SHA-256 hash for lookup
+    and a prefix for display in the UI.
+    """
+
+    __tablename__ = "api_keys"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    key_prefix = Column(String(12), nullable=False)
+    key_hash = Column(String(64), nullable=False, unique=True, index=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    user_email = Column(String(255), nullable=False)
+    user_roles = Column(JSONB, default=list)
+    last_used_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        return f"<ApiKey(id={self.id}, name='{self.name}', prefix='{self.key_prefix}')>"
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if the key has expired."""
+        if self.expires_at is None:
+            return False
+        return datetime.utcnow() > self.expires_at
 
 
 class AuditLog(Base):

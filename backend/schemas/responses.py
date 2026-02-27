@@ -159,6 +159,30 @@ class ProfileDeleteResponse(BaseModel):
 
 
 # ============================================================================
+# API Key Responses
+# ============================================================================
+
+
+class ApiKeyResponse(BaseModel):
+    """API key info (never contains the full key)."""
+
+    id: str
+    key_prefix: str
+    is_active: bool
+    created_at: str | None = None
+    last_used_at: str | None = None
+
+
+class CreateApiKeyResponse(BaseModel):
+    """Response when creating a new API key. Contains the full key (shown once)."""
+
+    id: str
+    key: str = Field(..., description="The full API key — shown only once, store it securely")
+    key_prefix: str
+    created_at: str | None = None
+
+
+# ============================================================================
 # Config Responses
 # ============================================================================
 

@@ -14,7 +14,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from backend.api.sse.connection_manager import get_connection_manager
 from backend.core.exceptions import ValidationError
-from backend.core.security import User, get_current_user
+from backend.core.security import User, get_current_user_jwt_only
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
 from backend.utils import parse_uuid
@@ -29,7 +29,7 @@ TERMINAL_STATUSES = ("completed", "failed", "timeout", "cancelled")
 @router.get("/progress/{run_id}")
 async def sse_progress(
     run_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_jwt_only),
 ):
     """
     SSE endpoint for real-time progress updates.

@@ -12,6 +12,7 @@ import httpx
 from backend.core.config import get_settings
 from backend.core.exceptions import ExternalServiceError
 from backend.infrastructure.keycloak.admin_client import get_keycloak_admin_token
+from backend.repositories.api_key_repository import ApiKeyRepository
 from backend.repositories.file_repository import FileRepository
 from backend.repositories.run_repository import RunRepository
 from backend.utils import parse_uuid
@@ -26,9 +27,15 @@ class ProfileService:
     Handles profile data retrieval and GDPR-compliant account deletion.
     """
 
-    def __init__(self, run_repo: RunRepository, file_repo: FileRepository):
+    def __init__(
+        self,
+        run_repo: RunRepository,
+        file_repo: FileRepository,
+        api_key_repo: ApiKeyRepository | None = None,
+    ):
         self.run_repo = run_repo
         self.file_repo = file_repo
+        self.api_key_repo = api_key_repo
         self.settings = get_settings()
 
     def get_profile(self, user_id: str, email: str) -> dict[str, Any]:
@@ -83,6 +90,11 @@ class ProfileService:
         user_uuid = parse_uuid(user_id)
 
         logger.info(f"Starting GDPR account deletion for user: {user_id}")
+
+        # Delete all API keys
+        if self.api_key_repo:
+            keys_deleted = self.api_key_repo.delete_all_for_user(user_uuid)
+            logger.info(f"Deleted {keys_deleted} API keys for user {user_id}")
 
         # Delete all runs (cascades to run_steps and run_artifacts)
         runs_deleted = self.run_repo.delete_all_for_user(user_uuid)

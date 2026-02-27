@@ -14,6 +14,8 @@ import type {
   EquationResults,
   UserPermissions,
   UserApiKeys,
+  ApiKey,
+  CreateApiKeyResponse,
   DashboardStats,
   RunTrendItem,
   StatusDistributionItem,
@@ -233,6 +235,20 @@ export const publicService = {
 
   downloadCsv: (token: string) =>
     publicApi.get(`/public/${token}/download-csv`, { responseType: 'blob' }),
+};
+
+// ============================================================================
+// API Keys Service
+// ============================================================================
+
+export const apiKeysService = {
+  get: () => api.get<ApiKey | null>('/api-keys'),
+
+  generate: () => api.post<CreateApiKeyResponse>('/api-keys'),
+
+  revoke: () => api.delete<{ message: string }>('/api-keys'),
+
+  regenerate: () => api.post<CreateApiKeyResponse>('/api-keys/regenerate'),
 };
 
 // ============================================================================

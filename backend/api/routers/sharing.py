@@ -13,7 +13,7 @@ from fastapi.responses import Response
 from backend.api.dependencies import get_share_service
 from backend.core.exceptions import EntityNotFoundError
 from backend.core.rate_limit import limiter
-from backend.core.security import User, get_current_user
+from backend.core.security import User, get_current_user_jwt_only
 from backend.schemas.responses import (
     MessageResponse,
     PublicRunResponse,
@@ -35,7 +35,7 @@ router = APIRouter(tags=["Sharing"])
 
 @router.get("/api/runs/shared", response_model=SharedRunsResponse)
 def get_shared_runs(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
     share_service: ShareService = Depends(get_share_service),
 ):
     """
@@ -51,7 +51,7 @@ def get_shared_runs(
 @router.post("/api/runs/{run_id}/share", response_model=ShareLinkResponse)
 def create_share_link(
     run_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
     share_service: ShareService = Depends(get_share_service),
 ):
     """
@@ -80,7 +80,7 @@ def create_share_link(
 @router.delete("/api/runs/{run_id}/share", response_model=MessageResponse)
 def revoke_share_link(
     run_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
     share_service: ShareService = Depends(get_share_service),
 ):
     """
