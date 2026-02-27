@@ -14,6 +14,7 @@ import {
   ResultsHeader,
   ResultContent,
 } from '@components/Results';
+import { AppFooter } from '@components/AppFooter';
 import { publicService, type PublicRunData } from '@services/api';
 import type { EquationResults } from '@/types';
 
@@ -110,11 +111,7 @@ const PublicResultsView: React.FC = () => {
         </div>
       </main>
 
-      <footer className="bg-surface border-t border-[var(--color-border)] py-6 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 text-center text-muted text-sm">
-          &copy; {new Date().getFullYear()} Syxplain AI. All rights reserved.
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 };

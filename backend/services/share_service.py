@@ -56,10 +56,18 @@ class ShareService:
 
         Raises:
             EntityNotFoundError: If run not found or not owned by user
+            ValueError: If run has incomplete results (explanation error)
         """
         run = self.run_repo.get_by_id_for_user(UUID(run_id), UUID(user_id))
         if not run:
             raise EntityNotFoundError("Run", run_id)
+
+        # Block sharing if explanations failed
+        if self._has_explanation_error(run.results):
+            raise ValueError(
+                "Cannot share results: AI explanations could not be generated for this analysis. "
+                "Please re-run the analysis to get complete results before sharing."
+            )
 
         # If already shared, return existing token
         if run.public_share_token:
@@ -75,6 +83,14 @@ class ShareService:
         logger.info(f"User {user_id} created share link for run {run_id}")
 
         return {"share_token": token, "share_url": f"/share/{token}"}
+
+    @staticmethod
+    def _has_explanation_error(results: dict | None) -> bool:
+        """Check if the run's results contain an explanation error."""
+        if not results or not isinstance(results, dict):
+            return False
+        explanations = results.get("explanations")
+        return isinstance(explanations, dict) and "error" in explanations
 
     def revoke_share_link(self, run_id: str, user_id: str) -> None:
         """

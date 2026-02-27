@@ -354,6 +354,24 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data }) => {
     );
   }
 
+  // Handle LLM explanation failure — show error instead of partial results
+  if (data._explanation_error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+        <div className="flex flex-col items-center justify-center text-center py-8">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+            <i className="pi pi-times-circle text-red-500 text-3xl"></i>
+          </div>
+          <h4 className="text-xl font-bold text-primary font-heading mb-2">Analysis Failed</h4>
+          <p className="text-secondary max-w-md">
+            The AI explanation step encountered an error during this analysis.
+            The results could not be fully generated. Please re-run the analysis to get complete results.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Summary Section */}

@@ -102,6 +102,8 @@ export interface EquationResults {
   summary: Summary;
   recommendation: Recommendation;
   _parse_error?: string;
+  /** Set when the LLM explanation step failed; equations are raw PySR output */
+  _explanation_error?: boolean;
 }
 
 // ============================================================================

@@ -31,19 +31,6 @@ from backend.services.progress_service import ProgressTracker
 logger = logging.getLogger(__name__)
 
 
-def _is_user_api_key_error(exc: Exception) -> bool:
-    """Check if an exception is an API key authentication, quota, or rate limit error."""
-    try:
-        import litellm
-
-        return isinstance(
-            exc,
-            (litellm.AuthenticationError, litellm.RateLimitError, litellm.BudgetExceededError),
-        )
-    except ImportError:
-        return False
-
-
 def _format_user_facing_error(exc: Exception) -> str:
     """Convert an exception into a user-friendly error message."""
     try:
@@ -65,6 +52,22 @@ def _format_user_facing_error(exc: Exception) -> str:
                 "API budget exceeded. "
                 "Your API account has reached its spending limit. "
                 "Please increase your budget or add credits and try again."
+            )
+        if isinstance(exc, litellm.NotFoundError):
+            return (
+                "The selected AI model was not found. "
+                "It may have been deprecated or renamed. "
+                "Please try a different model."
+            )
+        if isinstance(exc, litellm.APIConnectionError):
+            return (
+                "Could not connect to the AI service. "
+                "Please check your internet connection and try again."
+            )
+        if isinstance(exc, litellm.Timeout):
+            return (
+                "The AI service request timed out. "
+                "This may be due to high demand. Please try again later."
             )
     except ImportError:
         pass
@@ -390,11 +393,11 @@ class AnalysisOrchestrator:
             logger.info(f"LLM-generated PySR config: {validated}")
             return validated
         except Exception as e:
-            # Re-raise API key errors so the user gets a clear failure message
-            if context.user_api_key and _is_user_api_key_error(e):
+            # User-provided keys: always fail so the user sees a clear error
+            if context.user_api_key:
                 raise
             logger.warning(f"LLM config generation failed, using defaults: {e}")
-            # Return default config (niterations=None lets worker auto-estimate)
+            # Server keys: return default config (niterations=None lets worker auto-estimate)
             return {
                 "niterations": None,
                 "populations": 15,
@@ -607,10 +610,11 @@ class AnalysisOrchestrator:
             )
             return explanations
         except Exception as e:
-            # Re-raise API key errors so the user gets a clear failure message
-            if context.user_api_key and _is_user_api_key_error(e):
+            # User-provided keys: always fail so the user sees a clear error
+            if context.user_api_key:
                 raise
             logger.error(f"Explanation generation failed: {e}")
+            # Server keys: return partial results with error noted
             return {
                 "error": str(e),
                 "equations": compute_results.get("pysr", {}).get("equations", []),
@@ -668,10 +672,11 @@ class AnalysisOrchestrator:
 
             return enhanced_explanations
         except Exception as e:
-            # Re-raise API key errors so the user gets a clear failure message
-            if (context.user_api_key or context.user_openai_key) and _is_user_api_key_error(e):
+            # User-provided keys: always fail so the user sees a clear error
+            if context.user_api_key or context.user_openai_key:
                 raise
             logger.error(f"Deep research failed: {e}")
+            # Server keys: return previous explanations without deep research
             return explanations
 
     def _compile_final_results(

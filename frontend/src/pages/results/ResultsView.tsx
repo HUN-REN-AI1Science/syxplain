@@ -15,6 +15,7 @@ import {
   ResultsHeader,
   ResultContent,
   LoadingSpinner,
+  hasExplanationError,
 } from '@components/Results';
 import type { ResultsStatus } from '@components/Results';
 import { runsService, configService } from '@services/api';
@@ -242,6 +243,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     typeof result === 'object' &&
     (('equations' in result && 'summary' in result) || 'explanations' in result);
 
+  // Check if the LLM explanation step failed (results are incomplete)
+  const explanationFailed = hasExplanationError(result);
+
   // Only show error for terminal failure states, not transient WebSocket messages
   const isTerminalError =
     !!error && (status === 'failed' || status === 'timeout' || status === 'cancelled');
@@ -258,9 +262,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     return 'processing';
   };
 
-  // Header action buttons
+  // Header action buttons - hidden when explanations failed
   const renderHeaderActions = () => {
-    if (!isCompleted || !isNewFormat) return null;
+    if (!isCompleted || !isNewFormat || explanationFailed) return null;
 
     return (
       <>

@@ -73,6 +73,8 @@ def create_share_link(
         return ShareLinkResponse(**result)
     except EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 @router.delete("/api/runs/{run_id}/share", response_model=MessageResponse)

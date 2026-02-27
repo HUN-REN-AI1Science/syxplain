@@ -32,7 +32,13 @@ const extractFromBackendFormat = (result: Record<string, unknown>): EquationResu
     !Array.isArray(explanations) &&
     'equations' in explanations
   ) {
-    return explanations as unknown as EquationResults;
+    const data = explanations as unknown as EquationResults & { error?: string };
+    // When the LLM explanation step failed, explanations contains an error field
+    // and the equations are raw PySR output (no overviews, citations, etc.)
+    if ('error' in explanations && typeof (explanations as Record<string, unknown>).error === 'string') {
+      return { ...data, _explanation_error: true };
+    }
+    return data;
   }
   return null;
 };
