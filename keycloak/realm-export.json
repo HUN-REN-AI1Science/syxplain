@@ -9,6 +9,7 @@
   "editUsernameAllowed": false,
   "verifyEmail": true,
   "loginTheme": "syxplain",
+  "emailTheme": "syxplain",
   "sslRequired": "external",
   "defaultSignatureAlgorithm": "RS256",
   "passwordPolicy": "length(8) and maxLength(128) and specialChars(1) and digits(1)",

@@ -55,20 +55,6 @@ const PublicResultsView: React.FC = () => {
     fetchPublicRun();
   }, [token]);
 
-  // Parse results - handle both new direct format and old wrapper format
-  let parsedResults: EquationResults | string | null = null;
-
-  if (runData?.results) {
-    const results = runData.results;
-    if ('equations' in results) {
-      // New format: results is the EquationResults object directly
-      parsedResults = results as EquationResults;
-    } else if ('pysr_explanations' in results) {
-      // Old format: pass through to ResultContent for parsing
-      parsedResults = results.pysr_explanations;
-    }
-  }
-
   return (
     <div className="min-h-screen bg-surface-alt font-sans flex flex-col">
       <PublicHeader />
@@ -113,8 +99,8 @@ const PublicResultsView: React.FC = () => {
                 {token && <PublicRunSettingsPanel shareToken={token} />}
 
                 {/* Results Content */}
-                {parsedResults ? (
-                  <ResultContent result={parsedResults} />
+                {runData.results ? (
+                  <ResultContent result={runData.results as EquationResults | string} />
                 ) : (
                   <Message severity="warn" text="No results available" className="w-full" />
                 )}
