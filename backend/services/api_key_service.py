@@ -25,7 +25,7 @@ from backend.utils import parse_uuid
 logger = logging.getLogger(__name__)
 
 KEY_PREFIX = "syxp_"
-ROLE_CACHE_TTL_SECONDS = 3600  # 1 hour
+ROLE_CACHE_TTL_SECONDS = 300  # 5 minutes
 
 
 def _generate_key() -> str:
@@ -186,5 +186,18 @@ class ApiKeyService:
                     roles = [r["name"] for r in resp.json()]
                     self.repo.update_roles(api_key, roles)
                     logger.debug(f"Refreshed roles for API key {api_key.key_prefix}: {roles}")
+                elif resp.status_code == 404:
+                    # User deleted from Keycloak — deactivate the API key
+                    logger.warning(
+                        f"Keycloak user not found for API key {api_key.key_prefix}, "
+                        "deactivating key"
+                    )
+                    self.repo.deactivate(api_key)
+                    raise AuthenticationError(
+                        message="User account no longer exists",
+                        reason="user_deleted",
+                    )
+        except AuthenticationError:
+            raise
         except Exception as e:
-            logger.debug(f"Could not refresh roles for API key {api_key.key_prefix}: {e}")
+            logger.warning(f"Could not refresh roles for API key {api_key.key_prefix}: {e}")

@@ -7,10 +7,11 @@ for programmatic access without Keycloak/browser login.
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.api.dependencies import get_api_key_service
 from backend.core.exceptions import ValidationError
+from backend.core.rate_limit import limiter
 from backend.core.security import User, get_current_user_jwt_only
 from backend.schemas.responses import (
     ApiKeyResponse,
@@ -25,7 +26,9 @@ router = APIRouter(prefix="/api")
 
 
 @router.get("/api-keys", response_model=ApiKeyResponse | None)
+@limiter.limit("30/minute")
 def get_api_key(
+    request: Request,
     current_user: User = Depends(get_current_user_jwt_only),
     service: ApiKeyService = Depends(get_api_key_service),
 ):
@@ -37,7 +40,9 @@ def get_api_key(
 
 
 @router.post("/api-keys", response_model=CreateApiKeyResponse, status_code=201)
+@limiter.limit("5/minute")
 def create_api_key(
+    request: Request,
     current_user: User = Depends(get_current_user_jwt_only),
     service: ApiKeyService = Depends(get_api_key_service),
 ):
@@ -55,7 +60,9 @@ def create_api_key(
 
 
 @router.delete("/api-keys", response_model=MessageResponse)
+@limiter.limit("5/minute")
 def revoke_api_key(
+    request: Request,
     current_user: User = Depends(get_current_user_jwt_only),
     service: ApiKeyService = Depends(get_api_key_service),
 ):
@@ -72,7 +79,9 @@ def revoke_api_key(
 
 
 @router.post("/api-keys/regenerate", response_model=CreateApiKeyResponse)
+@limiter.limit("5/minute")
 def regenerate_api_key(
+    request: Request,
     current_user: User = Depends(get_current_user_jwt_only),
     service: ApiKeyService = Depends(get_api_key_service),
 ):

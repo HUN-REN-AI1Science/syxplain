@@ -31,7 +31,7 @@ class ProfileService:
         self,
         run_repo: RunRepository,
         file_repo: FileRepository,
-        api_key_repo: ApiKeyRepository | None = None,
+        api_key_repo: ApiKeyRepository,
     ):
         self.run_repo = run_repo
         self.file_repo = file_repo
@@ -92,9 +92,8 @@ class ProfileService:
         logger.info(f"Starting GDPR account deletion for user: {user_id}")
 
         # Delete all API keys
-        if self.api_key_repo:
-            keys_deleted = self.api_key_repo.delete_all_for_user(user_uuid)
-            logger.info(f"Deleted {keys_deleted} API keys for user {user_id}")
+        keys_deleted = self.api_key_repo.delete_all_for_user(user_uuid)
+        logger.info(f"Deleted {keys_deleted} API keys for user {user_id}")
 
         # Delete all runs (cascades to run_steps and run_artifacts)
         runs_deleted = self.run_repo.delete_all_for_user(user_uuid)

@@ -187,6 +187,12 @@ async def get_current_user(
     Raises:
         HTTPException: If authentication fails
     """
+    # Warn if both auth methods are provided
+    if x_api_key and credentials:
+        logger.warning(
+            "Request contains both X-API-Key and Bearer token; using API key"
+        )
+
     # Path 1: API key authentication
     if x_api_key:
         try:

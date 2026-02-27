@@ -6,6 +6,7 @@ to all connected clients watching a specific run.
 """
 
 import asyncio
+import contextlib
 import logging
 from collections import defaultdict
 from typing import Any
@@ -13,6 +14,8 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = ("completed", "failed", "timeout", "cancelled")
+MAX_QUEUE_SIZE = 256
+MAX_SSE_CONNECTIONS_PER_USER = 5
 
 
 class SSEConnectionManager:
@@ -60,8 +63,21 @@ class SSEConnectionManager:
 
         Returns:
             An asyncio.Queue that will receive progress dicts.
+
+        Raises:
+            ConnectionError: If the user has reached the max SSE connection limit.
         """
-        queue: asyncio.Queue = asyncio.Queue()
+        # Enforce per-user connection limit
+        if len(self._user_queues.get(user_id, set())) >= MAX_SSE_CONNECTIONS_PER_USER:
+            logger.warning(
+                f"SSE connection limit reached for user {user_id[:8]}... "
+                f"(max {MAX_SSE_CONNECTIONS_PER_USER})"
+            )
+            raise ConnectionError(
+                f"Maximum {MAX_SSE_CONNECTIONS_PER_USER} concurrent SSE connections per user"
+            )
+
+        queue: asyncio.Queue = asyncio.Queue(maxsize=MAX_QUEUE_SIZE)
         self._queues[run_id].add(queue)
         self._user_queues[user_id].add((run_id, queue))
         logger.info(
@@ -147,10 +163,8 @@ class SSEConnectionManager:
         # On terminal status, push None sentinel so generators stop
         if status in TERMINAL_STATUSES:
             for queue in list(self._queues.get(run_id, set())):
-                try:
+                with contextlib.suppress(asyncio.QueueFull):
                     queue.put_nowait(None)
-                except asyncio.QueueFull:
-                    pass
 
     def get_connection_count(self, run_id: str) -> int:
         """Get the number of active connections for a run."""

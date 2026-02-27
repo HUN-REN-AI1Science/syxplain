@@ -87,9 +87,18 @@ async def sse_progress(
         )
 
     manager = get_connection_manager()
-    queue = manager.connect(run_id, user.user_id)
 
     async def event_generator():
+        # Connect inside the generator so disconnect always runs in finally
+        try:
+            queue = manager.connect(run_id, user.user_id)
+        except ConnectionError as e:
+            yield {
+                "event": "error",
+                "data": json.dumps({"type": "error", "message": str(e)}),
+            }
+            return
+
         try:
             # Yield initial state as first event
             initial_event = {

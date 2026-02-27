@@ -34,7 +34,7 @@ def upgrade() -> None:
         sa.Column("user_roles", JSONB(), server_default="[]"),
         sa.Column("last_used_at", sa.DateTime(), nullable=True),
         sa.Column("expires_at", sa.DateTime(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=True),
+        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=True),
     )
 
 

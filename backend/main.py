@@ -68,7 +68,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         # Content Security Policy (skip for interactive docs which load external JS/CSS)
-        if not request.url.path.startswith(("/docs", "/redoc", "/openapi.json")):
+        if not request.url.path.startswith(("/docs", "/openapi.json")):
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; frame-ancestors 'none'"
             )
@@ -110,11 +110,10 @@ def create_app() -> FastAPI:
             "All endpoints require an API key passed via the `X-API-Key` header.\n\n"
             "Generate an API key in the web UI (Profile -> API Keys).\n\n"
             "## API Specification\n\n"
-            "- **Swagger UI:** You are here (`/docs`)\n"
-            "- **ReDoc:** [`/redoc`](/redoc)\n"
             "- **OpenAPI JSON:** [`/openapi.json`](/openapi.json) (download for code generation)"
         ),
         version="1.0.0",
+        redoc_url=None,
         openapi_tags=tags_metadata,
     )
 

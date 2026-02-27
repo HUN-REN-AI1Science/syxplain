@@ -8,7 +8,7 @@ Provides combined upload+analyze, status polling, and artifact download.
 import json
 import logging
 
-from fastapi import APIRouter, Depends, File, Form, Path, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Path, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from backend.api.dependencies import get_file_repository, get_run_service
@@ -20,6 +20,7 @@ from backend.core.exceptions import (
     FileValidationError,
     ValidationError,
 )
+from backend.core.rate_limit import limiter
 from backend.core.security import User, get_current_user
 from backend.repositories.file_repository import FileRepository
 from backend.schemas.programmatic import (
@@ -98,7 +99,9 @@ cancelling the run.
         401: {"description": "Missing or invalid API key", "model": V1ErrorResponse},
     },
 )
+@limiter.limit("5/minute")
 async def analyze(
+    request: Request,  # Required for rate limiting
     file: UploadFile = File(..., description="CSV or Excel file to analyze"),
     params: str = Form(
         ...,
@@ -113,8 +116,8 @@ async def analyze(
     try:
         params_dict = json.loads(params)
         analyze_params = AnalyzeParams(**params_dict)
-    except json.JSONDecodeError as e:
-        return _v1_error(400, "invalid_json", f"Invalid JSON in params field: {e}")
+    except json.JSONDecodeError:
+        return _v1_error(400, "invalid_json", "Malformed JSON in params field")
     except Exception as e:
         return _v1_error(400, "validation_error", str(e))
 
@@ -216,7 +219,9 @@ download URLs for generated plots and files.
         404: {"description": "Run not found or not owned by the authenticated user", "model": V1ErrorResponse},
     },
 )
+@limiter.limit("60/minute")
 def get_run_status(
+    request: Request,
     run_id: str = Path(..., description="Unique identifier of the run to query"),
     current_user: User = Depends(get_current_user),
     run_service: RunService = Depends(get_run_service),
@@ -278,7 +283,9 @@ to control pagination, sort order, and filter by status.
         200: {"description": "Paginated list of run summaries", "model": V1RunListResponse},
     },
 )
+@limiter.limit("30/minute")
 def list_runs(
+    request: Request,
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(10, ge=1, le=100, description="Number of items per page (1-100)"),
     sort_order: str = Query("desc", description="Sort order by creation date: 'asc' or 'desc'"),
@@ -341,7 +348,9 @@ For runs with active Slurm jobs, the corresponding jobs will be cancelled on the
         404: {"description": "Run not found or not owned by the authenticated user", "model": V1ErrorResponse},
     },
 )
+@limiter.limit("10/minute")
 async def cancel_run(
+    request: Request,
     run_id: str = Path(..., description="Unique identifier of the run to cancel"),
     current_user: User = Depends(get_current_user),
     run_service: RunService = Depends(get_run_service),
@@ -385,7 +394,9 @@ of the run status response.
         404: {"description": "Artifact or run not found", "model": V1ErrorResponse},
     },
 )
+@limiter.limit("60/minute")
 def download_artifact(
+    request: Request,
     run_id: str = Path(..., description="Unique identifier of the run that produced the artifact"),
     filename: str = Path(..., description="Artifact filename as listed in the run status artifacts array"),
     current_user: User = Depends(get_current_user),
@@ -421,7 +432,8 @@ Lists both Gemini models (used for the main LLM pipeline) and deep research mode
         200: {"description": "Lists of available model identifiers", "model": V1ModelsResponse},
     },
 )
-def list_models(current_user: User = Depends(get_current_user)):
+@limiter.limit("30/minute")
+def list_models(request: Request, current_user: User = Depends(get_current_user)):
     """List available models for analysis."""
     settings = get_settings()
     return V1ModelsResponse(
