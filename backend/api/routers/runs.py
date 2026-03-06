@@ -25,6 +25,7 @@ from backend.schemas.responses import (
     RunSummary,
 )
 from backend.services.analysis_service import start_analysis_run
+from backend.services.progress_service import get_progress_phases
 from backend.services.run_service import RunService
 from backend.utils.security_utils import safe_content_disposition
 
@@ -100,7 +101,12 @@ async def run_analysis(
             f"using_user_key={not has_hunren_access and user_api_key is not None})"
         )
 
-        return RunResponse(run_id=run_id, status="pending", message="Analysis started")
+        return RunResponse(
+            run_id=run_id,
+            status="pending",
+            message="Analysis started",
+            progress_phases=get_progress_phases(),
+        )
 
     except ConfigurationError as e:
         logger.error(f"Configuration error: {e.message}")

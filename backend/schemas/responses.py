@@ -21,6 +21,7 @@ class RunResponse(BaseModel):
     run_id: str
     status: str
     message: str
+    progress_phases: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class RunStatusResponse(BaseModel):

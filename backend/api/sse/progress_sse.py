@@ -3,18 +3,24 @@ SSE endpoint for real-time progress updates.
 
 Provides a GET endpoint at /api/sse/progress/{run_id} that streams
 progress updates to authenticated clients using Server-Sent Events.
+
+Accepts JWT via either Authorization header or ?token= query parameter.
+The query parameter is needed because the browser's native EventSource API
+does not support custom headers.
 """
 
 import asyncio
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sse_starlette.sse import EventSourceResponse
 
 from backend.api.sse.connection_manager import get_connection_manager
+from backend.core.config import get_auth_settings
 from backend.core.exceptions import ValidationError
-from backend.core.security import User, get_current_user_jwt_only
+from backend.core.security import User, _authenticate_jwt, security
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
 from backend.utils import parse_uuid
@@ -26,10 +32,32 @@ router = APIRouter(prefix="/api/sse", tags=["SSE"])
 TERMINAL_STATUSES = ("completed", "failed", "timeout", "cancelled")
 
 
+async def _get_sse_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    token: str | None = Query(None, description="JWT token (alternative to Authorization header)"),
+) -> User:
+    """Authenticate via Authorization header or ?token= query parameter."""
+    settings = get_auth_settings()
+
+    # Prefer Authorization header, fall back to query param
+    if credentials:
+        return _authenticate_jwt(credentials, settings)
+
+    if token:
+        creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+        return _authenticate_jwt(creds, settings)
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required (Bearer header or ?token= query parameter)",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 @router.get("/progress/{run_id}")
 async def sse_progress(
     run_id: str,
-    user: User = Depends(get_current_user_jwt_only),
+    user: User = Depends(_get_sse_user),
 ):
     """
     SSE endpoint for real-time progress updates.

@@ -52,8 +52,6 @@ export interface SSEOptions {
   onStateChange?: (state: ConnectionState) => void;
   /** Called when an error occurs */
   onError?: (error: Error) => void;
-  /** Called when the connection is closed */
-  onClose?: () => void;
   /** Maximum number of reconnection attempts before giving up (default: 5) */
   maxRetries?: number;
   /** Initial reconnection delay in ms (default: 1000) */

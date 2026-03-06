@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Track running analysis tasks (prevents GC of asyncio tasks)
 _running_tasks: dict[str, asyncio.Task] = {}
 
-# Track broadcast tasks to prevent GC
+# Track broadcast tasks (prevents GC of fire-and-forget SSE broadcasts)
 _broadcast_tasks: set[asyncio.Task] = set()
 
 
@@ -129,6 +129,9 @@ async def _run_analysis(
     Performs the actual analysis work by delegating to the orchestrator,
     which coordinates compute tasks (SHAP, PySR) on Slurm and LLM operations.
     """
+    # Yield control so the HTTP response (with run_id) is sent first
+    await asyncio.sleep(0)
+
     from backend.core.logging import configure_debug_mode, configure_logging
 
     configure_logging()

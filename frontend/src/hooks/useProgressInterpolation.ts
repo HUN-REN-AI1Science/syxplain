@@ -172,10 +172,10 @@ export function useProgressInterpolation(
     return () => clearInterval(intervalId);
   }, [backendProgress, status, updateInterval]);
 
-  // Determine if we're in the early HPC queue phase (progress < 5% and running)
+  // Queue phase: only while backend hasn't started processing yet
   const isInQueuePhase = useMemo(() => {
-    return backendProgress < 5 && status === 'running';
-  }, [backendProgress, status]);
+    return status === 'pending';
+  }, [status]);
 
   return { displayProgress, currentStepDescription, currentStepLabel, isInQueuePhase };
 }
