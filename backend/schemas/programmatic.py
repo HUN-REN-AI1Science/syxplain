@@ -1,5 +1,5 @@
 """
-Pydantic schemas for the programmatic API (v1).
+Pydantic schemas for the Syxplain API.
 
 These schemas are designed for script/notebook usage with a flat,
 minimal structure optimized for programmatic clients.
@@ -22,7 +22,9 @@ class AnalyzeParams(BaseModel):
         ...,
         min_length=1,
         description="Description of the project and analysis goals",
-        json_schema_extra={"examples": ["Predict soil phosphorus availability from chemical properties"]},
+        json_schema_extra={
+            "examples": ["Predict soil phosphorus availability from chemical properties"]
+        },
     )
     target_variable: str = Field(
         ...,
@@ -97,12 +99,8 @@ class AnalyzeResponse(BaseModel):
         default="pending",
         description="Initial run status (always 'pending' on creation)",
     )
-    status_url: str = Field(
-        ..., description="Relative URL to poll for run status and results"
-    )
-    cancel_url: str = Field(
-        ..., description="Relative URL to cancel the run"
-    )
+    status_url: str = Field(..., description="Relative URL to poll for run status and results")
+    cancel_url: str = Field(..., description="Relative URL to cancel the run")
 
     class Config:
         json_schema_extra = {
@@ -123,9 +121,7 @@ class ArtifactInfo(BaseModel):
         default=None,
         description="MIME type of the artifact (e.g. 'image/png', 'application/json')",
     )
-    download_url: str = Field(
-        ..., description="Relative URL to download the artifact"
-    )
+    download_url: str = Field(..., description="Relative URL to download the artifact")
 
     class Config:
         json_schema_extra = {
@@ -137,7 +133,7 @@ class ArtifactInfo(BaseModel):
         }
 
 
-class V1RunStatusResponse(BaseModel):
+class RunStatusResponse(BaseModel):
     """
     Run status with inline results when completed.
 
@@ -149,9 +145,7 @@ class V1RunStatusResponse(BaseModel):
         ...,
         description="Current run status: 'pending', 'running', 'completed', 'failed', 'timeout', or 'cancelled'",
     )
-    progress: int = Field(
-        ge=0, le=100, description="Completion percentage (0-100)"
-    )
+    progress: int = Field(ge=0, le=100, description="Completion percentage (0-100)")
     analysis_type: str = Field(
         default="quick",
         description="Type of analysis: 'quick' or 'deep'",
@@ -226,7 +220,7 @@ class V1RunStatusResponse(BaseModel):
         }
 
 
-class V1RunSummary(BaseModel):
+class RunSummary(BaseModel):
     """Summary of a single run for list responses."""
 
     run_id: str = Field(..., description="Unique identifier for the run")
@@ -234,16 +228,12 @@ class V1RunSummary(BaseModel):
         ...,
         description="Current run status: 'pending', 'running', 'completed', 'failed', 'timeout', or 'cancelled'",
     )
-    progress: int = Field(
-        ge=0, le=100, description="Completion percentage (0-100)"
-    )
+    progress: int = Field(ge=0, le=100, description="Completion percentage (0-100)")
     analysis_type: str = Field(
         default="quick",
         description="Type of analysis: 'quick' or 'deep'",
     )
-    csv_filename: str = Field(
-        ..., description="Name of the uploaded data file"
-    )
+    csv_filename: str = Field(..., description="Name of the uploaded data file")
     target_variable: str | None = Field(
         default=None, description="Name of the target variable being predicted"
     )
@@ -275,12 +265,10 @@ class V1RunSummary(BaseModel):
         }
 
 
-class V1RunListResponse(BaseModel):
+class RunListResponse(BaseModel):
     """Paginated list of runs."""
 
-    items: list[V1RunSummary] = Field(
-        ..., description="List of run summaries for the current page"
-    )
+    items: list[RunSummary] = Field(..., description="List of run summaries for the current page")
     total: int = Field(ge=0, description="Total number of runs matching the query")
     page: int = Field(ge=1, description="Current page number")
     page_size: int = Field(ge=1, description="Number of items per page")
@@ -310,7 +298,7 @@ class V1RunListResponse(BaseModel):
         }
 
 
-class V1CancelResponse(BaseModel):
+class CancelResponse(BaseModel):
     """Response from the cancel endpoint."""
 
     message: str = Field(..., description="Human-readable confirmation message")
@@ -325,8 +313,8 @@ class V1CancelResponse(BaseModel):
         }
 
 
-class V1ErrorResponse(BaseModel):
-    """Structured error response for v1 endpoints."""
+class ErrorResponse(BaseModel):
+    """Structured error response for Syxplain API endpoints."""
 
     error: str = Field(
         ...,
@@ -343,14 +331,12 @@ class V1ErrorResponse(BaseModel):
             "example": {
                 "error": "validation_error",
                 "message": "Target variable 'nonexistent' not found in uploaded file",
-                "details": {
-                    "available_columns": ["pH", "organic_C", "clay", "P_availability"]
-                },
+                "details": {"available_columns": ["pH", "organic_C", "clay", "P_availability"]},
             }
         }
 
 
-class V1ModelsResponse(BaseModel):
+class ModelsResponse(BaseModel):
     """Available models for analysis."""
 
     gemini_models: list[str] = Field(

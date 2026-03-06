@@ -92,15 +92,6 @@ def create_app() -> FastAPI:
     """
     settings = get_settings()
 
-    tags_metadata = [
-        {
-            "name": "Programmatic API (v1)",
-            "description": "Script-friendly endpoints for automated analysis. "
-            "Authenticate with `X-API-Key` header. "
-            "Upload + analyze in one call, poll for results.",
-        },
-    ]
-
     app = FastAPI(
         title="Syxplain API",
         description=(
@@ -114,7 +105,7 @@ def create_app() -> FastAPI:
         ),
         version="1.0.0",
         redoc_url=None,
-        openapi_tags=tags_metadata,
+        openapi_tags=None,
     )
 
     # Override OpenAPI schema to remove internal auth schemes (HTTPBearer)
@@ -128,7 +119,7 @@ def create_app() -> FastAPI:
             version=app.version,
             description=app.description,
             routes=app.routes,
-            tags=tags_metadata,
+            tags=None,
         )
         # Remove HTTPBearer scheme — only X-API-Key is relevant for public docs
         components = schema.get("components", {})

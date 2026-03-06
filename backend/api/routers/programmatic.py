@@ -1,5 +1,5 @@
 """
-Programmatic API (v1) endpoints.
+Syxplain API endpoints.
 
 Streamlined API designed for script, notebook, and CI/CD pipeline usage.
 Provides combined upload+analyze, status polling, and artifact download.
@@ -27,12 +27,12 @@ from backend.schemas.programmatic import (
     AnalyzeParams,
     AnalyzeResponse,
     ArtifactInfo,
-    V1CancelResponse,
-    V1ErrorResponse,
-    V1ModelsResponse,
-    V1RunListResponse,
-    V1RunStatusResponse,
-    V1RunSummary,
+    CancelResponse,
+    ErrorResponse,
+    ModelsResponse,
+    RunListResponse,
+    RunStatusResponse,
+    RunSummary,
 )
 from backend.services.analysis_service import start_analysis_run
 from backend.services.file_service import get_file_service
@@ -40,14 +40,16 @@ from backend.services.run_service import RunService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1", tags=["Programmatic API (v1)"])
+router = APIRouter(prefix="/api/v1", tags=["Syxplain API"])
 
 
-def _v1_error(status_code: int, error: str, message: str, details: dict | None = None) -> JSONResponse:
-    """Return a structured v1 error response."""
+def _api_error(
+    status_code: int, error: str, message: str, details: dict | None = None
+) -> JSONResponse:
+    """Return a structured API error response."""
     return JSONResponse(
         status_code=status_code,
-        content=V1ErrorResponse(error=error, message=message, details=details).model_dump(),
+        content=ErrorResponse(error=error, message=message, details=details).model_dump(),
     )
 
 
@@ -94,9 +96,15 @@ cancelling the run.
 ```
 """,
     responses={
-        202: {"description": "Analysis accepted and queued for execution", "model": AnalyzeResponse},
-        400: {"description": "Invalid input: malformed JSON, unsupported file type, or missing required fields", "model": V1ErrorResponse},
-        401: {"description": "Missing or invalid API key", "model": V1ErrorResponse},
+        202: {
+            "description": "Analysis accepted and queued for execution",
+            "model": AnalyzeResponse,
+        },
+        400: {
+            "description": "Invalid input: malformed JSON, unsupported file type, or missing required fields",
+            "model": ErrorResponse,
+        },
+        401: {"description": "Missing or invalid API key", "model": ErrorResponse},
     },
 )
 @limiter.limit("5/minute")
@@ -117,9 +125,9 @@ async def analyze(
         params_dict = json.loads(params)
         analyze_params = AnalyzeParams(**params_dict)
     except json.JSONDecodeError:
-        return _v1_error(400, "invalid_json", "Malformed JSON in params field")
+        return _api_error(400, "invalid_json", "Malformed JSON in params field")
     except Exception as e:
-        return _v1_error(400, "validation_error", str(e))
+        return _api_error(400, "validation_error", str(e))
 
     # Process file upload (reuse existing FileService)
     file_service = get_file_service()
@@ -136,9 +144,9 @@ async def analyze(
         )
         csv_filename = metadata.filename
     except (FileTooLargeError, FileValidationError) as e:
-        return _v1_error(400, "file_error", e.message, e.details)
+        return _api_error(400, "file_error", e.message, e.details)
     except Exception as e:
-        return _v1_error(400, "file_error", f"File processing failed: {e}")
+        return _api_error(400, "file_error", f"File processing failed: {e}")
 
     # Validate columns exist in the file
     try:
@@ -159,11 +167,11 @@ async def analyze(
             user_openai_key=user_openai_key,
         )
     except EntityNotFoundError as e:
-        return _v1_error(404, "not_found", e.message, e.details)
+        return _api_error(404, "not_found", e.message, e.details)
     except ValidationError as e:
-        return _v1_error(400, "validation_error", e.message, e.details)
+        return _api_error(400, "validation_error", e.message, e.details)
     except ConfigurationError as e:
-        return _v1_error(500, "configuration_error", e.message)
+        return _api_error(500, "configuration_error", e.message)
 
     # Start analysis run
     problem_desc = {
@@ -183,7 +191,7 @@ async def analyze(
         user_openai_key=user_openai_key if not has_hunren_access else None,
     )
 
-    logger.info(f"v1/analyze: Run {run_id} started for user {current_user.user_id}")
+    logger.info(f"api/analyze: Run {run_id} started for user {current_user.user_id}")
 
     return AnalyzeResponse(
         run_id=run_id,
@@ -200,7 +208,7 @@ async def analyze(
 
 @router.get(
     "/runs/{run_id}",
-    response_model=V1RunStatusResponse,
+    response_model=RunStatusResponse,
     summary="Get run status and results",
     description="""
 Poll this endpoint to check the progress and retrieve results of an analysis run.
@@ -215,8 +223,14 @@ download URLs for generated plots and files.
 **Fields populated on completion:** `results`, `artifacts`, `duration_seconds`, `finish_time`
 """,
     responses={
-        200: {"description": "Current run status with results if completed", "model": V1RunStatusResponse},
-        404: {"description": "Run not found or not owned by the authenticated user", "model": V1ErrorResponse},
+        200: {
+            "description": "Current run status with results if completed",
+            "model": RunStatusResponse,
+        },
+        404: {
+            "description": "Run not found or not owned by the authenticated user",
+            "model": ErrorResponse,
+        },
     },
 )
 @limiter.limit("60/minute")
@@ -230,7 +244,7 @@ def get_run_status(
     try:
         run = run_service.get_run_for_user(run_id, current_user.user_id)
     except EntityNotFoundError:
-        return _v1_error(404, "not_found", f"Run '{run_id}' not found")
+        return _api_error(404, "not_found", f"Run '{run_id}' not found")
 
     # Calculate duration
     duration_seconds = None
@@ -249,7 +263,7 @@ def get_run_status(
                 )
             )
 
-    return V1RunStatusResponse(
+    return RunStatusResponse(
         run_id=str(run.id),
         status=run.status,
         progress=run.progress or 0,
@@ -271,7 +285,7 @@ def get_run_status(
 
 @router.get(
     "/runs",
-    response_model=V1RunListResponse,
+    response_model=RunListResponse,
     summary="List your analysis runs",
     description="""
 List your analysis runs with pagination and optional filtering.
@@ -280,7 +294,7 @@ Returns a paginated list of run summaries ordered by creation date. Use query pa
 to control pagination, sort order, and filter by status.
 """,
     responses={
-        200: {"description": "Paginated list of run summaries", "model": V1RunListResponse},
+        200: {"description": "Paginated list of run summaries", "model": RunListResponse},
     },
 )
 @limiter.limit("30/minute")
@@ -289,7 +303,9 @@ def list_runs(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(10, ge=1, le=100, description="Number of items per page (1-100)"),
     sort_order: str = Query("desc", description="Sort order by creation date: 'asc' or 'desc'"),
-    status: str | None = Query(None, description="Filter by run status (e.g. 'completed', 'failed', 'running')"),
+    status: str | None = Query(
+        None, description="Filter by run status (e.g. 'completed', 'failed', 'running')"
+    ),
     current_user: User = Depends(get_current_user),
     run_service: RunService = Depends(get_run_service),
 ):
@@ -304,7 +320,7 @@ def list_runs(
     )
 
     items = [
-        V1RunSummary(
+        RunSummary(
             run_id=str(r.id),
             status=r.status,
             progress=r.progress or 0,
@@ -318,7 +334,7 @@ def list_runs(
         for r in result.items
     ]
 
-    return V1RunListResponse(
+    return RunListResponse(
         items=items,
         total=result.total,
         page=result.page,
@@ -334,7 +350,7 @@ def list_runs(
 
 @router.post(
     "/runs/{run_id}/cancel",
-    response_model=V1CancelResponse,
+    response_model=CancelResponse,
     summary="Cancel a running analysis",
     description="""
 Cancel a pending or running analysis run.
@@ -344,8 +360,14 @@ This operation is idempotent -- if the run has already reached a terminal state
 For runs with active Slurm jobs, the corresponding jobs will be cancelled on the cluster.
 """,
     responses={
-        200: {"description": "Run successfully cancelled or already in a terminal state", "model": V1CancelResponse},
-        404: {"description": "Run not found or not owned by the authenticated user", "model": V1ErrorResponse},
+        200: {
+            "description": "Run successfully cancelled or already in a terminal state",
+            "model": CancelResponse,
+        },
+        404: {
+            "description": "Run not found or not owned by the authenticated user",
+            "model": ErrorResponse,
+        },
     },
 )
 @limiter.limit("10/minute")
@@ -358,9 +380,9 @@ async def cancel_run(
     """Cancel a run."""
     try:
         await run_service.cancel_run(run_id, current_user.user_id)
-        return V1CancelResponse(message="Run cancelled", run_id=run_id)
+        return CancelResponse(message="Run cancelled", run_id=run_id)
     except EntityNotFoundError:
-        return _v1_error(404, "not_found", f"Run '{run_id}' not found")
+        return _api_error(404, "not_found", f"Run '{run_id}' not found")
 
 
 # ============================================================================
@@ -391,14 +413,16 @@ of the run status response.
                 "application/octet-stream": {"schema": {"type": "string", "format": "binary"}},
             },
         },
-        404: {"description": "Artifact or run not found", "model": V1ErrorResponse},
+        404: {"description": "Artifact or run not found", "model": ErrorResponse},
     },
 )
 @limiter.limit("60/minute")
 def download_artifact(
     request: Request,
     run_id: str = Path(..., description="Unique identifier of the run that produced the artifact"),
-    filename: str = Path(..., description="Artifact filename as listed in the run status artifacts array"),
+    filename: str = Path(
+        ..., description="Artifact filename as listed in the run status artifacts array"
+    ),
     current_user: User = Depends(get_current_user),
     run_service: RunService = Depends(get_run_service),
 ):
@@ -409,7 +433,7 @@ def download_artifact(
         artifact = run_service.get_artifact(run_id, filename, current_user.user_id)
         return Response(content=artifact.content, media_type=artifact.media_type)
     except EntityNotFoundError:
-        return _v1_error(404, "not_found", f"Artifact '{filename}' not found")
+        return _api_error(404, "not_found", f"Artifact '{filename}' not found")
 
 
 # ============================================================================
@@ -419,7 +443,7 @@ def download_artifact(
 
 @router.get(
     "/models",
-    response_model=V1ModelsResponse,
+    response_model=ModelsResponse,
     summary="List available analysis models",
     description="""
 Returns the available models that can be used in analysis requests.
@@ -429,14 +453,14 @@ Lists both Gemini models (used for the main LLM pipeline) and deep research mode
 `gemini_model` and `deep_research_model` fields of the analyze request.
 """,
     responses={
-        200: {"description": "Lists of available model identifiers", "model": V1ModelsResponse},
+        200: {"description": "Lists of available model identifiers", "model": ModelsResponse},
     },
 )
 @limiter.limit("30/minute")
 def list_models(request: Request, current_user: User = Depends(get_current_user)):
     """List available models for analysis."""
     settings = get_settings()
-    return V1ModelsResponse(
+    return ModelsResponse(
         gemini_models=settings.llm.get_user_api_model_list(),
         deep_research_models=settings.llm.get_deep_research_model_list(),
     )
