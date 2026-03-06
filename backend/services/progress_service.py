@@ -219,15 +219,16 @@ class ProgressTracker:
 
     def _persist_progress(self, progress: int, step_name: str | None = None) -> None:
         """Persist progress to database and broadcast via SSE."""
-        run_status = self._persist_progress_db(progress)
+        persisted, run_status = self._persist_progress_db(progress)
 
-        # Broadcast to SSE clients
-        _broadcast_progress_sync(
-            run_id=self.run_id,
-            progress=progress,
-            status=run_status,
-            step_name=step_name,
-        )
+        # Only broadcast if progress actually increased in DB
+        if persisted:
+            _broadcast_progress_sync(
+                run_id=self.run_id,
+                progress=progress,
+                status=run_status,
+                step_name=step_name,
+            )
 
     async def update_progress_async(
         self, step_name: str, status: str | None = None, details: dict[str, Any] | None = None
@@ -252,37 +253,56 @@ class ProgressTracker:
         else:
             logger.info(f"[Run {self.run_id[:8]}] Step {self.step_count}: {step_name}")
 
-        # Persist to DB in a thread (non-blocking)
-        run_status = await asyncio.to_thread(self._persist_progress_db, progress)
+        # Persist to DB in a thread (non-blocking) — only if progress increases
+        persisted, run_status = await asyncio.to_thread(self._persist_progress_db, progress)
 
-        # Broadcast directly (awaited, not fire-and-forget)
-        from backend.api.sse.connection_manager import get_connection_manager
+        if persisted:
+            # Broadcast directly (awaited, not fire-and-forget)
+            from backend.api.sse.connection_manager import get_connection_manager
 
-        manager = get_connection_manager()
-        await manager.broadcast_progress(
-            run_id=self.run_id,
-            progress=progress,
-            status=run_status,
-            step_name=step_name,
-        )
+            manager = get_connection_manager()
+            await manager.broadcast_progress(
+                run_id=self.run_id,
+                progress=progress,
+                status=run_status,
+                step_name=step_name,
+            )
 
-    def _persist_progress_db(self, progress: int) -> str:
-        """Write progress to database. Returns the current run status."""
+    def _persist_progress_db(self, progress: int) -> tuple[bool, str]:
+        """
+        Write progress to database if it increases.
+
+        Returns:
+            Tuple of (was_persisted, current_run_status).
+        """
         SessionLocal = get_session_factory()
         db = SessionLocal()
         run_status = "running"
+        persisted = False
         try:
             run = db.query(Run).filter(Run.id == self.run_id).first()
             if run:
-                run.progress = progress
                 run_status = run.status
-                db.commit()
-                logger.debug(f"[Run {self.run_id[:8]}] Persisted progress: {progress}%")
+                db_progress = run.progress or 0
+                # Sync internal tracker with DB (worker updates bypass tracker)
+                if db_progress > self.current_progress:
+                    self.current_progress = db_progress
+                if progress > db_progress:
+                    run.progress = progress
+                    self.current_progress = progress
+                    db.commit()
+                    persisted = True
+                    logger.debug(f"[Run {self.run_id[:8]}] Persisted progress: {progress}%")
+                else:
+                    logger.debug(
+                        f"[Run {self.run_id[:8]}] Skipped progress {progress}% "
+                        f"(DB already at {db_progress}%)"
+                    )
         except Exception as e:
             logger.error(f"Failed to update progress for {self.run_id}: {e}")
         finally:
             db.close()
-        return run_status
+        return persisted, run_status
 
     def save_artifact(self, filename: str, content: bytes, media_type: str | None = None) -> None:
         """

@@ -26,7 +26,7 @@ from backend.infrastructure.slurm import (
     get_slurm_backend,
 )
 from backend.infrastructure.slurm.client import is_quota_error
-from backend.services.progress_service import ProgressTracker
+from backend.services.progress_service import ProgressTracker, _broadcast_progress_sync
 
 logger = logging.getLogger(__name__)
 
@@ -274,9 +274,8 @@ class AnalysisOrchestrator:
             visualizations = compute_results.get("visualizations", [])
             self._save_artifacts(run_id, final_results, progress, visualizations=visualizations)
 
-            # Mark as completed
+            # Mark as completed (also broadcasts via SSE)
             self._update_run_status(run_id, "completed", results=final_results)
-            progress.set_progress(100, "Analysis complete")
 
             logger.info(f"Analysis completed successfully for run {run_id}")
             return final_results
@@ -788,7 +787,7 @@ class AnalysisOrchestrator:
         results: dict[str, Any] | None = None,
         error: str | None = None,
     ) -> None:
-        """Update run status in database."""
+        """Update run status in database and broadcast terminal states via SSE."""
         try:
             with get_db_session() as db:
                 run = db.query(Run).filter(Run.id == run_id).first()
@@ -807,6 +806,15 @@ class AnalysisOrchestrator:
                     if status == "completed":
                         run.progress = 100
                     db.commit()
+
+                    # Broadcast terminal states via SSE so clients see completion/failure
+                    if status in ("completed", "failed", "timeout", "cancelled"):
+                        _broadcast_progress_sync(
+                            run_id=run_id,
+                            progress=run.progress or 0,
+                            status=status,
+                            error=error,
+                        )
         except Exception as e:
             logger.error(f"Failed to update run status for {run_id}: {e}")
 

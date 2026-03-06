@@ -82,6 +82,12 @@ phases:
     increment_rate: 0.04
 
   # Deep research (75-82%, optional)
+  - name: deep_research
+    label: "Deep Research"
+    description: "Researching scientific literature to understand your equations..."
+    progress_end: 78
+    increment_rate: 0.25
+
   - name: deep_research_start
     label: "Deep Research"
     description: "Researching scientific literature to understand your equations..."
@@ -107,6 +113,12 @@ phases:
     increment_rate: 0.25
 
   # LLM explanation (82-99%, ~20s)
+  - name: llm_explanation
+    label: "Explaining Results"
+    description: "AI is interpreting your equations and generating insights..."
+    progress_end: 90
+    increment_rate: 0.25
+
   - name: phase_explanation
     label: "Generating Explanation"
     description: "AI is preparing to explain your equations..."
@@ -126,6 +138,13 @@ phases:
     increment_rate: 0.25
 
   - name: llm_explanation_complete
+    label: "Finalizing"
+    description: "Preparing your final results..."
+    progress_end: 95
+    increment_rate: 0.25
+
+  # Finalization (95-99%)
+  - name: finalization
     label: "Finalizing"
     description: "Preparing your final results..."
     progress_end: 99
