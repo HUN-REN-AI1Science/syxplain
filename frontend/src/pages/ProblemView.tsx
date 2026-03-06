@@ -383,6 +383,38 @@ const ProblemView: React.FC<ProblemViewProps> = ({
     }
   };
 
+  const handleModeChange = (newMode: string) => {
+    if (!newMode) return;
+    if (newMode === 'form' && mode === 'json') {
+      // JSON → Form: populate form fields from JSON
+      try {
+        const parsed = JSON.parse(jsonContent);
+        if (parsed.project_description) setProjectDescription(parsed.project_description);
+        if (parsed.target_variable) setTargetVariable(parsed.target_variable);
+        if (parsed.features) setFeatureDescriptions(parsed.features);
+      } catch {
+        // Invalid JSON — leave form as-is
+      }
+    } else if (newMode === 'json' && mode === 'form') {
+      // Form → JSON: build JSON from current form fields
+      const activeColumns = columns.filter(
+        (col) => col !== targetVariable && (!excludedColumns || !excludedColumns.includes(col))
+      );
+      const features: Record<string, string> = {};
+      activeColumns.forEach((col) => {
+        if (featureDescriptions[col]) features[col] = featureDescriptions[col];
+      });
+      setJsonContent(
+        JSON.stringify(
+          { project_description: projectDescription, target_variable: targetVariable, features },
+          null,
+          2
+        )
+      );
+    }
+    setMode(newMode);
+  };
+
   const modeOptions = [
     { label: 'Interactive Form', value: 'form' },
     { label: 'Upload JSON', value: 'json' },
@@ -404,7 +436,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
         <div className="mt-4 md:mt-0">
           <SelectButton
             value={mode}
-            onChange={(e: SelectButtonChangeEvent) => setMode(e.value)}
+            onChange={(e: SelectButtonChangeEvent) => handleModeChange(e.value)}
             options={modeOptions}
           />
         </div>
