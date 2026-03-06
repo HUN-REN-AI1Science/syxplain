@@ -63,8 +63,8 @@ phases:
 
   # SHAP worker range (10-25%, ~10s — scaled by endpoint)
   - name: shap_running
-    label: "Feature Analysis"
-    description: "Computing feature importance using machine learning..."
+    label: "SHAP Analysis"
+    description: "Computing pairwise SHAP interaction values..."
     progress_end: 25
     increment_rate: 0.15
 
