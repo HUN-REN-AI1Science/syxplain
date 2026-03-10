@@ -383,7 +383,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
     }
   };
 
-  const handleModeChange = (newMode: string) => {
+  const handleModeChange = (newMode: 'form' | 'json') => {
     if (!newMode) return;
     if (newMode === 'form' && mode === 'json') {
       // JSON → Form: populate form fields from JSON
