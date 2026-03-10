@@ -1,14 +1,16 @@
 """
 Security utilities for authentication and authorization.
 
-Provides JWT validation for Keycloak tokens (RS256 via JWKS) and user extraction.
+Provides dual authentication: JWT validation for Keycloak tokens (RS256 via JWKS)
+and API key authentication via X-API-Key header.
 """
 
+import contextlib
 import logging
 
 import jwt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
 
 from backend.core.config import AuthSettings, get_auth_settings
@@ -16,9 +18,10 @@ from backend.core.exceptions import AuthenticationError
 
 logger = logging.getLogger(__name__)
 
-# Security scheme for bearer token authentication
-security = HTTPBearer()
+# Security schemes — auto_error=False so we can check both paths
+security = HTTPBearer(auto_error=False)
 optional_security = HTTPBearer(auto_error=False)
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 # Cached JWKS client (initialized lazily)
 _jwks_client: PyJWKClient | None = None
@@ -104,23 +107,15 @@ def decode_jwt_token(token: str, settings: AuthSettings) -> dict:
         raise AuthenticationError(message="Authentication service unavailable", reason=str(e))
 
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    settings: AuthSettings = Depends(get_auth_settings),
-) -> User:
-    """
-    FastAPI dependency that validates JWT token and returns the current user.
+def _get_db_session():
+    """Lazy import to avoid circular imports."""
+    from backend.infrastructure.database.connection import get_db
 
-    Args:
-        credentials: Bearer token from request header
-        settings: Injected auth settings
+    return get_db
 
-    Returns:
-        User object with id and email
 
-    Raises:
-        HTTPException: If authentication fails
-    """
+def _authenticate_jwt(credentials: HTTPAuthorizationCredentials, settings: AuthSettings) -> User:
+    """Shared JWT authentication logic for both auth dependencies."""
     try:
         payload = decode_jwt_token(credentials.credentials, settings)
 
@@ -129,7 +124,8 @@ async def get_current_user(
 
         if not user_id:
             raise AuthenticationError(
-                message="Invalid authentication credentials", reason="Missing user ID in token"
+                message="Invalid authentication credentials",
+                reason="Missing user ID in token",
             )
 
         if email and not payload.get("email_verified", False):
@@ -149,28 +145,101 @@ async def get_current_user(
         )
 
 
+async def get_current_user_jwt_only(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    settings: AuthSettings = Depends(get_auth_settings),
+) -> User:
+    """
+    JWT-only auth for internal endpoints. Rejects API keys.
+
+    Returns:
+        User object with id, email, and roles
+
+    Raises:
+        HTTPException: If no Bearer token or token is invalid
+    """
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Bearer token required. API key authentication is not supported on this endpoint.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return _authenticate_jwt(credentials, settings)
+
+
+async def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    x_api_key: str | None = Depends(api_key_header),
+    settings: AuthSettings = Depends(get_auth_settings),
+) -> User:
+    """
+    FastAPI dependency that validates either a JWT token or API key.
+
+    Authentication order:
+    1. If X-API-Key header present → authenticate via API key
+    2. Else if Bearer token present → validate JWT (existing flow)
+    3. Else → 401
+
+    Returns:
+        User object with id, email, and roles
+
+    Raises:
+        HTTPException: If authentication fails
+    """
+    # Warn if both auth methods are provided
+    if x_api_key and credentials:
+        logger.warning("Request contains both X-API-Key and Bearer token; using API key")
+
+    # Path 1: API key authentication
+    if x_api_key:
+        try:
+            from backend.repositories.api_key_repository import ApiKeyRepository
+            from backend.services.api_key_service import ApiKeyService
+
+            db_gen = _get_db_session()()
+            db = next(db_gen)
+            try:
+                repo = ApiKeyRepository(db)
+                service = ApiKeyService(repo)
+                return service.authenticate_by_api_key(x_api_key)
+            finally:
+                with contextlib.suppress(StopIteration):
+                    next(db_gen)
+        except AuthenticationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=e.message,
+                headers={"WWW-Authenticate": "ApiKey"},
+            )
+
+    # Path 2: JWT Bearer token authentication
+    if credentials:
+        return _authenticate_jwt(credentials, settings)
+
+    # Path 3: No credentials provided
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required. Provide a Bearer token or X-API-Key header.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 async def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
     settings: AuthSettings = Depends(get_auth_settings),
 ) -> User | None:
     """
-    Optional authentication dependency.
+    Optional JWT-only authentication dependency.
 
-    Returns None if no token provided, otherwise validates and returns user.
+    Returns None if no credentials provided, otherwise validates and returns user.
     Useful for endpoints that work with or without authentication.
-
-    Args:
-        credentials: Optional bearer token
-        settings: Injected auth settings
-
-    Returns:
-        User object if authenticated, None otherwise
     """
     if credentials is None:
         return None
 
     try:
-        return await get_current_user(credentials, settings)
+        return await get_current_user_jwt_only(credentials, settings)
     except HTTPException:
         return None
 

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from backend.api.dependencies import get_file_repository, get_file_service_dep
 from backend.core.exceptions import FileTooLargeError, FileValidationError
 from backend.core.rate_limit import limiter
-from backend.core.security import User, get_current_user
+from backend.core.security import User, get_current_user_jwt_only
 from backend.repositories.file_repository import FileRepository
 from backend.schemas.responses import FileUploadResponse
 from backend.services.file_service import FileService
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api", tags=["Files"])
 def upload_file(
     request: Request,  # Required for rate limiting
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
     file_service: FileService = Depends(get_file_service_dep),
     file_repo: FileRepository = Depends(get_file_repository),
 ):

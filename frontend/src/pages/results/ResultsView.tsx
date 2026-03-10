@@ -1,6 +1,6 @@
 /**
  * ResultsView Component
- * Displays analysis results with WebSocket-based real-time progress updates
+ * Displays analysis results with SSE-based real-time progress updates
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
@@ -18,7 +18,7 @@ import {
   hasExplanationError,
 } from '@components/Results';
 import type { ResultsStatus } from '@components/Results';
-import { runsService, configService } from '@services/api';
+import { runsService } from '@services/api';
 import { useProgressInterpolation } from '@hooks/useProgressInterpolation';
 import { useRunProgress } from '@hooks/useRunProgress';
 import type { ProgressPhase, EquationResults } from '@/types';
@@ -30,16 +30,21 @@ import type { ProgressPhase, EquationResults } from '@/types';
 interface ResultsViewProps {
   runId: string | null;
   fromHistory?: boolean;
+  initialProgressPhases?: ProgressPhase[];
 }
 
 // ============================================================================
 // Component
 // ============================================================================
 
-const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false }) => {
+const ResultsView: React.FC<ResultsViewProps> = ({
+  runId,
+  fromHistory = false,
+  initialProgressPhases = [],
+}) => {
   // State
   const [result, setResult] = useState<EquationResults | string | null>(null);
-  const [progressPhases, setProgressPhases] = useState<ProgressPhase[]>([]);
+  const [progressPhases, setProgressPhases] = useState<ProgressPhase[]>(initialProgressPhases);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
@@ -63,7 +68,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     // Error is already tracked by the hook
   }, []);
 
-  // Real-time progress via WebSocket
+  // Real-time progress via SSE
   const {
     progress: backendProgress,
     status,
@@ -80,7 +85,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   const isCompleted = status === 'completed';
 
   // Fetch final results from API when run completes.
-  // Always fetch from API on completion — WebSocket intermediate results
+  // Always fetch from API on completion — SSE intermediate results
   // (from compute phase) lack LLM explanations and summary.
   useEffect(() => {
     if (isCompleted && runId) {
@@ -116,18 +121,12 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     status,
   });
 
-  // Fetch progress config on mount
+  // Update phases if provided after mount (e.g. from run response)
   useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const response = await configService.getProgressConfig();
-        setProgressPhases(response.data.phases || []);
-      } catch (e) {
-        console.error('Failed to fetch progress config:', e);
-      }
-    };
-    fetchConfig();
-  }, []);
+    if (initialProgressPhases.length > 0) {
+      setProgressPhases(initialProgressPhases);
+    }
+  }, [initialProgressPhases]);
 
   // Handle PDF export (lazy loads the PDF library)
   const handleExportPdf = async () => {
@@ -181,7 +180,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
     setCancelling(true);
     try {
       await runsService.cancel(runId);
-      // Don't reset cancelling — WebSocket will deliver terminal status
+      // Don't reset cancelling — SSE will deliver terminal status
       // which hides the entire progress section
     } catch (e) {
       console.error('Failed to cancel:', e);
@@ -246,7 +245,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   // Check if the LLM explanation step failed (results are incomplete)
   const explanationFailed = hasExplanationError(result);
 
-  // Only show error for terminal failure states, not transient WebSocket messages
+  // Only show error for terminal failure states, not transient SSE messages
   const isTerminalError =
     !!error && (status === 'failed' || status === 'timeout' || status === 'cancelled');
 

@@ -1,5 +1,5 @@
 /**
- * WebSocket Types for Real-time Progress Updates
+ * SSE Types for Real-time Progress Updates
  */
 
 import type { EquationResults, RunStatus } from './index';
@@ -28,21 +28,7 @@ export interface ProgressUpdateMessage {
   timestamp: string;
 }
 
-export interface PongMessage {
-  type: 'pong';
-}
-
-export type ServerMessage = InitialStateMessage | ProgressUpdateMessage | PongMessage;
-
-// ============================================================================
-// Client -> Server Messages
-// ============================================================================
-
-export interface PingMessage {
-  type: 'ping';
-}
-
-export type ClientMessage = PingMessage;
+export type ServerMessage = InitialStateMessage | ProgressUpdateMessage;
 
 // ============================================================================
 // Connection State
@@ -56,26 +42,22 @@ export type ConnectionState =
   | 'failed';
 
 // ============================================================================
-// WebSocket Service Options
+// SSE Service Options
 // ============================================================================
 
-export interface WebSocketOptions {
+export interface SSEOptions {
   /** Called when a message is received from the server */
   onMessage?: (message: ServerMessage) => void;
   /** Called when connection state changes */
   onStateChange?: (state: ConnectionState) => void;
   /** Called when an error occurs */
   onError?: (error: Error) => void;
-  /** Called when the connection is closed */
-  onClose?: (code: number, reason: string) => void;
   /** Maximum number of reconnection attempts before giving up (default: 5) */
   maxRetries?: number;
   /** Initial reconnection delay in ms (default: 1000) */
   initialDelay?: number;
   /** Maximum reconnection delay in ms (default: 30000) */
   maxDelay?: number;
-  /** Ping interval in ms to keep connection alive (default: 30000) */
-  pingInterval?: number;
 }
 
 // ============================================================================

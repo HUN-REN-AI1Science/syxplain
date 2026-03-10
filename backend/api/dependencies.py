@@ -9,11 +9,13 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from backend.infrastructure.database.connection import get_db
+from backend.repositories.api_key_repository import ApiKeyRepository
 from backend.repositories.artifact_repository import ArtifactRepository
 from backend.repositories.audit_repository import AuditRepository
 from backend.repositories.file_repository import FileRepository
 from backend.repositories.run_repository import RunRepository
 from backend.services.admin_stats_service import AdminStatsService
+from backend.services.api_key_service import ApiKeyService
 from backend.services.audit_service import AuditService
 from backend.services.file_service import FileService, get_file_service
 from backend.services.permission_service import PermissionService
@@ -40,6 +42,11 @@ def get_file_repository(db: Session = Depends(get_db)) -> FileRepository:
 def get_artifact_repository(db: Session = Depends(get_db)) -> ArtifactRepository:
     """Provide ArtifactRepository instance."""
     return ArtifactRepository(db)
+
+
+def get_api_key_repository(db: Session = Depends(get_db)) -> ApiKeyRepository:
+    """Provide ApiKeyRepository instance."""
+    return ApiKeyRepository(db)
 
 
 # ============================================================================
@@ -84,9 +91,17 @@ def get_share_service(
 def get_profile_service(
     run_repo: RunRepository = Depends(get_run_repository),
     file_repo: FileRepository = Depends(get_file_repository),
+    api_key_repo: ApiKeyRepository = Depends(get_api_key_repository),
 ) -> ProfileService:
     """Provide ProfileService instance with all dependencies."""
-    return ProfileService(run_repo=run_repo, file_repo=file_repo)
+    return ProfileService(run_repo=run_repo, file_repo=file_repo, api_key_repo=api_key_repo)
+
+
+def get_api_key_service(
+    api_key_repo: ApiKeyRepository = Depends(get_api_key_repository),
+) -> ApiKeyService:
+    """Provide ApiKeyService instance."""
+    return ApiKeyService(api_key_repo=api_key_repo)
 
 
 def get_permission_service() -> PermissionService:

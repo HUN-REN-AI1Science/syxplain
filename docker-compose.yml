@@ -1,20 +1,16 @@
 # Development Docker Compose
 # This configuration includes everything needed to run locally with hot reload:
 # - PostgreSQL database
+# - Mock Slurm server (runs worker tasks as local subprocesses)
 # - Backend API (with hot reload)
 # - Frontend (with hot reload via Vite)
 #
-# IMPORTANT: Slurm Setup Required
-# The backend connects to an external Slurm cluster at slurm.science-cloud.hu:6820.
-# No SSH tunnel is needed - the API is publicly accessible.
-# Before starting:
-#   1. Generate token via SSH: ssh <user>@slurm.science-cloud.hu "scontrol token username=<user> lifespan=3600"
-#   2. Configure .env with SLURM_* variables (see .env.example)
+# By default, Slurm jobs run locally via the mock-slurm service.
+# To use a real Slurm cluster instead, set SLURM_API_URL and SLURM_AUTH_TOKEN in .env.
 #
 # Quick start:
-#   1. Copy .env.example to .env and configure all required variables
-#   2. Generate Slurm token (see README.md)
-#   3. Run: docker-compose up --build
+#   1. Copy .env.example to .env and configure required variables
+#   2. Run: docker-compose up --build
 
 services:
   postgres:
@@ -64,9 +60,9 @@ services:
       - KEYCLOAK_ADMIN_USERNAME=${KEYCLOAK_ADMIN_USERNAME:-admin}
       - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin}
       - KEYCLOAK_ISSUER=${KEYCLOAK_ISSUER:-}
-      # Slurm Configuration - set these in .env (see README for setup)
-      - SLURM_API_URL=${SLURM_API_URL}
-      - SLURM_AUTH_TOKEN=${SLURM_AUTH_TOKEN}
+      # Slurm Configuration (defaults to local mock-slurm service)
+      - SLURM_API_URL=${SLURM_API_URL:-http://mock-slurm:6820}
+      - SLURM_AUTH_TOKEN=${SLURM_AUTH_TOKEN:-mock-token}
       - SLURM_USER_NAME=${SLURM_USER_NAME:-ai4science}
       - SLURM_PARTITION=${SLURM_PARTITION:-batch_cpu_m2.large}
       - SLURM_STAGING_DIR=${SLURM_STAGING_DIR:-/storage/ai4science/syxplain}
@@ -100,12 +96,32 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      mock-slurm:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  mock-slurm:
+    build:
+      context: .
+      dockerfile: dev/Dockerfile.mock-slurm
+    container_name: syxplain-mock-slurm
+    ports:
+      - "127.0.0.1:6820:6820"
+    volumes:
+      - ./slurm_worker:/app/slurm_worker
+      - ./dev:/app/dev
+    environment:
+      - PYTHONPATH=/app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6820/slurm/v0.0.41/ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   frontend:
     image: node:24-alpine

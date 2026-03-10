@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.api.dependencies import get_permission_service
 from backend.core.rate_limit import limiter
-from backend.core.security import User, get_current_user
+from backend.core.security import User, get_current_user_jwt_only
 from backend.schemas.requests import ValidateKeysRequest
 from backend.schemas.responses import PermissionResponse, ValidateKeysResponse
 from backend.services.permission_service import PermissionService
@@ -73,7 +73,7 @@ router = APIRouter(prefix="/api", tags=["Permissions"])
 @limiter.limit("60/minute")
 def get_my_permissions(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
     permission_service: PermissionService = Depends(get_permission_service),
 ):
     """
@@ -88,7 +88,9 @@ def get_my_permissions(
 @router.post("/validate-keys", response_model=ValidateKeysResponse)
 @limiter.limit("20/minute")
 async def validate_api_keys(
-    request: Request, body: ValidateKeysRequest, current_user: User = Depends(get_current_user)
+    request: Request,
+    body: ValidateKeysRequest,
+    current_user: User = Depends(get_current_user_jwt_only),
 ):
     """
     Validate API keys before analysis.

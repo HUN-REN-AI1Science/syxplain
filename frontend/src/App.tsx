@@ -19,7 +19,7 @@ import AppHeader from '@components/AppHeader';
 import AppFooter from '@components/AppFooter';
 import WorkflowSteps from '@components/WorkflowSteps';
 import FeedbackDialog from '@components/FeedbackDialog';
-import type { FeedbackContext, UserApiKeys } from '@/types';
+import type { FeedbackContext, ProgressPhase, UserApiKeys } from '@/types';
 
 const WORKFLOW_STEPS = [
   { label: 'Upload Data' },
@@ -51,6 +51,7 @@ function MainApp() {
   const [excludedColumns, setExcludedColumns] = useState<string[]>([]);
   const [nanCounts, setNanCounts] = useState<Record<string, number>>({});
   const [runId, setRunId] = useState<string | null>(null);
+  const [progressPhases, setProgressPhases] = useState<ProgressPhase[]>([]);
   const [fromHistory, setFromHistory] = useState<boolean>(false);
   const [feedbackVisible, setFeedbackVisible] = useState(false);
   const toast = useRef<Toast>(null);
@@ -85,6 +86,9 @@ function MainApp() {
         user_api_keys: user_api_keys as UserApiKeys | undefined,
       });
       setRunId(response.data.run_id);
+      if (response.data.progress_phases) {
+        setProgressPhases(response.data.progress_phases);
+      }
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
       const errorMessage = err.response?.data?.detail || 'Failed to start analysis';
@@ -196,7 +200,11 @@ function MainApp() {
                           />
                         )}
                         {activeIndex === 2 && (
-                          <ResultsView runId={runId} fromHistory={fromHistory} />
+                          <ResultsView
+                            runId={runId}
+                            fromHistory={fromHistory}
+                            initialProgressPhases={progressPhases}
+                          />
                         )}
                       </div>
                     </CSSTransition>

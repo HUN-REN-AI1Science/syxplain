@@ -21,11 +21,7 @@ export const UploadProgressOverlay: React.FC<UploadProgressOverlayProps> = ({
     <div className="absolute inset-0 flex items-center justify-center z-20">
       <div className="bg-surface/90 backdrop-blur-md p-8 rounded-2xl shadow-xl w-full max-w-md flex flex-col items-center animate-fade-in-up border border-[var(--color-border)]">
         <div className="w-full mb-4">
-          <ProgressBar
-            mode="indeterminate"
-            style={{ height: '8px' }}
-            className="w-full"
-          />
+          <ProgressBar mode="indeterminate" style={{ height: '8px' }} className="w-full" />
         </div>
         <div className="flex items-center space-x-3">
           {processing ? (

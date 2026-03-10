@@ -18,16 +18,18 @@ from starlette.responses import Response
 
 from backend.api.routers import (
     admin,
+    api_keys,
     config,
     feedback,
     files,
     permissions,
     profile,
+    programmatic,
     progress,
     runs,
     sharing,
 )
-from backend.api.websocket import progress_ws
+from backend.api.sse.progress_sse import router as progress_sse_router
 from backend.core.config import get_settings
 from backend.core.exceptions import register_exception_handlers
 from backend.core.logging import configure_logging, configure_uvicorn_logging
@@ -66,7 +68,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         # Content Security Policy (skip for interactive docs which load external JS/CSS)
-        if not request.url.path.startswith(("/docs", "/redoc", "/openapi.json")):
+        if not request.url.path.startswith(("/docs", "/openapi.json")):
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; frame-ancestors 'none'"
             )
@@ -92,9 +94,50 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Syxplain API",
-        description="Symbolic Regression Explanation API",
+        description=(
+            "**Syxplain** -- Neurosymbolic Scientific Discovery Platform\n\n"
+            "Automated symbolic regression + LLM explanation for scientific data.\n\n"
+            "## Authentication\n\n"
+            "All endpoints require an API key passed via the `X-API-Key` header.\n\n"
+            "Generate an API key in the web UI (Profile -> API Keys).\n\n"
+            "## API Specification\n\n"
+            "- **OpenAPI JSON:** [`/openapi.json`](/openapi.json) (download for code generation)"
+        ),
         version="1.0.0",
+        redoc_url=None,
+        openapi_tags=None,
     )
+
+    # Override OpenAPI schema to remove internal auth schemes (HTTPBearer)
+    def custom_openapi():
+        if app.openapi_schema:
+            return app.openapi_schema
+        from fastapi.openapi.utils import get_openapi
+
+        schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+            tags=None,
+        )
+        # Remove HTTPBearer scheme — only X-API-Key is relevant for public docs
+        components = schema.get("components", {})
+        security_schemes = components.get("securitySchemes", {})
+        security_schemes.pop("HTTPBearer", None)
+        # Remove Bearer security requirement from all endpoints
+        for path_methods in schema.get("paths", {}).values():
+            for operation in path_methods.values():
+                if isinstance(operation, dict) and "security" in operation:
+                    operation["security"] = [
+                        s for s in operation["security"] if "HTTPBearer" not in s
+                    ]
+                    if not operation["security"]:
+                        del operation["security"]
+        app.openapi_schema = schema
+        return schema
+
+    app.openapi = custom_openapi
 
     # -------------------------------------------------------------------------
     # Middleware Configuration (order matters - first added = last executed)
@@ -121,7 +164,7 @@ def create_app() -> FastAPI:
         allow_origins=allowed_origins,
         allow_credentials=not is_wildcard,
         allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+        allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-API-Key"],
         expose_headers=["Content-Disposition"],
     )
 
@@ -135,7 +178,7 @@ def create_app() -> FastAPI:
     # Health Check Endpoint
     # -------------------------------------------------------------------------
 
-    @app.get("/health", tags=["Health"])
+    @app.get("/health", tags=["Health"], include_in_schema=False)
     async def health_check():
         """Health check endpoint for load balancers and container orchestration."""
         return {"status": "healthy"}
@@ -144,16 +187,21 @@ def create_app() -> FastAPI:
     # Router Registration (order matters for path matching)
     # -------------------------------------------------------------------------
 
-    app.include_router(admin.router)
-    app.include_router(config.router)
-    app.include_router(feedback.router)
-    app.include_router(files.router)
-    app.include_router(permissions.router)
-    app.include_router(profile.router)
-    app.include_router(progress.router)
-    app.include_router(progress_ws.router)  # WebSocket for real-time progress
-    app.include_router(sharing.router)  # Before runs to capture /api/runs/shared
-    app.include_router(runs.router)
+    # Public API (visible in /docs)
+    app.include_router(programmatic.router)  # /api/v1/ — programmatic API
+
+    # Internal routers (hidden from OpenAPI docs, JWT-only auth)
+    app.include_router(api_keys.router, include_in_schema=False)
+    app.include_router(admin.router, include_in_schema=False)
+    app.include_router(config.router, include_in_schema=False)
+    app.include_router(feedback.router, include_in_schema=False)
+    app.include_router(files.router, include_in_schema=False)
+    app.include_router(permissions.router, include_in_schema=False)
+    app.include_router(profile.router, include_in_schema=False)
+    app.include_router(progress.router, include_in_schema=False)
+    app.include_router(progress_sse_router, include_in_schema=False)  # SSE
+    app.include_router(sharing.router, include_in_schema=False)  # Before runs
+    app.include_router(runs.router, include_in_schema=False)
 
     # -------------------------------------------------------------------------
     # Lifecycle Events

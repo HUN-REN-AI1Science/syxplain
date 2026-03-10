@@ -162,9 +162,7 @@ const AuditLogs: React.FC<AuditLogsProps> = ({ toast }) => {
   const targetTemplate = (rowData: AuditLogEntry) => (
     <div className="flex flex-col">
       <span className="text-sm">{rowData.target_type}</span>
-      <span className="text-xs text-muted font-mono">
-        {rowData.target_id.substring(0, 12)}...
-      </span>
+      <span className="text-xs text-muted font-mono">{rowData.target_id.substring(0, 12)}...</span>
     </div>
   );
 

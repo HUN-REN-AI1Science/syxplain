@@ -14,6 +14,8 @@ import type {
   EquationResults,
   UserPermissions,
   UserApiKeys,
+  ApiKey,
+  CreateApiKeyResponse,
   DashboardStats,
   RunTrendItem,
   StatusDistributionItem,
@@ -139,7 +141,7 @@ export const runsService = {
     analysis_type: string;
     deep_research_model: string | null;
     user_api_keys?: UserApiKeys;
-  }) => api.post<{ run_id: string }>('/run', data),
+  }) => api.post<{ run_id: string; progress_phases?: ProgressPhase[] }>('/run', data),
 
   downloadCsv: (id: string) => api.get(`/runs/${id}/download-csv`, { responseType: 'blob' }),
 
@@ -167,8 +169,6 @@ export const uploadService = {
 // ============================================================================
 
 export const configService = {
-  getProgressConfig: () => api.get<{ phases: ProgressPhase[] }>('/progress-config'),
-
   getDeepResearchModels: () => api.get<{ models: string[] }>('/config/deep-research-models'),
 
   getUserApiModels: () => api.get<{ models: string[] }>('/config/user-api-models'),
@@ -233,6 +233,20 @@ export const publicService = {
 
   downloadCsv: (token: string) =>
     publicApi.get(`/public/${token}/download-csv`, { responseType: 'blob' }),
+};
+
+// ============================================================================
+// API Keys Service
+// ============================================================================
+
+export const apiKeysService = {
+  get: () => api.get<ApiKey | null>('/api-keys'),
+
+  generate: () => api.post<CreateApiKeyResponse>('/api-keys'),
+
+  revoke: () => api.delete<{ message: string }>('/api-keys'),
+
+  regenerate: () => api.post<CreateApiKeyResponse>('/api-keys/regenerate'),
 };
 
 // ============================================================================

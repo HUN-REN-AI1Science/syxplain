@@ -336,25 +336,11 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
         paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
         currentPageReportTemplate="Showing {first} to {last} of {totalRecords} runs"
       >
-        <Column
-          field="id"
-          header="ID"
-          body={(row) => row.id.substring(0, 8) + '...'}
-        />
+        <Column field="id" header="ID" body={(row) => row.id.substring(0, 8) + '...'} />
         <Column header="User" body={userTemplate} />
-        <Column
-          field="status"
-          header="Status"
-          body={statusTemplate}
-          sortable
-        />
+        <Column field="status" header="Status" body={statusTemplate} sortable />
         <Column field="analysis_type" header="Type" sortable />
-        <Column
-          field="created_at"
-          header="Created"
-          body={dateTemplate}
-          sortable
-        />
+        <Column field="created_at" header="Created" body={dateTemplate} sortable />
         <Column header="Duration" body={durationTemplate} />
         <Column header="Actions" body={actionsTemplate} />
       </DataTable>

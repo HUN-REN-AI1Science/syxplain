@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Track running analysis tasks (prevents GC of asyncio tasks)
 _running_tasks: dict[str, asyncio.Task] = {}
 
-# Track broadcast tasks to prevent GC
+# Track broadcast tasks (prevents GC of fire-and-forget SSE broadcasts)
 _broadcast_tasks: set[asyncio.Task] = set()
 
 
@@ -32,7 +32,7 @@ def update_run_status(
     progress: int | None = None,
 ) -> None:
     """
-    Update run status in the database and broadcast via WebSocket.
+    Update run status in the database and broadcast via SSE.
 
     Args:
         run_id: The run UUID as string
@@ -75,7 +75,7 @@ def update_run_status(
         logger.error(f"Failed to update run status for {run_id}: {e}")
         return
 
-    # Broadcast via WebSocket
+    # Broadcast via SSE
     _broadcast_status_update(run_id, status, final_progress or 0, error, results)
 
 
@@ -86,9 +86,9 @@ def _broadcast_status_update(
     error: str | None = None,
     results: dict[str, Any] | None = None,
 ) -> None:
-    """Broadcast status update via WebSocket."""
+    """Broadcast status update via SSE."""
     try:
-        from backend.api.websocket.connection_manager import get_connection_manager
+        from backend.api.sse.connection_manager import get_connection_manager
 
         manager = get_connection_manager()
 
@@ -129,6 +129,9 @@ async def _run_analysis(
     Performs the actual analysis work by delegating to the orchestrator,
     which coordinates compute tasks (SHAP, PySR) on Slurm and LLM operations.
     """
+    # Yield control so the HTTP response (with run_id) is sent first
+    await asyncio.sleep(0)
+
     from backend.core.logging import configure_debug_mode, configure_logging
 
     configure_logging()

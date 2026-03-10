@@ -15,7 +15,7 @@ from backend.core.exceptions import (
     EntityNotFoundError,
     ValidationError,
 )
-from backend.core.security import User, get_current_user
+from backend.core.security import User, get_current_user_jwt_only
 from backend.schemas.requests import RunRequest, SortField, SortOrder
 from backend.schemas.responses import (
     MessageResponse,
@@ -25,6 +25,7 @@ from backend.schemas.responses import (
     RunSummary,
 )
 from backend.services.analysis_service import start_analysis_run
+from backend.services.progress_service import get_progress_phases
 from backend.services.run_service import RunService
 from backend.utils.security_utils import safe_content_disposition
 
@@ -36,7 +37,7 @@ router = APIRouter(prefix="/api", tags=["Runs"])
 @router.post("/run", response_model=RunResponse)
 async def run_analysis(
     request: RunRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
     run_service: RunService = Depends(get_run_service),
 ):
     """
@@ -100,7 +101,12 @@ async def run_analysis(
             f"using_user_key={not has_hunren_access and user_api_key is not None})"
         )
 
-        return RunResponse(run_id=run_id, status="pending", message="Analysis started")
+        return RunResponse(
+            run_id=run_id,
+            status="pending",
+            message="Analysis started",
+            progress_phases=get_progress_phases(),
+        )
 
     except ConfigurationError as e:
         logger.error(f"Configuration error: {e.message}")
@@ -120,7 +126,7 @@ def list_runs(
     status: str | None = Query(None, description="Filter by status"),
     analysis_type: str | None = Query(None, description="Filter by analysis type"),
     search: str | None = Query(None, description="Search in filename and target variable"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
     run_service: RunService = Depends(get_run_service),
 ):
     """
@@ -178,7 +184,7 @@ def list_runs(
 @router.get("/runs/{run_id}", response_model=RunStatusResponse)
 def get_run(
     run_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
     run_service: RunService = Depends(get_run_service),
 ):
     """
@@ -202,7 +208,7 @@ def get_run(
 @router.post("/runs/{run_id}/cancel", response_model=MessageResponse)
 async def cancel_run(
     run_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
     run_service: RunService = Depends(get_run_service),
 ):
     """
@@ -229,7 +235,7 @@ async def cancel_run(
 @router.delete("/runs/{run_id}", response_model=MessageResponse)
 def delete_run(
     run_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
     run_service: RunService = Depends(get_run_service),
 ):
     """
@@ -257,7 +263,7 @@ def delete_run(
 @router.get("/runs/{run_id}/details")
 def get_run_details(
     run_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
     run_service: RunService = Depends(get_run_service),
 ):
     """
@@ -282,7 +288,7 @@ def get_run_details(
 def download_file(
     run_id: str,
     filename: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
     run_service: RunService = Depends(get_run_service),
 ):
     """
@@ -308,7 +314,7 @@ def download_file(
 @router.get("/runs/{run_id}/download-csv")
 def download_csv(
     run_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_jwt_only),
     run_service: RunService = Depends(get_run_service),
 ):
     """

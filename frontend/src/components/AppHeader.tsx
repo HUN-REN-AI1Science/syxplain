@@ -49,6 +49,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     { label: 'Profile', icon: 'pi pi-user', command: onProfileClick },
     ...(onAdminClick ? [{ label: 'Admin', icon: 'pi pi-cog', command: onAdminClick }] : []),
     { label: 'Feedback', icon: 'pi pi-comment', command: onFeedbackClick },
+    {
+      label: 'API Docs',
+      icon: 'pi pi-book',
+      command: () => window.open('/docs', '_blank'),
+    },
     { separator: true },
     { label: themeLabel, icon: themeIcon, command: toggleTheme },
     { separator: true },

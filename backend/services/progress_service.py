@@ -31,13 +31,13 @@ def _broadcast_progress_sync(
     results: dict | None = None,
 ) -> None:
     """
-    Broadcast progress update via WebSocket (sync wrapper for async broadcast).
+    Broadcast progress update via SSE (sync wrapper for async broadcast).
 
     This is safe to call from sync code - it will schedule the broadcast
     on the event loop if one is running, or skip if not.
     """
     try:
-        from backend.api.websocket.connection_manager import get_connection_manager
+        from backend.api.sse.connection_manager import get_connection_manager
 
         manager = get_connection_manager()
 
@@ -69,16 +69,10 @@ def _broadcast_progress_sync(
 # ============================================================================
 
 _progress_cache: dict[str, int] | None = None
-_description_cache: dict[str, str] | None = None
 
 
-def _load_progress_config() -> tuple[dict[str, int], dict[str, str]]:
-    """
-    Load progress phase weights and descriptions from YAML configuration.
-
-    Returns:
-        Tuple of (weights dict, descriptions dict)
-    """
+def _load_progress_weights() -> dict[str, int]:
+    """Load progress phase weights from YAML configuration."""
     config_paths = [
         Path(__file__).parent.parent / "progress_config.yaml",
         Path("backend/progress_config.yaml"),
@@ -90,32 +84,20 @@ def _load_progress_config() -> tuple[dict[str, int], dict[str, str]]:
                 with open(config_path) as f:
                     config = yaml.safe_load(f)
                     phases = config.get("phases", [])
-                    weights = {p["name"]: p["progress_end"] for p in phases}
-                    descriptions = {
-                        p["name"]: p.get("description", p.get("label", "")) for p in phases
-                    }
-                    return weights, descriptions
+                    return {p["name"]: p["progress_end"] for p in phases}
             except Exception as e:
                 logger.warning(f"Failed to load progress_config.yaml: {e}")
 
     logger.warning("No progress_config.yaml found, using empty weights")
-    return {}, {}
+    return {}
 
 
 def get_progress_weights() -> dict[str, int]:
     """Get cached progress weights."""
-    global _progress_cache, _description_cache
+    global _progress_cache
     if _progress_cache is None:
-        _progress_cache, _description_cache = _load_progress_config()
+        _progress_cache = _load_progress_weights()
     return _progress_cache
-
-
-def get_step_description(step_name: str) -> str:
-    """Get the user-friendly description for a step."""
-    global _progress_cache, _description_cache
-    if _description_cache is None:
-        _progress_cache, _description_cache = _load_progress_config()
-    return _description_cache.get(step_name, "Processing...")
 
 
 def get_progress_phases():
@@ -211,7 +193,7 @@ class ProgressTracker:
             summary = {k: type(v).__name__ for k, v in details.items()}
             logger.debug(f"  Details: {summary}")
 
-        # Update database and broadcast via WebSocket
+        # Update database and broadcast via SSE
         self._persist_progress(progress, step_name=step_name)
 
     def set_progress(self, progress: int, status: str | None = None) -> None:
@@ -236,34 +218,91 @@ class ProgressTracker:
         self._persist_progress(progress)
 
     def _persist_progress(self, progress: int, step_name: str | None = None) -> None:
-        """Persist progress to database and broadcast via WebSocket."""
-        run_status = self._persist_progress_db(progress)
+        """Persist progress to database and broadcast via SSE."""
+        persisted, run_status = self._persist_progress_db(progress)
 
-        # Broadcast to WebSocket clients
-        _broadcast_progress_sync(
-            run_id=self.run_id,
-            progress=progress,
-            status=run_status,
-            step_name=step_name,
-        )
+        # Only broadcast if progress actually increased in DB
+        if persisted:
+            _broadcast_progress_sync(
+                run_id=self.run_id,
+                progress=progress,
+                status=run_status,
+                step_name=step_name,
+            )
 
-    def _persist_progress_db(self, progress: int) -> str:
-        """Write progress to database. Returns the current run status."""
+    async def update_progress_async(
+        self, step_name: str, status: str | None = None, details: dict[str, Any] | None = None
+    ) -> None:
+        """Async version of update_progress that awaits DB and SSE broadcast."""
+        if not self.run_id:
+            return
+
+        self.step_count += 1
+
+        if step_name in self.weights:
+            progress = self.weights[step_name]
+        else:
+            progress = min(99, self.current_progress + 1)
+
+        progress = max(progress, self.current_progress)
+        progress = min(99, progress)
+        self.current_progress = progress
+
+        if status:
+            logger.info(f"[Run {self.run_id[:8]}] Step {self.step_count}: {step_name} - {status}")
+        else:
+            logger.info(f"[Run {self.run_id[:8]}] Step {self.step_count}: {step_name}")
+
+        # Persist to DB in a thread (non-blocking) — only if progress increases
+        persisted, run_status = await asyncio.to_thread(self._persist_progress_db, progress)
+
+        if persisted:
+            # Broadcast directly (awaited, not fire-and-forget)
+            from backend.api.sse.connection_manager import get_connection_manager
+
+            manager = get_connection_manager()
+            await manager.broadcast_progress(
+                run_id=self.run_id,
+                progress=progress,
+                status=run_status,
+                step_name=step_name,
+            )
+
+    def _persist_progress_db(self, progress: int) -> tuple[bool, str]:
+        """
+        Write progress to database if it increases.
+
+        Returns:
+            Tuple of (was_persisted, current_run_status).
+        """
         SessionLocal = get_session_factory()
         db = SessionLocal()
         run_status = "running"
+        persisted = False
         try:
             run = db.query(Run).filter(Run.id == self.run_id).first()
             if run:
-                run.progress = progress
                 run_status = run.status
-                db.commit()
-                logger.debug(f"[Run {self.run_id[:8]}] Persisted progress: {progress}%")
+                db_progress = run.progress or 0
+                # Sync internal tracker with DB (worker updates bypass tracker)
+                if db_progress > self.current_progress:
+                    self.current_progress = db_progress
+                if progress > db_progress:
+                    run.progress = progress
+                    self.current_progress = progress
+                    db.commit()
+                    persisted = True
+                    logger.debug(f"[Run {self.run_id[:8]}] Persisted progress: {progress}%")
+                else:
+                    logger.debug(
+                        f"[Run {self.run_id[:8]}] Skipped progress {progress}% "
+                        f"(DB already at {db_progress}%)"
+                    )
         except Exception as e:
             logger.error(f"Failed to update progress for {self.run_id}: {e}")
         finally:
             db.close()
-        return run_status
+        return persisted, run_status
 
     def save_artifact(self, filename: str, content: bytes, media_type: str | None = None) -> None:
         """
@@ -290,33 +329,3 @@ class ProgressTracker:
             logger.error(f"Failed to save artifact {filename}: {e}")
         finally:
             db.close()
-
-    # ========================================================================
-    # Backward Compatibility Methods
-    # ========================================================================
-
-    def log_step(self, step_name: str, payload: Any = None) -> None:
-        """
-        Backward-compatible alias for update_progress.
-
-        Args:
-            step_name: Name of the step
-            payload: Optional payload (logged as debug summary only)
-        """
-        if isinstance(payload, dict):
-            status = payload.get("status")
-            self.update_progress(step_name, status=status, details=payload)
-        else:
-            self.update_progress(step_name)
-
-    def log_artifact(self, filename: str, content: bytes, media_type: str | None = None) -> None:
-        """Backward-compatible alias for save_artifact."""
-        self.save_artifact(filename, content, media_type)
-
-
-# ============================================================================
-# Backward Compatibility Alias
-# ============================================================================
-
-# Keep StepLogger as alias during migration
-StepLogger = ProgressTracker

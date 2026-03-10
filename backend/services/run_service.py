@@ -287,7 +287,7 @@ class RunService:
                 except Exception as e:
                     logger.warning(f"Failed to cancel {job_type} {job_id}: {e}")
 
-        # Update status in database and broadcast via WebSocket
+        # Update status in database and broadcast via SSE
         from backend.services.analysis_service import update_run_status
 
         update_run_status(run_id, status="cancelled", error="Analysis cancelled by user")

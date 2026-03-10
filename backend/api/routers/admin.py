@@ -18,7 +18,7 @@ from backend.api.dependencies import (
     get_system_monitor_service,
 )
 from backend.core.rate_limit import limiter
-from backend.core.security import User, get_current_user
+from backend.core.security import User, get_current_user_jwt_only
 from backend.repositories.run_repository import AdminRunFilters, PaginationParams, RunRepository
 from backend.schemas.requests import SortField, SortOrder
 from backend.schemas.responses import (
@@ -73,7 +73,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 
-def require_admin(current_user: User = Depends(get_current_user)) -> User:
+def require_admin(current_user: User = Depends(get_current_user_jwt_only)) -> User:
     """
     Dependency that requires admin access.
 

@@ -241,7 +241,9 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
           <div className="text-center">
             <i className="pi pi-check-circle text-3xl text-green-500 mb-2" />
             <p className="text-sm text-secondary">Success Rate</p>
-            <p className="text-xl font-bold font-heading text-primary">{stats?.success_rate.toFixed(1)}%</p>
+            <p className="text-xl font-bold font-heading text-primary">
+              {stats?.success_rate.toFixed(1)}%
+            </p>
           </div>
         </Card>
 
@@ -249,7 +251,9 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
           <div className="text-center">
             <i className="pi pi-check text-3xl text-teal-500 mb-2" />
             <p className="text-sm text-secondary">Completed</p>
-            <p className="text-xl font-bold font-heading text-primary">{stats?.total_completed || 0}</p>
+            <p className="text-xl font-bold font-heading text-primary">
+              {stats?.total_completed || 0}
+            </p>
           </div>
         </Card>
       </div>
@@ -276,7 +280,9 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
 
         {/* Quick vs Deep Comparison */}
         <Card className="shadow-md">
-          <h3 className="text-base sm:text-lg font-semibold font-heading text-primary mb-4">Quick vs Deep</h3>
+          <h3 className="text-base sm:text-lg font-semibold font-heading text-primary mb-4">
+            Quick vs Deep
+          </h3>
           <div className="h-56 sm:h-64">
             <Chart type="bar" data={comparisonChartData} options={comparisonChartOptions} />
           </div>
@@ -285,7 +291,9 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
 
       {/* Performance by Type Table */}
       <Card className="shadow-md">
-        <h3 className="text-lg font-semibold font-heading text-primary mb-4">Performance by Analysis Type</h3>
+        <h3 className="text-lg font-semibold font-heading text-primary mb-4">
+          Performance by Analysis Type
+        </h3>
         <div className="overflow-x-auto">
           <DataTable value={byType} loading={loading} className="text-sm">
             <Column header="Type" body={typeTemplate} />

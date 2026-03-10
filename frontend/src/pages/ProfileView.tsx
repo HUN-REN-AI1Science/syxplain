@@ -14,6 +14,7 @@ import {
   AccountInfoSection,
   UsageStatsSection,
   SharedRunsTable,
+  ApiKeysSection,
   DangerZoneSection,
   DeleteAccountDialog,
   RevokeShareDialog,
@@ -197,6 +198,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
         onViewRun={onSelectRun}
         onRevokeShare={setRevokeRunId}
       />
+      <ApiKeysSection />
       <DangerZoneSection onDeleteClick={() => setShowDeleteDialog(true)} />
 
       <RevokeShareDialog

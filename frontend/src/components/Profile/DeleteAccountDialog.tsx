@@ -85,9 +85,7 @@ export const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
             Your account and login credentials
           </li>
         </ul>
-        <p className="text-primary font-medium">
-          You will need to register again to use Syxplain.
-        </p>
+        <p className="text-primary font-medium">You will need to register again to use Syxplain.</p>
       </div>
     </Dialog>
   );

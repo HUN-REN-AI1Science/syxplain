@@ -142,6 +142,25 @@ export interface ProfileData {
 }
 
 // ============================================================================
+// API Key Types
+// ============================================================================
+
+export interface ApiKey {
+  id: string;
+  key_prefix: string;
+  is_active: boolean;
+  created_at: string | null;
+  last_used_at: string | null;
+}
+
+export interface CreateApiKeyResponse {
+  id: string;
+  key: string;
+  key_prefix: string;
+  created_at: string | null;
+}
+
+// ============================================================================
 // Form Types
 // ============================================================================
 

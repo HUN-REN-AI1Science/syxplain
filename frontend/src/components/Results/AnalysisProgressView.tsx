@@ -57,7 +57,10 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
 
       {/* Step Description with crossfade */}
       <div className="h-8 mb-4" aria-live="polite">
-        <p key={stepDescription} className="text-base font-medium text-muted step-description-animate">
+        <p
+          key={stepDescription}
+          className="text-base font-medium text-muted step-description-animate"
+        >
           {stepDescription}
         </p>
       </div>

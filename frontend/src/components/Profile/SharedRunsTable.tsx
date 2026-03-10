@@ -47,8 +47,12 @@ export const SharedRunsTable: React.FC<SharedRunsTableProps> = ({
                 <th className="px-3 py-2 sm:px-4 sm:py-3 text-xs font-semibold text-secondary uppercase">
                   Dataset
                 </th>
-                <th className="px-3 py-2 sm:px-4 sm:py-3 text-xs font-semibold text-secondary uppercase">Target</th>
-                <th className="hidden md:table-cell px-3 py-2 sm:px-4 sm:py-3 text-xs font-semibold text-secondary uppercase">Type</th>
+                <th className="px-3 py-2 sm:px-4 sm:py-3 text-xs font-semibold text-secondary uppercase">
+                  Target
+                </th>
+                <th className="hidden md:table-cell px-3 py-2 sm:px-4 sm:py-3 text-xs font-semibold text-secondary uppercase">
+                  Type
+                </th>
                 <th className="hidden md:table-cell px-3 py-2 sm:px-4 sm:py-3 text-xs font-semibold text-secondary uppercase">
                   Created
                 </th>
@@ -64,7 +68,9 @@ export const SharedRunsTable: React.FC<SharedRunsTableProps> = ({
               {sharedRuns.map((run, idx) => (
                 <tr
                   key={run.id}
-                  className={idx !== sharedRuns.length - 1 ? 'border-b border-[var(--color-border)]' : ''}
+                  className={
+                    idx !== sharedRuns.length - 1 ? 'border-b border-[var(--color-border)]' : ''
+                  }
                 >
                   <td className="px-3 py-2 sm:px-4 sm:py-3 text-primary text-sm">
                     <span

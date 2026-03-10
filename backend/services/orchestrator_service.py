@@ -26,7 +26,7 @@ from backend.infrastructure.slurm import (
     get_slurm_backend,
 )
 from backend.infrastructure.slurm.client import is_quota_error
-from backend.services.progress_service import ProgressTracker
+from backend.services.progress_service import ProgressTracker, _broadcast_progress_sync
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,7 @@ class AnalysisOrchestrator:
 
         Raises:
             SlurmBackendError: If submission fails with non-quota error
-            OrchestratorError: If run is cancelled during retry wait
+            AnalysisCancelledError: If run is cancelled during retry wait
         """
         slurm_settings = get_slurm_settings()
         retry_interval = slurm_settings.retry_interval
@@ -199,7 +199,7 @@ class AnalysisOrchestrator:
                     await asyncio.sleep(1)
                     # Check if run was cancelled
                     if self._is_run_cancelled(run_id):
-                        raise OrchestratorError("Analysis cancelled by user")
+                        raise AnalysisCancelledError("Analysis cancelled by user")
 
     async def run_analysis(self, context: AnalysisContext) -> dict[str, Any]:
         """
@@ -225,20 +225,22 @@ class AnalysisOrchestrator:
         try:
             # Update status to running
             self._update_run_status(run_id, "running")
-            progress.update_progress("initialization", status="Initializing analysis")
+            await progress.update_progress_async("initialization", status="Initializing analysis")
 
             # Step 1: Data summary
-            progress.update_progress("data_summary", status="Analyzing dataset")
+            await progress.update_progress_async("data_summary", status="Analyzing dataset")
             data_summary = self._generate_data_summary(context)
 
             # Step 1.5: Generate feature visualizations for LLM
-            progress.update_progress("visualization", status="Generating feature visualizations")
+            await progress.update_progress_async(
+                "visualization", status="Generating feature visualizations"
+            )
             feature_visualizations = await asyncio.to_thread(
                 self._generate_feature_visualizations, context
             )
 
             # Step 2: Generate PySR config using LLM
-            progress.update_progress(
+            await progress.update_progress_async(
                 "pysr_config_generation", status="Generating symbolic regression configuration"
             )
             pysr_config = await self._generate_pysr_config(
@@ -246,29 +248,34 @@ class AnalysisOrchestrator:
             )
 
             # Step 3: Submit compute tasks
-            progress.update_progress("compute_submission", status="Submitting compute tasks")
+            await progress.update_progress_async(
+                "compute_submission", status="Submitting compute tasks"
+            )
             compute_results = await self._run_compute_tasks(context, pysr_config, progress)
 
             # Step 4: LLM explanation of results
-            progress.update_progress("llm_explanation", status="Generating explanations")
+            await progress.update_progress_async(
+                "llm_explanation", status="Generating explanations"
+            )
             explanations = await self._generate_explanations(context, compute_results, data_summary)
 
             # Step 5: Optional deep research
             if context.analysis_type == "deep" and context.deep_research_model:
-                progress.update_progress("deep_research", status="Performing deep research")
+                await progress.update_progress_async(
+                    "deep_research", status="Performing deep research"
+                )
                 explanations = await self._run_deep_research(context, compute_results, explanations)
 
             # Step 6: Finalize and store results
-            progress.update_progress("finalization", status="Finalizing results")
+            await progress.update_progress_async("finalization", status="Finalizing results")
             final_results = self._compile_final_results(context, compute_results, explanations)
 
             # Save artifacts (including visualizations from compute results)
             visualizations = compute_results.get("visualizations", [])
             self._save_artifacts(run_id, final_results, progress, visualizations=visualizations)
 
-            # Mark as completed
+            # Mark as completed (also broadcasts via SSE)
             self._update_run_status(run_id, "completed", results=final_results)
-            progress.set_progress(100, "Analysis complete")
 
             logger.info(f"Analysis completed successfully for run {run_id}")
             return final_results
@@ -472,7 +479,9 @@ class AnalysisOrchestrator:
         results = {}
 
         # Report HPC connection phase (user-friendly)
-        progress.update_progress("hpc_connecting", status="Connecting to computing cluster")
+        await progress.update_progress_async(
+            "hpc_connecting", status="Connecting to computing cluster"
+        )
 
         # Build task inputs
         shap_task_input = TaskInput(
@@ -513,7 +522,7 @@ class AnalysisOrchestrator:
         logger.info(f"PySR task submitted as job {pysr_job.job_id}")
 
         # Report queued phase (user-friendly - jobs are submitted, waiting in queue)
-        progress.update_progress("hpc_queued", status="Jobs queued for processing")
+        await progress.update_progress_async("hpc_queued", status="Jobs queued for processing")
 
         # Store job IDs in database for cancellation
         self._store_slurm_job_ids(
@@ -778,7 +787,7 @@ class AnalysisOrchestrator:
         results: dict[str, Any] | None = None,
         error: str | None = None,
     ) -> None:
-        """Update run status in database."""
+        """Update run status in database and broadcast terminal states via SSE."""
         try:
             with get_db_session() as db:
                 run = db.query(Run).filter(Run.id == run_id).first()
@@ -797,6 +806,15 @@ class AnalysisOrchestrator:
                     if status == "completed":
                         run.progress = 100
                     db.commit()
+
+                    # Broadcast terminal states via SSE so clients see completion/failure
+                    if status in ("completed", "failed", "timeout", "cancelled"):
+                        _broadcast_progress_sync(
+                            run_id=run_id,
+                            progress=run.progress or 0,
+                            status=status,
+                            error=error,
+                        )
         except Exception as e:
             logger.error(f"Failed to update run status for {run_id}: {e}")
 

@@ -206,9 +206,7 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
             </div>
 
             {/* Analysis Mode */}
-            <div
-              className="rounded-xl p-4 border bg-surface-alt border-[var(--color-border)]"
-            >
+            <div className="rounded-xl p-4 border bg-surface-alt border-[var(--color-border)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <i
@@ -270,7 +268,9 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
                       <div
                         key={featureName}
                         className={`grid grid-cols-12 gap-4 px-4 py-3 items-center hover:bg-brand-50 transition-colors ${
-                          index !== featureEntries.length - 1 ? 'border-b border-[var(--color-border)]' : ''
+                          index !== featureEntries.length - 1
+                            ? 'border-b border-[var(--color-border)]'
+                            : ''
                         }`}
                       >
                         <div className="col-span-4 flex items-center min-w-0">
