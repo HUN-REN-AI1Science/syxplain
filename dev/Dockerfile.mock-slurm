@@ -1,0 +1,40 @@
+# Mock Slurm worker container for local development
+#
+# Runs mock_slurmrestd.py (FastAPI) which:
+# - SHAP tasks: spawns real python -m slurm_worker subprocesses
+# - PySR tasks: returns mock results via HTTP callbacks (no Julia needed)
+#
+# Build context must be the repo root (context: .)
+
+FROM python:3.11-slim
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python deps: worker requirements (minus pysr/juliacall) + mock server deps
+COPY slurm_worker/requirements.txt /tmp/worker-requirements.txt
+RUN grep -v -E '^(pysr|juliacall)' /tmp/worker-requirements.txt > /tmp/filtered-requirements.txt \
+    && pip install --no-cache-dir \
+        -r /tmp/filtered-requirements.txt \
+        fastapi \
+        uvicorn[standard] \
+        matplotlib \
+    && rm /tmp/worker-requirements.txt /tmp/filtered-requirements.txt
+
+# Copy worker code and mock server
+COPY slurm_worker/ /app/slurm_worker/
+COPY dev/mock_slurmrestd.py /app/dev/mock_slurmrestd.py
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    LC_ALL=C.UTF-8 \
+    LANG=C.UTF-8
+
+WORKDIR /app
+EXPOSE 6820
+
+ENTRYPOINT ["python", "/app/dev/mock_slurmrestd.py", "--port", "6820"]
