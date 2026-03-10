@@ -211,6 +211,17 @@ class FileService:
         if len(columns) == 0:
             raise FileValidationError(message="No columns detected in the file", filename=filename)
 
+        non_string_cols = [col for col in columns if not isinstance(col, str)]
+        if non_string_cols:
+            raise FileValidationError(
+                message=(
+                    f"Column names could not be identified — the values {non_string_cols} "
+                    "were found as headers. Please ensure the first row of your file contains "
+                    "descriptive column names (e.g., 'Temperature', 'Pressure'), not data values."
+                ),
+                filename=filename,
+            )
+
     def extract_metadata(self, df: pd.DataFrame, filename: str, content: bytes) -> FileMetadata:
         """
         Extract metadata from a DataFrame.

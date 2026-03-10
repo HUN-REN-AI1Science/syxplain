@@ -65,8 +65,10 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadComplete }) => {
           );
         }, 1500);
       }
-    } catch (err) {
-      setError('Failed to upload file. Please check your connection.');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } } };
+      const detail = axiosErr?.response?.data?.detail;
+      setError(detail || 'Failed to upload file. Please check your connection.');
       console.error(err);
       setUploading(false);
     }
