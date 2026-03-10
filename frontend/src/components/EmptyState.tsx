@@ -24,7 +24,12 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
     <h3 className="font-heading text-xl font-semibold text-primary mb-2">{title}</h3>
     {subtitle && <p className="text-secondary text-sm max-w-sm mb-6">{subtitle}</p>}
     {actionLabel && onAction && (
-      <Button label={actionLabel} icon="pi pi-plus" className="p-button-outlined" onClick={onAction} />
+      <Button
+        label={actionLabel}
+        icon="pi pi-plus"
+        className="p-button-outlined"
+        onClick={onAction}
+      />
     )}
   </div>
 );

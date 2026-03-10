@@ -263,7 +263,9 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
 
         {/* Error Distribution Chart */}
         <Card className="shadow-md">
-          <h3 className="text-lg font-semibold font-heading text-primary mb-4">Error Distribution</h3>
+          <h3 className="text-lg font-semibold font-heading text-primary mb-4">
+            Error Distribution
+          </h3>
           <div className="h-48 sm:h-64">
             {distribution.length > 0 ? (
               <Chart type="pie" data={distributionChartData} options={distributionChartOptions} />
@@ -295,23 +297,11 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
             paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport"
             currentPageReportTemplate="Showing {first} to {last} of {totalRecords} failed runs"
           >
-            <Column
-              field="id"
-              header="ID"
-              body={(row) => row.id.substring(0, 8) + '...'}
-            />
+            <Column field="id" header="ID" body={(row) => row.id.substring(0, 8) + '...'} />
             <Column header="User" body={userTemplate} />
-            <Column
-              field="status"
-              header="Status"
-              body={statusTemplate}
-            />
+            <Column field="status" header="Status" body={statusTemplate} />
             <Column header="Error" body={errorTemplate} />
-            <Column
-              field="created_at"
-              header="Date"
-              body={dateTemplate}
-            />
+            <Column field="created_at" header="Date" body={dateTemplate} />
             <Column header="" body={actionsTemplate} />
           </DataTable>
         </div>

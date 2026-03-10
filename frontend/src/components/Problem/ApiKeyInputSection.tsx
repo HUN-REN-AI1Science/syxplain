@@ -55,7 +55,9 @@ const ApiKeyHelpContent = () => (
     </div>
 
     <div className="bg-brand-50 p-3 rounded">
-      <h4 className="font-heading font-semibold text-primary mb-1">Want to Use Built-in API Keys?</h4>
+      <h4 className="font-heading font-semibold text-primary mb-1">
+        Want to Use Built-in API Keys?
+      </h4>
       <p className="text-sm text-secondary">
         If you'd like access to the built-in HUN-REN API keys (no personal key required), please
         contact the system administrators to request access privileges.

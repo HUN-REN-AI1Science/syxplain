@@ -206,9 +206,7 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
             </div>
 
             {/* Analysis Mode - Compact */}
-            <div
-              className="rounded-xl p-4 border bg-surface-alt border-[var(--color-border)]"
-            >
+            <div className="rounded-xl p-4 border bg-surface-alt border-[var(--color-border)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <i
@@ -273,7 +271,9 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
                       <div
                         key={featureName}
                         className={`grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 px-4 py-3 items-center hover:bg-brand-50 transition-colors ${
-                          index !== featureEntries.length - 1 ? 'border-b border-[var(--color-border)]' : ''
+                          index !== featureEntries.length - 1
+                            ? 'border-b border-[var(--color-border)]'
+                            : ''
                         }`}
                       >
                         <div className="sm:col-span-4 flex items-center min-w-0">

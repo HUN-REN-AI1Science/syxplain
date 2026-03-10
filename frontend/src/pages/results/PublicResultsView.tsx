@@ -74,7 +74,9 @@ const PublicResultsView: React.FC = () => {
                 <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-4">
                   <i className="pi pi-exclamation-triangle text-red-500 text-3xl"></i>
                 </div>
-                <h2 className="text-xl font-bold text-primary font-heading mb-2">Unable to Load Results</h2>
+                <h2 className="text-xl font-bold text-primary font-heading mb-2">
+                  Unable to Load Results
+                </h2>
                 <p className="text-secondary text-center max-w-md mb-6">{error}</p>
                 <Message
                   severity="warn"

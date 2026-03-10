@@ -245,7 +245,10 @@ const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = (
                     </h5>
                     <div className="space-y-2">
                       {equation.term_explanations.map((term, idx) => (
-                        <div key={idx} className="bg-surface rounded-lg p-3 border border-[var(--color-border)]">
+                        <div
+                          key={idx}
+                          className="bg-surface rounded-lg p-3 border border-[var(--color-border)]"
+                        >
                           <code className="text-brand-500 font-mono text-sm bg-brand-50 px-2 py-1 rounded">
                             {term.term}
                           </code>
@@ -364,8 +367,8 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data }) => {
           </div>
           <h4 className="text-xl font-bold text-primary font-heading mb-2">Analysis Failed</h4>
           <p className="text-secondary max-w-md">
-            The AI explanation step encountered an error during this analysis.
-            The results could not be fully generated. Please re-run the analysis to get complete results.
+            The AI explanation step encountered an error during this analysis. The results could not
+            be fully generated. Please re-run the analysis to get complete results.
           </p>
         </div>
       </div>

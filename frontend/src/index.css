@@ -46,18 +46,18 @@
 
   /* Interactive elements cursor */
   button,
-  [role="button"],
+  [role='button'],
   a,
   label[for],
   select,
   summary,
-  [tabindex]:not([tabindex="-1"]) {
+  [tabindex]:not([tabindex='-1']) {
     cursor: pointer;
   }
 
   /* Button press effect */
   button:active:not(:disabled),
-  [role="button"]:active:not(:disabled) {
+  [role='button']:active:not(:disabled) {
     transform: scale(0.97);
   }
 }
@@ -197,18 +197,34 @@
    ========================================================================== */
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes fadeInDown {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {
@@ -232,8 +248,9 @@
 .fade-enter-active {
   opacity: 1;
   transform: translateY(0);
-  transition: opacity var(--duration-normal) var(--ease-default),
-              transform var(--duration-normal) var(--ease-spring);
+  transition:
+    opacity var(--duration-normal) var(--ease-default),
+    transform var(--duration-normal) var(--ease-spring);
 }
 
 .fade-exit {
@@ -244,14 +261,21 @@
 .fade-exit-active {
   opacity: 0;
   transform: translateY(-8px);
-  transition: opacity var(--duration-fast) var(--ease-default),
-              transform var(--duration-fast) var(--ease-default);
+  transition:
+    opacity var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
 }
 
 /* Step description crossfade */
 @keyframes stepDescriptionEnter {
-  0% { opacity: 0; transform: translateY(8px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .step-description-animate {
@@ -263,7 +287,12 @@
    ========================================================================== */
 
 .progress-bar-shimmer .p-progressbar-value {
-  background: linear-gradient(90deg, var(--color-brand-500) 0%, #3b82f6 50%, var(--color-brand-500) 100%) !important;
+  background: linear-gradient(
+    90deg,
+    var(--color-brand-500) 0%,
+    #3b82f6 50%,
+    var(--color-brand-500) 100%
+  ) !important;
   background-size: 200% 100%;
   animation: progressShimmer 2s linear infinite;
 }
@@ -273,13 +302,23 @@
 }
 
 @keyframes progressShimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 @keyframes messageFade {
-  0% { opacity: 0; transform: translateY(4px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message-animate {
@@ -287,8 +326,13 @@
 }
 
 @keyframes queuePulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .queue-pulse {
@@ -296,8 +340,14 @@
 }
 
 @keyframes tipSlideIn {
-  0% { opacity: 0; transform: translateX(-10px); }
-  100% { opacity: 1; transform: translateX(0); }
+  0% {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .tip-animate {
@@ -305,9 +355,18 @@
 }
 
 @keyframes p-progressbar-indeterminate-anim {
-  0% { left: -35%; right: 100%; }
-  60% { left: 100%; right: -90%; }
-  100% { left: 100%; right: -90%; }
+  0% {
+    left: -35%;
+    right: 100%;
+  }
+  60% {
+    left: 100%;
+    right: -90%;
+  }
+  100% {
+    left: 100%;
+    right: -90%;
+  }
 }
 
 /* ==========================================================================
@@ -376,8 +435,9 @@
    ========================================================================== */
 
 .card-hover {
-  transition: box-shadow var(--duration-normal) var(--ease-default),
-              transform var(--duration-normal) var(--ease-default);
+  transition:
+    box-shadow var(--duration-normal) var(--ease-default),
+    transform var(--duration-normal) var(--ease-default);
 }
 
 .card-hover:hover {
@@ -392,33 +452,73 @@
    ========================================================================== */
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme='light']) {
     --tw-bg-opacity: 1;
   }
 
-  :root:not([data-theme="light"]) .bg-red-50 { background-color: rgba(153, 27, 27, 0.15) !important; }
-  :root:not([data-theme="light"]) .bg-amber-50 { background-color: rgba(180, 83, 9, 0.15) !important; }
-  :root:not([data-theme="light"]) .bg-amber-100 { background-color: rgba(180, 83, 9, 0.2) !important; }
-  :root:not([data-theme="light"]) .bg-yellow-50 { background-color: rgba(161, 98, 7, 0.15) !important; }
-  :root:not([data-theme="light"]) .bg-orange-100 { background-color: rgba(194, 65, 12, 0.2) !important; }
-  :root:not([data-theme="light"]) .bg-green-50 { background-color: rgba(6, 95, 70, 0.15) !important; }
-  :root:not([data-theme="light"]) .bg-blue-100 { background-color: rgba(29, 78, 216, 0.2) !important; }
+  :root:not([data-theme='light']) .bg-red-50 {
+    background-color: rgba(153, 27, 27, 0.15) !important;
+  }
+  :root:not([data-theme='light']) .bg-amber-50 {
+    background-color: rgba(180, 83, 9, 0.15) !important;
+  }
+  :root:not([data-theme='light']) .bg-amber-100 {
+    background-color: rgba(180, 83, 9, 0.2) !important;
+  }
+  :root:not([data-theme='light']) .bg-yellow-50 {
+    background-color: rgba(161, 98, 7, 0.15) !important;
+  }
+  :root:not([data-theme='light']) .bg-orange-100 {
+    background-color: rgba(194, 65, 12, 0.2) !important;
+  }
+  :root:not([data-theme='light']) .bg-green-50 {
+    background-color: rgba(6, 95, 70, 0.15) !important;
+  }
+  :root:not([data-theme='light']) .bg-blue-100 {
+    background-color: rgba(29, 78, 216, 0.2) !important;
+  }
 
-  :root:not([data-theme="light"]) .border-red-200 { border-color: rgba(153, 27, 27, 0.4) !important; }
-  :root:not([data-theme="light"]) .border-amber-200,
-  :root:not([data-theme="light"]) .border-amber-300 { border-color: rgba(180, 83, 9, 0.4) !important; }
-  :root:not([data-theme="light"]) .border-yellow-200 { border-color: rgba(161, 98, 7, 0.4) !important; }
+  :root:not([data-theme='light']) .border-red-200 {
+    border-color: rgba(153, 27, 27, 0.4) !important;
+  }
+  :root:not([data-theme='light']) .border-amber-200,
+  :root:not([data-theme='light']) .border-amber-300 {
+    border-color: rgba(180, 83, 9, 0.4) !important;
+  }
+  :root:not([data-theme='light']) .border-yellow-200 {
+    border-color: rgba(161, 98, 7, 0.4) !important;
+  }
 }
 
-[data-theme="dark"] .bg-red-50 { background-color: rgba(153, 27, 27, 0.15) !important; }
-[data-theme="dark"] .bg-amber-50 { background-color: rgba(180, 83, 9, 0.15) !important; }
-[data-theme="dark"] .bg-amber-100 { background-color: rgba(180, 83, 9, 0.2) !important; }
-[data-theme="dark"] .bg-yellow-50 { background-color: rgba(161, 98, 7, 0.15) !important; }
-[data-theme="dark"] .bg-orange-100 { background-color: rgba(194, 65, 12, 0.2) !important; }
-[data-theme="dark"] .bg-green-50 { background-color: rgba(6, 95, 70, 0.15) !important; }
-[data-theme="dark"] .bg-blue-100 { background-color: rgba(29, 78, 216, 0.2) !important; }
+[data-theme='dark'] .bg-red-50 {
+  background-color: rgba(153, 27, 27, 0.15) !important;
+}
+[data-theme='dark'] .bg-amber-50 {
+  background-color: rgba(180, 83, 9, 0.15) !important;
+}
+[data-theme='dark'] .bg-amber-100 {
+  background-color: rgba(180, 83, 9, 0.2) !important;
+}
+[data-theme='dark'] .bg-yellow-50 {
+  background-color: rgba(161, 98, 7, 0.15) !important;
+}
+[data-theme='dark'] .bg-orange-100 {
+  background-color: rgba(194, 65, 12, 0.2) !important;
+}
+[data-theme='dark'] .bg-green-50 {
+  background-color: rgba(6, 95, 70, 0.15) !important;
+}
+[data-theme='dark'] .bg-blue-100 {
+  background-color: rgba(29, 78, 216, 0.2) !important;
+}
 
-[data-theme="dark"] .border-red-200 { border-color: rgba(153, 27, 27, 0.4) !important; }
-[data-theme="dark"] .border-amber-200,
-[data-theme="dark"] .border-amber-300 { border-color: rgba(180, 83, 9, 0.4) !important; }
-[data-theme="dark"] .border-yellow-200 { border-color: rgba(161, 98, 7, 0.4) !important; }
+[data-theme='dark'] .border-red-200 {
+  border-color: rgba(153, 27, 27, 0.4) !important;
+}
+[data-theme='dark'] .border-amber-200,
+[data-theme='dark'] .border-amber-300 {
+  border-color: rgba(180, 83, 9, 0.4) !important;
+}
+[data-theme='dark'] .border-yellow-200 {
+  border-color: rgba(161, 98, 7, 0.4) !important;
+}

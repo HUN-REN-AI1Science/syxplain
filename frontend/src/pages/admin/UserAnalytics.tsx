@@ -209,7 +209,9 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
             </div>
             <div>
               <p className="text-sm text-secondary">Total Users</p>
-              <p className="text-2xl font-bold font-heading text-primary">{stats?.total_users || 0}</p>
+              <p className="text-2xl font-bold font-heading text-primary">
+                {stats?.total_users || 0}
+              </p>
             </div>
           </div>
         </Card>
@@ -233,7 +235,9 @@ const UserAnalytics: React.FC<UserAnalyticsProps> = ({ toast }) => {
             </div>
             <div>
               <p className="text-sm text-secondary">Active (24h)</p>
-              <p className="text-2xl font-bold font-heading text-primary">{stats?.active_users_24h || 0}</p>
+              <p className="text-2xl font-bold font-heading text-primary">
+                {stats?.active_users_24h || 0}
+              </p>
             </div>
           </div>
         </Card>

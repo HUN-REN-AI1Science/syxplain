@@ -73,9 +73,7 @@ export const UploadDropZone: React.FC<UploadDropZoneProps> = ({
         </p>
       </div>
 
-      <p className="text-xs text-muted">
-        Supports CSV, XLSX, XLS &middot; Maximum 50MB
-      </p>
+      <p className="text-xs text-muted">Supports CSV, XLSX, XLS &middot; Maximum 50MB</p>
     </div>
   </div>
 );

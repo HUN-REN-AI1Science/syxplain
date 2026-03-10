@@ -25,7 +25,11 @@ export const ApiKeysSection: React.FC = () => {
       const response = await apiKeysService.get();
       setApiKey(response.data);
     } catch {
-      toast.current?.show({ severity: 'error', summary: 'Error', detail: 'Failed to load API key' });
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to load API key',
+      });
     } finally {
       setLoading(false);
     }
@@ -134,7 +138,10 @@ export const ApiKeysSection: React.FC = () => {
                 <span>
                   <code className="bg-surface-hover px-1 rounded">{apiKey.key_prefix}...</code>
                 </span>
-                <span>Created {apiKey.created_at ? new Date(apiKey.created_at).toLocaleDateString() : 'N/A'}</span>
+                <span>
+                  Created{' '}
+                  {apiKey.created_at ? new Date(apiKey.created_at).toLocaleDateString() : 'N/A'}
+                </span>
                 {apiKey.last_used_at && (
                   <span>Last used {new Date(apiKey.last_used_at).toLocaleDateString()}</span>
                 )}
@@ -202,7 +209,11 @@ export const ApiKeysSection: React.FC = () => {
         modal
         footer={
           <div className="flex justify-end gap-2">
-            <Button label="Cancel" className="p-button-text" onClick={() => setShowRevokeConfirm(false)} />
+            <Button
+              label="Cancel"
+              className="p-button-text"
+              onClick={() => setShowRevokeConfirm(false)}
+            />
             <Button label="Revoke" className="p-button-danger" onClick={handleRevoke} />
           </div>
         }

@@ -167,7 +167,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
             </div>
             <div>
               <p className="text-sm text-secondary">Total Users</p>
-              <p className="text-2xl font-bold font-heading text-primary">{stats?.total_users || 0}</p>
+              <p className="text-2xl font-bold font-heading text-primary">
+                {stats?.total_users || 0}
+              </p>
               <p className="text-xs text-green-600">{stats?.active_users_24h || 0} active today</p>
             </div>
           </div>
@@ -180,7 +182,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
             </div>
             <div>
               <p className="text-sm text-secondary">Total Runs</p>
-              <p className="text-2xl font-bold font-heading text-primary">{stats?.total_runs || 0}</p>
+              <p className="text-2xl font-bold font-heading text-primary">
+                {stats?.total_runs || 0}
+              </p>
               <p className="text-xs text-green-600">{stats?.runs_today || 0} today</p>
             </div>
           </div>
@@ -193,7 +197,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
             </div>
             <div>
               <p className="text-sm text-secondary">Success Rate</p>
-              <p className="text-2xl font-bold font-heading text-primary">{stats?.success_rate || 0}%</p>
+              <p className="text-2xl font-bold font-heading text-primary">
+                {stats?.success_rate || 0}%
+              </p>
               <ProgressBar
                 value={stats?.success_rate || 0}
                 showValue={false}
@@ -232,7 +238,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Run Trends Chart */}
         <Card className="shadow-md lg:col-span-2">
-          <h3 className="text-lg font-semibold font-heading text-primary mb-4">Run Trends (30 Days)</h3>
+          <h3 className="text-lg font-semibold font-heading text-primary mb-4">
+            Run Trends (30 Days)
+          </h3>
           <div className="h-48 sm:h-64">
             <Chart type="line" data={trendChartData} options={trendChartOptions} />
           </div>
@@ -240,7 +248,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
 
         {/* Status Distribution Chart */}
         <Card className="shadow-md">
-          <h3 className="text-lg font-semibold font-heading text-primary mb-4">Status Distribution</h3>
+          <h3 className="text-lg font-semibold font-heading text-primary mb-4">
+            Status Distribution
+          </h3>
           <div className="h-48 sm:h-64">
             <Chart
               type="doughnut"
@@ -253,7 +263,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ toast }) => {
 
       {/* Recent Activity */}
       <Card className="shadow-md">
-        <h3 className="text-lg font-semibold font-heading text-primary mb-4">Recent Admin Activity</h3>
+        <h3 className="text-lg font-semibold font-heading text-primary mb-4">
+          Recent Admin Activity
+        </h3>
         {activity.length === 0 ? (
           <p className="text-secondary text-center py-4">No recent activity</p>
         ) : (

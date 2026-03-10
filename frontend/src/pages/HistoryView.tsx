@@ -256,7 +256,13 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
           sortField={sortField}
           sortOrder={sortOrder}
           onSort={onSort}
-          emptyMessage={<EmptyState icon={History} title="No analysis runs yet" subtitle="Start a new analysis from the Upload step to see your results here." />}
+          emptyMessage={
+            <EmptyState
+              icon={History}
+              title="No analysis runs yet"
+              subtitle="Start a new analysis from the Upload step to see your results here."
+            />
+          }
           className="w-full"
           paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport"
           currentPageReportTemplate="Showing {first} to {last} of {totalRecords} runs"
