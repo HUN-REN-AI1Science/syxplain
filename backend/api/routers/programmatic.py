@@ -8,7 +8,7 @@ Provides combined upload+analyze, status polling, and artifact download.
 import json
 import logging
 
-from fastapi import APIRouter, Depends, File, Form, Path, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Path, Query, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
 
 from backend.api.dependencies import get_file_repository, get_run_service
@@ -392,7 +392,7 @@ async def cancel_run(
 
 @router.get(
     "/runs/{run_id}/artifacts/{filename}",
-    response_model=ArtifactInfo,
+    response_class=Response,
     summary="Download an artifact file",
     description="""
 Download a generated artifact from a completed run.
@@ -427,8 +427,6 @@ def download_artifact(
     run_service: RunService = Depends(get_run_service),
 ):
     """Download an artifact file from a run."""
-    from fastapi.responses import Response
-
     try:
         artifact = run_service.get_artifact(run_id, filename, current_user.user_id)
         return Response(content=artifact.content, media_type=artifact.media_type)

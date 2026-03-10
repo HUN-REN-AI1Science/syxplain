@@ -144,11 +144,12 @@ class ApiKeyService:
         if not api_key:
             raise AuthenticationError(message="Invalid API key", reason="not_found")
 
+        # Refresh roles from Keycloak if stale (must happen before updating last_used_at,
+        # because _maybe_refresh_roles uses last_used_at to compute staleness)
+        self._maybe_refresh_roles(api_key)
+
         # Update last used timestamp
         self.repo.update_last_used(api_key)
-
-        # Refresh roles from Keycloak if stale
-        self._maybe_refresh_roles(api_key)
 
         return User(
             user_id=str(api_key.user_id),

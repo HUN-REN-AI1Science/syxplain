@@ -111,7 +111,7 @@ services:
       dockerfile: dev/Dockerfile.mock-slurm
     container_name: syxplain-mock-slurm
     ports:
-      - "6820:6820"
+      - "127.0.0.1:6820:6820"
     volumes:
       - ./slurm_worker:/app/slurm_worker
       - ./dev:/app/dev

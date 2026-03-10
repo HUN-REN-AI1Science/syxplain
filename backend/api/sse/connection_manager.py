@@ -154,6 +154,11 @@ class SSEConnectionManager:
 
         for q in dead_queues:
             self._queues[run_id].discard(q)
+            # Also remove from _user_queues to prevent leaked connection accounting
+            for user_id, user_queue_set in list(self._user_queues.items()):
+                user_queue_set.discard((run_id, q))
+                if not user_queue_set:
+                    del self._user_queues[user_id]
 
         if dead_queues:
             logger.info(f"Cleaned up {len(dead_queues)} full queues for run {run_id[:8]}...")
