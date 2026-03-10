@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 SAFE_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._\-\s]{0,198}[a-zA-Z0-9._]$")
 # Characters that indicate path traversal attempts
 PATH_TRAVERSAL_PATTERNS = ["..", "/", "\\", "\x00", "%2e", "%2f", "%5c"]
+# Allowed column name characters: alphanumeric, underscores, hyphens, spaces, dots, parentheses
+VALID_COLUMN_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _\-.()/%%°µ+]*$")
 
 
 @dataclass
@@ -218,6 +220,17 @@ class FileService:
                     f"Column names could not be identified — the values {non_string_cols} "
                     "were found as headers. Please ensure the first row of your file contains "
                     "descriptive column names (e.g., 'Temperature', 'Pressure'), not data values."
+                ),
+                filename=filename,
+            )
+
+        invalid_cols = [col for col in columns if not VALID_COLUMN_NAME_PATTERN.match(col)]
+        if invalid_cols:
+            raise FileValidationError(
+                message=(
+                    f"Invalid column names: {invalid_cols}. Column names must start with a "
+                    "letter or digit and contain only letters, digits, spaces, underscores, "
+                    "hyphens, dots, or parentheses."
                 ),
                 filename=filename,
             )
