@@ -156,9 +156,7 @@ class SSEConnectionManager:
             self._queues[run_id].discard(q)
 
         if dead_queues:
-            logger.info(
-                f"Cleaned up {len(dead_queues)} full queues for run {run_id[:8]}..."
-            )
+            logger.info(f"Cleaned up {len(dead_queues)} full queues for run {run_id[:8]}...")
 
         # On terminal status, push None sentinel so generators stop
         if status in TERMINAL_STATUSES:

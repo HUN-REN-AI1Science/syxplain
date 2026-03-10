@@ -88,7 +88,9 @@ def get_my_permissions(
 @router.post("/validate-keys", response_model=ValidateKeysResponse)
 @limiter.limit("20/minute")
 async def validate_api_keys(
-    request: Request, body: ValidateKeysRequest, current_user: User = Depends(get_current_user_jwt_only)
+    request: Request,
+    body: ValidateKeysRequest,
+    current_user: User = Depends(get_current_user_jwt_only),
 ):
     """
     Validate API keys before analysis.
