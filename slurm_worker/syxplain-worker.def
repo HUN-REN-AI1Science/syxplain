@@ -25,8 +25,9 @@ From: python:3.11-slim
         && rm -rf /var/lib/apt/lists/*
 
     # Install Julia (required for PySR)
-    export JULIA_VERSION=1.10.2
-    curl -fsSL https://julialang-s3.julialang.org/bin/linux/x64/1.10/julia-${JULIA_VERSION}-linux-x86_64.tar.gz | \
+    # Julia 1.11+ fixes the libopenlibm executable stack issue with Singularity
+    export JULIA_VERSION=1.11.5
+    curl -fsSL https://julialang-s3.julialang.org/bin/linux/x64/1.11/julia-${JULIA_VERSION}-linux-x86_64.tar.gz | \
         tar -xz -C /opt
     ln -s /opt/julia-${JULIA_VERSION}/bin/julia /usr/local/bin/julia
 
@@ -86,6 +87,8 @@ print('Julia pre-compilation complete')
     export LANG=C.UTF-8
     # Julia depot stacking: writable persistent storage on top of read-only precompiled depot
     export JULIA_DEPOT_PATH="/storage/ai4science/syxplain/.julia:/opt/julia-depot"
+    # Force pyjuliapkg to use the container's Julia instead of downloading its own
+    export PYTHON_JULIAPKG_EXE=/usr/local/bin/julia
     # Broad CPU target matching the build-time precompilation
     export JULIA_CPU_TARGET="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
     # Julia threading - will be overridden by SLURM_CPUS_PER_TASK in the worker

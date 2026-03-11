@@ -323,6 +323,9 @@ export const adminService = {
 
   deleteRun: (runId: string) => api.delete<AdminRunActionResponse>(`/admin/runs/${runId}`),
 
+  downloadRunFile: (runId: string) =>
+    api.get<Blob>(`/admin/runs/${runId}/download-csv`, { responseType: 'blob' }),
+
   // System Monitoring
   getSystemHealth: () => api.get<SystemHealth>('/admin/system/health'),
 
