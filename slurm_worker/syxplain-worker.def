@@ -84,8 +84,8 @@ print('Julia pre-compilation complete')
     export PYTHONPATH=/app
     export LC_ALL=C.UTF-8
     export LANG=C.UTF-8
-    # Julia depot stacking: writable scratch on top of read-only precompiled depot
-    export JULIA_DEPOT_PATH="/tmp/.julia:/opt/julia-depot"
+    # Julia depot stacking: writable persistent storage on top of read-only precompiled depot
+    export JULIA_DEPOT_PATH="/storage/ai4science/syxplain/.julia:/opt/julia-depot"
     # Broad CPU target matching the build-time precompilation
     export JULIA_CPU_TARGET="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
     # Julia threading - will be overridden by SLURM_CPUS_PER_TASK in the worker
