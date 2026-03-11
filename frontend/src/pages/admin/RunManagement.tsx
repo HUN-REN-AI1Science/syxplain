@@ -157,7 +157,7 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
   const handleDownloadFile = async (runId: string, filename?: string) => {
     try {
       const response = await adminService.downloadRunFile(runId);
-      const blob = new Blob([response.data]);
+      const blob = response.data;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -401,16 +401,13 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
               <div>
                 <label className="text-sm text-secondary">File</label>
                 <p>
-                  <a
-                    href="#"
+                  <button
+                    type="button"
                     className="text-primary hover:underline cursor-pointer"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleDownloadFile(selectedRun.id, selectedRun.csv_filename);
-                    }}
+                    onClick={() => handleDownloadFile(selectedRun.id, selectedRun.csv_filename)}
                   >
                     {selectedRun.csv_filename}
-                  </a>
+                  </button>
                 </p>
               </div>
               <div>
