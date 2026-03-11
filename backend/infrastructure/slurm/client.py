@@ -295,6 +295,20 @@ class SlurmClient:
                 try:
                     status = await self.get_job_status(job_id)
                     break  # success
+                except SlurmJobNotFoundError:
+                    if last_state is not None:
+                        # Job was seen running but is now gone from slurmrestd —
+                        # treat as completed (purged from accounting)
+                        logger.info(
+                            f"Job {job_id} no longer in slurmrestd "
+                            f"(last state: {last_state.value}), treating as completed"
+                        )
+                        return JobStatus(
+                            job_id=job_id,
+                            state=JobState.COMPLETED,
+                            reason="Job completed (purged from slurmrestd)",
+                        )
+                    raise  # Never seen running — genuinely not found
                 except SlurmClientError as e:
                     if attempt >= max_retries:
                         raise  # exhausted retries
