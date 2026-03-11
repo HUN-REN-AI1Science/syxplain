@@ -154,6 +154,27 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
     });
   };
 
+  const handleDownloadFile = async (runId: string, filename?: string) => {
+    try {
+      const response = await adminService.downloadRunFile(runId);
+      const blob = new Blob([response.data]);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'download';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (error: unknown) {
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to download file',
+      });
+    }
+  };
+
   const handleDeleteRun = (run: AdminRunSummary) => {
     confirmDialog({
       message: `Are you sure you want to delete this run? This action cannot be undone.`,
@@ -379,7 +400,18 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
               </div>
               <div>
                 <label className="text-sm text-secondary">File</label>
-                <p>{selectedRun.csv_filename}</p>
+                <p>
+                  <a
+                    href="#"
+                    className="text-primary hover:underline cursor-pointer"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleDownloadFile(selectedRun.id, selectedRun.csv_filename);
+                    }}
+                  >
+                    {selectedRun.csv_filename}
+                  </a>
+                </p>
               </div>
               <div>
                 <label className="text-sm text-secondary">Progress</label>

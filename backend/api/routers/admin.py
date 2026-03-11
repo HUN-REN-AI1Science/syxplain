@@ -8,17 +8,19 @@ and analytics.
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from backend.api.dependencies import (
     get_admin_stats_service,
     get_audit_service,
+    get_file_repository,
     get_permission_service,
     get_run_repository,
     get_system_monitor_service,
 )
 from backend.core.rate_limit import limiter
 from backend.core.security import User, get_current_user_jwt_only
+from backend.repositories.file_repository import FileRepository
 from backend.repositories.run_repository import AdminRunFilters, PaginationParams, RunRepository
 from backend.schemas.requests import SortField, SortOrder
 from backend.schemas.responses import (
@@ -342,6 +344,42 @@ def delete_run(
         success=True,
         message="Run deleted successfully",
         run_id=run_id,
+    )
+
+
+@router.get("/runs/{run_id}/download-csv")
+@limiter.limit("60/minute")
+def admin_download_csv(
+    request: Request,
+    run_id: str,
+    admin: User = Depends(require_admin),
+    run_repo: RunRepository = Depends(get_run_repository),
+    file_repo: FileRepository = Depends(get_file_repository),
+):
+    """Download the original uploaded file for any run."""
+    from backend.utils import parse_uuid
+    from backend.utils.security_utils import safe_content_disposition
+
+    try:
+        run_uuid = parse_uuid(run_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid run ID format")
+
+    run = run_repo.admin_get_run(run_uuid)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    if not run.csv_filename:
+        raise HTTPException(status_code=404, detail="No file associated with this run")
+
+    db_file = file_repo.get_latest_by_filename(run.csv_filename, run.user_id)
+    if not db_file:
+        raise HTTPException(status_code=404, detail="Original file not found")
+
+    return Response(
+        content=db_file.content,
+        media_type=db_file.media_type or "application/octet-stream",
+        headers={"Content-Disposition": safe_content_disposition(db_file.filename)},
     )
 
 
