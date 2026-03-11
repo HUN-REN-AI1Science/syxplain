@@ -248,7 +248,14 @@ exit $?
             )
 
         except SlurmJobNotFoundError:
-            raise JobNotFoundError(f"Slurm job {slurm_job_id} not found")
+            # Job may have been purged from slurmrestd after completion
+            logger.info(f"Slurm job {slurm_job_id} not found in slurmrestd, treating as completed")
+            return TaskResult(
+                job_id=job_id,
+                state=JobState.COMPLETED,
+                progress=100,
+                message="Job completed (purged from slurmrestd)",
+            )
         except SlurmClientError as e:
             raise SlurmBackendError(f"Failed to get job status: {e}") from e
 
@@ -257,19 +264,21 @@ exit $?
         if job_id not in self._tasks:
             raise JobNotFoundError(f"Job {job_id} not found")
 
-        status = await self.get_task_status(job_id)
-        if status.state != JobState.COMPLETED:
-            raise JobNotCompletedError(f"Job {job_id} is in state {status.state.value}")
-
         task_data = self._tasks[job_id]
         task = task_data["task"]
 
-        # Results are stored in Run record via worker callback
+        # Results are stored in Run record via worker callback — check DB first
+        # to avoid hitting slurmrestd (job may already be purged)
         with get_db_session() as db:
             run = db.query(Run).filter(Run.id == task.run_id).first()
             if run and run.results:
                 logger.info(f"Retrieved results for job {job_id} from database")
                 return run.results
+
+        # Results not in DB yet — check if job is still running
+        status = await self.get_task_status(job_id)
+        if status.state != JobState.COMPLETED:
+            raise JobNotCompletedError(f"Job {job_id} is in state {status.state.value}")
 
         raise SlurmBackendError(f"Results not found for job {job_id}")
 
