@@ -131,6 +131,7 @@ export const runsService = {
       public_share_token?: string | null;
       start_time?: string | null;
       finish_time?: string | null;
+      target_variable?: string | null;
     }>(`/runs/${id}`),
 
   getDetails: (id: string) => api.get<RunDetails>(`/runs/${id}/details`),
@@ -224,6 +225,7 @@ export interface PublicRunData {
   progress: number;
   results: EquationResults | { pysr_explanations: string } | null;
   share_token: string;
+  target_variable?: string | null;
 }
 
 export const publicService = {

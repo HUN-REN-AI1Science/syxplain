@@ -30,6 +30,7 @@ ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
 
 interface EquationResultsViewProps {
   data: EquationResults;
+  targetVariable?: string | null;
 }
 
 const mathJaxConfig = {
@@ -146,10 +147,11 @@ const ScatterPlot: React.FC<{ data: ScatterData }> = ({ data }) => {
   );
 };
 
-const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = ({
-  equation,
-  isRecommended,
-}) => {
+const EquationCard: React.FC<{
+  equation: Equation;
+  isRecommended: boolean;
+  targetVariable?: string | null;
+}> = ({ equation, isRecommended, targetVariable }) => {
   const [detailsExpanded, setDetailsExpanded] = useState(false);
 
   // Count available details
@@ -209,7 +211,7 @@ const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = (
         <div className="bg-surface-alt rounded-lg p-6 overflow-x-auto border border-[var(--color-border)] mathjax-equation">
           <MathJaxContext config={mathJaxConfig}>
             <MathJax inline dynamic>
-              {`\`${escapeForAsciiMath(equation.equation)}\``}
+              {`\`${targetVariable ? `${escapeForAsciiMath(targetVariable)} = ` : ''}${escapeForAsciiMath(equation.equation)}\``}
             </MathJax>
           </MathJaxContext>
         </div>
@@ -333,7 +335,7 @@ const EquationCard: React.FC<{ equation: Equation; isRecommended: boolean }> = (
   );
 };
 
-const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data }) => {
+const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data, targetVariable }) => {
   const { equations, summary, recommendation } = data;
 
   // Handle parse error fallback
@@ -469,7 +471,7 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data }) => {
                     <div className="mt-3 bg-surface rounded-lg p-3 border border-[rgba(34,197,94,0.2)] overflow-x-auto mathjax-equation">
                       <MathJaxContext config={mathJaxConfig}>
                         <MathJax inline dynamic>
-                          {`\`${escapeForAsciiMath(recommendedEquation.equation)}\``}
+                          {`\`${targetVariable ? `${escapeForAsciiMath(targetVariable)} = ` : ''}${escapeForAsciiMath(recommendedEquation.equation)}\``}
                         </MathJax>
                       </MathJaxContext>
                     </div>
@@ -537,6 +539,7 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data }) => {
                 key={eq.id}
                 equation={eq}
                 isRecommended={eq.id === recommendation?.equation_id}
+                targetVariable={targetVariable}
               />
             ))}
           </div>

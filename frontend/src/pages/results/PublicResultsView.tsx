@@ -103,7 +103,10 @@ const PublicResultsView: React.FC = () => {
 
                 {/* Results Content */}
                 {runData.results ? (
-                  <ResultContent result={runData.results as EquationResults | string} />
+                  <ResultContent
+                    result={runData.results as EquationResults | string}
+                    targetVariable={runData.target_variable}
+                  />
                 ) : (
                   <Message severity="warn" text="No results available" className="w-full" />
                 )}

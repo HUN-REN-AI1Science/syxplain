@@ -83,6 +83,7 @@ class RunService:
             Status dictionary
         """
         run = self.get_run_for_user(run_id, user_id)
+        pd = run.problem_description or {}
         return {
             "status": run.status,
             "progress": run.progress or 0,
@@ -91,6 +92,7 @@ class RunService:
             "public_share_token": run.public_share_token,
             "start_time": run.start_time,
             "finish_time": run.finish_time,
+            "target_variable": pd.get("target_variable"),
         }
 
     def list_runs(

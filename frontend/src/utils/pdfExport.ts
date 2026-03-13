@@ -201,7 +201,8 @@ function renderSummary(ctx: PdfContext, summary: EquationResults['summary']): vo
 function renderRecommendation(
   ctx: PdfContext,
   recommendation: EquationResults['recommendation'],
-  equations: Equation[]
+  equations: Equation[],
+  targetVariable?: string | null
 ): void {
   const { pdf, margin, contentWidth } = ctx;
 
@@ -215,7 +216,8 @@ function renderRecommendation(
   if (recEq) {
     pdf.setFontSize(12);
     pdf.setFont('times', 'italic');
-    const lines = pdf.splitTextToSize(recEq.equation, contentWidth - 10);
+    const estText = targetVariable ? `${targetVariable} = ${recEq.equation}` : recEq.equation;
+    const lines = pdf.splitTextToSize(estText, contentWidth - 10);
     recHeight += lines.length * 6 + 10;
   }
 
@@ -248,7 +250,8 @@ function renderRecommendation(
     pdf.setFontSize(12);
     pdf.setFont('times', 'italic');
     pdf.setTextColor(40, 40, 40);
-    const eqLines = pdf.splitTextToSize(recEq.equation, contentWidth - 10);
+    const eqText = targetVariable ? `${targetVariable} = ${recEq.equation}` : recEq.equation;
+    const eqLines = pdf.splitTextToSize(eqText, contentWidth - 10);
     eqLines.forEach((line: string) => {
       pdf.text(line, margin + 5, ctx.y);
       ctx.y += 6;
@@ -277,7 +280,13 @@ function renderRecommendation(
   ctx.y += 10;
 }
 
-function renderEquation(ctx: PdfContext, eq: Equation, idx: number, totalCount: number): void {
+function renderEquation(
+  ctx: PdfContext,
+  eq: Equation,
+  idx: number,
+  totalCount: number,
+  targetVariable?: string | null
+): void {
   const { pdf, margin, pageWidth, contentWidth } = ctx;
 
   checkPageBreak(ctx, 60);
@@ -312,7 +321,8 @@ function renderEquation(ctx: PdfContext, eq: Equation, idx: number, totalCount: 
   pdf.setFontSize(10);
   pdf.setFont('times', 'italic');
   pdf.setTextColor(0, 0, 0);
-  const eqText = pdf.splitTextToSize(eq.equation, contentWidth - 10);
+  const eqStr = targetVariable ? `${targetVariable} = ${eq.equation}` : eq.equation;
+  const eqText = pdf.splitTextToSize(eqStr, contentWidth - 10);
   const boxHeight = Math.max(12, eqText.length * 6 + 6);
 
   pdf.rect(margin, ctx.y - 3, contentWidth, boxHeight, 'FD');
@@ -457,7 +467,11 @@ function renderEquation(ctx: PdfContext, eq: Equation, idx: number, totalCount: 
   }
 }
 
-function renderEquations(ctx: PdfContext, equations: Equation[]): void {
+function renderEquations(
+  ctx: PdfContext,
+  equations: Equation[],
+  targetVariable?: string | null
+): void {
   const { pdf, margin, pageWidth } = ctx;
 
   if (!equations?.length) return;
@@ -478,7 +492,7 @@ function renderEquations(ctx: PdfContext, equations: Equation[]): void {
   ctx.y += 12;
 
   equations.forEach((eq, idx) => {
-    renderEquation(ctx, eq, idx, equations.length);
+    renderEquation(ctx, eq, idx, equations.length, targetVariable);
   });
 }
 
@@ -489,7 +503,11 @@ function renderEquations(ctx: PdfContext, equations: Equation[]): void {
 /**
  * Generate a PDF report from equation analysis results
  */
-export async function generateResultsPdf(data: EquationResults, runId: string): Promise<void> {
+export async function generateResultsPdf(
+  data: EquationResults,
+  runId: string,
+  targetVariable?: string | null
+): Promise<void> {
   const { equations, summary, recommendation } = data;
   const ctx = createPdfContext();
 
@@ -500,8 +518,8 @@ export async function generateResultsPdf(data: EquationResults, runId: string): 
     renderSummary(ctx, summary);
   }
 
-  renderRecommendation(ctx, recommendation, equations);
-  renderEquations(ctx, equations);
+  renderRecommendation(ctx, recommendation, equations, targetVariable);
+  renderEquations(ctx, equations, targetVariable);
 
   // Add page footers
   addFooter(ctx);

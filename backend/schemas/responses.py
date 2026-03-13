@@ -34,6 +34,7 @@ class RunStatusResponse(BaseModel):
     public_share_token: str | None = None
     start_time: datetime | None = None
     finish_time: datetime | None = None
+    target_variable: str | None = None
 
 
 class RunSummary(BaseModel):
@@ -137,6 +138,7 @@ class PublicRunResponse(BaseModel):
     progress: int = Field(ge=0, le=100)
     results: dict[str, Any] | None = None
     share_token: str
+    target_variable: str | None = None
 
 
 # ============================================================================

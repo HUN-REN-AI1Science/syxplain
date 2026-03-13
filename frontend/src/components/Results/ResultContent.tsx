@@ -13,6 +13,8 @@ interface ResultContentProps {
   result: EquationResults | string | null;
   /** Optional ref for the results container (used for PDF export) */
   resultsRef?: React.RefObject<HTMLDivElement>;
+  /** Target variable name to prepend to equations (e.g. "y = ...") */
+  targetVariable?: string | null;
 }
 
 /**
@@ -91,7 +93,11 @@ const parseResult = (
   return { type: 'legacy', data: String(result) };
 };
 
-export const ResultContent: React.FC<ResultContentProps> = ({ result, resultsRef }) => {
+export const ResultContent: React.FC<ResultContentProps> = ({
+  result,
+  resultsRef,
+  targetVariable,
+}) => {
   if (!result) {
     return null;
   }
@@ -101,7 +107,7 @@ export const ResultContent: React.FC<ResultContentProps> = ({ result, resultsRef
   if (type === 'new') {
     return (
       <div ref={resultsRef} className="space-y-8 animate-fade-in">
-        <EquationResultsView data={data as EquationResults} />
+        <EquationResultsView data={data as EquationResults} targetVariable={targetVariable} />
       </div>
     );
   }

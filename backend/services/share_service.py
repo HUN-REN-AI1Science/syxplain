@@ -156,11 +156,13 @@ class ShareService:
         if not run:
             raise EntityNotFoundError("Shared run", share_token)
 
+        pd = run.problem_description or {}
         return {
             "status": run.status,
             "progress": run.progress or 0,
             "results": run.results,
             "share_token": run.public_share_token,
+            "target_variable": pd.get("target_variable"),
         }
 
     def get_public_run_details(self, share_token: str) -> dict[str, Any]:

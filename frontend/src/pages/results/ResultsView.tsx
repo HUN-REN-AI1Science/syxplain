@@ -52,6 +52,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
   const [deleting, setDeleting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [duration, setDuration] = useState<string | null>(null);
+  const [targetVariable, setTargetVariable] = useState<string | null>(null);
 
   // Refs
   const toast = useRef<Toast>(null);
@@ -96,6 +97,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
             setResult(response.data.results as EquationResults | string);
           }
           setShareToken(response.data.public_share_token || null);
+          setTargetVariable(response.data.target_variable || null);
           // Compute duration from timing data
           const { start_time, finish_time } = response.data;
           if (start_time && finish_time) {
@@ -156,7 +158,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
 
       // Dynamic import to reduce initial bundle size
       const { generateResultsPdf } = await import('@utils/pdfExport');
-      await generateResultsPdf(parsedData, runId);
+      await generateResultsPdf(parsedData, runId, targetVariable);
       toast.current?.show({
         severity: 'success',
         summary: 'Export Complete',
@@ -366,7 +368,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({
         )}
 
         {/* Results - only show after run completes to avoid flashing legacy format during processing */}
-        {result && isCompleted && <ResultContent result={result} resultsRef={resultsRef} />}
+        {result && isCompleted && (
+          <ResultContent result={result} resultsRef={resultsRef} targetVariable={targetVariable} />
+        )}
       </div>
 
       {/* Share Dialog */}
