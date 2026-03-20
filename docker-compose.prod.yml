@@ -150,6 +150,7 @@ services:
       - "${FRONTEND_HTTPS_PORT:-443}:443"
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      - certbot_webroot:/var/www/certbot:ro
     networks:
       - syxplain-network
     depends_on:
@@ -225,3 +226,4 @@ volumes:
   app_data:
   app_outputs:
   app_logs:
+  certbot_webroot:
