@@ -144,20 +144,20 @@ class SlurmClient:
         """Async context manager exit."""
         await self.close()
 
-    async def submit_job(self, submission: SlurmJobSubmission) -> str:
+    async def submit_job(self, submission: SlurmJobSubmission, max_retries: int = 3) -> str:
         """
-        Submit a job to Slurm.
+        Submit a job to Slurm with retry on connection errors.
 
         Args:
             submission: Job submission details
+            max_retries: Maximum retries for network errors
 
         Returns:
             Slurm job ID as string
 
         Raises:
-            SlurmJobSubmissionError: If submission fails
+            SlurmJobSubmissionError: If submission fails after all retries
         """
-        client = await self._get_client()
         payload = submission.to_slurm_request()
 
         job_spec = payload.get("job", {})
@@ -171,29 +171,46 @@ class SlurmClient:
             f"gres={job_spec.get('tres_per_job')}"
         )
 
-        try:
-            response = await client.post(self._api_path("job/submit"), json=payload)
-            response.raise_for_status()
-            data = response.json()
-
-            job_id = data.get("job_id")
-            if not job_id:
-                raise SlurmJobSubmissionError(f"No job_id in response: {data}")
-
-            logger.info(f"Job submitted successfully: {job_id}")
-            return str(job_id)
-
-        except httpx.HTTPStatusError as e:
-            error_detail = ""
+        last_error = None
+        for attempt in range(max_retries + 1):
             try:
-                error_detail = e.response.json()
-            except Exception:
-                error_detail = e.response.text
-            raise SlurmJobSubmissionError(
-                f"Job submission failed: {e.response.status_code} - {error_detail}"
-            ) from e
-        except httpx.RequestError as e:
-            raise SlurmJobSubmissionError(f"Request failed: {e}") from e
+                client = await self._get_client()
+                response = await client.post(self._api_path("job/submit"), json=payload)
+                response.raise_for_status()
+                data = response.json()
+
+                job_id = data.get("job_id")
+                if not job_id:
+                    raise SlurmJobSubmissionError(f"No job_id in response: {data}")
+
+                logger.info(f"Job submitted successfully: {job_id}")
+                return str(job_id)
+
+            except httpx.HTTPStatusError as e:
+                error_detail = ""
+                try:
+                    error_detail = e.response.json()
+                except Exception:
+                    error_detail = e.response.text
+                raise SlurmJobSubmissionError(
+                    f"Job submission failed: {e.response.status_code} - {error_detail}"
+                ) from e
+            except httpx.RequestError as e:
+                last_error = e
+                if attempt < max_retries:
+                    wait = 2 ** (attempt + 1)  # 2, 4, 8 seconds
+                    logger.warning(
+                        f"Connection error submitting job '{submission.name}', "
+                        f"retry {attempt + 1}/{max_retries} in {wait}s: {e}"
+                    )
+                    await self.close()  # Reset connection pool
+                    await asyncio.sleep(wait)
+                    continue
+
+        raise SlurmJobSubmissionError(
+            f"Failed to connect to Slurm cluster after {max_retries} retries. "
+            "The cluster may be temporarily unavailable. Please try again later."
+        ) from last_error
 
     async def get_job_status(self, job_id: str) -> JobStatus:
         """

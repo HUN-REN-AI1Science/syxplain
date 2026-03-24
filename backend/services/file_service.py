@@ -24,6 +24,9 @@ PATH_TRAVERSAL_PATTERNS = ["..", "/", "\\", "\x00", "%2e", "%2f", "%5c"]
 # Allowed column name characters: alphanumeric, underscores, hyphens, spaces, dots, parentheses
 VALID_COLUMN_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _\-.()/%%°µ+]*$")
 
+# PySR's Julia backend requires valid identifiers as variable names
+_NON_IDENTIFIER_RE = re.compile(r"[^a-zA-Z0-9_]")
+
 
 @dataclass
 class FileMetadata:
@@ -169,6 +172,9 @@ class FileService:
         """
         Parse file content into a DataFrame.
 
+        Tries UTF-8 first, then falls back to latin-1 for CSVs with
+        non-UTF-8 encoding (e.g., Windows-1252 exports from Excel).
+
         Args:
             content: File content as bytes
             filename: Original filename for type detection
@@ -184,7 +190,11 @@ class FileService:
                 engine = self.get_excel_engine(filename)
                 return pd.read_excel(io.BytesIO(content), engine=engine)
             else:
-                return pd.read_csv(io.BytesIO(content))
+                try:
+                    return pd.read_csv(io.BytesIO(content), encoding="utf-8")
+                except UnicodeDecodeError:
+                    logger.info(f"UTF-8 decode failed for {filename}, falling back to latin-1")
+                    return pd.read_csv(io.BytesIO(content), encoding="latin-1")
         except Exception as e:
             file_type = "Excel" if self.is_excel_file(filename) else "CSV"
             logger.error(f"Failed to parse {file_type} file {filename}: {e}")
@@ -193,6 +203,62 @@ class FileService:
                 filename=filename,
                 file_type=file_type,
             )
+
+    def sanitize_column_names(self, df: pd.DataFrame, filename: str) -> tuple[pd.DataFrame, bool]:
+        """
+        Sanitize column names to be valid Python/Julia identifiers.
+
+        Replaces hyphens, dots, spaces, and other non-identifier characters
+        with underscores. This ensures compatibility with PySR's Julia backend
+        which requires valid identifier names for variables.
+
+        Args:
+            df: DataFrame with potentially non-identifier column names
+            filename: Original filename for error messages
+
+        Returns:
+            Tuple of (DataFrame with sanitized column names, whether any were renamed)
+
+        Raises:
+            FileValidationError: If sanitization creates duplicate column names
+        """
+        rename_map = {}
+        for col in df.columns:
+            col_str = str(col)
+            sanitized = _NON_IDENTIFIER_RE.sub("_", col_str)
+            sanitized = sanitized.strip("_") or "column"
+            if sanitized[0].isdigit():
+                sanitized = f"_{sanitized}"
+            if sanitized != col_str:
+                rename_map[col] = sanitized
+
+        if not rename_map:
+            return df, False
+
+        # Check for collisions after sanitization
+        new_names = [rename_map.get(col, str(col)) for col in df.columns]
+        if len(set(new_names)) != len(new_names):
+            seen = set()
+            dupes = set()
+            for name in new_names:
+                if name in seen:
+                    dupes.add(name)
+                seen.add(name)
+            raise FileValidationError(
+                message=(
+                    f"Column name conflict after sanitization: {', '.join(sorted(dupes))}. "
+                    "Multiple columns map to the same name when special characters "
+                    "(hyphens, dots, spaces) are replaced with underscores. "
+                    "Please rename the conflicting columns in your file."
+                ),
+                filename=filename,
+            )
+
+        logger.info(
+            f"Sanitized column names in {filename}: "
+            + ", ".join(f"'{k}' → '{v}'" for k, v in rename_map.items())
+        )
+        return df.rename(columns=rename_map), True
 
     def validate_dataframe(self, df: pd.DataFrame, filename: str) -> None:
         """
@@ -299,6 +365,13 @@ class FileService:
 
         # Parse DataFrame
         df = self.parse_dataframe(content, filename)
+
+        # Sanitize column names for PySR/Julia compatibility
+        df, renamed = self.sanitize_column_names(df, filename)
+
+        # Re-serialize if columns were renamed so stored content has clean names
+        if renamed:
+            content = df.to_csv(index=False).encode("utf-8")
 
         # Validate content
         self.validate_dataframe(df, filename)

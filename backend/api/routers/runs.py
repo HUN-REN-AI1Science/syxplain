@@ -34,6 +34,46 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Runs"])
 
 
+_slurm_health_cache: dict[str, float | bool] = {"ts": 0.0, "ok": False}
+_SLURM_HEALTH_TTL = 30.0  # seconds
+
+
+async def _check_slurm_reachable() -> bool:
+    """Check slurmrestd is reachable, cached for 30s to avoid per-request overhead."""
+    import time
+
+    now = time.monotonic()
+    if now - _slurm_health_cache["ts"] < _SLURM_HEALTH_TTL:
+        return bool(_slurm_health_cache["ok"])
+
+    import httpx
+
+    from backend.core.config import get_slurm_settings
+    from backend.infrastructure.slurm.client import API_VERSION
+
+    try:
+        settings = get_slurm_settings()
+        if not settings.api_url or not settings.auth_token:
+            result = False
+        else:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                response = await client.get(
+                    f"{settings.api_url}/slurm/{API_VERSION}/diag",
+                    headers={
+                        "Authorization": f"Bearer {settings.auth_token}",
+                        "Slurm-User-Name": settings.user_name,
+                    },
+                )
+            result = response.status_code == 200
+    except Exception as e:
+        logger.debug(f"Slurm pre-flight check failed: {e}")
+        result = False
+
+    _slurm_health_cache["ts"] = now
+    _slurm_health_cache["ok"] = result
+    return result
+
+
 @router.post("/run", response_model=RunResponse)
 async def run_analysis(
     request: RunRequest,
@@ -69,6 +109,13 @@ async def run_analysis(
             user_api_key = request.user_api_keys.gemini_api_key
             user_model = request.user_api_keys.gemini_model
             user_openai_key = request.user_api_keys.openai_api_key
+
+        # Check Slurm cluster is reachable before accepting the run
+        if not await _check_slurm_reachable():
+            raise HTTPException(
+                status_code=503,
+                detail="The computing cluster is temporarily unavailable. Please try again later.",
+            )
 
         # Validate the request with permission context
         run_service.validate_run_request(

@@ -23,6 +23,7 @@ from backend.infrastructure.slurm import (
     SlurmBackendError,
     SlurmTask,
     TaskInput,
+    TaskResult,
     get_slurm_backend,
 )
 from backend.infrastructure.slurm.client import is_quota_error
@@ -142,11 +143,66 @@ class AnalysisOrchestrator:
             self._backend = get_slurm_backend()
         return self._backend
 
-    def _is_run_cancelled(self, run_id: str) -> bool:
-        """Check if run has been cancelled."""
+    def _is_run_terminal(self, run_id: str) -> str | None:
+        """Check if run is in a terminal state (failed/cancelled by worker callback).
+
+        Returns the status string if terminal, None otherwise.
+        """
         with get_db_session() as db:
             run = db.query(Run).filter(Run.id == run_id).first()
-            return run is not None and run.status == "cancelled"
+            if run and run.status in ("failed", "cancelled"):
+                return run.status
+            return None
+
+    async def _wait_for_job(
+        self,
+        job_id: str,
+        task_name: str,
+        run_id: str,
+        on_state_change=None,
+    ) -> TaskResult:
+        """
+        Wait for a Slurm job with periodic checks for worker-reported failures.
+
+        If a sibling worker reports an error (marking the run as failed in the DB),
+        this method detects it and returns early instead of waiting for the full
+        timeout. Also handles purged jobs gracefully when the run is already terminal.
+
+        Args:
+            job_id: Internal job ID
+            task_name: Human-readable name (SHAP/PySR) for logging
+            run_id: Run ID for DB status checks
+            on_state_change: Optional callback for state transitions
+
+        Returns:
+            TaskResult with final job status
+        """
+        try:
+            return await self.backend.wait_for_completion(
+                job_id,
+                poll_interval=self._config.poll_interval,
+                timeout=self._config.compute_timeout,
+                on_state_change=on_state_change,
+            )
+        except SlurmBackendError as e:
+            # Check if the run was already marked as failed by a worker callback
+            # (e.g., PySR failed and reported via /api/internal/error)
+            terminal_status = self._is_run_terminal(run_id)
+            if terminal_status == "failed":
+                logger.warning(
+                    f"{task_name} wait failed for run {run_id}, "
+                    f"but run already marked as failed by worker callback: {e}"
+                )
+                # Return a synthetic FAILED result — the orchestrator will
+                # read the actual error from the DB
+                return TaskResult(
+                    job_id=job_id,
+                    state=JobState.FAILED,
+                    error=f"Run already failed (worker callback): {e}",
+                )
+            if terminal_status == "cancelled":
+                raise AnalysisCancelledError("Analysis cancelled by user") from e
+            raise  # Re-raise for genuinely unexpected errors
 
     async def _submit_with_retry(
         self,
@@ -198,7 +254,7 @@ class AnalysisOrchestrator:
                 for _ in range(retry_interval):
                     await asyncio.sleep(1)
                     # Check if run was cancelled
-                    if self._is_run_cancelled(run_id):
+                    if self._is_run_terminal(run_id) == "cancelled":
                         raise AnalysisCancelledError("Analysis cancelled by user")
 
     async def run_analysis(self, context: AnalysisContext) -> dict[str, Any]:
@@ -546,18 +602,11 @@ class AnalysisOrchestrator:
                 )
                 hpc_started_reported = True
 
-        shap_status = await self.backend.wait_for_completion(
-            shap_job.job_id,
-            poll_interval=self._config.poll_interval,
-            timeout=self._config.compute_timeout,
-            on_state_change=on_job_state_change,
+        shap_status = await self._wait_for_job(
+            shap_job.job_id, "SHAP", context.run_id, on_job_state_change
         )
-
-        pysr_status = await self.backend.wait_for_completion(
-            pysr_job.job_id,
-            poll_interval=self._config.poll_interval,
-            timeout=self._config.compute_timeout,
-            on_state_change=on_job_state_change,
+        pysr_status = await self._wait_for_job(
+            pysr_job.job_id, "PySR", context.run_id, on_job_state_change
         )
 
         # Check for cancellation first, then failures

@@ -5,6 +5,7 @@ Provides endpoints for Slurm workers to push progress updates
 back to the backend.
 """
 
+import asyncio
 import logging
 import secrets
 from typing import Any
@@ -20,6 +21,9 @@ from backend.infrastructure.database.models import Run
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/internal", tags=["Internal"])
+
+# Track cancel tasks (prevents GC of fire-and-forget asyncio tasks)
+_cancel_tasks: set[asyncio.Task] = set()
 
 # Maps each worker task_type to its allocated range of the overall progress bar.
 # Workers report 0-100% internally; the endpoint scales into these ranges.
@@ -69,6 +73,27 @@ def _validate_worker_token(token: str) -> bool:
 
     # Use constant-time comparison to prevent timing attacks
     return secrets.compare_digest(token, expected_token)
+
+
+async def _cancel_slurm_jobs(run_id: str, slurm_job_ids: dict[str, Any]) -> None:
+    """
+    Cancel all Slurm jobs for a run to prevent orphaned cluster resources.
+    """
+    try:
+        from backend.infrastructure.slurm import get_slurm_backend
+
+        backend = get_slurm_backend()
+
+        async def _cancel_one(job_type: str, job_id: str) -> None:
+            try:
+                await backend.cancel_task(job_id)
+                logger.info(f"[Run {run_id[:8]}] Cancelled {job_type}: {job_id}")
+            except Exception as e:
+                logger.warning(f"[Run {run_id[:8]}] Failed to cancel {job_type} {job_id}: {e}")
+
+        await asyncio.gather(*(_cancel_one(jt, jid) for jt, jid in slurm_job_ids.items() if jid))
+    except Exception as e:
+        logger.error(f"[Run {run_id[:8]}] Error cancelling Slurm jobs: {e}")
 
 
 @router.post("/progress/{run_id}")
@@ -191,8 +216,15 @@ async def receive_error(
 
             run.status = "failed"
             run.error = error.error
+            slurm_job_ids = run.slurm_job_ids
             db.commit()
             logger.info(f"[Run {run_id[:8]}] Marked as failed: {error.error}")
+
+            # Cancel other Slurm jobs to avoid orphaned compute resources
+            if slurm_job_ids:
+                task = asyncio.create_task(_cancel_slurm_jobs(run_id, slurm_job_ids))
+                _cancel_tasks.add(task)
+                task.add_done_callback(_cancel_tasks.discard)
 
             # Broadcast error via SSE
             manager = get_connection_manager()
