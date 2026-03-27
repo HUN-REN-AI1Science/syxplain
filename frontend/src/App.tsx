@@ -7,10 +7,12 @@ import ProblemView from '@pages/ProblemView';
 import ResultsView from '@pages/results/ResultsView';
 import HistoryView from '@pages/HistoryView';
 import ProfileView from '@pages/ProfileView';
+import HelpView from '@pages/HelpView';
 import AdminLayout from '@pages/admin/AdminLayout';
 import PublicResultsView from '@pages/results/PublicResultsView';
 import { AuthProvider, useAuth } from '@contexts/AuthContext';
 import { ThemeProvider } from '@contexts/ThemeContext';
+import { NavigationContext } from '@contexts/NavigationContext';
 import { runsService } from '@services/api';
 import { Toast } from 'primereact/toast';
 import { Card } from 'primereact/card';
@@ -44,7 +46,8 @@ const oidcConfig = {
 };
 
 function MainApp() {
-  const [view, setView] = useState<'workflow' | 'history' | 'profile' | 'admin'>('workflow');
+  const [view, setView] = useState<'workflow' | 'history' | 'profile' | 'admin' | 'help'>('workflow');
+  const [helpAnchor, setHelpAnchor] = useState<string | undefined>(undefined);
   const [activeIndex, setActiveIndex] = useState(0);
   const [filename, setFilename] = useState<string | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
@@ -98,6 +101,11 @@ function MainApp() {
     }
   };
 
+  const navigateTo = (newView: string, anchor?: string) => {
+    setHelpAnchor(anchor);
+    setView(newView as 'workflow' | 'history' | 'profile' | 'admin' | 'help');
+  };
+
   const handleReset = () => {
     setView('workflow');
     setActiveIndex(0);
@@ -136,6 +144,7 @@ function MainApp() {
   });
 
   return (
+    <NavigationContext.Provider value={{ navigateTo }}>
     <div className="min-h-screen bg-page font-body flex flex-col">
       <a href="#main-content" className="skip-to-content">
         Skip to main content
@@ -149,6 +158,7 @@ function MainApp() {
         onHistoryClick={() => setView('history')}
         onProfileClick={() => setView('profile')}
         onAdminClick={isAdmin ? () => setView('admin') : undefined}
+        onHelpClick={() => setView('help')}
         onFeedbackClick={() => setFeedbackVisible(true)}
         onLogout={handleLogout}
       />
@@ -161,7 +171,11 @@ function MainApp() {
 
       <main id="main-content" className="flex-grow py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto">
-          {view === 'admin' ? (
+          {view === 'help' ? (
+            <Card className="shadow-card border-round-2xl overflow-hidden border-none">
+              <HelpView onBack={() => setView('workflow')} anchor={helpAnchor} />
+            </Card>
+          ) : view === 'admin' ? (
             <Card className="shadow-card border-round-2xl overflow-hidden border-none">
               <AdminLayout onBack={() => setView('workflow')} />
             </Card>
@@ -218,6 +232,7 @@ function MainApp() {
 
       <AppFooter />
     </div>
+    </NavigationContext.Provider>
   );
 }
 
