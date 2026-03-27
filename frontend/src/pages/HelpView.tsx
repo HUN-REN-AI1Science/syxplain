@@ -177,18 +177,11 @@ const Analysis: React.FC = () => (
 
     <SubHeading id="quick-analysis" title="Quick Analysis" />
     <Prose>
-      Quick Analysis runs the <strong>core Syxplain algorithm</strong> on your data. It is the
-      default mode and the right starting point for most use cases.
+      Quick Analysis runs the <strong>core Syxplain algorithm</strong> on your data. The LLM
+      generates explanations using your problem description and data context directly — no external
+      research is performed. It is the right starting point for most use cases: faster,
+      more cost-effective, and ideal for initial exploration or iterative experimentation.
     </Prose>
-    <ul className="list-disc list-inside text-secondary space-y-2 mb-4 ml-2">
-      <li>Discovers symbolic equations that best fit your target variable.</li>
-      <li>
-        AI-generated explanations are based on your problem description and data context — no
-        external research is performed.
-      </li>
-      <li>Faster and more cost-effective than Deep Analysis.</li>
-      <li>Ideal for initial exploration or iterative experimentation.</li>
-    </ul>
     <InfoBox variant="tip">
       Start with Quick Analysis to explore your data. Upgrade to Deep Analysis when you need results
       grounded in scientific literature.
@@ -196,18 +189,13 @@ const Analysis: React.FC = () => (
 
     <SubHeading id="deep-analysis" title="Deep Analysis" />
     <Prose>
-      Deep Analysis is an <strong>extension of the core Syxplain algorithm</strong> that
-      incorporates live internet research before running. Prior to symbolic regression, it queries
-      scientific literature, known domain formulas, and relevant publications to build a richer
-      understanding of your problem. This domain knowledge then informs both the regression
-      configuration and the final explanations.
+      Deep Analysis extends the <strong>core Syxplain algorithm</strong> with internet search.
+      Before symbolic regression runs, it queries scientific literature and known domain formulas to
+      build a richer understanding of your problem. This context informs both the symbolic regression
+      configuration and the final explanations, resulting in more grounded results. This operating
+      mode can create more detail rich results if established theory exists, but comes at a higher
+      computational cost and longer processing time.
     </Prose>
-    <ul className="list-disc list-inside text-secondary space-y-2 mb-4 ml-2">
-      <li>Retrieves domain-specific knowledge and known formulas from the internet.</li>
-      <li>Produces richer term explanations and scientific citations in the results.</li>
-      <li>Better suited for problems where established theory exists and should be respected.</li>
-      <li>Higher computational cost and longer processing time than Quick Analysis.</li>
-    </ul>
     <InfoBox variant="warning">
       Deep Analysis is more resource-intensive. It is currently available in experimental mode and
       may be subject to usage limits in the future.
