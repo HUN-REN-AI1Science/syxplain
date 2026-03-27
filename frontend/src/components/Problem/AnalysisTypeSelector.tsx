@@ -6,8 +6,10 @@
 import React, { useRef } from 'react';
 import { Button } from 'primereact/button';
 import { Menu } from 'primereact/menu';
+import { Tooltip } from 'primereact/tooltip';
 import { Dropdown, type DropdownChangeEvent } from 'primereact/dropdown';
 import HelpButton from '@components/HelpButton';
+import { useNavigation } from '@contexts/NavigationContext';
 
 interface AnalysisTypeSelectorProps {
   analysisType: 'quick' | 'deep';
@@ -35,6 +37,7 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
   hasHunrenAccess = true,
 }) => {
   const analysisMenuRef = useRef<Menu>(null);
+  const { navigateTo } = useNavigation();
 
   return (
     <>
@@ -76,12 +79,25 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
       {/* Button row */}
       <div className="mt-2 flex justify-end items-center space-x-4">
         {showExportButton && onExportJson && (
-          <Button
-            label="Export JSON"
-            icon="pi pi-download"
-            onClick={onExportJson}
-            className="p-button-outlined p-button-secondary font-bold py-3 px-6 text-xl"
-          />
+          <>
+            <Tooltip target=".btn-export-json" position="bottom" autoHide={false}>
+              <span>
+                Download the current problem configuration as a JSON file, so you can re-import it later.{' '}
+                <button
+                  className="underline text-brand-300 hover:text-brand-200"
+                  onClick={() => navigateTo('help', 'export-json')}
+                >
+                  Learn more
+                </button>
+              </span>
+            </Tooltip>
+            <Button
+              label="Export JSON"
+              icon="pi pi-download"
+              onClick={onExportJson}
+              className="btn-export-json p-button-outlined p-button-secondary font-bold py-3 px-6 text-xl"
+            />
+          </>
         )}
 
         {/* Analysis Menu */}
@@ -106,6 +122,19 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
 
         {/* Split Button for Analysis Type Selection */}
         <div className="flex">
+          <Tooltip target=".btn-run-analysis" position="bottom" autoHide={false}>
+            <span>
+              {analysisType === 'quick'
+                ? 'Discover symbolic equations from your data using the core Syxplain algorithm. '
+                : 'Augments symbolic regression with live internet research to gather domain-specific knowledge and formulas relevant to your problem. '}
+              <button
+                className="underline text-brand-300 hover:text-brand-200"
+                onClick={() => navigateTo('help', analysisType === 'quick' ? 'quick-analysis' : 'deep-analysis')}
+              >
+                Learn more
+              </button>
+            </span>
+          </Tooltip>
           <Button
             label={analysisType === 'quick' ? 'Quick Analysis' : 'Deep Analysis'}
             icon={analysisType === 'quick' ? 'pi pi-bolt' : 'pi pi-search'}
@@ -113,18 +142,21 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
             onClick={onSubmit}
             size="large"
             disabled={disabled}
-            className={`font-bold py-3 px-6 text-xl shadow-lg transition-all rounded-r-none ${
+            className={`btn-run-analysis font-bold py-3 px-6 text-xl shadow-lg transition-all rounded-r-none ${
               disabled
                 ? 'bg-slate-300 border-slate-300 text-secondary cursor-not-allowed'
                 : 'bg-blue-500 hover:bg-blue-600 border-blue-500 text-white hover:shadow-xl'
             }`}
           />
+          <Tooltip target=".btn-switch-analysis" position="bottom">
+            <span>Switch between Quick Analysis and Deep Analysis</span>
+          </Tooltip>
           <Button
             icon="pi pi-chevron-down"
             onClick={(e) => analysisMenuRef.current?.toggle(e)}
             size="large"
             disabled={disabled}
-            className={`font-bold py-3 px-3 text-xl shadow-lg transition-all rounded-l-none border-l-0 ${
+            className={`btn-switch-analysis font-bold py-3 px-3 text-xl shadow-lg transition-all rounded-l-none border-l-0 ${
               disabled
                 ? 'bg-slate-300 border-slate-300 text-secondary cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-700 border-blue-500 text-white'
