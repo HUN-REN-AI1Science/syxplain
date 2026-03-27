@@ -124,20 +124,20 @@ const GettingStarted: React.FC = () => (
 
     <SubHeading id="what-is-syxplain" title="What is Syxplain?" />
     <Prose>
-      Syxplain is a scientific method for discovering <strong>interpretable mathematical
-      equations</strong> directly from data. Rather than producing black-box predictions, Syxplain
-      finds compact formulas you can read, validate, and reason about — making it particularly
-      valuable for scientific and engineering applications where understanding <em>why</em> a model
-      works is as important as how accurate it is.
+      Syxplain is a scientific method for discovering{' '}
+      <strong>interpretable mathematical equations</strong> directly from data. Rather than
+      producing black-box predictions, Syxplain finds compact formulas you can read, validate, and
+      reason about — making it particularly valuable for scientific and engineering applications
+      where understanding <em>why</em> a model works is as important as how accurate it is.
     </Prose>
     <Prose>
-      At its core, Syxplain combines two powerful ideas. First, it uses a <strong>large language
-      model (LLM)</strong> to intelligently configure the symbolic regression search — incorporating
-      context about your problem to reduce the search space and steer the algorithm toward
-      scientifically plausible equation structures. Second, it applies <strong>symbolic
-      regression</strong> to find the equations that best fit your data within that guided search
-      space. The discovered formulas are then analyzed, explained, and ranked to surface the most
-      meaningful result.
+      At its core, Syxplain combines two powerful ideas. First, it uses a{' '}
+      <strong>large language model (LLM)</strong> to intelligently configure the symbolic regression
+      search — incorporating context about your problem to reduce the search space and steer the
+      algorithm toward scientifically plausible equation structures. Second, it applies{' '}
+      <strong>symbolic regression</strong> to find the equations that best fit your data within that
+      guided search space. The discovered formulas are then analyzed, explained, and ranked to
+      surface the most meaningful result.
     </Prose>
     <Prose>
       The <strong>Syxplain platform</strong> is a fully hosted implementation of this algorithm,
@@ -159,8 +159,8 @@ const GettingStarted: React.FC = () => (
       <li>The first row must contain column headers.</li>
       <li>All columns must be numeric. Non-numeric columns are automatically excluded.</li>
       <li>
-        Columns with a high proportion of missing values (<code>NaN</code>) are flagged so you
-        can review them before proceeding.
+        Columns with a high proportion of missing values (<code>NaN</code>) are flagged so you can
+        review them before proceeding.
       </li>
       <li>There is no strict row limit, but larger datasets increase processing time.</li>
     </ul>
@@ -182,13 +182,16 @@ const Analysis: React.FC = () => (
     </Prose>
     <ul className="list-disc list-inside text-secondary space-y-2 mb-4 ml-2">
       <li>Discovers symbolic equations that best fit your target variable.</li>
-      <li>Uses web search to gather lightweight background context for AI-generated explanations.</li>
+      <li>
+        AI-generated explanations are based on your problem description and data context — no
+        external research is performed.
+      </li>
       <li>Faster and more cost-effective than Deep Analysis.</li>
       <li>Ideal for initial exploration or iterative experimentation.</li>
     </ul>
     <InfoBox variant="tip">
-      Start with Quick Analysis to explore your data. Upgrade to Deep Analysis when you need
-      results grounded in scientific literature.
+      Start with Quick Analysis to explore your data. Upgrade to Deep Analysis when you need results
+      grounded in scientific literature.
     </InfoBox>
 
     <SubHeading id="deep-analysis" title="Deep Analysis" />
@@ -206,8 +209,8 @@ const Analysis: React.FC = () => (
       <li>Higher computational cost and longer processing time than Quick Analysis.</li>
     </ul>
     <InfoBox variant="warning">
-      Deep Analysis is more resource-intensive. It is currently available in experimental mode
-      and may be subject to usage limits in the future.
+      Deep Analysis is more resource-intensive. It is currently available in experimental mode and
+      may be subject to usage limits in the future.
     </InfoBox>
 
     <SubHeading id="understanding-results" title="Understanding results" />
@@ -235,8 +238,8 @@ const Analysis: React.FC = () => (
         </div>
         <p className="text-sm text-secondary">
           The number of mathematical operations in the equation.{' '}
-          <strong>Lower means simpler.</strong> Simpler equations are easier to interpret and
-          less likely to overfit.
+          <strong>Lower means simpler.</strong> Simpler equations are easier to interpret and less
+          likely to overfit.
         </p>
       </div>
 
@@ -245,8 +248,8 @@ const Analysis: React.FC = () => (
           <Tag value="Recommended" severity="success" className="text-xs" />
         </div>
         <p className="text-sm text-secondary">
-          Syxplain selects one equation as the best trade-off between accuracy and simplicity,
-          and provides a rationale explaining the choice.
+          Syxplain selects one equation as the best trade-off between accuracy and simplicity, and
+          provides a rationale explaining the choice.
         </p>
       </div>
 
@@ -264,8 +267,8 @@ const Analysis: React.FC = () => (
         </p>
         <p className="text-sm text-secondary">
           A scatter plot comparing predicted values against your actual measured values. Points
-          close to the 1:1 diagonal indicate a good fit. Click <strong>Show Details</strong> on
-          any equation card to reveal it.
+          close to the 1:1 diagonal indicate a good fit. Click <strong>Show Details</strong> on any
+          equation card to reveal it.
         </p>
       </div>
     </div>
@@ -288,8 +291,8 @@ const ExportingSharing: React.FC = () => (
 
     <SubHeading id="export-data" title="Export data (CSV / Excel)" />
     <Prose>
-      Each equation card contains an <strong>Export Data</strong> button inside its details
-      section. This exports the measured vs. predicted scatter data for that equation:
+      Each equation card contains an <strong>Export Data</strong> button inside its details section.
+      This exports the measured vs. predicted scatter data for that equation:
     </Prose>
     <ul className="list-disc list-inside text-secondary space-y-2 mb-4 ml-2">
       <li>
@@ -310,8 +313,8 @@ const ExportingSharing: React.FC = () => (
 
     <SubHeading id="sharing" title="Sharing results" />
     <Prose>
-      Click the <strong>Share button</strong> (blue, top-right of the results page) to generate
-      a public link to your results. Anyone with the link can view them without logging in.
+      Click the <strong>Share button</strong> (blue, top-right of the results page) to generate a
+      public link to your results. Anyone with the link can view them without logging in.
     </Prose>
     <ul className="list-disc list-inside text-secondary space-y-2 mb-4 ml-2">
       <li>The link stays active until you revoke it.</li>
@@ -342,8 +345,8 @@ const AdminSection: React.FC = () => (
     <SubHeading id="admin-users" title="User management" />
     <Prose>
       User accounts and roles are managed through <strong>Keycloak</strong>. Admin-level access
-      grants access to this Admin panel and elevated API features. Contact your system
-      administrator to modify user roles.
+      grants access to this Admin panel and elevated API features. Contact your system administrator
+      to modify user roles.
     </Prose>
   </>
 );
@@ -418,9 +421,18 @@ const HelpView: React.FC<HelpViewProps> = ({ onBack, anchor }) => {
 
   useEffect(() => {
     const allIds = [
-      'getting-started', 'what-is-syxplain', 'uploading-data',
-      'analysis', 'quick-analysis', 'deep-analysis', 'understanding-results',
-      'exporting-sharing', 'export-pdf', 'export-data', 'export-json', 'sharing',
+      'getting-started',
+      'what-is-syxplain',
+      'uploading-data',
+      'analysis',
+      'quick-analysis',
+      'deep-analysis',
+      'understanding-results',
+      'exporting-sharing',
+      'export-pdf',
+      'export-data',
+      'export-json',
+      'sharing',
       ...(isAdmin ? ['admin', 'admin-backend', 'admin-users'] : []),
     ];
 
