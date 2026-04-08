@@ -17,6 +17,7 @@ interface AppHeaderProps {
   onHistoryClick: () => void;
   onProfileClick: () => void;
   onAdminClick?: () => void;
+  onHelpClick: () => void;
   onFeedbackClick: () => void;
   onLogout: () => void;
 }
@@ -27,6 +28,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onHistoryClick,
   onProfileClick,
   onAdminClick,
+  onHelpClick,
   onFeedbackClick,
   onLogout,
 }) => {
@@ -48,10 +50,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     { label: 'History', icon: 'pi pi-history', command: onHistoryClick },
     { label: 'Profile', icon: 'pi pi-user', command: onProfileClick },
     ...(onAdminClick ? [{ label: 'Admin', icon: 'pi pi-cog', command: onAdminClick }] : []),
+    { label: 'Documentation', icon: 'pi pi-book', command: onHelpClick },
     { label: 'Feedback', icon: 'pi pi-comment', command: onFeedbackClick },
     {
       label: 'API Docs',
-      icon: 'pi pi-book',
+      icon: 'pi pi-code',
       command: () => window.open('/docs', '_blank'),
     },
     { separator: true },

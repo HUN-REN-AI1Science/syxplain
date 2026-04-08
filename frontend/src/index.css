@@ -488,6 +488,23 @@
   :root:not([data-theme='light']) .border-yellow-200 {
     border-color: rgba(161, 98, 7, 0.4) !important;
   }
+  :root:not([data-theme='light']) .border-green-200 {
+    border-color: rgba(6, 95, 70, 0.4) !important;
+  }
+  :root:not([data-theme='light']) .border-brand-200 {
+    border-color: rgba(91, 124, 250, 0.3) !important;
+  }
+
+  /* Text colors for tinted info/warning/tip boxes */
+  :root:not([data-theme='light']) .text-amber-800 {
+    color: #fbbf24 !important;
+  }
+  :root:not([data-theme='light']) .text-green-800 {
+    color: #6ee7b7 !important;
+  }
+  :root:not([data-theme='light']) .text-brand-800 {
+    color: #93b4ff !important;
+  }
 }
 
 [data-theme='dark'] .bg-red-50 {
@@ -521,4 +538,21 @@
 }
 [data-theme='dark'] .border-yellow-200 {
   border-color: rgba(161, 98, 7, 0.4) !important;
+}
+[data-theme='dark'] .border-green-200 {
+  border-color: rgba(6, 95, 70, 0.4) !important;
+}
+[data-theme='dark'] .border-brand-200 {
+  border-color: rgba(91, 124, 250, 0.3) !important;
+}
+
+/* Text colors for tinted info/warning/tip boxes */
+[data-theme='dark'] .text-amber-800 {
+  color: #fbbf24 !important;
+}
+[data-theme='dark'] .text-green-800 {
+  color: #6ee7b7 !important;
+}
+[data-theme='dark'] .text-brand-800 {
+  color: #93b4ff !important;
 }
