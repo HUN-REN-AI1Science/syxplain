@@ -46,7 +46,9 @@ const oidcConfig = {
 };
 
 function MainApp() {
-  const [view, setView] = useState<'workflow' | 'history' | 'profile' | 'admin' | 'help'>('workflow');
+  const [view, setView] = useState<'workflow' | 'history' | 'profile' | 'admin' | 'help'>(
+    'workflow'
+  );
   const [helpAnchor, setHelpAnchor] = useState<string | undefined>(undefined);
   const [activeIndex, setActiveIndex] = useState(0);
   const [filename, setFilename] = useState<string | null>(null);
@@ -145,93 +147,93 @@ function MainApp() {
 
   return (
     <NavigationContext.Provider value={{ navigateTo }}>
-    <div className="min-h-screen bg-page font-body flex flex-col">
-      <a href="#main-content" className="skip-to-content">
-        Skip to main content
-      </a>
+      <div className="min-h-screen bg-page font-body flex flex-col">
+        <a href="#main-content" className="skip-to-content">
+          Skip to main content
+        </a>
 
-      <Toast ref={toast} />
+        <Toast ref={toast} />
 
-      <AppHeader
-        userEmail={user?.email}
-        onLogoClick={handleReset}
-        onHistoryClick={() => setView('history')}
-        onProfileClick={() => setView('profile')}
-        onAdminClick={isAdmin ? () => setView('admin') : undefined}
-        onHelpClick={() => setView('help')}
-        onFeedbackClick={() => setFeedbackVisible(true)}
-        onLogout={handleLogout}
-      />
+        <AppHeader
+          userEmail={user?.email}
+          onLogoClick={handleReset}
+          onHistoryClick={() => setView('history')}
+          onProfileClick={() => setView('profile')}
+          onAdminClick={isAdmin ? () => setView('admin') : undefined}
+          onHelpClick={() => setView('help')}
+          onFeedbackClick={() => setFeedbackVisible(true)}
+          onLogout={handleLogout}
+        />
 
-      <FeedbackDialog
-        visible={feedbackVisible}
-        onHide={() => setFeedbackVisible(false)}
-        context={buildFeedbackContext()}
-      />
+        <FeedbackDialog
+          visible={feedbackVisible}
+          onHide={() => setFeedbackVisible(false)}
+          context={buildFeedbackContext()}
+        />
 
-      <main id="main-content" className="flex-grow py-10 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-5xl mx-auto">
-          {view === 'help' ? (
-            <Card className="shadow-card border-round-2xl overflow-hidden border-none">
-              <HelpView onBack={() => setView('workflow')} anchor={helpAnchor} />
-            </Card>
-          ) : view === 'admin' ? (
-            <Card className="shadow-card border-round-2xl overflow-hidden border-none">
-              <AdminLayout onBack={() => setView('workflow')} />
-            </Card>
-          ) : view === 'history' ? (
-            <Card className="shadow-card border-round-2xl overflow-hidden border-none">
-              <HistoryView onSelectRun={handleSelectRun} />
-            </Card>
-          ) : view === 'profile' ? (
-            <Card className="shadow-card border-round-2xl overflow-hidden border-none">
-              <ProfileView onBack={() => setView('workflow')} onSelectRun={handleSelectRun} />
-            </Card>
-          ) : (
-            <Card className="shadow-card border-round-2xl overflow-hidden border-none">
-              <div className="flex flex-col">
-                <WorkflowSteps activeIndex={activeIndex} items={WORKFLOW_STEPS} />
+        <main id="main-content" className="flex-grow py-10 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-5xl mx-auto">
+            {view === 'help' ? (
+              <Card className="shadow-card border-round-2xl overflow-hidden border-none">
+                <HelpView onBack={() => setView('workflow')} anchor={helpAnchor} />
+              </Card>
+            ) : view === 'admin' ? (
+              <Card className="shadow-card border-round-2xl overflow-hidden border-none">
+                <AdminLayout onBack={() => setView('workflow')} />
+              </Card>
+            ) : view === 'history' ? (
+              <Card className="shadow-card border-round-2xl overflow-hidden border-none">
+                <HistoryView onSelectRun={handleSelectRun} />
+              </Card>
+            ) : view === 'profile' ? (
+              <Card className="shadow-card border-round-2xl overflow-hidden border-none">
+                <ProfileView onBack={() => setView('workflow')} onSelectRun={handleSelectRun} />
+              </Card>
+            ) : (
+              <Card className="shadow-card border-round-2xl overflow-hidden border-none">
+                <div className="flex flex-col">
+                  <WorkflowSteps activeIndex={activeIndex} items={WORKFLOW_STEPS} />
 
-                <div className="mt-6 min-h-[400px] relative overflow-hidden">
-                  <SwitchTransition mode="out-in">
-                    <CSSTransition
-                      key={activeIndex}
-                      nodeRef={nodeRef}
-                      timeout={300}
-                      classNames="fade"
-                      unmountOnExit
-                    >
-                      <div ref={nodeRef} className="w-full">
-                        {activeIndex === 0 && (
-                          <UploadView onUploadComplete={handleUploadComplete} />
-                        )}
-                        {activeIndex === 1 && (
-                          <ProblemView
-                            columns={columns}
-                            excludedColumns={excludedColumns}
-                            nanCounts={nanCounts}
-                            onSubmit={handleStartAnalysis}
-                          />
-                        )}
-                        {activeIndex === 2 && (
-                          <ResultsView
-                            runId={runId}
-                            fromHistory={fromHistory}
-                            initialProgressPhases={progressPhases}
-                          />
-                        )}
-                      </div>
-                    </CSSTransition>
-                  </SwitchTransition>
+                  <div className="mt-6 min-h-[400px] relative overflow-hidden">
+                    <SwitchTransition mode="out-in">
+                      <CSSTransition
+                        key={activeIndex}
+                        nodeRef={nodeRef}
+                        timeout={300}
+                        classNames="fade"
+                        unmountOnExit
+                      >
+                        <div ref={nodeRef} className="w-full">
+                          {activeIndex === 0 && (
+                            <UploadView onUploadComplete={handleUploadComplete} />
+                          )}
+                          {activeIndex === 1 && (
+                            <ProblemView
+                              columns={columns}
+                              excludedColumns={excludedColumns}
+                              nanCounts={nanCounts}
+                              onSubmit={handleStartAnalysis}
+                            />
+                          )}
+                          {activeIndex === 2 && (
+                            <ResultsView
+                              runId={runId}
+                              fromHistory={fromHistory}
+                              initialProgressPhases={progressPhases}
+                            />
+                          )}
+                        </div>
+                      </CSSTransition>
+                    </SwitchTransition>
+                  </div>
                 </div>
-              </div>
-            </Card>
-          )}
-        </div>
-      </main>
+              </Card>
+            )}
+          </div>
+        </main>
 
-      <AppFooter />
-    </div>
+        <AppFooter />
+      </div>
     </NavigationContext.Provider>
   );
 }

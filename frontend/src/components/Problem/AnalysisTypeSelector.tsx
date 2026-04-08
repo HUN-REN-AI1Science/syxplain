@@ -82,7 +82,8 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
           <>
             <Tooltip target=".btn-export-json" position="bottom" autoHide={false}>
               <span>
-                Download the current problem configuration as a JSON file, so you can re-import it later.{' '}
+                Download the current problem configuration as a JSON file, so you can re-import it
+                later.{' '}
                 <button
                   className="underline text-brand-300 hover:text-brand-200"
                   onClick={() => navigateTo('help', 'export-json')}
@@ -129,7 +130,9 @@ export const AnalysisTypeSelector: React.FC<AnalysisTypeSelectorProps> = ({
                 : 'Augments symbolic regression with live internet research to gather domain-specific knowledge and formulas relevant to your problem. '}
               <button
                 className="underline text-brand-300 hover:text-brand-200"
-                onClick={() => navigateTo('help', analysisType === 'quick' ? 'quick-analysis' : 'deep-analysis')}
+                onClick={() =>
+                  navigateTo('help', analysisType === 'quick' ? 'quick-analysis' : 'deep-analysis')
+                }
               >
                 Learn more
               </button>

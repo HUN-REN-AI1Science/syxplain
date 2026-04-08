@@ -179,8 +179,8 @@ const Analysis: React.FC = () => (
     <Prose>
       Quick Analysis runs the <strong>core Syxplain algorithm</strong> on your data. The LLM
       generates explanations using your problem description and data context directly — no external
-      research is performed. It is the right starting point for most use cases: faster,
-      more cost-effective, and ideal for initial exploration or iterative experimentation.
+      research is performed. It is the right starting point for most use cases: faster, more
+      cost-effective, and ideal for initial exploration or iterative experimentation.
     </Prose>
     <InfoBox variant="tip">
       Start with Quick Analysis to explore your data. Upgrade to Deep Analysis when you need results
@@ -191,10 +191,10 @@ const Analysis: React.FC = () => (
     <Prose>
       Deep Analysis extends the <strong>core Syxplain algorithm</strong> with internet search.
       Before symbolic regression runs, it queries scientific literature and known domain formulas to
-      build a richer understanding of your problem. This context informs both the symbolic regression
-      configuration and the final explanations, resulting in more grounded results. This operating
-      mode can create more detail rich results if established theory exists, but comes at a higher
-      computational cost and longer processing time.
+      build a richer understanding of your problem. This context informs both the symbolic
+      regression configuration and the final explanations, resulting in more grounded results. This
+      operating mode can create more detail rich results if established theory exists, but comes at
+      a higher computational cost and longer processing time.
     </Prose>
     <InfoBox variant="warning">
       Deep Analysis is more resource-intensive. It is currently available in experimental mode and
