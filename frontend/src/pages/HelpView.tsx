@@ -66,6 +66,9 @@ const scrollTo = (id: string) => {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
+const getNavIds = (items: NavItem[]): string[] =>
+  items.flatMap((item) => [item.id, ...(item.children?.map((c) => c.id) ?? [])]);
+
 // ============================================================================
 // Layout primitives
 // ============================================================================
@@ -408,26 +411,19 @@ const HelpView: React.FC<HelpViewProps> = ({ onBack, anchor }) => {
   }, [anchor]);
 
   useEffect(() => {
-    const allIds = [
-      'getting-started',
-      'what-is-syxplain',
-      'uploading-data',
-      'analysis',
-      'quick-analysis',
-      'deep-analysis',
-      'understanding-results',
-      'exporting-sharing',
-      'export-pdf',
-      'export-data',
-      'export-json',
-      'sharing',
-      ...(isAdmin ? ['admin', 'admin-backend', 'admin-users'] : []),
-    ];
+    const allIds = [...getNavIds(NAV), ...(isAdmin ? getNavIds([ADMIN_NAV]) : [])];
 
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries.filter((e) => e.isIntersecting);
-        if (visible.length > 0) setActiveId(visible[0].target.id);
+        if (visible.length > 0) {
+          const closestToTop = visible.reduce((closest, entry) =>
+            Math.abs(entry.boundingClientRect.top) < Math.abs(closest.boundingClientRect.top)
+              ? entry
+              : closest
+          );
+          setActiveId(closestToTop.target.id);
+        }
       },
       { rootMargin: '-20% 0px -70% 0px' }
     );

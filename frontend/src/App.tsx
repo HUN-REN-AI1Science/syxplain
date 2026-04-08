@@ -12,7 +12,7 @@ import AdminLayout from '@pages/admin/AdminLayout';
 import PublicResultsView from '@pages/results/PublicResultsView';
 import { AuthProvider, useAuth } from '@contexts/AuthContext';
 import { ThemeProvider } from '@contexts/ThemeContext';
-import { NavigationContext } from '@contexts/NavigationContext';
+import { NavigationContext, type AppView } from '@contexts/NavigationContext';
 import { runsService } from '@services/api';
 import { Toast } from 'primereact/toast';
 import { Card } from 'primereact/card';
@@ -46,9 +46,7 @@ const oidcConfig = {
 };
 
 function MainApp() {
-  const [view, setView] = useState<'workflow' | 'history' | 'profile' | 'admin' | 'help'>(
-    'workflow'
-  );
+  const [view, setView] = useState<AppView>('workflow');
   const [helpAnchor, setHelpAnchor] = useState<string | undefined>(undefined);
   const [activeIndex, setActiveIndex] = useState(0);
   const [filename, setFilename] = useState<string | null>(null);
@@ -103,9 +101,9 @@ function MainApp() {
     }
   };
 
-  const navigateTo = (newView: string, anchor?: string) => {
+  const navigateTo = (newView: AppView, anchor?: string) => {
     setHelpAnchor(anchor);
-    setView(newView as 'workflow' | 'history' | 'profile' | 'admin' | 'help');
+    setView(newView);
   };
 
   const handleReset = () => {
@@ -160,7 +158,10 @@ function MainApp() {
           onHistoryClick={() => setView('history')}
           onProfileClick={() => setView('profile')}
           onAdminClick={isAdmin ? () => setView('admin') : undefined}
-          onHelpClick={() => setView('help')}
+          onHelpClick={() => {
+            setHelpAnchor(undefined);
+            setView('help');
+          }}
           onFeedbackClick={() => setFeedbackVisible(true)}
           onLogout={handleLogout}
         />

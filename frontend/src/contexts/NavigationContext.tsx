@@ -5,8 +5,10 @@
 
 import { createContext, useContext } from 'react';
 
+export type AppView = 'workflow' | 'history' | 'profile' | 'admin' | 'help';
+
 interface NavigationContextValue {
-  navigateTo: (view: string, anchor?: string) => void;
+  navigateTo: (view: AppView, anchor?: string) => void;
 }
 
 export const NavigationContext = createContext<NavigationContextValue>({
