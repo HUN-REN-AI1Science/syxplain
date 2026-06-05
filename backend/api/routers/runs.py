@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from backend.api.dependencies import get_run_service
+from backend.core.constants import RunStatus
 from backend.core.exceptions import (
     ConfigurationError,
     EntityNotFoundError,
@@ -150,7 +151,7 @@ async def run_analysis(
 
         return RunResponse(
             run_id=run_id,
-            status="pending",
+            status=RunStatus.PENDING,
             message="Analysis started",
             progress_phases=get_progress_phases(),
         )

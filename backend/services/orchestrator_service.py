@@ -15,6 +15,7 @@ from typing import Any
 import pandas as pd
 
 from backend.core.config import get_compute_settings, get_slurm_settings
+from backend.core.constants import RunStatus
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
 from backend.infrastructure.slurm import (
@@ -150,7 +151,7 @@ class AnalysisOrchestrator:
         """
         with get_db_session() as db:
             run = db.query(Run).filter(Run.id == run_id).first()
-            if run and run.status in ("failed", "cancelled"):
+            if run and run.status in (RunStatus.FAILED, RunStatus.CANCELLED):
                 return run.status
             return None
 
@@ -188,7 +189,7 @@ class AnalysisOrchestrator:
             # Check if the run was already marked as failed by a worker callback
             # (e.g., PySR failed and reported via /api/internal/error)
             terminal_status = self._is_run_terminal(run_id)
-            if terminal_status == "failed":
+            if terminal_status == RunStatus.FAILED:
                 logger.warning(
                     f"{task_name} wait failed for run {run_id}, "
                     f"but run already marked as failed by worker callback: {e}"
@@ -200,7 +201,7 @@ class AnalysisOrchestrator:
                     state=JobState.FAILED,
                     error=f"Run already failed (worker callback): {e}",
                 )
-            if terminal_status == "cancelled":
+            if terminal_status == RunStatus.CANCELLED:
                 raise AnalysisCancelledError("Analysis cancelled by user") from e
             raise  # Re-raise for genuinely unexpected errors
 
@@ -254,7 +255,7 @@ class AnalysisOrchestrator:
                 for _ in range(retry_interval):
                     await asyncio.sleep(1)
                     # Check if run was cancelled
-                    if self._is_run_terminal(run_id) == "cancelled":
+                    if self._is_run_terminal(run_id) == RunStatus.CANCELLED:
                         raise AnalysisCancelledError("Analysis cancelled by user")
 
     async def run_analysis(self, context: AnalysisContext) -> dict[str, Any]:
@@ -280,7 +281,7 @@ class AnalysisOrchestrator:
 
         try:
             # Update status to running
-            self._update_run_status(run_id, "running")
+            self._update_run_status(run_id, RunStatus.RUNNING)
             await progress.update_progress_async("initialization", status="Initializing analysis")
 
             # Step 1: Data summary
@@ -331,7 +332,7 @@ class AnalysisOrchestrator:
             self._save_artifacts(run_id, final_results, progress, visualizations=visualizations)
 
             # Mark as completed (also broadcasts via SSE)
-            self._update_run_status(run_id, "completed", results=final_results)
+            self._update_run_status(run_id, RunStatus.COMPLETED, results=final_results)
 
             logger.info(f"Analysis completed successfully for run {run_id}")
             return final_results
@@ -343,7 +344,7 @@ class AnalysisOrchestrator:
         except Exception as e:
             logger.error(f"Analysis failed for run {run_id}: {e}", exc_info=True)
             error_msg = _format_user_facing_error(e)
-            self._update_run_status(run_id, "failed", error=error_msg)
+            self._update_run_status(run_id, RunStatus.FAILED, error=error_msg)
             raise OrchestratorError(f"Analysis failed: {error_msg}") from e
 
     def _generate_data_summary(self, context: AnalysisContext) -> dict[str, Any]:
@@ -843,21 +844,21 @@ class AnalysisOrchestrator:
                 if run:
                     run.status = status
                     # Set start_time when transitioning to running
-                    if status == "running" and run.start_time is None:
+                    if status == RunStatus.RUNNING and run.start_time is None:
                         run.start_time = datetime.utcnow()
                     # Set finish_time for terminal states
-                    if status in ("completed", "failed", "timeout", "cancelled"):
+                    if RunStatus.is_terminal(status):
                         run.finish_time = datetime.utcnow()
                     if results:
                         run.results = results
                     if error:
                         run.error = error
-                    if status == "completed":
+                    if status == RunStatus.COMPLETED:
                         run.progress = 100
                     db.commit()
 
                     # Broadcast terminal states via SSE so clients see completion/failure
-                    if status in ("completed", "failed", "timeout", "cancelled"):
+                    if RunStatus.is_terminal(status):
                         _broadcast_progress_sync(
                             run_id=run_id,
                             progress=run.progress or 0,

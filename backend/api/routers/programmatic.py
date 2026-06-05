@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from backend.api.dependencies import get_file_repository, get_run_service
 from backend.core.config import get_settings
+from backend.core.constants import RunStatus
 from backend.core.exceptions import (
     ConfigurationError,
     EntityNotFoundError,
@@ -195,7 +196,7 @@ async def analyze(
 
     return AnalyzeResponse(
         run_id=run_id,
-        status="pending",
+        status=RunStatus.PENDING,
         status_url=f"/api/v1/runs/{run_id}",
         cancel_url=f"/api/v1/runs/{run_id}/cancel",
     )
@@ -253,7 +254,7 @@ def get_run_status(
 
     # Build artifacts list
     artifacts = []
-    if run.status == "completed" and hasattr(run, "artifacts") and run.artifacts:
+    if run.status == RunStatus.COMPLETED and hasattr(run, "artifacts") and run.artifacts:
         for art in run.artifacts:
             artifacts.append(
                 ArtifactInfo(
@@ -273,7 +274,7 @@ def get_run_status(
         finish_time=run.finish_time,
         duration_seconds=duration_seconds,
         error=run.error,
-        results=run.results if run.status == "completed" else None,
+        results=run.results if run.status == RunStatus.COMPLETED else None,
         artifacts=artifacts,
     )
 

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
+from backend.core.constants import RunStatus
 from backend.infrastructure.database.models import Run
 
 logger = logging.getLogger(__name__)
@@ -65,9 +66,11 @@ class AdminStatsService:
 
         # Success rate (completed / (completed + failed + timeout))
         terminal_runs = (
-            self.db.query(Run).filter(Run.status.in_(["completed", "failed", "timeout"])).count()
+            self.db.query(Run)
+            .filter(Run.status.in_([RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.TIMEOUT]))
+            .count()
         )
-        completed_runs = self.db.query(Run).filter(Run.status == "completed").count()
+        completed_runs = self.db.query(Run).filter(Run.status == RunStatus.COMPLETED).count()
         success_rate = (completed_runs / terminal_runs * 100) if terminal_runs > 0 else 0.0
 
         # Average duration (for completed runs with timestamps)
@@ -78,7 +81,7 @@ class AdminStatsService:
                 )
             )
             .filter(
-                Run.status == "completed",
+                Run.status == RunStatus.COMPLETED,
                 Run.start_time.isnot(None),
                 Run.finish_time.isnot(None),
             )
@@ -87,8 +90,8 @@ class AdminStatsService:
         avg_duration_seconds = float(avg_duration) if avg_duration else 0.0
 
         # Pending and running counts
-        pending_runs = self.db.query(Run).filter(Run.status == "pending").count()
-        running_runs = self.db.query(Run).filter(Run.status == "running").count()
+        pending_runs = self.db.query(Run).filter(Run.status == RunStatus.PENDING).count()
+        running_runs = self.db.query(Run).filter(Run.status == RunStatus.RUNNING).count()
 
         return {
             "total_users": total_users,
@@ -118,10 +121,10 @@ class AdminStatsService:
             self.db.query(
                 func.date(Run.created_at).label("date"),
                 func.count(Run.id).label("total"),
-                func.sum(case((Run.status == "completed", 1), else_=0)).label("completed"),
-                func.sum(case((Run.status == "failed", 1), else_=0)).label("failed"),
-                func.sum(case((Run.status == "timeout", 1), else_=0)).label("timeout"),
-                func.sum(case((Run.status == "cancelled", 1), else_=0)).label("cancelled"),
+                func.sum(case((Run.status == RunStatus.COMPLETED, 1), else_=0)).label("completed"),
+                func.sum(case((Run.status == RunStatus.FAILED, 1), else_=0)).label("failed"),
+                func.sum(case((Run.status == RunStatus.TIMEOUT, 1), else_=0)).label("timeout"),
+                func.sum(case((Run.status == RunStatus.CANCELLED, 1), else_=0)).label("cancelled"),
             )
             .filter(Run.created_at >= cutoff)
             .group_by(func.date(Run.created_at))
@@ -221,7 +224,7 @@ class AdminStatsService:
             self.db.query(
                 Run.user_id,
                 func.count(Run.id).label("run_count"),
-                func.sum(case((Run.status == "completed", 1), else_=0)).label("completed"),
+                func.sum(case((Run.status == RunStatus.COMPLETED, 1), else_=0)).label("completed"),
             )
             .filter(Run.created_at >= cutoff)
             .group_by(Run.user_id)
@@ -252,7 +255,7 @@ class AdminStatsService:
                 func.extract("epoch", Run.finish_time) - func.extract("epoch", Run.start_time)
             )
             .filter(
-                Run.status == "completed",
+                Run.status == RunStatus.COMPLETED,
                 Run.start_time.isnot(None),
                 Run.finish_time.isnot(None),
             )
@@ -272,9 +275,11 @@ class AdminStatsService:
 
         # Success rate
         terminal_runs = (
-            self.db.query(Run).filter(Run.status.in_(["completed", "failed", "timeout"])).count()
+            self.db.query(Run)
+            .filter(Run.status.in_([RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.TIMEOUT]))
+            .count()
         )
-        completed_runs = self.db.query(Run).filter(Run.status == "completed").count()
+        completed_runs = self.db.query(Run).filter(Run.status == RunStatus.COMPLETED).count()
         success_rate = (completed_runs / terminal_runs * 100) if terminal_runs > 0 else 0.0
 
         return {
@@ -303,7 +308,7 @@ class AdminStatsService:
                 )
                 .filter(
                     Run.analysis_type == analysis_type,
-                    Run.status == "completed",
+                    Run.status == RunStatus.COMPLETED,
                     Run.start_time.isnot(None),
                     Run.finish_time.isnot(None),
                 )
@@ -317,12 +322,15 @@ class AdminStatsService:
             total = self.db.query(Run).filter(Run.analysis_type == analysis_type).count()
             completed = (
                 self.db.query(Run)
-                .filter(Run.analysis_type == analysis_type, Run.status == "completed")
+                .filter(Run.analysis_type == analysis_type, Run.status == RunStatus.COMPLETED)
                 .count()
             )
             failed = (
                 self.db.query(Run)
-                .filter(Run.analysis_type == analysis_type, Run.status.in_(["failed", "timeout"]))
+                .filter(
+                    Run.analysis_type == analysis_type,
+                    Run.status.in_([RunStatus.FAILED, RunStatus.TIMEOUT]),
+                )
                 .count()
             )
 
@@ -359,7 +367,7 @@ class AdminStatsService:
         failed_runs = (
             self.db.query(Run.error)
             .filter(
-                Run.status.in_(["failed", "timeout"]),
+                Run.status.in_([RunStatus.FAILED, RunStatus.TIMEOUT]),
                 Run.error.isnot(None),
                 Run.created_at >= cutoff,
             )
@@ -408,7 +416,9 @@ class AdminStatsService:
             self.db.query(
                 func.date(Run.created_at).label("date"),
                 func.count(Run.id).label("total"),
-                func.sum(case((Run.status.in_(["failed", "timeout"]), 1), else_=0)).label("failed"),
+                func.sum(
+                    case((Run.status.in_([RunStatus.FAILED, RunStatus.TIMEOUT]), 1), else_=0)
+                ).label("failed"),
             )
             .filter(Run.created_at >= cutoff)
             .group_by(func.date(Run.created_at))

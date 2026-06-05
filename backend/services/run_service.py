@@ -10,6 +10,7 @@ from typing import Any
 from uuid import UUID
 
 from backend.core.config import get_settings
+from backend.core.constants import RunStatus
 from backend.core.exceptions import (
     ConfigurationError,
     EntityNotFoundError,
@@ -275,7 +276,7 @@ class RunService:
             raise EntityNotFoundError("Run", run_id)
 
         # Already in terminal state - return success (idempotent)
-        if run.status in ("completed", "failed", "timeout", "cancelled"):
+        if RunStatus.is_terminal(run.status):
             logger.info(f"Run {run_id} already in terminal state: {run.status}")
             return True
 
@@ -292,7 +293,7 @@ class RunService:
         # Update status in database and broadcast via SSE
         from backend.services.analysis_service import update_run_status
 
-        update_run_status(run_id, status="cancelled", error="Analysis cancelled by user")
+        update_run_status(run_id, status=RunStatus.CANCELLED, error="Analysis cancelled by user")
 
         logger.info(f"User {user_id} cancelled run {run_id}")
         return True

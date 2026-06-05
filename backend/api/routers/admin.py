@@ -7,6 +7,7 @@ and analytics.
 
 import logging
 from datetime import datetime
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
@@ -69,6 +70,7 @@ from backend.services.admin_stats_service import AdminStatsService
 from backend.services.audit_service import AuditService
 from backend.services.permission_service import PermissionService
 from backend.services.system_monitor_service import SystemMonitorService
+from backend.utils import parse_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +96,38 @@ def get_client_ip(request: Request) -> str | None:
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else None
+
+
+def _parse_run_id(run_id: str) -> UUID:
+    """Parse and validate a run UUID, raising HTTPException on failure."""
+    try:
+        return parse_uuid(run_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid run ID format")
+
+
+def _get_user_email_map(permission_service: PermissionService) -> dict[str, str | None]:
+    """Build a user_id -> email mapping from Keycloak."""
+    users = permission_service.list_users()
+    return {u["user_id"]: u["email"] for u in users}
+
+
+def _run_to_admin_summary(run, user_emails: dict[str, str | None]) -> AdminRunSummary:
+    """Convert a Run model to an AdminRunSummary response."""
+    return AdminRunSummary(
+        id=str(run.id),
+        user_id=str(run.user_id),
+        user_email=user_emails.get(str(run.user_id)),
+        status=run.status,
+        created_at=run.created_at,
+        csv_filename=run.csv_filename,
+        target_variable=run.target_variable,
+        progress=run.progress,
+        analysis_type=run.analysis_type,
+        start_time=run.start_time,
+        finish_time=run.finish_time,
+        error=run.error,
+    )
 
 
 # ============================================================================
@@ -191,29 +225,10 @@ def get_all_runs(
     )
 
     result = run_repo.get_all_runs(filters=filters, pagination=pagination)
-
-    # Get user emails for all runs
-    users = permission_service.list_users()
-    user_emails = {u["user_id"]: u["email"] for u in users}
+    user_emails = _get_user_email_map(permission_service)
 
     return PaginatedAdminRunsResponse(
-        items=[
-            AdminRunSummary(
-                id=str(run.id),
-                user_id=str(run.user_id),
-                user_email=user_emails.get(str(run.user_id)),
-                status=run.status,
-                created_at=run.created_at,
-                csv_filename=run.csv_filename,
-                target_variable=run.target_variable,
-                progress=run.progress,
-                analysis_type=run.analysis_type,
-                start_time=run.start_time,
-                finish_time=run.finish_time,
-                error=run.error,
-            )
-            for run in result.items
-        ],
+        items=[_run_to_admin_summary(run, user_emails) for run in result.items],
         total=result.total,
         page=result.page,
         page_size=result.page_size,
@@ -231,20 +246,12 @@ def get_run_detail(
     permission_service: PermissionService = Depends(get_permission_service),
 ):
     """Get detailed run information."""
-    from backend.utils import parse_uuid
-
-    try:
-        run_uuid = parse_uuid(run_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid run ID format")
-
+    run_uuid = _parse_run_id(run_id)
     run = run_repo.admin_get_run(run_uuid)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
 
-    # Get user email
-    users = permission_service.list_users()
-    user_emails = {u["user_id"]: u["email"] for u in users}
+    user_emails = _get_user_email_map(permission_service)
 
     return AdminRunDetailResponse(
         id=str(run.id),
@@ -274,13 +281,7 @@ def cancel_run(
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Cancel a run."""
-    from backend.utils import parse_uuid
-
-    try:
-        run_uuid = parse_uuid(run_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid run ID format")
-
+    run_uuid = _parse_run_id(run_id)
     run = run_repo.admin_cancel_run(run_uuid)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -311,12 +312,7 @@ def delete_run(
     audit_service: AuditService = Depends(get_audit_service),
 ):
     """Delete a run and all associated data."""
-    from backend.utils import parse_uuid
-
-    try:
-        run_uuid = parse_uuid(run_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid run ID format")
+    run_uuid = _parse_run_id(run_id)
 
     # Get run details for audit log before deletion
     run = run_repo.admin_get_run(run_uuid)
@@ -357,14 +353,9 @@ def admin_download_csv(
     file_repo: FileRepository = Depends(get_file_repository),
 ):
     """Download the original uploaded file for any run."""
-    from backend.utils import parse_uuid
     from backend.utils.security_utils import safe_content_disposition
 
-    try:
-        run_uuid = parse_uuid(run_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid run ID format")
-
+    run_uuid = _parse_run_id(run_id)
     run = run_repo.admin_get_run(run_uuid)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -452,29 +443,10 @@ def get_failed_runs(
 ):
     """Get failed and timeout runs."""
     result = run_repo.get_failed_runs(days=days, page=page, page_size=page_size)
-
-    # Get user emails
-    users = permission_service.list_users()
-    user_emails = {u["user_id"]: u["email"] for u in users}
+    user_emails = _get_user_email_map(permission_service)
 
     return PaginatedAdminRunsResponse(
-        items=[
-            AdminRunSummary(
-                id=str(run.id),
-                user_id=str(run.user_id),
-                user_email=user_emails.get(str(run.user_id)),
-                status=run.status,
-                created_at=run.created_at,
-                csv_filename=run.csv_filename,
-                target_variable=run.target_variable,
-                progress=run.progress,
-                analysis_type=run.analysis_type,
-                start_time=run.start_time,
-                finish_time=run.finish_time,
-                error=run.error,
-            )
-            for run in result.items
-        ],
+        items=[_run_to_admin_summary(run, user_emails) for run in result.items],
         total=result.total,
         page=result.page,
         page_size=result.page_size,
@@ -601,10 +573,7 @@ def get_top_users(
 ):
     """Get top users by run count."""
     top_users = stats_service.get_top_users(limit=limit, period_days=period_days)
-
-    # Get user emails
-    users = permission_service.list_users()
-    user_emails = {u["user_id"]: u["email"] for u in users}
+    user_emails = _get_user_email_map(permission_service)
 
     return TopUsersResponse(
         items=[
