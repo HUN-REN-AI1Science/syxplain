@@ -13,6 +13,7 @@ from typing import Any
 
 import yaml
 
+from backend.core.constants import RunStatus
 from backend.infrastructure.database.connection import get_session_factory
 from backend.infrastructure.database.models import Run, RunArtifact
 
@@ -277,7 +278,7 @@ class ProgressTracker:
         """
         SessionLocal = get_session_factory()
         db = SessionLocal()
-        run_status = "running"
+        run_status = RunStatus.RUNNING
         persisted = False
         try:
             run = db.query(Run).filter(Run.id == self.run_id).first()

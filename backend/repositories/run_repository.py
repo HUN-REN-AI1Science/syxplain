@@ -13,6 +13,7 @@ from uuid import UUID
 from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
+from backend.core.constants import RunStatus
 from backend.infrastructure.database.models import Run
 from backend.repositories.base import BaseRepository
 
@@ -205,10 +206,10 @@ class RunRepository(BaseRepository[Run]):
 
         run.status = status
         # Set start_time when transitioning to running
-        if status == "running" and run.start_time is None:
+        if status == RunStatus.RUNNING and run.start_time is None:
             run.start_time = datetime.utcnow()
         # Set finish_time for terminal states
-        if status in ("completed", "failed", "timeout", "cancelled"):
+        if RunStatus.is_terminal(status):
             run.finish_time = datetime.utcnow()
         if results is not None:
             run.results = results
@@ -216,7 +217,7 @@ class RunRepository(BaseRepository[Run]):
             run.error = error
         if progress is not None:
             run.progress = progress
-        elif status == "completed":
+        elif status == RunStatus.COMPLETED:
             run.progress = 100
 
         self.db.commit()
@@ -430,8 +431,8 @@ class RunRepository(BaseRepository[Run]):
         if not run:
             return None
 
-        if run.status in ("pending", "running"):
-            run.status = "cancelled"
+        if run.status in (RunStatus.PENDING, RunStatus.RUNNING):
+            run.status = RunStatus.CANCELLED
             run.finish_time = datetime.utcnow()
             self.db.commit()
             self.db.refresh(run)
@@ -476,7 +477,7 @@ class RunRepository(BaseRepository[Run]):
         cutoff = datetime.utcnow() - timedelta(days=days)
 
         query = self.db.query(Run).filter(
-            Run.status.in_(["failed", "timeout"]),
+            Run.status.in_([RunStatus.FAILED, RunStatus.TIMEOUT]),
             Run.created_at >= cutoff,
         )
 

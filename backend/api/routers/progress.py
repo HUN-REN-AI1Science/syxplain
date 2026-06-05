@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from backend.api.sse.connection_manager import get_connection_manager
 from backend.core.config import get_compute_settings
+from backend.core.constants import RunStatus
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
 
@@ -214,7 +215,7 @@ async def receive_error(
                     detail=f"Run {run_id} not found",
                 )
 
-            run.status = "failed"
+            run.status = RunStatus.FAILED
             run.error = error.error
             slurm_job_ids = run.slurm_job_ids
             db.commit()
@@ -231,7 +232,7 @@ async def receive_error(
             await manager.broadcast_progress(
                 run_id=run_id,
                 progress=run.progress or 0,
-                status="failed",
+                status=RunStatus.FAILED,
                 error=error.error,
             )
 

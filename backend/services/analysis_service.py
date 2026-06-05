@@ -9,10 +9,11 @@ import asyncio
 import logging
 from typing import Any
 
+from backend.core.constants import RunStatus
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import File as DbFile
 from backend.infrastructure.database.models import Run
-from backend.services.file_service import FileService
+from backend.services.file_service import get_file_service
 from backend.services.orchestrator_service import AnalysisCancelledError
 
 logger = logging.getLogger(__name__)
@@ -51,10 +52,10 @@ def update_run_status(
             if run:
                 run.status = status
                 # Set start_time when transitioning to running
-                if status == "running" and run.start_time is None:
+                if status == RunStatus.RUNNING and run.start_time is None:
                     run.start_time = datetime.utcnow()
                 # Set finish_time for terminal states
-                if status in ("completed", "failed", "timeout", "cancelled"):
+                if RunStatus.is_terminal(status):
                     run.finish_time = datetime.utcnow()
                 if results:
                     run.results = results
@@ -64,10 +65,10 @@ def update_run_status(
                 if progress is not None:
                     run.progress = progress
                     final_progress = progress
-                elif status == "completed":
+                elif status == RunStatus.COMPLETED:
                     run.progress = 100
                     final_progress = 100
-                elif status in ("failed", "timeout", "cancelled"):
+                elif status in (RunStatus.FAILED, RunStatus.TIMEOUT, RunStatus.CANCELLED):
                     # Keep current progress for failed/timeout/cancelled
                     final_progress = run.progress or 0
                 db.commit()
@@ -146,7 +147,7 @@ async def _run_analysis(
 
     try:
         # Load data from DB
-        file_service = FileService()
+        file_service = get_file_service()
 
         with get_db_session() as db:
             db_file = (
@@ -186,14 +187,14 @@ async def _run_analysis(
 
     except asyncio.CancelledError:
         logger.info(f"Run {run_id} was cancelled")
-        update_run_status(run_id, "cancelled", error="Analysis cancelled by user")
+        update_run_status(run_id, RunStatus.CANCELLED, error="Analysis cancelled by user")
         raise
     except AnalysisCancelledError:
         logger.info(f"Run {run_id} was cancelled by user")
         # Don't overwrite — cancel_run already set status to "cancelled"
     except Exception as e:
         error_msg = str(e)
-        update_run_status(run_id, "failed", error=error_msg)
+        update_run_status(run_id, RunStatus.FAILED, error=error_msg)
         logger.error(f"Run {run_id} failed: {e}", exc_info=True)
 
 
@@ -228,7 +229,7 @@ def start_analysis_run(
         run = Run(
             problem_description=problem_desc,
             csv_filename=csv_filename,
-            status="pending",
+            status=RunStatus.PENDING,
             user_id=user_id,
             analysis_type=analysis_type,
         )
