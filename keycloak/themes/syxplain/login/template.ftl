@@ -10,6 +10,37 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="${url.resourcesPath}/css/syxplain.css">
+    <style>
+        /* Critical layout for the contact footer, inlined because Keycloak serves
+           the external CSS with a 30-day cache and an unchanged resource URL —
+           browsers with the old stylesheet would otherwise lay the contact block
+           out beside the card (flex row) and leave it unstyled. */
+        .syxplain-container { flex-direction: column; }
+        .syxplain-contact {
+            width: 100%;
+            max-width: 28rem;
+            margin-top: 1.5rem;
+            text-align: center;
+            font-size: 0.875rem;
+            color: var(--color-text-muted, #64748b);
+        }
+        .syxplain-contact-heading { margin: 0; }
+        .syxplain-contact-emails {
+            margin-top: 0.25rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem 0.5rem;
+        }
+        .syxplain-contact-link {
+            color: var(--color-brand-500, #0052cc);
+            font-weight: 500;
+            text-decoration: none;
+        }
+        .syxplain-contact-link:hover { text-decoration: underline; }
+        .syxplain-contact-sep { color: var(--color-text-muted, #64748b); }
+    </style>
 </head>
 <body>
     <div class="syxplain-container">
