@@ -52,7 +52,35 @@
                 </div>
             </#if>
         </div>
+
+        <div class="syxplain-contact">
+            <p class="syxplain-contact-heading">Contact the authors</p>
+            <p class="syxplain-contact-emails">
+                <a href="#" class="syxplain-contact-link" data-e="dWgubmVyLW51aEBkbmFsb3Iuc29sbG9o">[email&#160;protected]</a>
+                <span class="syxplain-contact-sep" aria-hidden="true">&middot;</span>
+                <a href="#" class="syxplain-contact-link" data-e="dWguYWR1Ym8taW51QGtpcnRhcC5pbHVz">[email&#160;protected]</a>
+            </p>
+        </div>
     </div>
+
+    <script>
+        // Each address is stored base64-encoded AND reversed, so no email-shaped
+        // string exists anywhere in the static HTML — not even inside decoded
+        // attributes — and no mailto: link is present until the user clicks.
+        // Users still see the address and get a single-click mail-client link.
+        (function () {
+            var links = document.querySelectorAll('.syxplain-contact-link');
+            Array.prototype.forEach.call(links, function (a) {
+                var addr = atob(a.getAttribute('data-e')).split('').reverse().join('');
+                a.textContent = addr;
+                a.setAttribute('aria-label', 'Send email to ' + addr);
+                a.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    window.location.href = 'mailto:' + addr;
+                });
+            });
+        })();
+    </script>
 </body>
 </html>
 </#macro>
