@@ -74,7 +74,16 @@
                     </div>
                     <#list social.providers as p>
                         <a href="${p.loginUrl}" class="syxplain-social-btn" id="social-${p.alias}">
-                            <#if p.iconClasses?has_content>
+                            <#if p.alias == "microsoft">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 21 21" aria-hidden="true">
+                                    <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                                    <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                                    <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                                    <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+                                </svg>
+                            <#elseif p.alias == "ai4science-login">
+                                <img src="${url.resourcesPath}/img/hunren_logo.png" width="18" height="18" alt="" aria-hidden="true" style="object-fit:contain;">
+                            <#elseif p.iconClasses?has_content>
                                 <i class="${p.iconClasses}"></i>
                             </#if>
                             <span>Sign in with ${p.displayName}</span>
