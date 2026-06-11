@@ -57,9 +57,14 @@ def create_dspy_model(
 
 
 def _web_search_extra_body(model_name: str) -> dict:
-    if "gemini" in model_name.lower():
-        return {"extra_body": {"tools": [{"type": "web_search_preview", "search_context_size": "medium"}]}}
-    return {}
+    # This helper is used exclusively by create_deep_research_model. Deep research
+    # models (both Gemini via the proxy and OpenAI o*-deep-research via the Responses
+    # API) require at least one of web_search_preview/mcp/file_search, so always attach
+    # the web search tool here. The Chat Completions "invalid tool type" rejection only
+    # affects the regular explanation models, which never call this helper.
+    return {
+        "extra_body": {"tools": [{"type": "web_search_preview", "search_context_size": "medium"}]}
+    }
 
 
 def create_deep_research_model(
