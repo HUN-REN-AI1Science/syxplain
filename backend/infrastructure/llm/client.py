@@ -56,15 +56,7 @@ def create_dspy_model(
     )
 
 
-def _web_search_extra_body() -> dict:
-    # This helper is used exclusively by create_deep_research_model. Deep research
-    # models (both Gemini via the proxy and OpenAI o*-deep-research via the Responses
-    # API) require at least one of web_search_preview/mcp/file_search, so always attach
-    # the web search tool here. The Chat Completions "invalid tool type" rejection only
-    # affects the regular explanation models, which never call this helper.
-    return {
-        "extra_body": {"tools": [{"type": "web_search_preview", "search_context_size": "medium"}]}
-    }
+_DEFAULT_DEEP_RESEARCH_MODEL = "o4-mini-deep-research"
 
 
 def create_deep_research_model(
@@ -86,15 +78,16 @@ def create_deep_research_model(
     """
     settings = get_settings().llm
 
+    # Deep research models require at least one of web_search_preview/mcp/file_search.
+    extra_body = {"tools": [{"type": "web_search_preview", "search_context_size": "medium"}]}
+
     if user_api_key:
         # User key: direct to OpenAI with selected model
-        effective_model = model_name or "o4-mini-deep-research"
-        extra_body = _web_search_extra_body()
         return dspy.LM(
-            model=f"openai/{effective_model}",
+            model=f"openai/{model_name or _DEFAULT_DEEP_RESEARCH_MODEL}",
             api_key=user_api_key,
             api_base=None,  # Use default OpenAI endpoint
-            **extra_body,
+            extra_body=extra_body,
         )
 
     # Server key: use configured settings
@@ -106,12 +99,11 @@ def create_deep_research_model(
     if not effective_model:
         # Parse from comma-separated list or fallback
         models = settings.get_deep_research_model_list()
-        effective_model = models[0] if models else "o4-mini-deep-research"
+        effective_model = models[0] if models else _DEFAULT_DEEP_RESEARCH_MODEL
 
-    extra_body = _web_search_extra_body(effective_model)
     return dspy.LM(
         model=f"openai/{effective_model}",
         api_key=settings.deep_research_api_key,
         api_base=settings.deep_research_api_base,
-        **extra_body,
+        extra_body=extra_body,
     )

@@ -148,14 +148,13 @@ def generate_equation_explanation(
         user_model: Optional user-specified model
 
     Returns:
-        JSON string with structured equation explanations
+        Dict with structured equation explanations (equations, summary, recommendation)
     """
     is_deep_analysis = deep_research_context and deep_research_context.get("equations")
 
-    # The explanation model is always a plain chat model (Gemini via user key, or the
-    # configured OpenAI proxy model like gpt-5.5). It only integrates citations already
-    # produced by the deep research search step — it never searches the web — so it must
-    # not receive web_search_preview (chat models reject it as an invalid tool type).
+    # The explanation step never searches the web — it only integrates citations already
+    # produced by the deep research step — so the plain chat model is used with no web
+    # search tool.
     lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
 
     # Deep analysis additionally enriches the project spec with the researched equations.
@@ -171,10 +170,8 @@ def generate_equation_explanation(
                 "Failed to parse project_spec_json for enhancement, proceeding with original"
             )
 
-        predictor = dspy.Predict(ExplainPySrEquationsDeep)
-
-    else:
-        predictor = dspy.Predict(ExplainPySrEquations)
+    signature = ExplainPySrEquationsDeep if is_deep_analysis else ExplainPySrEquations
+    predictor = dspy.Predict(signature)
 
     logger.info(f"Generating explanations. Deep Analysis: {is_deep_analysis}")
 
