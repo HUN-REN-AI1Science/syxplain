@@ -56,7 +56,7 @@ def create_dspy_model(
     )
 
 
-def _web_search_extra_body(model_name: str) -> dict:
+def _web_search_extra_body() -> dict:
     # This helper is used exclusively by create_deep_research_model. Deep research
     # models (both Gemini via the proxy and OpenAI o*-deep-research via the Responses
     # API) require at least one of web_search_preview/mcp/file_search, so always attach
@@ -89,7 +89,7 @@ def create_deep_research_model(
     if user_api_key:
         # User key: direct to OpenAI with selected model
         effective_model = model_name or "o4-mini-deep-research"
-        extra_body = _web_search_extra_body(effective_model)
+        extra_body = _web_search_extra_body()
         return dspy.LM(
             model=f"openai/{effective_model}",
             api_key=user_api_key,

@@ -152,16 +152,14 @@ def generate_equation_explanation(
     """
     is_deep_analysis = deep_research_context and deep_research_context.get("equations")
 
-    # Select appropriate model and signature
-    if is_deep_analysis:
-        # The explanation step only integrates citations already produced by the deep
-        # research search step (deep_research_equations) — it does not search the web
-        # itself. The configured explanation model is a plain chat model (e.g. gpt-5.5),
-        # which rejects web_search_preview as an invalid tool type, so omit it here for
-        # both Gemini (user key) and the OpenAI proxy (server key).
-        lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
+    # The explanation model is always a plain chat model (Gemini via user key, or the
+    # configured OpenAI proxy model like gpt-5.5). It only integrates citations already
+    # produced by the deep research search step — it never searches the web — so it must
+    # not receive web_search_preview (chat models reject it as an invalid tool type).
+    lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
 
-        # Enhance project spec with deep research results
+    # Deep analysis additionally enriches the project spec with the researched equations.
+    if is_deep_analysis:
         try:
             enhanced_project_spec = json.loads(project_spec_json)
             enhanced_project_spec["deep_research_equations"] = deep_research_context.get(
@@ -176,7 +174,6 @@ def generate_equation_explanation(
         predictor = dspy.Predict(ExplainPySrEquationsDeep)
 
     else:
-        lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
         predictor = dspy.Predict(ExplainPySrEquations)
 
     logger.info(f"Generating explanations. Deep Analysis: {is_deep_analysis}")
