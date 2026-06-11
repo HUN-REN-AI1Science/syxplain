@@ -154,16 +154,12 @@ def generate_equation_explanation(
 
     # Select appropriate model and signature
     if is_deep_analysis:
-        if user_api_key:
-            # User key = Gemini, no OpenAI-specific extra_body
-            lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
-        else:
-            # Server key = OpenAI proxy, can use web search tool
-            lm = create_dspy_model(
-                extra_body={
-                    "tools": [{"type": "web_search_preview", "search_context_size": "high"}]
-                },
-            )
+        # The explanation step only integrates citations already produced by the deep
+        # research search step (deep_research_equations) — it does not search the web
+        # itself. The configured explanation model is a plain chat model (e.g. gpt-5.5),
+        # which rejects web_search_preview as an invalid tool type, so omit it here for
+        # both Gemini (user key) and the OpenAI proxy (server key).
+        lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
 
         # Enhance project spec with deep research results
         try:
