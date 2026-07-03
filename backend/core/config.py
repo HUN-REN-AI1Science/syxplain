@@ -71,6 +71,14 @@ class LLMSettings:
         default_factory=lambda: os.environ.get("OPENAI_MODEL_NAME", "gpt-4o")
     )
 
+    # Small/cheap models for lightweight tasks (e.g. column description suggestions)
+    small_model_name: str = field(
+        default_factory=lambda: os.environ.get("SMALL_MODEL_NAME", "gpt-5-mini")
+    )
+    small_user_model_name: str = field(
+        default_factory=lambda: os.environ.get("SMALL_USER_MODEL_NAME", "gemini-2.5-flash")
+    )
+
     # Deep research settings
     deep_research_api_key: str = field(
         default_factory=lambda: os.environ.get("DEEP_RESEARCH_API_KEY", "")

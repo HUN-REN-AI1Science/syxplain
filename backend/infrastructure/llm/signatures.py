@@ -215,6 +215,42 @@ class DeepResearchEquations(dspy.Signature):
     )
 
 
+class GuessColumnDescriptions(dspy.Signature):
+    """
+    You are a data scientist helping a domain expert document a dataset.
+
+    You receive a project description, the target variable name, and a JSON array of
+    dataset column names. Infer what each column most likely represents in the context
+    of the project description.
+
+    Rules:
+    - Output EXACTLY one key for EVERY column name in the input array, spelled exactly
+      as given. Never omit a column and never leave a description empty.
+    - Each description: 1-2 sentences, never more than 3, at most ~40 words. Plain text.
+    - Include likely physical units or standard interpretations when inferable from the
+      name (e.g. "pH" -> soil/solution acidity; gene symbols -> marker meaning).
+    - If a name is uninterpretable, give your best generic guess based on the project
+      context — do not say "unknown" without offering a plausible interpretation.
+    - Do NOT describe the target variable unless it appears in the input array.
+
+    ### REQUIRED OUTPUT SCHEMA
+    Return STRICT JSON only — no markdown, no code fences, no commentary. Output must
+    parse with json.loads(). USE DOUBLE QUOTES for all keys and strings.
+
+    {
+        "<column_name>": "<1-2 sentence description>"
+    }
+    """
+
+    project_description: str = dspy.InputField(desc="Description of the project/problem")
+    target_variable: str = dspy.InputField(desc="Target variable name, or empty string")
+    columns_json: str = dspy.InputField(desc="JSON array of column names to describe")
+
+    descriptions_json: str = dspy.OutputField(
+        desc="JSON object mapping each input column name to a short description"
+    )
+
+
 class ExplainPySrEquationsDeep(dspy.Signature):
     """
     You are an agent who explains the output of symbolic regression with deep scientific research context.

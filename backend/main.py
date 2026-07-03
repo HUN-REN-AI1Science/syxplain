@@ -28,6 +28,7 @@ from backend.api.routers import (
     progress,
     runs,
     sharing,
+    suggestions,
 )
 from backend.api.sse.progress_sse import router as progress_sse_router
 from backend.core.config import get_settings
@@ -201,6 +202,7 @@ def create_app() -> FastAPI:
     app.include_router(progress.router, include_in_schema=False)
     app.include_router(progress_sse_router, include_in_schema=False)  # SSE
     app.include_router(sharing.router, include_in_schema=False)  # Before runs
+    app.include_router(suggestions.router, include_in_schema=False)
     app.include_router(runs.router, include_in_schema=False)
 
     # -------------------------------------------------------------------------
