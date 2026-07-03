@@ -7,17 +7,20 @@ Orchestrates LLM interactions for the application, including:
 - Deep research
 """
 
+import asyncio
 import json
 import logging
 from typing import Any
 
 import dspy
 
+from backend.core.config import get_settings
 from backend.infrastructure.llm.client import create_deep_research_model, create_dspy_model
 from backend.infrastructure.llm.signatures import (
     DeepResearchEquations,
     ExplainPySrEquations,
     ExplainPySrEquationsDeep,
+    GuessColumnDescriptions,
     PySrConfigGenerator,
 )
 from backend.infrastructure.monitoring.langfuse_service import flush_traces, observe, report_usage
@@ -79,6 +82,121 @@ def generate_pysr_config(
         logger.error(f"Error in generate_pysr_config: {e}")
         flush_traces()
         raise
+
+
+# Small-LLM context is limited, so column suggestions are requested in chunks.
+SUGGESTION_BATCH_SIZE = 8
+
+
+@observe(name="guess_column_descriptions_batch", as_type="generation")
+def guess_column_descriptions_batch(
+    project_description: str,
+    target_variable: str,
+    columns: list[str],
+    user_api_key: str | None = None,
+    user_model: str | None = None,
+) -> dict[str, str]:
+    """
+    Guesses short descriptions for one batch of column names.
+
+    Server keys use the small model from SMALL_MODEL_NAME; user keys use the
+    model the user selected (falling back to SMALL_USER_MODEL_NAME).
+
+    Args:
+        project_description: Description of the project/problem
+        target_variable: Target variable name (may be empty)
+        columns: Column names in this batch
+        user_api_key: Optional user-provided API key
+        user_model: Optional user-selected model (used with user_api_key)
+
+    Returns:
+        Dict mapping requested column names to non-empty descriptions
+        (columns the model omitted or left empty are absent).
+    """
+    settings = get_settings().llm
+    if user_api_key:
+        lm = create_dspy_model(
+            user_api_key=user_api_key,
+            user_model=user_model or settings.small_user_model_name,
+        )
+    else:
+        lm = create_dspy_model(model_name=settings.small_model_name)
+
+    predictor = dspy.Predict(GuessColumnDescriptions)
+
+    try:
+        with dspy.settings.context(lm=lm):
+            response = predictor(
+                project_description=project_description,
+                target_variable=target_variable,
+                columns_json=json.dumps(columns),
+            )
+
+        cleaned_json = clean_and_fix_json_string(response.descriptions_json)
+        parsed = json.loads(cleaned_json)
+        report_usage(lm)
+
+        requested = set(columns)
+        return {
+            col: desc.strip()
+            for col, desc in parsed.items()
+            if col in requested and isinstance(desc, str) and desc.strip()
+        }
+
+    except Exception as e:
+        logger.error(f"Error in guess_column_descriptions_batch: {e}")
+        flush_traces()
+        raise
+
+
+async def suggest_column_descriptions(
+    project_description: str,
+    target_variable: str,
+    columns: list[str],
+    user_api_key: str | None = None,
+    user_model: str | None = None,
+) -> tuple[dict[str, str], list[str]]:
+    """
+    Guesses descriptions for all columns, batching calls to the small model.
+
+    Batches run in parallel; batches that fail or return incomplete results are
+    retried once. Columns still missing afterwards are reported as failed rather
+    than silently omitted.
+
+    Returns:
+        (descriptions, failed_columns)
+    """
+    unique_columns = list(dict.fromkeys(columns))
+    descriptions: dict[str, str] = {}
+
+    async def run_batch(batch: list[str]) -> dict[str, str]:
+        return await asyncio.to_thread(
+            guess_column_descriptions_batch,
+            project_description,
+            target_variable,
+            batch,
+            user_api_key,
+            user_model,
+        )
+
+    async def run_pass(cols: list[str]) -> None:
+        batches = [
+            cols[i : i + SUGGESTION_BATCH_SIZE] for i in range(0, len(cols), SUGGESTION_BATCH_SIZE)
+        ]
+        results = await asyncio.gather(*(run_batch(b) for b in batches), return_exceptions=True)
+        for batch, result in zip(batches, results, strict=True):
+            if isinstance(result, BaseException):
+                logger.warning(f"Suggestion batch failed ({batch[:3]}...): {result}")
+            else:
+                descriptions.update(result)
+
+    await run_pass(unique_columns)
+    missing = [col for col in unique_columns if col not in descriptions]
+    if missing:
+        await run_pass(missing)
+
+    failed_columns = [col for col in unique_columns if col not in descriptions]
+    return descriptions, failed_columns
 
 
 @observe(name="deep_research_equations", as_type="generation")

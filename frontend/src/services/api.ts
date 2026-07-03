@@ -263,6 +263,29 @@ export const permissionsService = {
 };
 
 // ============================================================================
+// Suggestions Service
+// ============================================================================
+
+export interface SuggestDescriptionsResponse {
+  descriptions: Record<string, string>;
+  failed_columns: string[];
+  model: string;
+}
+
+export const suggestionsService = {
+  suggestDescriptions: (
+    data: {
+      project_description: string;
+      target_variable?: string;
+      columns: string[];
+      gemini_api_key?: string;
+      gemini_model?: string;
+    },
+    signal?: AbortSignal
+  ) => api.post<SuggestDescriptionsResponse>('/suggest-descriptions', data, { signal }),
+};
+
+// ============================================================================
 // Admin Service
 // ============================================================================
 

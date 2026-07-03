@@ -255,6 +255,14 @@ class ValidateKeysResponse(BaseModel):
     valid: bool
 
 
+class SuggestDescriptionsResponse(BaseModel):
+    """Response for automatic column description suggestions."""
+
+    descriptions: dict[str, str]
+    failed_columns: list[str] = Field(default_factory=list)
+    model: str
+
+
 # ============================================================================
 # Admin Dashboard Responses
 # ============================================================================

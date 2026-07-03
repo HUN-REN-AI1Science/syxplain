@@ -8,6 +8,7 @@ import { SelectButton, type SelectButtonChangeEvent } from 'primereact/selectbut
 import { Toast } from 'primereact/toast';
 import { configService, permissionsService } from '@services/api';
 import { useAuth } from '@contexts/AuthContext';
+import { useDescriptionSuggestions } from '@hooks/useDescriptionSuggestions';
 import {
   ExcludedColumnsWarning,
   ProjectDetailsSection,
@@ -56,6 +57,74 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   const [geminiValidationStatus, setGeminiValidationStatus] = useState<
     'idle' | 'validating' | 'valid' | 'invalid'
   >('idle');
+
+  // A column is "active" when it's neither the target nor excluded
+  const isActiveColumn = (col: string) =>
+    col !== targetVariable && (!excludedColumns || !excludedColumns.includes(col));
+
+  // Automatic column description suggestions (issue #45)
+  const canSuggest = hasHunrenAccess || geminiApiKey.trim().length > 0;
+  const lastSuggestedForRef = useRef('');
+
+  const applySuggestions = (descriptions: Record<string, string>) => {
+    // Functional update: never overwrite text the user typed while inference ran
+    setFeatureDescriptions((prev) => {
+      const next = { ...prev };
+      for (const [col, desc] of Object.entries(descriptions)) {
+        if (!next[col]?.trim()) next[col] = desc;
+      }
+      return next;
+    });
+  };
+
+  const {
+    status: suggestionStatus,
+    failedColumns,
+    errorMessage: suggestionError,
+    requestSuggestions,
+  } = useDescriptionSuggestions({ onDescriptions: applySuggestions });
+
+  const getEmptyActiveColumns = () =>
+    columns.filter((col) => isActiveColumn(col) && !featureDescriptions[col]?.trim());
+
+  const triggerSuggestions = (manual = false) => {
+    // Manual clicks always explain why nothing happened; the blur trigger stays silent
+    const explain = (detail: string) => {
+      if (manual) {
+        toast.current?.show({ severity: 'info', summary: 'Suggestions', detail });
+      }
+    };
+
+    if (mode !== 'form') return;
+    if (!canSuggest) {
+      explain('Enter your Gemini API key first to enable suggestions.');
+      return;
+    }
+    if (projectDescription.trim().length < 20) {
+      explain('Write a longer project description first (at least a sentence).');
+      return;
+    }
+    const emptyColumns = getEmptyActiveColumns();
+    if (emptyColumns.length === 0) {
+      explain('All feature descriptions are already filled in.');
+      return;
+    }
+
+    requestSuggestions({
+      project_description: projectDescription,
+      target_variable: targetVariable || undefined,
+      columns: emptyColumns,
+      gemini_api_key: !hasHunrenAccess ? geminiApiKey : undefined,
+      gemini_model: !hasHunrenAccess ? geminiModel || undefined : undefined,
+    });
+  };
+
+  const handleDescriptionBlur = () => {
+    // Only auto-trigger when the description changed since the last suggestion run
+    if (lastSuggestedForRef.current === projectDescription) return;
+    lastSuggestedForRef.current = projectDescription;
+    triggerSuggestions();
+  };
 
   // OpenAI API key state (for deep research only)
   const [openaiApiKey, setOpenaiApiKey] = useState('');
@@ -130,9 +199,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       return null;
     }
 
-    const activeColumns = columns.filter(
-      (col) => col !== targetVariable && (!excludedColumns || !excludedColumns.includes(col))
-    );
+    const activeColumns = columns.filter(isActiveColumn);
 
     const missingDescriptions = activeColumns.filter(
       (col) => !featureDescriptions[col] || featureDescriptions[col].trim() === ''
@@ -397,9 +464,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       }
     } else if (newMode === 'json' && mode === 'form') {
       // Form → JSON: build JSON from current form fields
-      const activeColumns = columns.filter(
-        (col) => col !== targetVariable && (!excludedColumns || !excludedColumns.includes(col))
-      );
+      const activeColumns = columns.filter(isActiveColumn);
       const features: Record<string, string> = {};
       activeColumns.forEach((col) => {
         if (featureDescriptions[col]) features[col] = featureDescriptions[col];
@@ -451,6 +516,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
           <ProjectDetailsSection
             projectDescription={projectDescription}
             onChange={setProjectDescription}
+            onBlur={handleDescriptionBlur}
           />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -469,6 +535,11 @@ const ProblemView: React.FC<ProblemViewProps> = ({
                 targetVariable={targetVariable}
                 featureDescriptions={featureDescriptions}
                 onChange={setFeatureDescriptions}
+                suggestionStatus={suggestionStatus}
+                suggestionError={suggestionError}
+                failedColumns={failedColumns}
+                canSuggest={canSuggest}
+                onSuggest={() => triggerSuggestions(true)}
               />
             </div>
           </div>

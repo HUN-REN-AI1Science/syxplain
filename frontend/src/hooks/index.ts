@@ -12,3 +12,10 @@ export { useRunProgress } from './useRunProgress';
 export type { UseRunProgressOptions, UseRunProgressReturn } from './useRunProgress';
 
 export { useIsMobile } from './useIsMobile';
+
+export { useDescriptionSuggestions } from './useDescriptionSuggestions';
+export type {
+  SuggestionStatus,
+  UseDescriptionSuggestionsOptions,
+  UseDescriptionSuggestionsResult,
+} from './useDescriptionSuggestions';

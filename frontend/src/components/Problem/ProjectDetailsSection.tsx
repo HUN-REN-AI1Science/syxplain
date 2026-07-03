@@ -10,11 +10,13 @@ import HelpButton from '@components/HelpButton';
 interface ProjectDetailsSectionProps {
   projectDescription: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
 }
 
 export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({
   projectDescription,
   onChange,
+  onBlur,
 }) => (
   <div className="bg-surface p-6 rounded-xl border border-[var(--color-border)] shadow-sm">
     <div className="flex items-start gap-3 mb-4">
@@ -66,6 +68,7 @@ export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({
         rows={6}
         value={projectDescription}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         placeholder="e.g., We want to predict soil phosphorus content based on chemical properties..."
       />
     </div>

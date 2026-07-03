@@ -105,6 +105,26 @@ class ValidateKeysRequest(BaseModel):
     openai_api_key: str | None = Field(default=None, description="OpenAI API key to validate")
 
 
+class SuggestDescriptionsRequest(BaseModel):
+    """Request schema for automatic column description suggestions."""
+
+    project_description: str = Field(
+        ..., min_length=10, description="Description of the project and analysis goals"
+    )
+    target_variable: str | None = Field(default=None, description="Target variable name")
+    columns: list[str] = Field(
+        ..., min_length=1, max_length=200, description="Column names to describe"
+    )
+    gemini_api_key: str | None = Field(
+        default=None,
+        description="User-provided Gemini API key (required without HUN-REN access)",
+    )
+    gemini_model: str | None = Field(
+        default=None,
+        description="Gemini model to use with the user-provided key",
+    )
+
+
 class FeedbackCategory(str, Enum):
     """Category of user feedback."""
 
