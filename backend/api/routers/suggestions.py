@@ -35,10 +35,12 @@ async def suggest_descriptions(
     their own Gemini API key (server keys are never used on their behalf).
 
     Returns:
-        SuggestDescriptionsResponse with descriptions and any failed columns
+        SuggestDescriptionsResponse with descriptions and any failed columns.
+        Per-batch LLM failures are retried once and then reported via
+        failed_columns rather than raising.
 
     Raises:
-        HTTPException: 400 if a required/invalid key, 502 if generation fails entirely
+        HTTPException: 400 for a missing/invalid key, 502 for unexpected errors
     """
     settings = get_settings().llm
 

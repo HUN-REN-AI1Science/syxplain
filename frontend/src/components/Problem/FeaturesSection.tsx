@@ -109,13 +109,15 @@ export const FeaturesSection: React.FC<FeaturesSectionProps> = ({
                   ? suggestionError || 'Could not generate suggestions.'
                   : `Could not generate suggestions for: ${failedColumns?.join(', ')}`}
               </span>
-              <Button
-                label="Retry"
-                size="small"
-                text
-                onClick={onSuggest}
-                className="shrink-0 whitespace-nowrap"
-              />
+              {onSuggest && (
+                <Button
+                  label="Retry"
+                  size="small"
+                  text
+                  onClick={onSuggest}
+                  className="shrink-0 whitespace-nowrap"
+                />
+              )}
             </div>
           }
           className="w-full"

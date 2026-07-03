@@ -110,6 +110,9 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       return;
     }
 
+    // Recorded only when a request is actually dispatched, so blurs that hit a
+    // guard (e.g. no key yet) can still auto-trigger later for the same text
+    lastSuggestedForRef.current = projectDescription;
     requestSuggestions({
       project_description: projectDescription,
       target_variable: targetVariable || undefined,
@@ -122,7 +125,6 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   const handleDescriptionBlur = () => {
     // Only auto-trigger when the description changed since the last suggestion run
     if (lastSuggestedForRef.current === projectDescription) return;
-    lastSuggestedForRef.current = projectDescription;
     triggerSuggestions();
   };
 
