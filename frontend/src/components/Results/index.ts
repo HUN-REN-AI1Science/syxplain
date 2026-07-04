@@ -14,6 +14,7 @@ export { default as PublicHeader } from './PublicHeader';
 
 // Result Display
 export { ResultContent } from './ResultContent';
+export { default as FailedRunReport } from './FailedRunReport';
 export { hasExplanationError } from './resultUtils';
 export { LegacyResultsFallback } from './LegacyResultsFallback';
 

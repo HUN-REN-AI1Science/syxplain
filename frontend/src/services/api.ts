@@ -8,6 +8,7 @@ import type {
   PaginatedResponse,
   RunSummary,
   RunDetails,
+  RunErrorDetails,
   UploadResponse,
   ProfileData,
   ProgressPhase,
@@ -128,6 +129,7 @@ export const runsService = {
       progress: number;
       results?: EquationResults | { pysr_explanations: string };
       error?: string;
+      error_details?: RunErrorDetails | null;
       public_share_token?: string | null;
       start_time?: string | null;
       finish_time?: string | null;

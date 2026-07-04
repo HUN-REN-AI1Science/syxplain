@@ -16,6 +16,12 @@ import pandas as pd
 
 from backend.core.config import get_compute_settings, get_slurm_settings
 from backend.core.constants import RunStatus
+from backend.core.error_classification import (
+    ErrorCategory,
+    build_error_details,
+    classify_exception,
+    describe_job_failure,
+)
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
 from backend.infrastructure.slurm import (
@@ -31,49 +37,6 @@ from backend.infrastructure.slurm.client import is_quota_error
 from backend.services.progress_service import ProgressTracker, _broadcast_progress_sync
 
 logger = logging.getLogger(__name__)
-
-
-def _format_user_facing_error(exc: Exception) -> str:
-    """Convert an exception into a user-friendly error message."""
-    try:
-        import litellm
-
-        if isinstance(exc, litellm.AuthenticationError):
-            return (
-                "API key authentication failed. "
-                "Please check that your API key is valid and has not been revoked."
-            )
-        if isinstance(exc, litellm.RateLimitError):
-            return (
-                "API rate limit or quota exceeded. "
-                "Your API account may have insufficient credits or has hit its usage limit. "
-                "Please check your account balance and try again."
-            )
-        if isinstance(exc, litellm.BudgetExceededError):
-            return (
-                "API budget exceeded. "
-                "Your API account has reached its spending limit. "
-                "Please increase your budget or add credits and try again."
-            )
-        if isinstance(exc, litellm.NotFoundError):
-            return (
-                "The selected AI model was not found. "
-                "It may have been deprecated or renamed. "
-                "Please try a different model."
-            )
-        if isinstance(exc, litellm.APIConnectionError):
-            return (
-                "Could not connect to the AI service. "
-                "Please check your internet connection and try again."
-            )
-        if isinstance(exc, litellm.Timeout):
-            return (
-                "The AI service request timed out. "
-                "This may be due to high demand. Please try again later."
-            )
-    except ImportError:
-        pass
-    return str(exc)
 
 
 @dataclass
@@ -185,6 +148,14 @@ class AnalysisOrchestrator:
                 timeout=self._config.compute_timeout,
                 on_state_change=on_state_change,
             )
+        except asyncio.TimeoutError as e:
+            hours = self._config.compute_timeout / 3600
+            raise ComputeTaskError(
+                f"The {task_name} computation did not finish within {hours:.0f} hours "
+                f"and was stopped. Try a smaller dataset, fewer features, or a quick analysis.",
+                category=ErrorCategory.RESOURCE_TIMEOUT,
+                task_type=task_name.lower(),
+            ) from e
         except SlurmBackendError as e:
             # Check if the run was already marked as failed by a worker callback
             # (e.g., PySR failed and reported via /api/internal/error)
@@ -279,12 +250,16 @@ class AnalysisOrchestrator:
             f"(type={context.analysis_type}, backend={self.backend.name})"
         )
 
+        # Track pipeline stage for error reporting on failure
+        stage = "initialization"
+
         try:
             # Update status to running
             self._update_run_status(run_id, RunStatus.RUNNING)
             await progress.update_progress_async("initialization", status="Initializing analysis")
 
             # Step 1: Data summary
+            stage = "data_analysis"
             await progress.update_progress_async("data_summary", status="Analyzing dataset")
             data_summary = self._generate_data_summary(context)
 
@@ -297,6 +272,7 @@ class AnalysisOrchestrator:
             )
 
             # Step 2: Generate PySR config using LLM
+            stage = "llm_configuration"
             await progress.update_progress_async(
                 "pysr_config_generation", status="Generating symbolic regression configuration"
             )
@@ -305,12 +281,14 @@ class AnalysisOrchestrator:
             )
 
             # Step 3: Submit compute tasks
+            stage = "compute"
             await progress.update_progress_async(
                 "compute_submission", status="Submitting compute tasks"
             )
             compute_results = await self._run_compute_tasks(context, pysr_config, progress)
 
             # Step 4: LLM explanation of results
+            stage = "llm_explanation"
             await progress.update_progress_async(
                 "llm_explanation", status="Generating explanations"
             )
@@ -318,12 +296,14 @@ class AnalysisOrchestrator:
 
             # Step 5: Optional deep research
             if context.analysis_type == "deep" and context.deep_research_model:
+                stage = "deep_research"
                 await progress.update_progress_async(
                     "deep_research", status="Performing deep research"
                 )
                 explanations = await self._run_deep_research(context, compute_results, explanations)
 
             # Step 6: Finalize and store results
+            stage = "finalization"
             await progress.update_progress_async("finalization", status="Finalizing results")
             final_results = self._compile_final_results(context, compute_results, explanations)
 
@@ -343,8 +323,16 @@ class AnalysisOrchestrator:
             raise
         except Exception as e:
             logger.error(f"Analysis failed for run {run_id}: {e}", exc_info=True)
-            error_msg = _format_user_facing_error(e)
-            self._update_run_status(run_id, RunStatus.FAILED, error=error_msg)
+            if isinstance(e, ComputeTaskError):
+                category, error_msg = e.category, str(e)
+                task_type = e.task_type
+            else:
+                category, error_msg = classify_exception(e)
+                task_type = None
+            error_details = build_error_details(category, stage=stage, exc=e, task_type=task_type)
+            self._update_run_status(
+                run_id, RunStatus.FAILED, error=error_msg, error_details=error_details
+            )
             raise OrchestratorError(f"Analysis failed: {error_msg}") from e
 
     def _generate_data_summary(self, context: AnalysisContext) -> dict[str, Any]:
@@ -614,11 +602,15 @@ class AnalysisOrchestrator:
         if shap_status.state == JobState.CANCELLED or pysr_status.state == JobState.CANCELLED:
             raise AnalysisCancelledError("Analysis cancelled by user")
 
-        if shap_status.state != JobState.COMPLETED:
-            raise OrchestratorError(f"SHAP task failed: {shap_status.error}")
-
-        if pysr_status.state != JobState.COMPLETED:
-            raise OrchestratorError(f"PySR task failed: {pysr_status.error}")
+        for task_name, task_status in (("SHAP", shap_status), ("PySR", pysr_status)):
+            if task_status.state != JobState.COMPLETED:
+                category, message = describe_job_failure(
+                    task_name,
+                    task_status.state.value,
+                    reason=task_status.message,
+                    error=task_status.error,
+                )
+                raise ComputeTaskError(message, category=category, task_type=task_name.lower())
 
         # Retrieve results
         shap_result = await self.backend.get_task_result(shap_job.job_id)
@@ -836,12 +828,22 @@ class AnalysisOrchestrator:
         status: str,
         results: dict[str, Any] | None = None,
         error: str | None = None,
+        error_details: dict[str, Any] | None = None,
     ) -> None:
         """Update run status in database and broadcast terminal states via SSE."""
         try:
             with get_db_session() as db:
                 run = db.query(Run).filter(Run.id == run_id).first()
                 if run:
+                    # First terminal state wins: keep the original error (e.g. the
+                    # worker callback's precise message) instead of overwriting it
+                    # with a later, wrapped version of the same failure.
+                    if RunStatus.is_terminal(run.status):
+                        logger.info(
+                            f"Run {run_id} already terminal ({run.status}), "
+                            f"skipping status update to {status}"
+                        )
+                        return
                     run.status = status
                     # Set start_time when transitioning to running
                     if status == RunStatus.RUNNING and run.start_time is None:
@@ -853,6 +855,8 @@ class AnalysisOrchestrator:
                         run.results = results
                     if error:
                         run.error = error
+                    if error_details:
+                        run.error_details = error_details
                     if status == RunStatus.COMPLETED:
                         run.progress = 100
                     db.commit()
@@ -873,6 +877,15 @@ class OrchestratorError(Exception):
     """Error during orchestration."""
 
     pass
+
+
+class ComputeTaskError(OrchestratorError):
+    """A compute task (SHAP/PySR) failed, with classification metadata."""
+
+    def __init__(self, message: str, category: str, task_type: str | None = None):
+        super().__init__(message)
+        self.category = category
+        self.task_type = task_type
 
 
 class AnalysisCancelledError(OrchestratorError):

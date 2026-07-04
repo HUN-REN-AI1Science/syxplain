@@ -89,6 +89,7 @@ class RunService:
             "status": run.status,
             "progress": run.progress or 0,
             "error": run.error,
+            "error_details": run.error_details,
             "results": run.results,
             "public_share_token": run.public_share_token,
             "start_time": run.start_time,
@@ -161,6 +162,7 @@ class RunService:
             "csv_metadata": csv_metadata,
             "analysis_type": run.analysis_type or "quick",
             "error": run.error,
+            "error_details": run.error_details,
         }
 
     def validate_run_request(

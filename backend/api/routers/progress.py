@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from backend.api.sse.connection_manager import get_connection_manager
 from backend.core.config import get_compute_settings
 from backend.core.constants import RunStatus
+from backend.core.error_classification import build_error_details, classify_error_message
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
 
@@ -215,8 +216,23 @@ async def receive_error(
                     detail=f"Run {run_id} not found",
                 )
 
+            # First terminal state wins (e.g. run already cancelled by user)
+            if RunStatus.is_terminal(run.status):
+                logger.info(
+                    f"[Run {run_id[:8]}] Already terminal ({run.status}), "
+                    f"ignoring worker error report"
+                )
+                return {"status": "ok", "run_status": run.status}
+
+            details = error.details or {}
             run.status = RunStatus.FAILED
             run.error = error.error
+            run.error_details = build_error_details(
+                classify_error_message(error.error),
+                stage="compute",
+                traceback=details.get("traceback"),
+                task_type=details.get("task_type"),
+            )
             slurm_job_ids = run.slurm_job_ids
             db.commit()
             logger.info(f"[Run {run_id[:8]}] Marked as failed: {error.error}")

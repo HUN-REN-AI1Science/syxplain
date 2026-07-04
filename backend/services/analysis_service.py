@@ -30,6 +30,7 @@ def update_run_status(
     status: str,
     results: dict[str, Any] | None = None,
     error: str | None = None,
+    error_details: dict[str, Any] | None = None,
     progress: int | None = None,
 ) -> None:
     """
@@ -40,6 +41,7 @@ def update_run_status(
         status: New status value
         results: Optional results dictionary
         error: Optional error message
+        error_details: Optional structured error info (category, stage, traceback)
         progress: Optional progress percentage
     """
     from datetime import datetime
@@ -50,6 +52,14 @@ def update_run_status(
         with get_db_session() as db:
             run = db.query(Run).filter(Run.id == run_id).first()
             if run:
+                # First terminal state wins: don't overwrite the original
+                # failure/cancellation with a later, wrapped version of it
+                if RunStatus.is_terminal(run.status):
+                    logger.info(
+                        f"Run {run_id} already terminal ({run.status}), "
+                        f"skipping status update to {status}"
+                    )
+                    return
                 run.status = status
                 # Set start_time when transitioning to running
                 if status == RunStatus.RUNNING and run.start_time is None:
@@ -61,6 +71,8 @@ def update_run_status(
                     run.results = results
                 if error:
                     run.error = error
+                if error_details:
+                    run.error_details = error_details
                 # Set progress based on status or explicit value
                 if progress is not None:
                     run.progress = progress
@@ -193,8 +205,15 @@ async def _run_analysis(
         logger.info(f"Run {run_id} was cancelled by user")
         # Don't overwrite — cancel_run already set status to "cancelled"
     except Exception as e:
-        error_msg = str(e)
-        update_run_status(run_id, RunStatus.FAILED, error=error_msg)
+        from backend.core.error_classification import build_error_details, classify_exception
+
+        category, error_msg = classify_exception(e)
+        update_run_status(
+            run_id,
+            RunStatus.FAILED,
+            error=error_msg,
+            error_details=build_error_details(category, stage="initialization", exc=e),
+        )
         logger.error(f"Run {run_id} failed: {e}", exc_info=True)
 
 

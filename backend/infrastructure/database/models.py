@@ -58,6 +58,8 @@ class Run(Base):
     problem_description = Column(JSONB, nullable=False)
     csv_filename = Column(String, nullable=False)  # Store filename for reference
     error = Column(Text, nullable=True)
+    # Structured failure info: {"category", "stage", "task_type", "technical", "traceback"}
+    error_details = Column(JSONB, nullable=True)
     results = Column(JSONB, nullable=True)
     public_share_token = Column(String(64), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)

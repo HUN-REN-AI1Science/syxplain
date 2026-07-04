@@ -29,6 +29,7 @@ export interface RunSummary {
   analysis_type: AnalysisType;
   start_time: string | null;
   finish_time: string | null;
+  error?: string | null;
 }
 
 export interface RunDetails {
@@ -42,6 +43,16 @@ export interface RunDetails {
   csv_metadata: CsvMetadata | null;
   analysis_type: AnalysisType | null;
   error: string | null;
+  error_details?: RunErrorDetails | null;
+}
+
+/** Structured failure info stored on a failed run (mirrors backend error_classification) */
+export interface RunErrorDetails {
+  category?: string | null;
+  stage?: string | null;
+  task_type?: string | null;
+  technical?: string | null;
+  traceback?: string | null;
 }
 
 export type RunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'timeout' | 'cancelled';

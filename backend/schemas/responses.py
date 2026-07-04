@@ -30,6 +30,7 @@ class RunStatusResponse(BaseModel):
     status: str
     progress: int = Field(ge=0, le=100)
     error: str | None = None
+    error_details: dict[str, Any] | None = None
     results: dict[str, Any] | None = None
     public_share_token: str | None = None
     start_time: datetime | None = None
@@ -49,6 +50,7 @@ class RunSummary(BaseModel):
     analysis_type: str = "quick"
     start_time: datetime | None = None
     finish_time: datetime | None = None
+    error: str | None = None
 
     class Config:
         from_attributes = True

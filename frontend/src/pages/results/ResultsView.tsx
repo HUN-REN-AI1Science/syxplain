@@ -5,7 +5,6 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Button } from 'primereact/button';
-import { Message } from 'primereact/message';
 import { Toast } from 'primereact/toast';
 import { Dialog } from 'primereact/dialog';
 import {
@@ -14,6 +13,7 @@ import {
   AnalysisProgressView,
   ResultsHeader,
   ResultContent,
+  FailedRunReport,
   LoadingSpinner,
   hasExplanationError,
 } from '@components/Results';
@@ -21,7 +21,7 @@ import type { ResultsStatus } from '@components/Results';
 import { runsService } from '@services/api';
 import { useProgressInterpolation } from '@hooks/useProgressInterpolation';
 import { useRunProgress } from '@hooks/useRunProgress';
-import type { ProgressPhase, EquationResults } from '@/types';
+import type { ProgressPhase, EquationResults, RunErrorDetails } from '@/types';
 
 // ============================================================================
 // Types
@@ -53,6 +53,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
   const [cancelling, setCancelling] = useState(false);
   const [duration, setDuration] = useState<string | null>(null);
   const [targetVariable, setTargetVariable] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<RunErrorDetails | null>(null);
 
   // Refs
   const toast = useRef<Toast>(null);
@@ -84,18 +85,23 @@ const ResultsView: React.FC<ResultsViewProps> = ({
 
   // Derived state (declared early so hooks below can reference it)
   const isCompleted = status === 'completed';
+  const isTerminal = ['completed', 'failed', 'timeout', 'cancelled'].includes(status);
 
-  // Fetch final results from API when run completes.
-  // Always fetch from API on completion — SSE intermediate results
-  // (from compute phase) lack LLM explanations and summary.
+  // Fetch run details from API for any terminal state.
+  // Completed: SSE intermediate results (from compute phase) lack LLM
+  // explanations and summary, so always fetch the final results.
+  // Failed/timeout/cancelled: fetch structured error details for the report.
   useEffect(() => {
-    if (isCompleted && runId) {
+    if (isTerminal && runId) {
       runsService
         .getById(runId)
         .then((response) => {
-          if (response.data.results) {
+          // Only show results for completed runs — failed runs may hold
+          // partial compute output that the results view can't render
+          if (response.data.status === 'completed' && response.data.results) {
             setResult(response.data.results as EquationResults | string);
           }
+          setErrorDetails(response.data.error_details || null);
           setShareToken(response.data.public_share_token || null);
           setTargetVariable(response.data.target_variable || null);
           // Compute duration from timing data
@@ -114,7 +120,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
         })
         .catch(console.error);
     }
-  }, [isCompleted, runId]);
+  }, [isTerminal, runId]);
 
   // Custom hook for smooth progress interpolation and step description
   const { displayProgress, currentStepDescription, isInQueuePhase } = useProgressInterpolation({
@@ -247,9 +253,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({
   // Check if the LLM explanation step failed (results are incomplete)
   const explanationFailed = hasExplanationError(result);
 
-  // Only show error for terminal failure states, not transient SSE messages
-  const isTerminalError =
-    !!error && (status === 'failed' || status === 'timeout' || status === 'cancelled');
+  // Terminal failure states (shown even when no error string was recorded,
+  // so failed runs opened from history always get a report)
+  const isTerminalError = status === 'failed' || status === 'timeout' || status === 'cancelled';
 
   // Determine header status
   const getHeaderStatus = (): ResultsStatus => {
@@ -320,15 +326,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({
       {fromHistory && runId && <RunSettingsPanel runId={runId} />}
 
       <div>
-        {/* Error / Cancelled State - only for terminal failures, not transient messages */}
+        {/* Error / Cancelled State - detailed failure report for terminal failures */}
         {isTerminalError && (
-          <div className="mb-6">
-            <Message
-              severity={status === 'cancelled' ? 'warn' : 'error'}
-              text={status === 'cancelled' ? error : `Analysis Failed: ${error}`}
-              className="w-full"
-            />
-          </div>
+          <FailedRunReport status={status} error={error} errorDetails={errorDetails} />
         )}
 
         {/* Loading State - Progress bar for starting, processing, or initial connection */}
@@ -430,8 +430,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({
         </div>
       </Dialog>
 
-      {/* Danger Zone - Delete Button */}
-      {isCompleted && (
+      {/* Danger Zone - Delete Button (any finished run, including failed ones) */}
+      {isTerminal && initialFetchDone && (
         <div className="mt-12 pt-6 border-t border-[var(--color-border)]">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>

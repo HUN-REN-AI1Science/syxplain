@@ -217,6 +217,7 @@ def list_runs(
                 analysis_type=run.analysis_type or "quick",
                 start_time=run.start_time,
                 finish_time=run.finish_time,
+                error=run.error,
             )
         )
 

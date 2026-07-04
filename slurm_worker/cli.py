@@ -181,7 +181,10 @@ class WorkerRunner:
         logger.error(error_trace)
 
         # Report error
-        self.reporter.on_error(error_msg, {"traceback": error_trace})
+        self.reporter.on_error(
+            error_msg,
+            {"traceback": error_trace, "task_type": self.config.task_type},
+        )
 
         # Write error output
         self.file_handler.write_error(

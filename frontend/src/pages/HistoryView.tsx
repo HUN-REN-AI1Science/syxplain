@@ -135,7 +135,17 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
   const statusTemplate = (rowData: RunSummary) => {
     const config = STATUS_CONFIG[rowData.status] || { severity: 'info', label: rowData.status };
 
-    if (rowData.status === 'running' || rowData.status === 'pending') {
+    // Tooltip: progress for active runs, error preview for failed ones
+    const tooltipContent =
+      rowData.status === 'running' || rowData.status === 'pending'
+        ? `${rowData.progress || 0}% complete`
+        : (rowData.status === 'failed' || rowData.status === 'timeout') && rowData.error
+          ? rowData.error.length > 200
+            ? `${rowData.error.slice(0, 200)}…`
+            : rowData.error
+          : null;
+
+    if (tooltipContent) {
       const tagId = `status-tag-${rowData.id.replace(/-/g, '')}`;
       return (
         <>
@@ -145,11 +155,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
             className={tagId}
             style={{ cursor: 'help' }}
           />
-          <Tooltip
-            target={`.${tagId}`}
-            content={`${rowData.progress || 0}% complete`}
-            position="top"
-          />
+          <Tooltip target={`.${tagId}`} content={tooltipContent} position="top" />
         </>
       );
     }
@@ -176,15 +182,24 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
     return formatDuration(rowData.start_time, rowData.finish_time);
   };
 
-  const actionTemplate = (rowData: RunSummary) => (
-    <Button
-      label="View"
-      icon="pi pi-eye"
-      size="small"
-      onClick={() => onSelectRun(rowData.id)}
-      disabled={rowData.status !== 'completed'}
-    />
-  );
+  const actionTemplate = (rowData: RunSummary) => {
+    const isFinished = ['completed', 'failed', 'timeout', 'cancelled'].includes(rowData.status);
+    return (
+      <Button
+        label="View"
+        icon="pi pi-eye"
+        size="small"
+        onClick={() => onSelectRun(rowData.id)}
+        disabled={!isFinished}
+        tooltip={
+          rowData.status === 'failed' || rowData.status === 'timeout'
+            ? 'See what went wrong'
+            : undefined
+        }
+        tooltipOptions={{ position: 'left' }}
+      />
+    );
+  };
 
   return (
     <div className="p-4 sm:p-6">
@@ -214,8 +229,9 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
 
             <h4>Navigating Your History</h4>
             <p>
-              Click <strong>View</strong> on any completed run to see results. Use filters to find
-              specific runs by status or analysis type.
+              Click <strong>View</strong> on any finished run — completed runs show their results,
+              while failed runs show what went wrong and how to fix it. Use filters to find specific
+              runs by status or analysis type.
             </p>
           </HelpButton>
         </div>
