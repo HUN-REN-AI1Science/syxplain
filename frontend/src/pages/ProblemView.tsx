@@ -229,7 +229,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       toast.current?.show({
         severity: 'error',
         summary: 'Validation Error',
-        detail: 'At least one feature column is required. Restore a removed column to continue.',
+        detail: 'At least one feature column (besides the target) is required to run the analysis.',
       });
       return null;
     }
@@ -494,10 +494,16 @@ const ProblemView: React.FC<ProblemViewProps> = ({
         if (parsed.features) {
           setFeatureDescriptions(parsed.features);
           // The JSON's feature set is authoritative: selectable columns absent
-          // from it are treated as removed (auto-excluded stay in their own bucket)
+          // from it are treated as removed (auto-excluded stay in their own bucket).
+          // Fall back to the current target when the JSON omits one, and use an
+          // own-property check so a column named e.g. "toString" isn't mistaken
+          // for a present feature.
+          const importedTarget = parsed.target_variable || targetVariable;
           setRemovedColumns(
             columns.filter(
-              (col) => isSelectableFeature(col, parsed.target_variable) && !(col in parsed.features)
+              (col) =>
+                isSelectableFeature(col, importedTarget) &&
+                !Object.prototype.hasOwnProperty.call(parsed.features, col)
             )
           );
         }
