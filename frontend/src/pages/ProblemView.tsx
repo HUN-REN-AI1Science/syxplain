@@ -48,6 +48,8 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   const [projectDescription, setProjectDescription] = useState('');
   const [targetVariable, setTargetVariable] = useState('');
   const [featureDescriptions, setFeatureDescriptions] = useState<Record<string, string>>({});
+  // Columns the user manually removed from the analysis (issue #49)
+  const [removedColumns, setRemovedColumns] = useState<string[]>([]);
 
   // Gemini API key state (for users without HUN-REN access)
   const [geminiApiKey, setGeminiApiKey] = useState('');
@@ -58,9 +60,31 @@ const ProblemView: React.FC<ProblemViewProps> = ({
     'idle' | 'validating' | 'valid' | 'invalid'
   >('idle');
 
-  // A column is "active" when it's neither the target nor excluded
-  const isActiveColumn = (col: string) =>
-    col !== targetVariable && (!excludedColumns || !excludedColumns.includes(col));
+  // A column can be a feature when it's neither the target nor auto-excluded.
+  // `target` is a param so the JSON import path can test against its own target.
+  const isSelectableFeature = (col: string, target: string = targetVariable) =>
+    col !== target && !excludedColumns?.includes(col);
+
+  // "Active" narrows that to columns the user hasn't removed
+  const isActiveColumn = (col: string) => isSelectableFeature(col) && !removedColumns.includes(col);
+
+  // Single source of truth for the feature columns in play
+  const activeColumns = columns.filter(isActiveColumn);
+
+  const handleRemoveColumn = (col: string) => {
+    setRemovedColumns((prev) => (prev.includes(col) ? prev : [...prev, col]));
+  };
+
+  const handleRestoreColumn = (col: string) => {
+    setRemovedColumns((prev) => prev.filter((c) => c !== col));
+  };
+
+  // Selecting a column as target always re-includes it, so a removed column
+  // picked from the dropdown can't stay in the removed list
+  const handleTargetChange = (value: string) => {
+    setTargetVariable(value);
+    setRemovedColumns((prev) => prev.filter((c) => c !== value));
+  };
 
   // Automatic column description suggestions (issue #45)
   const canSuggest = hasHunrenAccess || geminiApiKey.trim().length > 0;
@@ -85,7 +109,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   } = useDescriptionSuggestions({ onDescriptions: applySuggestions });
 
   const getEmptyActiveColumns = () =>
-    columns.filter((col) => isActiveColumn(col) && !featureDescriptions[col]?.trim());
+    activeColumns.filter((col) => !featureDescriptions[col]?.trim());
 
   const triggerSuggestions = (manual = false) => {
     // Manual clicks always explain why nothing happened; the blur trigger stays silent
@@ -201,7 +225,14 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       return null;
     }
 
-    const activeColumns = columns.filter(isActiveColumn);
+    if (activeColumns.length === 0) {
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Validation Error',
+        detail: 'At least one feature column is required. Restore a removed column to continue.',
+      });
+      return null;
+    }
 
     const missingDescriptions = activeColumns.filter(
       (col) => !featureDescriptions[col] || featureDescriptions[col].trim() === ''
@@ -460,13 +491,21 @@ const ProblemView: React.FC<ProblemViewProps> = ({
         const parsed = JSON.parse(jsonContent);
         if (parsed.project_description) setProjectDescription(parsed.project_description);
         if (parsed.target_variable) setTargetVariable(parsed.target_variable);
-        if (parsed.features) setFeatureDescriptions(parsed.features);
+        if (parsed.features) {
+          setFeatureDescriptions(parsed.features);
+          // The JSON's feature set is authoritative: selectable columns absent
+          // from it are treated as removed (auto-excluded stay in their own bucket)
+          setRemovedColumns(
+            columns.filter(
+              (col) => isSelectableFeature(col, parsed.target_variable) && !(col in parsed.features)
+            )
+          );
+        }
       } catch {
         // Invalid JSON — leave form as-is
       }
     } else if (newMode === 'json' && mode === 'form') {
       // Form → JSON: build JSON from current form fields
-      const activeColumns = columns.filter(isActiveColumn);
       const features: Record<string, string> = {};
       activeColumns.forEach((col) => {
         if (featureDescriptions[col]) features[col] = featureDescriptions[col];
@@ -527,15 +566,17 @@ const ProblemView: React.FC<ProblemViewProps> = ({
                 columns={columns}
                 targetVariable={targetVariable}
                 nanCounts={nanCounts}
-                onChange={setTargetVariable}
+                onChange={handleTargetChange}
               />
             </div>
 
             <div className="lg:col-span-2">
               <FeaturesSection
-                columns={columns}
-                targetVariable={targetVariable}
+                activeColumns={activeColumns}
                 featureDescriptions={featureDescriptions}
+                removedColumns={removedColumns}
+                onRemoveColumn={handleRemoveColumn}
+                onRestoreColumn={handleRestoreColumn}
                 onChange={setFeatureDescriptions}
                 suggestionStatus={suggestionStatus}
                 suggestionError={suggestionError}
