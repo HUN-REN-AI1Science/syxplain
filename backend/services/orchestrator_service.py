@@ -6,15 +6,21 @@ managing the complete analysis pipeline from data ingestion to explanation.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 import pandas as pd
 
-from backend.core.config import get_compute_settings, get_slurm_settings
+from backend.core.config import (
+    get_compute_settings,
+    get_discovery_settings,
+    get_slurm_settings,
+)
 from backend.core.constants import RunStatus
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
@@ -28,13 +34,33 @@ from backend.infrastructure.slurm import (
     get_slurm_backend,
 )
 from backend.infrastructure.slurm.client import is_quota_error
+from backend.services.discovery.session import (
+    ALLOWED_BINARY,
+    ALLOWED_UNARY,
+    DiscoveryBudget,
+    DiscoverySession,
+)
 from backend.services.progress_service import ProgressTracker, _broadcast_progress_sync
 
 logger = logging.getLogger(__name__)
 
 
-def _format_user_facing_error(exc: Exception) -> str:
+_DSPY_ERROR_MESSAGES = {
+    "LMAuthError": "API key authentication failed. Please check that your API key is valid and has not been revoked.",
+    "LMBillingError": "API budget exceeded. Your API account has reached its spending limit. Please add credits and try again.",
+    "LMRateLimitError": "API rate limit or quota exceeded. Please check your account limits and try again later.",
+    "LMUnsupportedModelError": "The selected AI model was not found or is not supported. Please try a different model.",
+    "LMTimeoutError": "The AI service request timed out. This may be due to high demand. Please try again later.",
+    "LMTransportError": "Could not connect to the AI service. Please check the connection and try again.",
+    "LMServerError": "The AI service returned a server error. Please try again later.",
+}
+
+
+def _format_user_facing_error(exc: BaseException) -> str:
     """Convert an exception into a user-friendly error message."""
+    for cls in type(exc).__mro__:  # DSPy >= 3.4 wraps provider errors in its own types
+        if cls.__name__ in _DSPY_ERROR_MESSAGES:
+            return _DSPY_ERROR_MESSAGES[cls.__name__]
     try:
         import litellm
 
@@ -73,7 +99,7 @@ def _format_user_facing_error(exc: Exception) -> str:
             )
     except ImportError:
         pass
-    return str(exc)
+    return str(exc) or type(exc).__name__
 
 
 @dataclass
@@ -109,15 +135,16 @@ class AnalysisOrchestrator:
     Orchestrates the complete analysis workflow.
 
     Handles the coordination between:
-    1. Compute-intensive tasks (SHAP, PySR) on the Slurm cluster
-    2. LLM operations (config generation, explanation) on main backend
+    1. The discovery agent and classic-model fitting (in this process)
+    2. PySR searches on the Slurm cluster (launched by the orchestrator and the agent)
+    3. LLM operations (config generation, explanation) on main backend
 
     The workflow is:
     1. Data preparation
-    2. LLM generates PySR config
-    3. Submit compute tasks (SHAP interactions, PySR)
-    4. Wait for compute completion
-    5. LLM explains results
+    2. LLM generates the config of a baseline PySR search, which is submitted
+    3. Discovery agent fits classic laws, diagnoses failures and steers more PySR searches
+    4. Every model is scored on held-out data
+    5. LLM explains results (with the agent's notebook as context)
     6. (Optional) Deep research with o4-mini
     7. Store final results
     """
@@ -171,7 +198,7 @@ class AnalysisOrchestrator:
 
         Args:
             job_id: Internal job ID
-            task_name: Human-readable name (SHAP/PySR) for logging
+            task_name: Human-readable name (e.g. pysr_2) for logging
             run_id: Run ID for DB status checks
             on_state_change: Optional callback for state transitions
 
@@ -304,35 +331,33 @@ class AnalysisOrchestrator:
                 context, data_summary, visualizations_b64=feature_visualizations
             )
 
-            # Step 3: Submit compute tasks
-            await progress.update_progress_async(
-                "compute_submission", status="Submitting compute tasks"
-            )
-            compute_results = await self._run_compute_tasks(context, pysr_config, progress)
+            # Step 3: Agentic discovery (baseline PySR search + agent-driven loop)
+            discovery_results = await self._run_discovery(context, pysr_config, progress)
+            warnings = discovery_results.pop("warnings", [])
 
-            # Step 4: LLM explanation of results
-            await progress.update_progress_async(
-                "llm_explanation", status="Generating explanations"
-            )
-            explanations = await self._generate_explanations(context, compute_results, data_summary)
+            # The discovery brief is complete on its own: persist it before narration,
+            # so a failing explanation step can never lose it.
+            await asyncio.to_thread(self._store_results, run_id, discovery_results)
 
-            # Step 5: Optional deep research
-            if context.analysis_type == "deep" and context.deep_research_model:
-                await progress.update_progress_async(
-                    "deep_research", status="Performing deep research"
-                )
-                explanations = await self._run_deep_research(context, compute_results, explanations)
+            # Step 4: Narration (best-effort for every key type)
+            explanations = await self._narrate(context, discovery_results, progress, warnings)
 
-            # Step 6: Finalize and store results
+            # Step 5: Finalize and store results
             await progress.update_progress_async("finalization", status="Finalizing results")
-            final_results = self._compile_final_results(context, compute_results, explanations)
+            final_results = self._compile_final_results(
+                context, discovery_results, explanations, warnings
+            )
 
-            # Save artifacts (including visualizations from compute results)
-            visualizations = compute_results.get("visualizations", [])
+            visualizations = [
+                {"filename": f"feature_{i + 1}_vs_target.png", "content_b64": b64}
+                for i, b64 in enumerate(feature_visualizations)
+            ]
             self._save_artifacts(run_id, final_results, progress, visualizations=visualizations)
 
             # Mark as completed (also broadcasts via SSE)
-            self._update_run_status(run_id, RunStatus.COMPLETED, results=final_results)
+            if not self._update_run_status(run_id, RunStatus.COMPLETED, results=final_results):
+                self._update_run_status(run_id, RunStatus.FAILED, error="Failed to store results")
+                raise OrchestratorError("Failed to store results")
 
             logger.info(f"Analysis completed successfully for run {run_id}")
             return final_results
@@ -520,255 +545,456 @@ class AnalysisOrchestrator:
 
         return config
 
-    async def _run_compute_tasks(
+    def _discovery_budget(self, analysis_type: str) -> DiscoveryBudget:
+        settings = get_discovery_settings()
+        limits = settings.for_type(analysis_type)
+        budget = DiscoveryBudget(
+            max_iters=limits["max_iters"],
+            max_pysr_runs=limits["max_pysr_runs"],
+            max_concurrent_pysr=limits["max_concurrent_pysr"],
+            wall_clock_s=limits["wall_clock_s"],
+            pysr_timeout_s=limits["pysr_timeout_s"],
+            max_tool_calls=limits["max_tool_calls"],
+        )
+        if not settings.enabled:
+            budget.max_pysr_runs = 1  # baseline search only
+        return budget
+
+    def _discovery_project(
+        self, context: AnalysisContext, session: DiscoverySession
+    ) -> dict[str, Any]:
+        """Project description for the agent, with features keyed by their expression alias."""
+        desc = context.problem_description
+        features = desc.get("features", {}) or {}
+        return {
+            "project_description": desc.get("project_description", ""),
+            "target": {"alias": session.target_alias, "column": context.target_column},
+            "features": {
+                alias: {
+                    "column": session.column_of[alias],
+                    "description": features.get(session.column_of[alias], ""),
+                    "kind": session.kinds.get(alias, "continuous"),
+                }
+                for alias in session.features
+            },
+            "excluded_columns": session.excluded_columns,
+        }
+
+    async def _run_discovery(
         self,
         context: AnalysisContext,
         pysr_config: dict[str, Any],
         progress: ProgressTracker,
     ) -> dict[str, Any]:
         """
-        Submit and monitor compute tasks on the backend.
+        Agentic equation discovery (the run controller's EXPLORE..SELECT phases).
 
-        Runs SHAP and PySR tasks, possibly in parallel depending
-        on available resources.
+        LAUNCH: the baseline PySR search (and, in deep mode, the literature scout) start
+        first so the Slurm queue and the research model overlap with profiling and the
+        agent. PROFILE runs in a separate process. EXPLORE is the agent's budget. SETTLE
+        waits for searches, RECONCILE makes the agent's report consistent with what
+        finished, and SELECT/PERSIST build the brief. Whatever happens to the agent, the
+        run ends with the baseline equations plus classic baselines; on any failure or
+        cancellation every launched search is cancelled.
         """
-        compute_settings = get_compute_settings()
-        results = {}
+        from backend.api.sse.connection_manager import get_connection_manager
+        from backend.services.discovery.literature import literature_features, run_literature
+        from backend.services.discovery.reconcile import reconcile
+        from backend.services.discovery.report import build_results
 
-        # Report HPC connection phase (user-friendly)
-        await progress.update_progress_async(
-            "hpc_connecting", status="Connecting to computing cluster"
+        settings = get_discovery_settings()
+        budget = self._discovery_budget(context.analysis_type)
+        manager = get_connection_manager()
+        warnings: list[dict[str, str]] = []
+
+        async def on_event(event: dict[str, Any]) -> None:
+            await manager.broadcast_event(context.run_id, event)
+
+        descriptions = context.problem_description.get("features", {}) or {}
+        launcher = _SlurmSearchLauncher(self, context, progress)
+        session = await asyncio.to_thread(
+            DiscoverySession,
+            context.data,
+            context.target_column,
+            context.predictor_columns,
+            budget,
+            launcher,
+            on_event,
+            descriptions=descriptions,
+            sparse_column_threshold=settings.sparse_column_threshold,
+            max_categorical_levels=settings.max_categorical_levels,
         )
 
-        # Build task inputs
-        shap_task_input = TaskInput(
-            task_type="shap",
-            run_id=context.run_id,
-            input_data={
-                "data": context.data[[context.target_column, *context.predictor_columns]].to_dict(
-                    orient="split"
-                ),
-                "target_column": context.target_column,
-                "predictor_columns": context.predictor_columns,
-                "generate_visualizations": True,
-            },
-            callback_url=compute_settings.worker_callback_url,
-            callback_token=compute_settings.worker_callback_token,
-        )
-
-        pysr_task_input = TaskInput(
-            task_type="pysr",
-            run_id=context.run_id,
-            input_data={
-                "data": context.data[[context.target_column, *context.predictor_columns]].to_dict(
-                    orient="split"
-                ),
-                "target_column": context.target_column,
-                "predictor_columns": context.predictor_columns,
-                "config": pysr_config,
-            },
-            callback_url=compute_settings.worker_callback_url,
-            callback_token=compute_settings.worker_callback_token,
-        )
-
-        # Submit tasks with retry on quota errors
-        shap_job = await self._submit_with_retry(shap_task_input, "SHAP", context.run_id, progress)
-        logger.info(f"SHAP task submitted as job {shap_job.job_id}")
-
-        pysr_job = await self._submit_with_retry(pysr_task_input, "PySR", context.run_id, progress)
-        logger.info(f"PySR task submitted as job {pysr_job.job_id}")
-
-        # Report queued phase (user-friendly - jobs are submitted, waiting in queue)
-        await progress.update_progress_async("hpc_queued", status="Jobs queued for processing")
-
-        # Store job IDs in database for cancellation
-        self._store_slurm_job_ids(
-            context.run_id,
-            {
-                "shap_job_id": shap_job.job_id,
-                "pysr_job_id": pysr_job.job_id,
-            },
-        )
-
-        # Wait for completion (can run in parallel on cluster)
-        # Track whether we've reported the hpc_starting phase
-        hpc_started_reported = False
-
-        def on_job_state_change(old_state, new_state, status):
-            """Report hpc_starting when first job transitions to RUNNING."""
-            nonlocal hpc_started_reported
-            if not hpc_started_reported and new_state == JobState.RUNNING:
-                progress.update_progress(
-                    "hpc_starting", status="Resources allocated, starting compute"
+        try:
+            # LAUNCH
+            await progress.update_progress_async(
+                "compute_submission", status="Submitting baseline symbolic regression search"
+            )
+            baseline_features = session.continuous_features or session.features
+            await session.start_search(
+                features=baseline_features,
+                unary_operators=[
+                    u for u in pysr_config.get("unary_operators") or [] if u in ALLOWED_UNARY
+                ],
+                binary_operators=[
+                    b for b in pysr_config.get("binary_operators") or [] if b in ALLOWED_BINARY
+                ]
+                or ["+", "-", "*", "/"],
+                maxsize=pysr_config.get("maxsize"),
+                niterations=pysr_config.get("niterations"),
+                rationale="Baseline: all continuous features, operators chosen from the feature plots",
+                enforce_budget=False,
+            )
+            if self._wants_literature(context):
+                features_for_lit = literature_features(
+                    session,
+                    descriptions,
+                    context.problem_description.get("project_description", ""),
                 )
-                hpc_started_reported = True
+                session.literature_task = asyncio.create_task(
+                    run_literature(session, self._literature_lookup(context, features_for_lit))
+                )
 
-        shap_status = await self._wait_for_job(
-            shap_job.job_id, "SHAP", context.run_id, on_job_state_change
-        )
-        pysr_status = await self._wait_for_job(
-            pysr_job.job_id, "PySR", context.run_id, on_job_state_change
-        )
+            # PROFILE (separate process; not charged to the agent's budget)
+            await session.ensure_profile()
+            session.reset_clock()
 
-        # Check for cancellation first, then failures
-        if shap_status.state == JobState.CANCELLED or pysr_status.state == JobState.CANCELLED:
+            # EXPLORE
+            agent_report: dict[str, Any] | None = None
+            agent_error: str | None = None
+            lm = None
+            if settings.enabled:
+                agent_report, agent_error, lm = await self._run_agent(
+                    context, session, budget, progress, settings.model_name
+                )
+                if agent_error:
+                    warnings.append({"stage": "agent", "message": agent_error})
+            self._raise_if_cancelled(context, session)
+
+            # Classic baselines must exist even when the agent was off or failed early.
+            if sum(1 for m in session.snapshot() if m.kind != "symbolic") < 3:
+                await session.emit("agent", "Screening the classic function catalog")
+                await asyncio.to_thread(session.auto_screen)
+
+            # SETTLE
+            pending = [s.search_id for s in session.searches.values() if not s.done]
+            await progress.update_progress_async(
+                "discovery_agent",
+                status=f"Waiting for {', '.join(pending)}" if pending else "Collecting results",
+            )
+            await session.ensure_result(
+                grace_s=min(session.remaining_s + 300, 1800),
+                max_wait_s=settings.first_result_timeout_s,
+            )
+            self._raise_if_cancelled(context, session)
+            if session.literature_task is not None:
+                with contextlib.suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(asyncio.shield(session.literature_task), timeout=600)
+                if not session.literature_task.done():
+                    session.literature_task.cancel()
+                    warnings.append(
+                        {
+                            "stage": "literature",
+                            "message": "Literature search did not finish in time",
+                        }
+                    )
+                laws = session.known_laws or {}
+                if laws.get("status") in ("empty", "failed"):
+                    warnings.append(
+                        {
+                            "stage": "literature",
+                            "message": "No published laws were found for these variables"
+                            if laws.get("status") == "empty"
+                            else f"Literature search failed: {laws.get('error')}",
+                        }
+                    )
+
+            # RECONCILE
+            if agent_report is not None:
+                review = None
+                if (
+                    settings.review_steps > 0
+                    and lm is not None
+                    and agent_report.get("ended") in ("finish", "steps", "time")
+                ):
+                    review = self._review_fn(context, session, lm, settings.review_steps)
+                agent_report = await reconcile(session, agent_report, review)
+
+            await progress.update_progress_async("discovery_wrapup", status="Scoring models")
+            completed = [s for s in session.searches.values() if s.status == "completed"]
+            if not completed:
+                errors = "; ".join(
+                    f"{s.search_id}: {s.error or s.status}" for s in session.searches.values()
+                )
+                if not any(not m.error for m in session.snapshot()):
+                    raise OrchestratorError(f"PySR task failed: {errors}")
+                session.note(
+                    "data_issue",
+                    f"All symbolic regression searches failed ({errors}); results contain classic "
+                    "models only",
+                )
+                warnings.append({"stage": "symbolic_regression", "message": errors[:500]})
+
+            # SELECT + PERSIST
+            results = await asyncio.to_thread(build_results, session, agent_report, agent_error)
+            results["warnings"] = warnings
+            await progress.update_progress_async(
+                "final_scoring", status="Models scored and selected"
+            )
+            logger.info(
+                f"Discovery finished for run {context.run_id}: {len(session.models)} models, "
+                f"{len(session.searches)} searches, {len(results['equations'])} equations reported, "
+                f"headline {results['discovery']['selection']['headline_model_id']}"
+            )
+            return results
+        except BaseException:
+            session.cancelled = True
+            if session.literature_task is not None:
+                session.literature_task.cancel()
+            with contextlib.suppress(BaseException):
+                await asyncio.shield(session.cancel_all())
+            raise
+
+    def _raise_if_cancelled(self, context: AnalysisContext, session: DiscoverySession) -> None:
+        if session.cancelled or self._is_run_terminal(context.run_id) == RunStatus.CANCELLED:
+            session.cancelled = True
             raise AnalysisCancelledError("Analysis cancelled by user")
 
-        if shap_status.state != JobState.COMPLETED:
-            raise OrchestratorError(f"SHAP task failed: {shap_status.error}")
-
-        if pysr_status.state != JobState.COMPLETED:
-            raise OrchestratorError(f"PySR task failed: {pysr_status.error}")
-
-        # Retrieve results
-        shap_result = await self.backend.get_task_result(shap_job.job_id)
-        pysr_result = await self.backend.get_task_result(pysr_job.job_id)
-
-        results["shap"] = shap_result
-        results["pysr"] = pysr_result
-
-        # Extract visualizations from SHAP results
-        results["visualizations"] = shap_result.get("visualizations", [])
-        logger.info(
-            f"Compute tasks completed for run {context.run_id}, "
-            f"{len(results['visualizations'])} visualizations generated"
-        )
-
-        return results
-
-    async def _generate_explanations(
+    async def _run_agent(
         self,
         context: AnalysisContext,
-        compute_results: dict[str, Any],
-        data_summary: dict[str, Any],
-    ) -> dict[str, Any]:
+        session: DiscoverySession,
+        budget: DiscoveryBudget,
+        progress: ProgressTracker,
+        model_name: str,
+    ) -> tuple[dict[str, Any] | None, str | None, Any]:
         """
-        Generate LLM explanations for the results.
+        Run the discovery agent. Any agent failure (LM setup, LLM errors, timeout) is
+        returned as an error string so the run continues with the fallback path.
 
-        This runs on the main backend (has LLM keys).
+        Returns:
+            (report, error, lm)
         """
-        from backend.services.llm_service import generate_equation_explanation
+        from backend.services.discovery.agent import fallback_report, run_discovery_agent
+        from backend.services.discovery.tools import build_tools
 
-        try:
-            # Format equations for the LLM service
-            equations = compute_results.get("pysr", {}).get("equations", [])
-            data_spec = {
-                "equation": [eq.get("equation", "") for eq in equations],
-                "loss": [eq.get("loss", 0) for eq in equations],
-                "complexity": [eq.get("complexity", 0) for eq in equations],
-            }
-
-            # Run synchronous LLM call in thread pool to avoid blocking event loop
-            explanations = await asyncio.to_thread(
-                generate_equation_explanation,
-                project_spec_json=json.dumps(context.problem_description),
-                data_spec_json=json.dumps(data_spec),
-                deep_research_context=None,
-                user_api_key=context.user_api_key,
-                user_model=context.user_model,
+        async def failed(e: BaseException, message: str | None = None):
+            error = message or _format_user_facing_error(e)
+            logger.error(f"Discovery agent failed for run {context.run_id}: {e!r}")
+            await session.emit(
+                "agent", f"Agent stopped with an error; continuing with fallback ({error[:120]})"
             )
-            return explanations
-        except Exception as e:
-            # User-provided keys: always fail so the user sees a clear error
-            if context.user_api_key:
-                raise
-            logger.error(f"Explanation generation failed: {e}")
-            # Server keys: return partial results with error noted
-            return {
-                "error": str(e),
-                "equations": compute_results.get("pysr", {}).get("equations", []),
-            }
-
-    async def _run_deep_research(
-        self,
-        context: AnalysisContext,
-        compute_results: dict[str, Any],
-        explanations: dict[str, Any],
-    ) -> dict[str, Any]:
-        """
-        Run deep research using o4-mini.
-
-        This runs on the main backend (has LLM keys).
-        """
-        from backend.services.llm_service import (
-            deep_research_equations,
-            generate_equation_explanation,
-        )
+            report = fallback_report(session, "the agent stopped with an error")
+            report["ended"] = "llm_error"
+            return report, error
 
         try:
-            # Get features from problem description
-            features_dict = context.problem_description.get("features", {})
+            lm = self._discovery_lm(context, model_name)
+            tools = build_tools(session, literature_enabled=self._wants_literature(context))
+        except Exception as e:
+            report, error = await failed(e)
+            return report, error, None
 
-            if not features_dict:
-                logger.warning("No features defined for deep research")
-                return explanations
+        agent_task = asyncio.create_task(
+            run_discovery_agent(
+                session,
+                tools,
+                lm,
+                self._discovery_project(context, session),
+                max_iters=budget.max_iters,
+            )
+        )
+        ticker = asyncio.create_task(self._watch_discovery(session, progress, agent_task))
+        try:
+            report = await asyncio.wait_for(
+                asyncio.shield(agent_task), timeout=budget.wall_clock_s + 600
+            )
+            return report, None, lm
+        except asyncio.CancelledError:
+            agent_task.cancel()
+            if session.cancelled or self._is_run_terminal(context.run_id) == RunStatus.CANCELLED:
+                session.cancelled = True
+                raise AnalysisCancelledError("Analysis cancelled by user") from None
+            raise
+        except (asyncio.TimeoutError, TimeoutError) as e:
+            agent_task.cancel()
+            report, error = await failed(e, "The discovery agent exceeded its time budget")
+            return report, error, lm
+        except Exception as e:
+            agent_task.cancel()
+            report, error = await failed(e)
+            return report, error, lm
+        finally:
+            ticker.cancel()
 
-            # Run synchronous LLM calls in thread pool to avoid blocking event loop
-            # Deep research uses OpenAI (o4-mini-deep-research), so pass user_openai_key
-            deep_result = await asyncio.to_thread(
+    def _review_fn(self, context: AnalysisContext, session: DiscoverySession, lm, steps: int):
+        """Read-only review pass over late searches (a few extra minutes of agent time)."""
+        from backend.services.discovery.agent import run_review
+        from backend.services.discovery.tools import build_tools
+
+        async def review(report: dict[str, Any], late: list[str]) -> dict[str, Any]:
+            session.budget.wall_clock_s = session.elapsed_s + 300
+            session.budget.max_tool_calls = session.tool_calls + steps * 2
+            return await asyncio.wait_for(
+                run_review(
+                    session,
+                    build_tools(session),
+                    lm,
+                    self._discovery_project(context, session),
+                    report,
+                    late,
+                    max_iters=steps,
+                ),
+                timeout=420,
+            )
+
+        return review
+
+    def _discovery_lm(self, context: AnalysisContext, model_name: str):
+        from backend.infrastructure.llm.client import create_dspy_model
+
+        return create_dspy_model(
+            model_name=model_name or None,
+            user_api_key=context.user_api_key,
+            user_model=context.user_model,
+            num_retries=6,
+        )
+
+    def _wants_literature(self, context: AnalysisContext) -> bool:
+        return context.analysis_type == "deep" and bool(context.deep_research_model)
+
+    def _literature_lookup(self, context: AnalysisContext, features: dict[str, str]):
+        """Deep mode: one call to the research model (features keyed by alias, with the target)."""
+        from backend.services.llm_service import deep_research_equations
+
+        async def lookup() -> dict[str, Any]:
+            return await asyncio.to_thread(
                 deep_research_equations,
-                features_dict=features_dict,
+                features_dict=features,
                 model_name=context.deep_research_model,
                 user_api_key=context.user_openai_key,
             )
 
-            # Re-generate explanations with deep research context
-            equations = compute_results.get("pysr", {}).get("equations", [])
-            data_spec = {
-                "equation": [eq.get("equation", "") for eq in equations],
-                "loss": [eq.get("loss", 0) for eq in equations],
-                "complexity": [eq.get("complexity", 0) for eq in equations],
-            }
+        return lookup
 
-            enhanced_explanations = await asyncio.to_thread(
-                generate_equation_explanation,
-                project_spec_json=json.dumps(context.problem_description),
-                data_spec_json=json.dumps(data_spec),
-                deep_research_context=deep_result,
-                user_api_key=context.user_api_key,
-                user_model=context.user_model,
-            )
+    async def _watch_discovery(
+        self,
+        session: DiscoverySession,
+        progress: ProgressTracker,
+        agent_task: asyncio.Task,
+    ) -> None:
+        """Advance the progress bar with the agent's time budget and watch for cancellation."""
+        start, end = 10, 71
+        try:
+            while not agent_task.done():
+                await asyncio.sleep(10)
+                try:
+                    status = await asyncio.to_thread(self._is_run_terminal, progress.run_id)
+                    if status == RunStatus.CANCELLED:
+                        session.cancelled = True
+                        agent_task.cancel()
+                        return
+                    frac = min(1.0, session.elapsed_s / max(session.budget.wall_clock_s, 1.0))
+                    await progress.set_progress_async(int(start + frac * (end - start)))
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:  # a DB hiccup must not stop cancellation checks
+                    logger.warning(f"Discovery watcher tick failed: {e}")
+        except asyncio.CancelledError:
+            pass
 
-            return enhanced_explanations
+    async def _narrate(
+        self,
+        context: AnalysisContext,
+        discovery_results: dict[str, Any],
+        progress: ProgressTracker,
+        warnings: list[dict[str, str]],
+    ) -> dict[str, Any]:
+        """
+        Explanation (and, in deep mode, literature-grounded explanation). Best-effort for
+        every key type: the discovery brief is complete without it, so a failure becomes
+        a warning, never a failed run.
+        """
+        from backend.services.discovery.literature import deep_research_context
+
+        deep_ctx = None
+        if self._wants_literature(context):
+            await progress.update_progress_async("deep_research", status="Integrating literature")
+            deep_ctx = deep_research_context(discovery_results["discovery"].get("literature"))
+        await progress.update_progress_async("llm_explanation", status="Generating explanations")
+        try:
+            return await self._generate_explanations(context, discovery_results, deep_ctx)
+        except (asyncio.CancelledError, AnalysisCancelledError):
+            raise
         except Exception as e:
-            # User-provided keys: always fail so the user sees a clear error
-            if context.user_api_key or context.user_openai_key:
-                raise
-            logger.error(f"Deep research failed: {e}")
-            # Server keys: return previous explanations without deep research
-            return explanations
+            message = _format_user_facing_error(e)
+            logger.error(f"Explanation failed for run {context.run_id}: {e!r}")
+            warnings.append({"stage": "explanation", "message": message})
+            return {"error": message, "equations": discovery_results.get("equations", [])}
+
+    async def _generate_explanations(
+        self,
+        context: AnalysisContext,
+        discovery_results: dict[str, Any],
+        deep_research_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Generate LLM explanations for the discovery brief (raises on failure)."""
+        from backend.services.discovery.report import explanation_data_spec
+        from backend.services.llm_service import generate_equation_explanation
+
+        data_spec = explanation_data_spec(discovery_results)
+        # Run synchronous LLM call in thread pool to avoid blocking event loop
+        return await asyncio.to_thread(
+            generate_equation_explanation,
+            project_spec_json=json.dumps(context.problem_description),
+            data_spec_json=json.dumps(data_spec),
+            deep_research_context=deep_research_context,
+            user_api_key=context.user_api_key,
+            user_model=context.user_model,
+        )
 
     def _compile_final_results(
         self,
         context: AnalysisContext,
-        compute_results: dict[str, Any],
+        discovery_results: dict[str, Any],
         explanations: dict[str, Any],
+        warnings: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
-        """Compile all results into final output format."""
-        pysr_results = compute_results.get("pysr", {})
-        scatter_data = pysr_results.get("scatter_data", {})
+        """Compile all results into final output format (provenance joined by model_id)."""
+        from backend.services.discovery.report import json_safe, merge_explanations
 
-        # Merge scatter_data into equations in explanations (matching legacy behavior)
-        if "equations" in explanations and scatter_data:
-            matched_count = 0
-            for eq in explanations["equations"]:
-                eq_str = eq.get("equation", "")
-                if eq_str in scatter_data:
-                    eq["scatter_data"] = scatter_data[eq_str]
-                    matched_count += 1
-            logger.info(f"Merged scatter data for {matched_count} equations")
+        equations = discovery_results.get("equations", [])
+        if "error" not in explanations:
+            explanations, matched = merge_explanations(explanations, equations)
+            if matched < len(equations):
+                logger.warning(
+                    f"Explanation covered {matched} of {len(equations)} equations; the rest are "
+                    "shown without narration"
+                )
+        return json_safe(
+            {
+                "equations": equations,
+                "best_equation": discovery_results.get("best_equation"),
+                "explanations": explanations,
+                "scatter_data": discovery_results.get("scatter_data", {}),
+                "discovery": discovery_results.get("discovery"),
+                "warnings": warnings or [],
+                "analysis_type": context.analysis_type,
+                "compute_backend": self.backend.name,
+                "completed_at": datetime.utcnow().isoformat(),
+            }
+        )
 
-        return {
-            "equations": pysr_results.get("equations", []),
-            "best_equation": pysr_results.get("best_equation"),
-            "interactions": compute_results.get("shap", {}).get("interactions", []),
-            "top_features": compute_results.get("shap", {}).get("top_features", []),
-            "explanations": explanations,
-            "scatter_data": scatter_data,  # Also include at top level for backwards compatibility
-            "analysis_type": context.analysis_type,
-            "compute_backend": self.backend.name,
-            "completed_at": datetime.utcnow().isoformat(),
-        }
+    def _store_results(self, run_id: str, results: dict[str, Any]) -> None:
+        """Persist intermediate results while the run is still RUNNING."""
+        try:
+            with get_db_session() as db:
+                run = db.query(Run).filter(Run.id == run_id).first()
+                if run:
+                    run.results = results
+                    db.commit()
+        except Exception as e:
+            logger.error(f"Failed to store intermediate results for {run_id}: {e}")
 
     def _save_artifacts(
         self,
@@ -818,7 +1044,7 @@ class AnalysisOrchestrator:
 
         Args:
             run_id: Run identifier
-            job_ids: Dictionary with shap_job_id and pysr_job_id
+            job_ids: Dictionary of task key (pysr_1, pysr_2, ...) to job ID
         """
         try:
             with get_db_session() as db:
@@ -836,7 +1062,7 @@ class AnalysisOrchestrator:
         status: str,
         results: dict[str, Any] | None = None,
         error: str | None = None,
-    ) -> None:
+    ) -> bool:
         """Update run status in database and broadcast terminal states via SSE."""
         try:
             with get_db_session() as db:
@@ -865,8 +1091,90 @@ class AnalysisOrchestrator:
                             status=status,
                             error=error,
                         )
+                    return True
+                return False
         except Exception as e:
             logger.error(f"Failed to update run status for {run_id}: {e}")
+            return False
+
+
+class _SlurmSearchLauncher:
+    """Runs a discovery session's PySR searches as keyed Slurm tasks."""
+
+    def __init__(
+        self,
+        orchestrator: AnalysisOrchestrator,
+        context: AnalysisContext,
+        progress: ProgressTracker,
+    ):
+        self.orchestrator = orchestrator
+        self.context = context
+        self.progress = progress
+        self.job_ids: dict[str, str] = {}
+
+    async def submit(
+        self,
+        search_id: str,
+        input_data: dict[str, Any],
+        on_job_id=None,
+    ) -> str:
+        compute_settings = get_compute_settings()
+        task_input = TaskInput(
+            task_type="pysr",
+            task_key=search_id,
+            run_id=self.context.run_id,
+            input_data=input_data,
+            callback_url=compute_settings.worker_callback_url,
+            callback_token=compute_settings.worker_callback_token,
+        )
+        job = await self.orchestrator._submit_with_retry(
+            task_input, search_id, self.context.run_id, self.progress
+        )
+        self.job_ids[search_id] = job.job_id
+        if on_job_id is not None:
+            on_job_id(job.job_id)  # before any await: a cancel from now on reaches the job
+        # Stored so that user cancellation (run_service) also cancels these jobs
+        await asyncio.to_thread(
+            self.orchestrator._store_slurm_job_ids, self.context.run_id, dict(self.job_ids)
+        )
+        logger.info(f"{search_id} submitted as job {job.job_id}")
+        return job.job_id
+
+    async def wait(self, job_id: str) -> tuple[bool, dict[str, Any] | None, str | None]:
+        status = await self.orchestrator._wait_for_job(job_id, "PySR", self.context.run_id)
+        result = None
+        try:
+            result = await self.orchestrator.backend.get_task_result(job_id)
+        except SlurmBackendError as e:
+            if status.state == JobState.COMPLETED:
+                return False, None, f"results missing: {e}"
+        if status.state == JobState.CANCELLED:
+            return False, None, "cancelled"
+        if result and result.get("status") == "error":
+            return False, None, result.get("error") or "worker reported an error"
+        if status.state != JobState.COMPLETED:
+            reason = status.error or f"job ended in state {status.state.value}"
+            tail = self._stderr_tail(job_id)
+            return False, None, f"{reason}: {tail}" if tail else reason
+        return True, result, None
+
+    def _stderr_tail(self, job_id: str, n_bytes: int = 1500) -> str:
+        """Last lines of the job's stderr, when the staging directory is readable here."""
+        path = (getattr(self.orchestrator.backend, "_tasks", {}).get(job_id) or {}).get(
+            "stderr_path"
+        )
+        if not path or not os.path.exists(path):
+            return ""
+        try:
+            with open(path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                f.seek(max(0, f.tell() - n_bytes))
+                return f.read().decode("utf-8", errors="replace").strip().splitlines()[-1][:500]
+        except (OSError, IndexError):
+            return ""
+
+    async def cancel(self, job_id: str) -> None:
+        await self.orchestrator.backend.cancel_task(job_id)
 
 
 class OrchestratorError(Exception):

@@ -1,8 +1,7 @@
 # Mock Slurm worker container for local development
 #
 # Runs mock_slurmrestd.py (FastAPI) which:
-# - SHAP tasks: spawns real python -m slurm_worker subprocesses
-# - PySR tasks: returns mock results via HTTP callbacks (no Julia needed)
+# - PySR tasks: returns least-squares mock equations via HTTP callbacks (no Julia needed)
 #
 # Build context must be the repo root (context: .)
 
@@ -22,7 +21,6 @@ RUN grep -v -E '^(pysr|juliacall)' /tmp/worker-requirements.txt > /tmp/filtered-
         -r /tmp/filtered-requirements.txt \
         fastapi \
         uvicorn[standard] \
-        matplotlib \
     && rm /tmp/worker-requirements.txt /tmp/filtered-requirements.txt
 
 # Copy worker code and mock server

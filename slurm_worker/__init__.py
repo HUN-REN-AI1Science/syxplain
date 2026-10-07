@@ -9,11 +9,10 @@ Package Structure:
     - config: Configuration dataclasses
     - tasks: Task implementations (Strategy pattern)
     - reporting: Progress reporting to backend
-    - visualization: Plot generation
     - io: File I/O operations
 """
 
-__version__ = "2.0.0"
+__version__ = "3.0.0"  # 3.x: keyed tasks (--task-key), guesses, target transforms
 
 from slurm_worker.tasks import TaskRegistry
 

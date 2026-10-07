@@ -135,7 +135,10 @@ async def sse_progress(
                 "status": run_data["status"],
                 "progress": run_data["progress"],
                 "error": run_data["error"],
-                "results": run_data["results"],
+                # Per-task intermediate results are internal to the orchestrator
+                "results": {k: v for k, v in (run_data["results"] or {}).items() if k != "tasks"}
+                or None,
+                "recent_events": manager.recent_events(run_id),
             }
             yield {
                 "event": "initial_state",
@@ -160,7 +163,9 @@ async def sse_progress(
                     return
 
                 yield {
-                    "event": "progress_update",
+                    "event": "agent_event"
+                    if message.get("type") == "agent_event"
+                    else "progress_update",
                     "data": json.dumps(message),
                 }
 

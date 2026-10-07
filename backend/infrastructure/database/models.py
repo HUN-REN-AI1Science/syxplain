@@ -53,7 +53,7 @@ class Run(Base):
         String, default=RunStatus.PENDING, index=True
     )  # pending, running, completed, failed, timeout, cancelled
     analysis_type = Column(String, default="quick")  # "quick" or "deep"
-    slurm_job_ids = Column(JSONB, nullable=True)  # {"shap_job_id": "...", "pysr_job_id": "..."}
+    slurm_job_ids = Column(JSONB, nullable=True)  # {"pysr_1": "<job id>", "pysr_2": ...}
     progress = Column(Integer, default=0)  # 0-100 percentage
     problem_description = Column(JSONB, nullable=False)
     csv_filename = Column(String, nullable=False)  # Store filename for reference
@@ -65,7 +65,7 @@ class Run(Base):
     finish_time = Column(DateTime, nullable=True)  # Set when status becomes terminal
 
     # Input data for compute tasks (stored when submitted to Slurm)
-    input_data = Column(JSONB, nullable=True)  # {"shap": {...}, "pysr": {...}}
+    input_data = Column(JSONB, nullable=True)  # {"pysr_1": {...}, ...} (nulled once fetched)
 
     # Relationships with cascade delete
     steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")

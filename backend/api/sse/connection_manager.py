@@ -8,7 +8,7 @@ to all connected clients watching a specific run.
 import asyncio
 import contextlib
 import logging
-from collections import defaultdict
+from collections import OrderedDict, defaultdict, deque
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 TERMINAL_STATUSES = ("completed", "failed", "timeout", "cancelled")
 MAX_QUEUE_SIZE = 256
 MAX_SSE_CONNECTIONS_PER_USER = 5
+MAX_RECENT_EVENTS = 50
+MAX_REPLAY_RUNS = 200
 
 
 class SSEConnectionManager:
@@ -33,6 +35,7 @@ class SSEConnectionManager:
             cls._instance = super().__new__(cls)
             cls._instance._queues = defaultdict(set)
             cls._instance._user_queues = defaultdict(set)
+            cls._instance._recent_events = OrderedDict()
         return cls._instance
 
     @property
@@ -129,6 +132,8 @@ class SSEConnectionManager:
             error: Optional error message
             results: Optional results data
         """
+        if status in TERMINAL_STATUSES:
+            self._recent_events.pop(run_id, None)
         queues = self._queues.get(run_id, set())
         if not queues:
             return
@@ -165,9 +170,37 @@ class SSEConnectionManager:
 
         # On terminal status, push None sentinel so generators stop
         if status in TERMINAL_STATUSES:
+            self._recent_events.pop(run_id, None)
             for queue in list(self._queues.get(run_id, set())):
                 with contextlib.suppress(asyncio.QueueFull):
                     queue.put_nowait(None)
+
+    async def broadcast_event(self, run_id: str, event: dict[str, Any]) -> None:
+        """
+        Broadcast an activity event (e.g. a discovery-agent step) to clients watching a run.
+
+        The last few events are kept per run so a client that connects mid-run can
+        replay them (see ``recent_events``).
+        """
+        message = {
+            "type": "agent_event",
+            "run_id": run_id,
+            "event": event,
+            "timestamp": _get_timestamp(),
+        }
+        recent = self._recent_events.setdefault(run_id, deque(maxlen=MAX_RECENT_EVENTS))
+        self._recent_events.move_to_end(run_id)
+        recent.append(message)
+        while len(self._recent_events) > MAX_REPLAY_RUNS:
+            self._recent_events.popitem(last=False)
+
+        for queue in list(self._queues.get(run_id, set())):
+            with contextlib.suppress(asyncio.QueueFull):
+                queue.put_nowait(message)
+
+    def recent_events(self, run_id: str) -> list[dict[str, Any]]:
+        """Recent activity events of a run (oldest first)."""
+        return list(self._recent_events.get(run_id, ()))
 
     def get_connection_count(self, run_id: str) -> int:
         """Get the number of active connections for a run."""

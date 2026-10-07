@@ -46,18 +46,31 @@ Syxplain uses a **Slurm-based compute architecture** that separates LLM operatio
  │   Backend API    │─────────────────▶│                │                 │
  │                  │                  │                ▼                 │
  │  - Orchestrator  │                  │  ┌──────────────────────────┐    │
- │  - LLM calls     │  HTTP (callback) │  │     Slurm Scheduler      │    │
- │  - WebSocket     │◀─────────────────│  └─────────┬──────────┬─────┘    │
- └──────────────────┘                  │            │          │          │
-                                       │            ▼          ▼          │
-                                       │  ┌──────────┐ ┌────────────┐     │
-                                       │  │SHAP Task │ │ PySR Task  │     │
-                                       │  │(worker)  │ │ (worker)   │     │
-                                       │  └──────────┘ └────────────┘     │
+ │  - Discovery     │  HTTP (callback) │  │     Slurm Scheduler      │    │
+ │    agent (LLM)   │◀─────────────────│  └─────────┬──────────┬─────┘    │
+ │  - Classic fits  │                  │            │          │          │
+ │  - SSE           │                  │            ▼          ▼          │
+ └──────────────────┘                  │  ┌────────────┐ ┌────────────┐   │
+                                       │  │ PySR task  │ │ PySR task  │...│
+                                       │  │  pysr_1    │ │  pysr_2    │   │
+                                       │  └────────────┘ └────────────┘   │
                                        └──────────────────────────────────┘
 ```
 
-Compute-intensive tasks (SHAP analysis, PySR symbolic regression) are submitted to an external **Slurm cluster** at `slurm.science-cloud.hu` via the slurmrestd REST API. The backend runs on a separate application server and communicates with the cluster over HTTP.
+PySR symbolic-regression searches are submitted to an external **Slurm cluster** at `slurm.science-cloud.hu` via the slurmrestd REST API. The backend runs on a separate application server and communicates with the cluster over HTTP.
+
+### Agentic equation discovery
+
+Equations are found by an **AI-scientist agent** (DSPy ReAct, `backend/services/discovery/`) that runs in the backend:
+
+1. A baseline PySR search (all features, operators chosen by an LLM from the feature plots) is submitted first, so the cluster queue wait overlaps with the agent's work.
+2. The agent profiles the data: correlations, mutual information, random-forest permutation importance, a **noise ceiling** (out-of-fold random-forest R², roughly the best achievable accuracy) and **SHAP** on that forest: importance, interacting feature pairs (candidates for product terms and multiplicative laws) and each feature's partial-effect shape with the other features accounted for.
+3. It fits **classic named laws** (Mitscherlich, Michaelis-Menten/Langmuir, Freundlich/power, logistic, Gompertz, linear/quadratic-plateau, Gaussian peak, Mitscherlich-Baule, Cobb-Douglas, ...) and its own formulas. Each fit comes back with **diagnosed reasons it falls short**: wrong curve shape (and where), missing variable (and which one), variance growing with the value, unidentifiable parameters, or "matches the noise ceiling".
+4. Guided by those reasons, it launches **targeted PySR searches** (feature subset, operators, target transform, its best formulas as warm-start guesses) and compares the results with the classic laws.
+5. It records findings in a **lab notebook** (rejected forms with reasons, insights, data issues), which the explanation LLM reads.
+6. All models are scored on **held-out rows** that neither the agent nor PySR saw.
+
+The agent is bounded by a budget (`DISCOVERY_*` variables, per quick/deep analysis). If it fails, the run still finishes with the baseline search and an automatic screen of the classic catalog. `python test_worker_local.py --task classic --example 1` runs the classic-law screen locally without any services.
 
 ## Prerequisites
 

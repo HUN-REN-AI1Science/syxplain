@@ -1,6 +1,6 @@
 # Slurm Integration Guide
 
-This guide explains how Syxplain integrates with a Slurm HPC cluster for compute-intensive tasks (SHAP analysis, PySR symbolic regression).
+This guide explains how Syxplain integrates with a Slurm HPC cluster for compute-intensive tasks (PySR symbolic-regression searches). A run submits several keyed searches (`pysr_1`, `pysr_2`, ...): a baseline search, then targeted searches launched by the discovery agent in the backend (see the README).
 
 ## TL;DR Quick Setup
 
@@ -96,8 +96,8 @@ For detailed configuration and troubleshooting, continue reading.
 │  │  │  syxplain_worker      │  │   │  │  syxplain_worker      │  │          │
 │  │  │  (Singularity)        │  │   │  │  (Singularity)        │  │          │
 │  │  │                       │  │   │  │                       │  │          │
-│  │  │  - SHAP analysis      │  │   │  │  - PySR regression    │  │          │
-│  │  │  - PySR regression    │  │   │  │  - SHAP analysis      │  │          │
+│  │  │  - PySR (pysr_1)      │  │   │  │  - PySR (pysr_2)      │  │          │
+│  │  │                       │  │   │  │                       │  │          │
 │  │  └───────────────────────┘  │   │  └───────────────────────┘  │          │
 │  └─────────────────────────────┘   └─────────────────────────────┘          │
 │                                                                             │
@@ -107,8 +107,8 @@ For detailed configuration and troubleshooting, continue reading.
 │  │  /storage/<username>/syxplain/           <- Staging directory        │   │
 │  │  ├── logs/                               <- Job logs                 │   │
 │  │  │   └── 2025-06-15/                     <- Date-organized           │   │
-│  │  │       ├── 143052_shap_a1b2c3d4_e5f6g7h8.stdout                    │   │
-│  │  │       └── 143052_shap_a1b2c3d4_e5f6g7h8.stderr                    │   │
+│  │  │       ├── 143052_pysr_1_a1b2c3d4_e5f6g7h8.stdout                  │   │
+│  │  │       └── 143052_pysr_1_a1b2c3d4_e5f6g7h8.stderr                  │   │
 │  │                                                                      │   │
 │  │  /storage/<username>/containers/         <- Singularity containers   │   │
 │  │  └── syxplain-worker.sif                                             │   │
@@ -223,10 +223,20 @@ Before deploying, test the worker on your machine:
 ```bash
 cd slurm_worker
 pip install -r requirements.txt
-python test_worker_local.py --task shap --example 1
+python test_worker_local.py --task pysr --example 1 --niterations 5
 ```
 
 See [slurm_worker/README.md](./slurm_worker/README.md) for more testing options.
+
+## Deploy Order (worker before backend)
+
+The backend passes `--task-key` to the worker and expects worker features (target transforms, warm-start guesses, full Pareto fronts) that only worker **3.0.0+** has. An older `syxplain-worker.sif` rejects the argument and every search fails before reporting back. Always:
+
+1. Rebuild the container from `slurm_worker/syxplain-worker.def` and copy it to `SLURM_CONTAINER_PATH` on the cluster.
+2. Check it: `singularity exec syxplain-worker.sif python -c "import slurm_worker; print(slurm_worker.__version__)"` prints `3.0.0`.
+3. Only then deploy the backend.
+
+The worker reports its version when it fetches its input (stored in `Run.input_data[<task_key>].worker_version`). If a search still fails with `unrecognized arguments: --task-key`, the run notebook says the worker image is outdated.
 
 ## Monitoring Jobs
 
@@ -261,7 +271,7 @@ Logs are organized in date-structured directories under `{staging_dir}/logs/`.
 Filenames encode the timestamp, task type, run ID, and job UUID:
 
 ```
-logs/2025-06-15/143052_shap_a1b2c3d4_e5f6g7h8.stdout
+logs/2025-06-15/143052_pysr_1_a1b2c3d4_e5f6g7h8.stdout
                 HHMMSS_type_runid____jobuuid
 ```
 
@@ -273,8 +283,8 @@ ssh <username>@slurm.science-cloud.hu
 ls /storage/<username>/syxplain/logs/$(date +%Y-%m-%d)/
 
 # View stdout/stderr for a specific job
-cat /storage/<username>/syxplain/logs/2025-06-15/143052_shap_a1b2c3d4_e5f6g7h8.stdout
-cat /storage/<username>/syxplain/logs/2025-06-15/143052_shap_a1b2c3d4_e5f6g7h8.stderr
+cat /storage/<username>/syxplain/logs/2025-06-15/143052_pysr_1_a1b2c3d4_e5f6g7h8.stdout
+cat /storage/<username>/syxplain/logs/2025-06-15/143052_pysr_1_a1b2c3d4_e5f6g7h8.stderr
 ```
 
 ## Troubleshooting

@@ -29,57 +29,39 @@ phases:
     progress_end: 4
     increment_rate: 0.5
 
-  # LLM config generation (4-9%, ~13s — first noticeable wait)
+  # LLM config for the baseline PySR search (4-9%, ~13s — first noticeable wait)
   - name: pysr_config_generation
     label: "AI Configuration"
     description: "AI is analyzing your data to find the best approach..."
     progress_end: 9
     increment_rate: 0.25
 
-  # HPC submission (9-10%, instant)
+  # Baseline search submission (9-10%, instant)
   - name: compute_submission
     label: "Submitting Jobs"
-    description: "Submitting analysis to the computing cluster..."
-    progress_end: 9
+    description: "Submitting a first symbolic regression search to the computing cluster..."
+    progress_end: 10
     increment_rate: 0.5
 
-  - name: hpc_connecting
-    label: "Connecting"
-    description: "Connecting to the computing cluster..."
-    progress_end: 9
-    increment_rate: 0.5
+  # Agentic discovery (10-72%). The orchestrator advances the bar with the agent's
+  # time budget; the agent's steps stream to the UI as activity events.
+  - name: discovery_agent
+    label: "AI Scientist at Work"
+    description: "An AI agent is profiling your data, fitting classic scientific laws and steering symbolic regression on the cluster..."
+    progress_end: 72
+    increment_rate: 0.02
 
-  - name: hpc_queued
-    label: "In Queue"
-    description: "Your analysis jobs are queued for processing..."
-    progress_end: 10
-    increment_rate: 0.3
+  - name: discovery_wrapup
+    label: "Collecting Results"
+    description: "Waiting for the last symbolic regression searches to finish..."
+    progress_end: 74
+    increment_rate: 0.02
 
-  - name: hpc_starting
-    label: "Starting Compute"
-    description: "Resources allocated! Starting analysis..."
-    progress_end: 10
-    increment_rate: 0.4
-
-  # SHAP worker range (10-25%, ~10s — scaled by endpoint)
-  - name: shap_running
-    label: "SHAP Analysis"
-    description: "Computing pairwise SHAP interaction values..."
-    progress_end: 25
-    increment_rate: 0.15
-
-  # PySR worker range (25-75%, ~3.5min — scaled by endpoint)
-  - name: pysr_starting
-    label: "Equation Discovery"
-    description: "Starting symbolic regression engine..."
-    progress_end: 30
-    increment_rate: 0.06
-
-  - name: pysr_running
-    label: "Finding Equations"
-    description: "Discovering mathematical equations that fit your data... This may take a few minutes."
+  - name: final_scoring
+    label: "Scoring Models"
+    description: "Scoring every model on held-out data it has never seen..."
     progress_end: 75
-    increment_rate: 0.04
+    increment_rate: 0.25
 
   # Deep research (75-82%, optional)
   - name: deep_research

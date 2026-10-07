@@ -316,8 +316,9 @@ def generate_equation_explanation(
             parsed.setdefault(
                 "summary", {"key_drivers": [], "secondary_drivers": [], "findings": ""}
             )
+            # No recommendation: the backend falls back to the selector's headline.
             parsed.setdefault(
-                "recommendation", {"equation_id": 1, "simplified_equation": "", "rationale": []}
+                "recommendation", {"equation_id": None, "simplified_equation": "", "rationale": []}
             )
 
             # Post-process: Renumber equation IDs

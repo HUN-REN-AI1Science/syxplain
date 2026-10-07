@@ -19,11 +19,19 @@ import {
 } from 'chart.js';
 import { Scatter } from 'react-chartjs-2';
 import { escapeForAsciiMath } from '@utils/formatting';
+import { mathJaxConfig } from '@utils/mathjax';
 import { exportToCSV, exportToExcel } from '@utils/dataExport';
 import { sanitizeText, sanitizeUrl } from '@utils/security';
+import {
+  headlineReasonText,
+  metricLabel,
+  metricValue,
+  scatterBasisLabel,
+  variableLegend,
+} from '@utils/discovery';
 import CitationText from './CitationText';
 import HelpButton from '@components/HelpButton';
-import type { Equation, ScatterData, EquationResults } from '@/types';
+import type { DiscoverySelection, Equation, ScatterData, EquationResults } from '@/types';
 
 // Register Chart.js components
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
@@ -31,31 +39,36 @@ ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
 interface EquationResultsViewProps {
   data: EquationResults;
   targetVariable?: string | null;
+  /**
+   * The run has a discovery report: equations are usable even when the AI explanation
+   * failed, so the "Analysis Failed" card is reserved for legacy runs.
+   */
+  hasDiscovery?: boolean;
+  /** The selector's headline choice from the discovery report */
+  selection?: DiscoverySelection;
 }
 
-const mathJaxConfig = {
-  loader: { load: ['input/asciimath', 'output/chtml'] },
-  asciimath: {
-    displaystyle: true,
-    delimiters: [['`', '`']],
-  },
-  options: {
-    // Disable automatic typesetting on page load
-    skipHtmlTags: [
-      'script',
-      'noscript',
-      'style',
-      'textarea',
-      'pre',
-      'code',
-      'annotation',
-      'annotation-xml',
-    ],
-  },
-  startup: {
-    // Disable automatic document typesetting - critical to prevent processing description text
-    typeset: false,
-  },
+/** AsciiMath source "lhs = rhs"; the left-hand side is the target alias used by the equation */
+const equationMath = (eq: Equation, targetVariable?: string | null): string => {
+  const lhs = eq.target_alias || targetVariable;
+  return `\`${lhs ? `${escapeForAsciiMath(lhs)} = ` : ''}${escapeForAsciiMath(eq.equation)}\``;
+};
+
+/** "where k = Kd_value, P = P_olsen" legend of the aliases an equation uses */
+const VariablesLegend: React.FC<{ variables?: Record<string, string> }> = ({ variables }) => {
+  const pairs = variableLegend(variables);
+  if (pairs.length === 0) return null;
+  return (
+    <p className="mt-2 text-xs text-muted">
+      where{' '}
+      {pairs.map(([alias, col], i) => (
+        <span key={alias}>
+          {i > 0 && ', '}
+          <code className="text-primary">{alias}</code> = {col}
+        </span>
+      ))}
+    </p>
+  );
 };
 
 // Interactive Scatter Plot Component
@@ -147,6 +160,16 @@ const ScatterPlot: React.FC<{ data: ScatterData }> = ({ data }) => {
   );
 };
 
+/** "classic: Mitscherlich" -> "Classic law: Mitscherlich", "symbolic" -> "Symbolic regression" */
+const originLabel = (origin: string): string => {
+  if (origin === 'symbolic') return 'Symbolic regression';
+  const [kind, ...rest] = origin.split(':');
+  const name = rest.join(':').trim();
+  const prefix =
+    kind === 'classic' ? 'Classic law' : kind === 'literature' ? 'Published law' : 'Agent formula';
+  return name ? `${prefix}: ${name}` : prefix;
+};
+
 const EquationCard: React.FC<{
   equation: Equation;
   isRecommended: boolean;
@@ -162,6 +185,8 @@ const EquationCard: React.FC<{
   ].reduce((a, b) => a + b, 0);
 
   const hasDetails = detailsCount > 0;
+  const r2 = metricValue(equation);
+  const scatterBasis = scatterBasisLabel(equation.scatter_data);
 
   return (
     <div
@@ -188,17 +213,43 @@ const EquationCard: React.FC<{
             {equation.id}
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-primary">Equation {equation.id}</span>
+              {equation.model_id && (
+                <code className="text-xs font-mono px-1.5 py-0.5 rounded bg-surface-alt text-secondary border border-[var(--color-border)]">
+                  {equation.model_id}
+                </code>
+              )}
               {isRecommended && <Tag value="Recommended" severity="success" className="text-xs" />}
+              {equation.agent_recommended && (
+                <Tag value="Agent pick" severity="info" className="text-xs" />
+              )}
+              {equation.origin && (
+                <Tag
+                  value={originLabel(equation.origin)}
+                  className={`text-xs ${
+                    equation.origin === 'symbolic'
+                      ? 'bg-brand-50 text-brand-500'
+                      : 'bg-[rgba(34,197,94,0.12)] text-green-700'
+                  }`}
+                />
+              )}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Tag
-            value={`Loss: ${equation.loss.toFixed(3)}`}
-            className="bg-[rgba(245,158,11,0.12)] text-[rgb(245,158,11)] text-xs px-2 py-1"
-          />
+          {r2 !== null && (
+            <Tag
+              value={`${metricLabel(equation.metric_basis, equation.holdout_n)}: ${r2.toFixed(3)}`}
+              className="bg-[rgba(34,197,94,0.12)] text-green-700 text-xs px-2 py-1"
+            />
+          )}
+          {typeof equation.loss === 'number' && (
+            <Tag
+              value={`Loss: ${equation.loss.toFixed(3)}`}
+              className="bg-[rgba(245,158,11,0.12)] text-[rgb(245,158,11)] text-xs px-2 py-1"
+            />
+          )}
           <Tag
             value={`Complexity: ${equation.complexity}`}
             className="bg-surface-alt text-primary text-xs px-2 py-1"
@@ -211,15 +262,28 @@ const EquationCard: React.FC<{
         <div className="bg-surface-alt rounded-lg p-6 overflow-x-auto border border-[var(--color-border)] mathjax-equation">
           <MathJaxContext config={mathJaxConfig}>
             <MathJax inline dynamic>
-              {`\`${targetVariable ? `${escapeForAsciiMath(targetVariable)} = ` : ''}${escapeForAsciiMath(equation.equation)}\``}
+              {equationMath(equation, targetVariable)}
             </MathJax>
           </MathJaxContext>
         </div>
+        <VariablesLegend variables={equation.variables} />
 
         {/* Overview */}
-        <p className="mt-4 text-secondary leading-relaxed">
-          <CitationText text={equation.overview} citations={equation.citations} />
-        </p>
+        {equation.overview && (
+          <p className="mt-4 text-secondary leading-relaxed">
+            <CitationText text={equation.overview} citations={equation.citations} />
+          </p>
+        )}
+
+        {equation.agent_recommended && equation.agent_why && (
+          <p className="mt-3 text-sm text-secondary flex items-start gap-2">
+            <i className="pi pi-android text-brand-500 mt-0.5" aria-hidden="true"></i>
+            <span>
+              <span className="font-medium text-primary">Why the agent picked it:</span>{' '}
+              {sanitizeText(equation.agent_why)}
+            </span>
+          </p>
+        )}
 
         {/* Foldable Details Section */}
         {hasDetails && (
@@ -270,6 +334,9 @@ const EquationCard: React.FC<{
                       <h5 className="text-sm font-semibold text-primary flex items-center gap-2">
                         <i className="pi pi-chart-line text-brand-500"></i>
                         Predicted vs. Measured
+                        {scatterBasis && (
+                          <span className="font-normal text-muted">({scatterBasis})</span>
+                        )}
                       </h5>
                       <SplitButton
                         label="Export Data"
@@ -335,8 +402,23 @@ const EquationCard: React.FC<{
   );
 };
 
-const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data, targetVariable }) => {
-  const { equations, summary, recommendation } = data;
+const EquationResultsView: React.FC<EquationResultsViewProps> = ({
+  data,
+  targetVariable,
+  hasDiscovery = false,
+  selection,
+}) => {
+  const { equations = [], summary, recommendation } = data;
+  // The selector's headline is the single recommended model. Runs from before it existed
+  // fall back to the explanation AI's recommendation.
+  const headline = equations.find((eq) => eq.is_headline);
+  const recommendedId = headline?.id ?? recommendation?.equation_id ?? 0;
+  const explainerDisagrees =
+    !!headline &&
+    recommendation?.agrees_with_headline === false &&
+    recommendation.equation_id > 0 &&
+    recommendation.equation_id !== headline.id;
+  const headlineReason = headline ? headlineReasonText(selection?.headline_reason) : '';
 
   // Handle parse error fallback
   if (data._parse_error) {
@@ -359,8 +441,9 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data, targetV
     );
   }
 
-  // Handle LLM explanation failure — show error instead of partial results
-  if (data._explanation_error) {
+  // LLM explanation failure on a legacy run (no discovery report): the equations are raw
+  // and unscored, so show an error instead of partial results
+  if (data._explanation_error && !hasDiscovery) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-xl p-6">
         <div className="flex flex-col items-center justify-center text-center py-8">
@@ -452,11 +535,37 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data, targetV
         </div>
       )}
 
+      {explainerDisagrees && (
+        <div className="bg-[rgba(59,130,246,0.06)] border border-[rgba(59,130,246,0.2)] rounded-xl p-4 text-sm text-secondary flex items-start gap-3">
+          <i className="pi pi-info-circle text-brand-500 mt-0.5" aria-hidden="true"></i>
+          <div>
+            <p>
+              <span className="font-medium text-primary">
+                The explanation AI prefers Equation {recommendation.equation_id}
+              </span>
+              {recommendation.disagreement_reason
+                ? `: ${sanitizeText(recommendation.disagreement_reason)}`
+                : '.'}
+            </p>
+            {recommendation.rationale?.length > 0 && (
+              <ul className="mt-2 list-disc pl-5 space-y-1">
+                {recommendation.rationale.map((reason, idx) => (
+                  <li key={idx}>{sanitizeText(reason)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Recommendation Card */}
-      {recommendation &&
-        recommendation.equation_id > 0 &&
+      {recommendedId > 0 &&
         (() => {
-          const recommendedEquation = equations.find((eq) => eq.id === recommendation.equation_id);
+          const recommendedEquation = equations.find((eq) => eq.id === recommendedId);
+          const rationale =
+            recommendation && recommendation.equation_id === recommendedId
+              ? (recommendation.rationale ?? [])
+              : [];
           return (
             <div className="bg-[rgba(34,197,94,0.06)] rounded-xl border border-[rgba(34,197,94,0.2)] p-6">
               <div className="flex items-start gap-4">
@@ -465,26 +574,29 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data, targetV
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-bold font-heading text-primary">
-                    Recommended: Equation {recommendation.equation_id}
+                    Recommended: Equation {recommendedId}
                   </h3>
                   {recommendedEquation && (
                     <div className="mt-3 bg-surface rounded-lg p-3 border border-[rgba(34,197,94,0.2)] overflow-x-auto mathjax-equation">
                       <MathJaxContext config={mathJaxConfig}>
                         <MathJax inline dynamic>
-                          {`\`${targetVariable ? `${escapeForAsciiMath(targetVariable)} = ` : ''}${escapeForAsciiMath(recommendedEquation.equation)}\``}
+                          {equationMath(recommendedEquation, targetVariable)}
                         </MathJax>
                       </MathJaxContext>
                     </div>
                   )}
-                  {recommendation.rationale && recommendation.rationale.length > 0 && (
+                  {rationale.length > 0 && (
                     <ul className="mt-4 space-y-2">
-                      {recommendation.rationale.map((reason, idx) => (
+                      {rationale.map((reason, idx) => (
                         <li key={idx} className="flex items-start gap-2 text-secondary">
                           <i className="pi pi-check-circle text-green-500 mt-0.5 flex-shrink-0"></i>
                           <span className="text-sm">{reason}</span>
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {headlineReason && (
+                    <p className="mt-3 text-xs text-muted">Model selection: {headlineReason}</p>
                   )}
                 </div>
               </div>
@@ -502,10 +614,19 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data, targetV
             </h3>
             <HelpButton title="Understanding Equations">
               <h4>Equation Metrics</h4>
+              <p>
+                The list mixes symbolic-regression equations with classic, custom and published
+                (literature) laws, ordered by complexity.
+              </p>
               <ul>
                 <li>
-                  <strong>Loss (MSE)</strong> - Mean Squared Error, measures prediction accuracy.
-                  Lower is better.
+                  <strong>R²</strong> - Share of the target's variation the equation explains. It is
+                  measured on held-out rows no model was trained on, or, when the dataset is too
+                  small for a holdout, by cross-validation (CV R²).
+                </li>
+                <li>
+                  <strong>Loss (MSE)</strong> - Mean Squared Error on the same rows as the R²
+                  (held-out MSE or CV MSE). Lower is better.
                 </li>
                 <li>
                   <strong>Complexity</strong> - Number of terms/operations in the equation. Lower
@@ -538,7 +659,7 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({ data, targetV
               <EquationCard
                 key={eq.id}
                 equation={eq}
-                isRecommended={eq.id === recommendation?.equation_id}
+                isRecommended={eq.id === recommendedId}
                 targetVariable={targetVariable}
               />
             ))}

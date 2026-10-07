@@ -11,12 +11,15 @@ langgraph
 langchain-core
 matplotlib
 seaborn
+scipy
+scikit-learn
 shap
 sqlalchemy
 psycopg2-binary
 alembic
 pyjwt[crypto]
-dspy
+# Pinned: the discovery agent extends dspy.ReAct internals
+dspy>=3.4,<3.5
 langfuse
 openinference-instrumentation-dspy
 openpyxl

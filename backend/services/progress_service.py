@@ -269,6 +269,24 @@ class ProgressTracker:
                 step_name=step_name,
             )
 
+    async def set_progress_async(self, progress: int, step_name: str | None = None) -> None:
+        """Async version of set_progress (DB write in a thread, awaited SSE broadcast)."""
+        if not self.run_id:
+            return
+        progress = min(99, max(0, progress))
+        if progress <= self.current_progress:
+            return
+        persisted, run_status = await asyncio.to_thread(self._persist_progress_db, progress)
+        if persisted:
+            from backend.api.sse.connection_manager import get_connection_manager
+
+            await get_connection_manager().broadcast_progress(
+                run_id=self.run_id,
+                progress=progress,
+                status=run_status,
+                step_name=step_name,
+            )
+
     def _persist_progress_db(self, progress: int) -> tuple[bool, str]:
         """
         Write progress to database if it increases.

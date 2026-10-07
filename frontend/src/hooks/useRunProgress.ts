@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ProgressSSE } from '@services/sseService';
-import type { EquationResults, RunStatus } from '@/types';
+import type { AgentEvent, EquationResults, RunStatus } from '@/types';
 import type {
   ConnectionState,
   ServerMessage,
@@ -15,6 +15,7 @@ import type {
 } from '@/types/sse';
 
 const TERMINAL_STATUSES: RunStatus[] = ['completed', 'failed', 'timeout', 'cancelled'];
+const MAX_ACTIVITY = 60;
 
 export function useRunProgress(options: UseRunProgressOptions): UseRunProgressReturn {
   const { runId, onComplete, onError, enabled = true } = options;
@@ -26,6 +27,7 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
   const [results, setResults] = useState<EquationResults | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
   const [isReady, setIsReady] = useState(false);
+  const [activity, setActivity] = useState<AgentEvent[]>([]);
 
   // Refs
   const sseRef = useRef<ProgressSSE | null>(null);
@@ -62,6 +64,13 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
   // Handle SSE message
   const handleMessage = useCallback(
     (message: ServerMessage) => {
+      if (message.type === 'agent_event') {
+        setActivity((prev) => [...prev, message.event].slice(-MAX_ACTIVITY));
+        return;
+      }
+      if (message.type === 'initial_state' && message.recent_events?.length) {
+        setActivity(message.recent_events.map((m) => m.event).slice(-MAX_ACTIVITY));
+      }
       if (message.type === 'initial_state' || message.type === 'progress_update') {
         setProgress(message.progress);
         setStatus(message.status);
@@ -122,6 +131,7 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
     results,
     connectionState,
     isReady,
+    activity,
   };
 }
 

@@ -4,16 +4,15 @@
 #
 # This creates a container optimized for HPC environments with:
 # - Python 3.11 with scientific computing stack
-# - Julia 1.10.2 with PySR pre-compiled
-# - SHAP and all required dependencies
+# - Julia 1.11 with PySR pre-compiled
 
 Bootstrap: docker
 From: python:3.11-slim
 
 %labels
     Author Syxplain Team
-    Version 1.0
-    Description Syxplain compute worker for SHAP and PySR tasks on Slurm
+    Version 3.0.0
+    Description Syxplain compute worker for PySR tasks on Slurm
 
 %post
     # Install system dependencies
@@ -36,7 +35,8 @@ From: python:3.11-slim
 
     # Copy requirements and install Python dependencies
     # Note: requirements.txt must be in the same directory as the .def file during build
-    pip install --no-cache-dir numpy pandas scipy scikit-learn shap pysr juliacall requests
+    # PySR is pinned: the backend relies on its `guesses` argument and equation string format
+    pip install --no-cache-dir numpy pandas scipy pysr==2.7.0 juliacall requests
 
     # Pre-compile Julia packages into a fixed depot path (not /root/.julia)
     # so they persist and are readable at runtime
@@ -78,7 +78,6 @@ print('Julia pre-compilation complete')
     io/ /app/slurm_worker/io
     reporting/ /app/slurm_worker/reporting
     tasks/ /app/slurm_worker/tasks
-    visualization/ /app/slurm_worker/visualization
 
 %environment
     export PYTHONUNBUFFERED=1
@@ -100,22 +99,20 @@ print('Julia pre-compilation complete')
 %test
     python -c "import sys; sys.path.insert(0, '/app'); from slurm_worker import __version__; print(f'Version: {__version__}')"
     python -c "from pysr import PySRRegressor; print('PySR OK')"
-    python -c "import shap; print('SHAP OK')"
 
 %help
     Syxplain Worker Container
 
-    This container runs compute-intensive tasks (SHAP and PySR) for the Syxplain
+    This container runs compute-intensive PySR tasks for the Syxplain
     symbolic regression analysis platform.
 
     Usage:
         singularity run syxplain-worker.sif --help
-        singularity run syxplain-worker.sif --task-type shap --run-id <id> --input <file> --output <file>
         singularity run syxplain-worker.sif --task-type pysr --run-id <id> --input <file> --output <file>
 
     With bind mounts for data access:
         singularity run --bind /storage:/storage syxplain-worker.sif \
-            --task-type shap \
+            --task-type pysr \
             --run-id abc123 \
             --input /storage/staging/abc123/input.json \
             --output /storage/staging/abc123/output.json

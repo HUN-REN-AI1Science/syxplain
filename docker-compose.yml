@@ -77,9 +77,9 @@ services:
       - WORKER_CALLBACK_TOKEN=${WORKER_CALLBACK_TOKEN:-dev-callback-token}
       - JOB_POLL_INTERVAL=5
       # Analysis Settings (sensible defaults for dev)
-      - SHAP_SUBSAMPLE_FRACTION=0.1
-      - SHAP_SUBSAMPLE_MIN=100
-      - SHAP_SUBSAMPLE_MAX=1000
+      - DISCOVERY_AGENT_ENABLED=${DISCOVERY_AGENT_ENABLED:-true}
+      - DISCOVERY_AGENT_MODEL=${DISCOVERY_AGENT_MODEL:-}
+      - DISCOVERY_WALL_CLOCK_MIN=${DISCOVERY_WALL_CLOCK_MIN:-15,30}
       - ANALYSIS_TIMEOUT_HOURS=2
       # CORS (allow all for local dev)
       - CORS_ORIGINS=*

@@ -139,19 +139,80 @@ class AnalysisSettings:
         return self.max_file_size_mb * 1024 * 1024
 
 
-@dataclass
-class SHAPSettings:
-    """SHAP analysis settings."""
+def _per_analysis_type(raw: str, default: tuple[float, float]) -> tuple[float, float]:
+    """Parse "quick,deep" (or a single value for both)."""
+    try:
+        parts = [float(p) for p in raw.split(",") if p.strip()]
+    except ValueError:
+        return default
+    if len(parts) == 1:
+        return parts[0], parts[0]
+    if len(parts) >= 2:
+        return parts[0], parts[1]
+    return default
 
-    subsample_fraction: float = field(
-        default_factory=lambda: float(os.environ.get("SHAP_SUBSAMPLE_FRACTION", "0.1"))
+
+@dataclass
+class DiscoverySettings:
+    """
+    Budget of the agentic equation-discovery loop.
+
+    Values given as "quick,deep" apply per analysis type.
+    """
+
+    enabled: bool = field(
+        default_factory=lambda: os.environ.get("DISCOVERY_AGENT_ENABLED", "true").lower() == "true"
     )
-    subsample_min: int = field(
-        default_factory=lambda: int(os.environ.get("SHAP_SUBSAMPLE_MIN", "1000"))
+    # Model for the agent (server keys); empty = OPENAI_MODEL_NAME
+    model_name: str = field(default_factory=lambda: os.environ.get("DISCOVERY_AGENT_MODEL", ""))
+    max_iters: tuple[float, float] = field(
+        default_factory=lambda: _per_analysis_type(
+            os.environ.get("DISCOVERY_MAX_ITERS", "30,40"), (30, 40)
+        )
     )
-    subsample_max: int = field(
-        default_factory=lambda: int(os.environ.get("SHAP_SUBSAMPLE_MAX", "5000"))
+    max_pysr_runs: tuple[float, float] = field(
+        default_factory=lambda: _per_analysis_type(
+            os.environ.get("DISCOVERY_MAX_PYSR_RUNS", "3,6"), (3, 6)
+        )
     )
+    wall_clock_minutes: tuple[float, float] = field(
+        default_factory=lambda: _per_analysis_type(
+            os.environ.get("DISCOVERY_WALL_CLOCK_MIN", "45,150"), (45, 150)
+        )
+    )
+    max_concurrent_pysr: int = field(
+        default_factory=lambda: int(os.environ.get("DISCOVERY_MAX_CONCURRENT_PYSR", "2"))
+    )
+    pysr_timeout_s: int = field(
+        default_factory=lambda: int(os.environ.get("DISCOVERY_PYSR_TIMEOUT_S", "1800"))
+    )
+    # Read-only review steps for searches that finish after the agent stopped (0 = off)
+    review_steps: int = field(
+        default_factory=lambda: int(os.environ.get("DISCOVERY_REVIEW_STEPS", "5"))
+    )
+    # How long to wait for a first PySR result when none has completed
+    first_result_timeout_s: int = field(
+        default_factory=lambda: int(os.environ.get("DISCOVERY_FIRST_RESULT_TIMEOUT_S", "3600"))
+    )
+    # Drop a predictor whose missing values alone remove more than this share of rows
+    sparse_column_threshold: float = field(
+        default_factory=lambda: float(os.environ.get("DISCOVERY_SPARSE_COLUMN_THRESHOLD", "0.2"))
+    )
+    max_categorical_levels: int = field(
+        default_factory=lambda: int(os.environ.get("DISCOVERY_MAX_CATEGORICAL_LEVELS", "10"))
+    )
+
+    def for_type(self, analysis_type: str) -> dict[str, float]:
+        i = 1 if analysis_type == "deep" else 0
+        return {
+            "max_iters": int(self.max_iters[i]),
+            "max_pysr_runs": int(self.max_pysr_runs[i]),
+            "wall_clock_s": float(self.wall_clock_minutes[i]) * 60,
+            "max_concurrent_pysr": self.max_concurrent_pysr,
+            "pysr_timeout_s": self.pysr_timeout_s,
+            # Safety net for runaway tool use; the agent is budgeted in steps.
+            "max_tool_calls": int(self.max_iters[i]) * 2,
+        }
 
 
 @dataclass
@@ -253,7 +314,7 @@ class Settings:
     llm: LLMSettings = field(default_factory=LLMSettings)
     cors: CORSSettings = field(default_factory=CORSSettings)
     analysis: AnalysisSettings = field(default_factory=AnalysisSettings)
-    shap: SHAPSettings = field(default_factory=SHAPSettings)
+    discovery: DiscoverySettings = field(default_factory=DiscoverySettings)
     langfuse: LangfuseSettings = field(default_factory=LangfuseSettings)
     slurm: SlurmSettings = field(default_factory=SlurmSettings)
     compute: ComputeSettings = field(default_factory=ComputeSettings)
@@ -296,6 +357,11 @@ def get_slurm_settings() -> SlurmSettings:
 def get_compute_settings() -> ComputeSettings:
     """Get compute backend settings for dependency injection."""
     return get_settings().compute
+
+
+def get_discovery_settings() -> DiscoverySettings:
+    """Get discovery-agent settings for dependency injection."""
+    return get_settings().discovery
 
 
 def get_github_settings() -> GitHubSettings:

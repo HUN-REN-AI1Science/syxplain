@@ -63,6 +63,10 @@ export class ProgressSSE {
       this.handleMessage(event.data);
     });
 
+    es.addEventListener('agent_event', (event: MessageEvent) => {
+      this.handleMessage(event.data);
+    });
+
     es.addEventListener('error', (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);

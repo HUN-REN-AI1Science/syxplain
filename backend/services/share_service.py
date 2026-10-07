@@ -86,7 +86,14 @@ class ShareService:
 
     @staticmethod
     def _has_explanation_error(results: dict | None) -> bool:
-        """Check if the run's results contain an explanation error."""
+        """
+        Check if the run's results are incomplete because the explanation failed.
+
+        Runs with a discovery report are complete without the narration (the equations,
+        metrics and agent report are all there), so they can always be shared.
+        """
+        if isinstance(results, dict) and results.get("discovery"):
+            return False
         if not results or not isinstance(results, dict):
             return False
         explanations = results.get("explanations")

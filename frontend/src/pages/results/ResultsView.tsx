@@ -15,7 +15,10 @@ import {
   ResultsHeader,
   ResultContent,
   LoadingSpinner,
-  hasExplanationError,
+  extractDiscovery,
+  extractEquationResults,
+  extractWarnings,
+  isResultIncomplete,
 } from '@components/Results';
 import type { ResultsStatus } from '@components/Results';
 import { runsService } from '@services/api';
@@ -75,6 +78,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
     status,
     error,
     isReady: initialFetchDone,
+    activity,
   } = useRunProgress({
     runId,
     onComplete: handleComplete,
@@ -138,27 +142,19 @@ const ResultsView: React.FC<ResultsViewProps> = ({
     try {
       // Parse result the same way ResultContent does, extracting from
       // the backend's combined format (enriched data lives inside `explanations`)
-      let parsedData: EquationResults;
       const raw = typeof result === 'object' ? result : JSON.parse(result);
-
-      if (
-        raw &&
-        typeof raw === 'object' &&
-        'explanations' in raw &&
-        raw.explanations &&
-        typeof raw.explanations === 'object' &&
-        !Array.isArray(raw.explanations) &&
-        'equations' in raw.explanations
-      ) {
-        // Backend combined format: extract enriched data from explanations wrapper
-        parsedData = raw.explanations as EquationResults;
-      } else {
-        parsedData = raw as EquationResults;
-      }
+      const parsedData: EquationResults = extractEquationResults(raw) ?? (raw as EquationResults);
 
       // Dynamic import to reduce initial bundle size
       const { generateResultsPdf } = await import('@utils/pdfExport');
-      await generateResultsPdf(parsedData, runId, targetVariable);
+      const discovery = extractDiscovery(raw);
+      await generateResultsPdf(
+        parsedData,
+        runId,
+        targetVariable,
+        discovery,
+        parsedData.warnings ?? extractWarnings(raw)
+      );
       toast.current?.show({
         severity: 'success',
         summary: 'Export Complete',
@@ -244,8 +240,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({
     typeof result === 'object' &&
     (('equations' in result && 'summary' in result) || 'explanations' in result);
 
-  // Check if the LLM explanation step failed (results are incomplete)
-  const explanationFailed = hasExplanationError(result);
+  // Results are incomplete only when the LLM explanation failed on a legacy run; with a
+  // discovery report the equations and report are complete, so share/export stay enabled
+  const resultIncomplete = isResultIncomplete(result);
 
   // Only show error for terminal failure states, not transient SSE messages
   const isTerminalError =
@@ -263,9 +260,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({
     return 'processing';
   };
 
-  // Header action buttons - hidden when explanations failed
+  // Header action buttons - hidden when the results are incomplete
   const renderHeaderActions = () => {
-    if (!isCompleted || !isNewFormat || explanationFailed) return null;
+    if (!isCompleted || !isNewFormat || resultIncomplete) return null;
 
     return (
       <>
@@ -347,6 +344,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
               isJobSubmitted={
                 status === 'running' && !isStarting && !isConnecting && !isInQueuePhase
               }
+              activity={activity}
             />
             {status === 'running' && !isStarting && !isConnecting && (
               <div className="flex justify-center mt-4">
