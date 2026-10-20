@@ -88,11 +88,17 @@ class ExplainPySrEquations(dspy.Signature):
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
     Use this context: contrast symbolic equations with the classic baselines (what does a symbolic equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
 
+    ### COHERENCE
+    discovery.coherence checks whether the independent lines of evidence agree on the headline equation: checks[] holds the backend's verdicts (pass / warn / fail / na) against the noise ceiling, the holdout, SHAP, published laws, named laws, its parameters and the agent. They are final: never contradict or re-score them. discovery.coherence.effect_directions gives the shape of the headline's effect for each variable over the observed range (with the predictions at both ends). Add what the backend cannot judge:
+    - coherence.domain_checks: for each variable in effect_directions, and for the headline's limiting behaviour (as variables approach zero or grow, saturation, staying within physically possible values), say whether it is consistent with domain knowledge, PROJECT_SPEC. status is "consistent", "questionable" or "inconsistent"; aspect names the variable or behaviour in a few words.
+    - coherence.assessment: one paragraph on whether the evidence agrees on the headline and which link is weakest, reusing the failed or warned checks.
+    If discovery.coherence is null, return "coherence": null.
+
     ### RECOMMENDATION RULE
     DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied). Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
 
     ### TEXT FORMATTING (CRITICAL)
-    - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", or "rationale" fields.
+    - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", "rationale" or "coherence" fields.
     - Write all explanations in plain English prose. No subscripts, superscripts, Greek letters in LaTeX form (e.g., $\\alpha$), or special math fonts.
     - Variable names should be written as plain text (e.g., "Tm_sprsum" not "$T_{m\\_sprsum}$").
     - Use words instead of symbols for mathematical concepts (e.g., "squared" instead of "^2" in prose).
@@ -134,6 +140,12 @@ class ExplainPySrEquations(dspy.Signature):
             "agrees_with_headline": true,
             "disagreement_reason": "",
             "rationale": ["reason 1 why this equation is best", "reason 2 (scientific plausibility)", "reason 3"]
+        },
+        "coherence": {
+            "domain_checks": [
+                {"aspect": "P effect: increasing, saturating", "status": "consistent", "explanation": "string"}
+            ],
+            "assessment": "string - paragraph"
         }
     }
 
@@ -319,11 +331,17 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
     Use this context: contrast symbolic equations with the classic baselines (what does a symbolic equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
 
+    ### COHERENCE
+    discovery.coherence checks whether the independent lines of evidence agree on the headline equation: checks[] holds the backend's verdicts (pass / warn / fail / na) against the noise ceiling, the holdout, SHAP, published laws, named laws, its parameters and the agent. They are final: never contradict or re-score them. discovery.coherence.effect_directions gives the shape of the headline's effect for each variable over the observed range (with the predictions at both ends). Add what the backend cannot judge:
+    - coherence.domain_checks: for each variable in effect_directions, and for the headline's limiting behaviour (as variables approach zero or grow, saturation, staying within physically possible values), say whether it is consistent with domain knowledge, PROJECT_SPEC and with the literature_equations. status is "consistent", "questionable" or "inconsistent"; aspect names the variable or behaviour in a few words.
+    - coherence.assessment: one paragraph on whether the evidence agrees on the headline and which link is weakest, reusing the failed or warned checks.
+    If discovery.coherence is null, return "coherence": null.
+
     ### RECOMMENDATION RULE
     DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied). Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
 
     ### TEXT FORMATTING (CRITICAL)
-    - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", or "rationale" fields.
+    - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", "rationale" or "coherence" fields.
     - Write all explanations in plain English prose. No subscripts, superscripts, Greek letters in LaTeX form (e.g., $\\alpha$), or special math fonts.
     - Variable names should be written as plain text (e.g., "Tm_sprsum" not "$T_{m\\_sprsum}$").
     - Use words instead of symbols for mathematical concepts (e.g., "squared" instead of "^2" in prose).
@@ -366,6 +384,12 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
             "agrees_with_headline": true,
             "disagreement_reason": "",
             "rationale": ["reason 1 why this equation is best", "reason 2 (referencing the literature compatibility)", "reason 3"]
+        },
+        "coherence": {
+            "domain_checks": [
+                {"aspect": "P effect: increasing, saturating", "status": "consistent", "explanation": "string"}
+            ],
+            "assessment": "string - paragraph"
         }
     }
 

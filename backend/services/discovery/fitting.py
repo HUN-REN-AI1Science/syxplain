@@ -100,6 +100,11 @@ class ModelResult:
     parsed: ParsedExpression | None = field(default=None, repr=False, compare=False)
     oof_pred: np.ndarray | None = field(default=None, repr=False, compare=False)
 
+    @property
+    def n_undefined_total(self) -> int:
+        """Rows where the model is undefined, in CV and on the holdout."""
+        return self.n_undefined + ((self.holdout or {}).get("n_undefined") or 0)
+
     def brief(self) -> dict[str, Any]:
         """Compact view for the agent's context window."""
         out: dict[str, Any] = {

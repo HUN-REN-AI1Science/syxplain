@@ -6,6 +6,7 @@
 import React from 'react';
 import EquationResultsView from './EquationResults/EquationResultsView';
 import DiscoveryReportPanel from './Discovery/DiscoveryReportPanel';
+import CoherenceSection from './Discovery/CoherenceSection';
 import LegacyResultsFallback from './LegacyResultsFallback';
 import ResultWarnings from './ResultWarnings';
 import SectionErrorBoundary from './SectionErrorBoundary';
@@ -100,6 +101,11 @@ export const ResultContent: React.FC<ResultContentProps> = ({
           hasDiscovery={!!discovery}
           selection={discovery?.selection}
         />
+        {discovery?.coherence && (
+          <SectionErrorBoundary name="The coherence check">
+            <CoherenceSection report={discovery.coherence} domain={equationData.coherence} />
+          </SectionErrorBoundary>
+        )}
         {discovery && (
           <SectionErrorBoundary name="The discovery report">
             <DiscoveryReportPanel report={discovery} loadPlot={loadPlot} />
