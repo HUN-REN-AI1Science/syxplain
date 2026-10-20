@@ -41,6 +41,10 @@ From: python:3.11-slim
     # Pre-compile Julia packages into a fixed depot path (not /root/.julia)
     # so they persist and are readable at runtime
     export JULIA_DEPOT_PATH=/opt/julia-depot
+    # Use the container's Julia and keep juliacall's environment inside the image, so
+    # jobs reuse exactly what is resolved and precompiled here (same as %environment)
+    export PYTHON_JULIAPKG_EXE=/usr/local/bin/julia
+    export PYTHON_JULIAPKG_PROJECT=/opt/julia-env
 
     # Broad CPU target so precompiled native code is valid on HPC nodes
     export JULIA_CPU_TARGET="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
@@ -63,6 +67,9 @@ except:
     pass  # First run may fail but Julia is compiled
 print('Julia pre-compilation complete')
 " || true
+
+    # Jobs run as an unprivileged user: everything preloaded must be readable
+    chmod -R a+rX /opt/julia-env /opt/julia-depot
 
     # Clean up (avoid /tmp and /var/tmp as they may contain host files with fakeroot)
     apt-get clean || true
@@ -88,6 +95,10 @@ print('Julia pre-compilation complete')
     export JULIA_DEPOT_PATH="/storage/ai4science/syxplain/.julia:/opt/julia-depot"
     # Force pyjuliapkg to use the container's Julia instead of downloading its own
     export PYTHON_JULIAPKG_EXE=/usr/local/bin/julia
+    # The Julia environment resolved and precompiled at build time; never re-resolve or
+    # download at run time
+    export PYTHON_JULIAPKG_PROJECT=/opt/julia-env
+    export PYTHON_JULIAPKG_OFFLINE=yes
     # Broad CPU target matching the build-time precompilation
     export JULIA_CPU_TARGET="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
     # Julia threading - will be overridden by SLURM_CPUS_PER_TASK in the worker
@@ -98,7 +109,17 @@ print('Julia pre-compilation complete')
 
 %test
     python -c "import sys; sys.path.insert(0, '/app'); from slurm_worker import __version__; print(f'Version: {__version__}')"
-    python -c "from pysr import PySRRegressor; print('PySR OK')"
+    # /storage (the runtime depot) is not mounted during a build: use a scratch depot. Offline,
+    # so this fails if anything would still be downloaded or resolved at run time.
+    JULIA_DEPOT_PATH="$(mktemp -d):/opt/julia-depot" python -c "
+import time
+t = time.time()
+from pysr import PySRRegressor
+import numpy as np
+X = np.random.randn(20, 2)
+PySRRegressor(niterations=1, turbo=True, verbosity=0, progress=False).fit(X, X[:, 0] + X[:, 1])
+print(f'PySR OK: import + fit in {time.time() - t:.0f}s, offline')
+"
 
 %help
     Syxplain Worker Container
