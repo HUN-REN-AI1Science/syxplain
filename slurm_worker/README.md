@@ -40,7 +40,9 @@ cd /storage/ai4science/syxplain/slurm_worker
 singularity build --fakeroot ../containers/syxplain-worker.sif syxplain-worker.def
 ```
 
-This creates `syxplain-worker.sif` with all dependencies pre-installed and Julia pre-compiled.
+This creates `syxplain-worker.sif` with all dependencies pre-installed and every PySR Julia package installed and precompiled into the image (about 25 minutes). The build fails if that preloading fails, and its self-test imports and fits PySR offline on the read-only image, so jobs never download, resolve or compile anything at run time.
+
+For a first install, building straight into `containers/` is fine. **To update a running deployment, do not overwrite the live image**: build beside it, smoke-test on a compute node, deploy the backend, then swap the image in, as described in [SLURM.md → Deploy Order](../SLURM.md#deploy-order-worker-and-backend-together).
 
 ### 3. Test the Container
 
@@ -68,10 +70,10 @@ When you make changes to the worker code:
 # From your local machine - copy updated code
 scp -r slurm_worker ai4science@slurm.science-cloud.hu:/storage/ai4science/syxplain/
 
-# SSH and rebuild with --force to overwrite
+# SSH and rebuild beside the live image (swap it in after the backend deploy, see SLURM.md)
 ssh ai4science@slurm.science-cloud.hu
 cd /storage/ai4science/syxplain/slurm_worker
-singularity build --fakeroot --force ../containers/syxplain-worker.sif syxplain-worker.def
+singularity build --fakeroot ../containers/syxplain-worker.sif.new syxplain-worker.def
 ```
 
 ## Local Testing

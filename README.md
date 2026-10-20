@@ -139,7 +139,7 @@ Copy `.env.example` to `.env` and configure:
 **Optional:**
 - `OPENAI_API_BASE` - Custom LLM endpoint
 - `OPENAI_MODEL_NAME` - Model name (default: `gpt-4o`)
-- `SLURM_PARTITION` - Slurm partition (default: `batch_cpu_m2.large`)
+- `SLURM_PARTITION` - Slurm partition (default: `cpu_m2.2xlarge`)
 - `GITHUB_FEEDBACK_TOKEN` - GitHub personal access token for creating feedback issues
 - `GITHUB_FEEDBACK_REPO_OWNER` - GitHub repository owner (e.g. `HUN-REN-AI1Science`)
 - `GITHUB_FEEDBACK_REPO_NAME` - GitHub repository name (e.g. `syxplain`)
