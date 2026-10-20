@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=syxplain-compute
-#SBATCH --partition=batch_cpu_m2.large
+#SBATCH --partition=cpu_m2.2xlarge
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=4G
 #SBATCH --time=01:00:00

@@ -56,7 +56,11 @@ def create_dspy_model(
     )
 
 
-_DEFAULT_DEEP_RESEARCH_MODEL = "o4-mini-deep-research"
+# OpenAI retired o3/o4-mini-deep-research (2026-07-23): a regular reasoning model now does the
+# research through the Responses API's web search, set up to search as broadly as they did.
+_DEFAULT_DEEP_RESEARCH_MODEL = "gpt-6.1-sol"
+# Web searches per literature lookup: the main cost and latency lever
+_DEEP_RESEARCH_MAX_TOOL_CALLS = 60
 
 
 def create_deep_research_model(
@@ -78,8 +82,14 @@ def create_deep_research_model(
     """
     settings = get_settings().llm
 
-    # Deep research models require at least one of web_search_preview/mcp/file_search.
-    extra_body = {"tools": [{"type": "web_search_preview", "search_context_size": "medium"}]}
+    # Web search is a Responses API tool (Chat Completions accepts only function tools).
+    research_kwargs = {
+        "model_type": "responses",
+        "tools": [{"type": "web_search", "search_context_size": "high"}],
+        "max_tool_calls": _DEEP_RESEARCH_MAX_TOOL_CALLS,
+        "reasoning": {"effort": "high"},
+        "timeout": 1800,
+    }
 
     if user_api_key:
         # User key: direct to OpenAI with selected model
@@ -87,7 +97,7 @@ def create_deep_research_model(
             model=f"openai/{model_name or _DEFAULT_DEEP_RESEARCH_MODEL}",
             api_key=user_api_key,
             api_base=None,  # Use default OpenAI endpoint
-            extra_body=extra_body,
+            **research_kwargs,
         )
 
     # Server key: use configured settings
@@ -105,5 +115,5 @@ def create_deep_research_model(
         model=f"openai/{effective_model}",
         api_key=settings.deep_research_api_key,
         api_base=settings.deep_research_api_base,
-        extra_body=extra_body,
+        **research_kwargs,
     )

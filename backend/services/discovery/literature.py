@@ -63,7 +63,7 @@ def literature_features(
         if col in session.alias_of
     }
     target_desc = descriptions.get(session.target_column) or project_description[:300]
-    out[session.target_alias] = f"target variable ({session.target_column})" + (
+    out[session.target_alias] = f"TARGET variable ({session.target_column})" + (
         f": {target_desc}" if target_desc else ""
     )
     return out

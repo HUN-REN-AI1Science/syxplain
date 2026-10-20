@@ -290,7 +290,7 @@ def test_deep_mode_calls_literature_once_with_target(orchestrator, monkeypatch):
 
     monkeypatch.setattr(llm_service, "deep_research_equations", research)
     monkeypatch.setattr(llm_service, "generate_equation_explanation", explain)
-    ctx = _context(analysis_type="deep", deep_research_model="o4-mini-deep-research")
+    ctx = _context(analysis_type="deep", deep_research_model="gpt-6.1-sol")
 
     async def run():
         progress = StubProgress()
@@ -301,7 +301,7 @@ def test_deep_mode_calls_literature_once_with_target(orchestrator, monkeypatch):
 
     results, _explanations, warnings = asyncio.run(run())
     assert len(calls) == 1
-    assert calls[0]["response"].startswith("target variable")
+    assert calls[0]["response"].startswith("TARGET variable")
     law = results["discovery"]["literature"]["laws"][0]
     assert law["model_id"].startswith("L") and law["cv_r2"] > 0.9
     assert deep_contexts[0]["equations"][0]["model_id"] == law["model_id"]
@@ -322,7 +322,7 @@ def test_deep_mode_without_laws_warns_and_explains_plainly(orchestrator, monkeyp
         "generate_equation_explanation",
         lambda **k: deep_contexts.append(k["deep_research_context"]) or {"equations": []},
     )
-    ctx = _context(analysis_type="deep", deep_research_model="o4-mini-deep-research")
+    ctx = _context(analysis_type="deep", deep_research_model="gpt-6.1-sol")
 
     async def run():
         progress = StubProgress()

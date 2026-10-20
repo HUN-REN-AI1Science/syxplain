@@ -143,10 +143,10 @@ class AnalysisOrchestrator:
     1. Data preparation
     2. LLM generates the config of a baseline PySR search, which is submitted
     3. Discovery agent fits classic laws, diagnoses failures and steers more PySR searches
-    4. Every model is scored on held-out data
+       (deep mode: a literature scout finds published laws by web search, which are fitted too)
+    4. The Selector ranks every model by cross-validation; the holdout is scored once
     5. LLM explains results (with the agent's notebook as context)
-    6. (Optional) Deep research with o4-mini
-    7. Store final results
+    6. Store final results
     """
 
     def __init__(

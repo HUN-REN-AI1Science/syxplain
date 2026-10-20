@@ -139,7 +139,7 @@ For detailed configuration and troubleshooting, continue reading.
 | `SLURM_USER_NAME` | Yes | - | Your Slurm username |
 | `SLURM_STAGING_DIR` | Yes | - | Staging directory on cluster storage |
 | `SLURM_CONTAINER_PATH` | Yes* | - | Path to Singularity container |
-| `SLURM_PARTITION` | No | `batch_cpu_m2.large` | Slurm partition for jobs |
+| `SLURM_PARTITION` | No | `cpu_m2.2xlarge` | Slurm partition for jobs |
 | `SLURM_CPUS` | No | `4` | CPUs per job |
 | `SLURM_MEMORY` | No | `8G` | Memory per job |
 | `SLURM_TIME_LIMIT` | No | `04:00:00` | Max job time (HH:MM:SS) |
@@ -228,13 +228,21 @@ python test_worker_local.py --task pysr --example 1 --niterations 5
 
 See [slurm_worker/README.md](./slurm_worker/README.md) for more testing options.
 
-## Deploy Order (worker before backend)
+## Deploy Order (worker and backend together)
 
-The backend passes `--task-key` to the worker and expects worker features (target transforms, warm-start guesses, full Pareto fronts) that only worker **3.0.0+** has. An older `syxplain-worker.sif` rejects the argument and every search fails before reporting back. Always:
+The backend passes `--task-key` to the worker and expects worker features (target transforms, warm-start guesses, full Pareto fronts) that only worker **3.0.0+** has; an older image rejects the argument. A 2.x backend, in turn, needs the SHAP task that 3.0.0 no longer has. So build the new image beside the old one and swap it in right after the backend deploy:
 
-1. Rebuild the container from `slurm_worker/syxplain-worker.def` and copy it to `SLURM_CONTAINER_PATH` on the cluster.
-2. Check it: `singularity exec syxplain-worker.sif python -c "import slurm_worker; print(slurm_worker.__version__)"` prints `3.0.0`.
-3. Only then deploy the backend.
+1. Build on the login node, which has Singularity with `--fakeroot` (about 25 minutes, mostly Julia precompilation):
+   ```bash
+   B=/storage/ai4science/syxplain/build-<version>
+   rsync -a --exclude __pycache__ slurm_worker/ ai4science@slurm.science-cloud.hu:$B/src/
+   ssh ai4science@slurm.science-cloud.hu "cd $B/src && SINGULARITY_TMPDIR=$B/tmp SINGULARITY_CACHEDIR=$B/cache \
+     setsid nohup singularity build --fakeroot $B/syxplain-worker.sif syxplain-worker.def > $B/build.log 2>&1 &"
+   ```
+   The build installs and precompiles every PySR Julia package into the image and fails if that does not work; its `%test` imports and fits PySR offline on the read-only image. Jobs therefore never download, resolve or compile Julia packages (`PYTHON_JULIACALL_EXE`/`PYTHON_JULIACALL_PROJECT` point juliacall at the baked environment).
+2. Smoke-test on a compute node with `sbatch` (`--partition=cpu_m2.2xlarge`) running the image on a real input JSON (`--input`, `--output`).
+3. Deploy the backend (merge to `main`).
+4. Swap the image, keeping the old one: `cp -p syxplain-worker.sif syxplain-worker.sif.bak-<old version>`, then copy the new image over `SLURM_CONTAINER_PATH`, and check `singularity exec syxplain-worker.sif python -c "import slurm_worker; print(slurm_worker.__version__)"`.
 
 The worker reports its version when it fetches its input (stored in `Run.input_data[<task_key>].worker_version`). If a search still fails with `unrecognized arguments: --task-key`, the run notebook says the worker image is outdated.
 

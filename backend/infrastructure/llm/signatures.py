@@ -159,6 +159,8 @@ class DeepResearchEquations(dspy.Signature):
     3. For each relationship:
        - Use the external sources to find the interpretation and evaluations of the equation.
        - Write a Pythonic equation using the keys from the feature list exactly as variable names.
+       - If one feature is marked TARGET, write every equation that involves it SOLVED FOR THE TARGET, with the target alone on the left side (e.g. "y = a*x + b", never "x = (y - b)/a"). Rearrange published forms algebraically when needed, and keep the original's constants.
+       - Find as many distinct relationships as the literature supports (aim for 3-8), including ones that use only a subset of the variables.
        - You may introduce constants or parameters (e.g. kappa, g, cp, alpha, Pmax, A, B).
        - Provide citation links (DOI, journal URLs, textbook links) supporting the equation.
     4. Do not include explanations, extra text, or commentary — only the json.

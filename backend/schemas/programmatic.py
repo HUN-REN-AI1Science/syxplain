@@ -354,8 +354,7 @@ class ModelsResponse(BaseModel):
                     "gemini-2.5-flash",
                 ],
                 "deep_research_models": [
-                    "o3",
-                    "o4-mini",
+                    "gpt-6.1-sol",
                 ],
             }
         }

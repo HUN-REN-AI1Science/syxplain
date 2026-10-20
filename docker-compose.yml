@@ -66,7 +66,7 @@ services:
       - SLURM_API_URL=${SLURM_API_URL:-http://mock-slurm:6820}
       - SLURM_AUTH_TOKEN=${SLURM_AUTH_TOKEN:-mock-token}
       - SLURM_USER_NAME=${SLURM_USER_NAME:-ai4science}
-      - SLURM_PARTITION=${SLURM_PARTITION:-batch_cpu_m2.large}
+      - SLURM_PARTITION=${SLURM_PARTITION:-cpu_m2.2xlarge}
       - SLURM_STAGING_DIR=${SLURM_STAGING_DIR:-/storage/ai4science/syxplain}
       - SLURM_CPUS=${SLURM_CPUS:-4}
       - SLURM_MEMORY=${SLURM_MEMORY:-8G}
