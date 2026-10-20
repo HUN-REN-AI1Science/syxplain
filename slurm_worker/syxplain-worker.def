@@ -95,10 +95,11 @@ print('Julia pre-compilation complete')
     export JULIA_DEPOT_PATH="/storage/ai4science/syxplain/.julia:/opt/julia-depot"
     # Force pyjuliapkg to use the container's Julia instead of downloading its own
     export PYTHON_JULIAPKG_EXE=/usr/local/bin/julia
-    # The Julia environment resolved and precompiled at build time; never re-resolve or
-    # download at run time
-    export PYTHON_JULIAPKG_PROJECT=/opt/julia-env
-    export PYTHON_JULIAPKG_OFFLINE=yes
+    # Load the Julia environment resolved and precompiled at build time directly: with both
+    # set, juliacall skips juliapkg (no resolve, no lock file, no download) on the
+    # read-only image
+    export PYTHON_JULIACALL_EXE=/usr/local/bin/julia
+    export PYTHON_JULIACALL_PROJECT=/opt/julia-env
     # Broad CPU target matching the build-time precompilation
     export JULIA_CPU_TARGET="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
     # Julia threading - will be overridden by SLURM_CPUS_PER_TASK in the worker
@@ -109,8 +110,9 @@ print('Julia pre-compilation complete')
 
 %test
     python -c "import sys; sys.path.insert(0, '/app'); from slurm_worker import __version__; print(f'Version: {__version__}')"
-    # /storage (the runtime depot) is not mounted during a build: use a scratch depot. Offline,
-    # so this fails if anything would still be downloaded or resolved at run time.
+    # /storage (the runtime depot) is not mounted during a build: use a scratch depot.
+    # juliacall loads the baked environment directly (%environment), so this fails if a job
+    # would still need to resolve or download anything.
     JULIA_DEPOT_PATH="$(mktemp -d):/opt/julia-depot" python -c "
 import time
 t = time.time()
