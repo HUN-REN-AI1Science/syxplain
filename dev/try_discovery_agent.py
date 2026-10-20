@@ -126,6 +126,24 @@ async def main(args: argparse.Namespace) -> None:
             f"{e['verdict']:9s} {e['equation'][:80]}"
         )
     print(f"\nNotebook entries: {len(session.notebook)}; elapsed {time.time() - t0:.0f}s")
+    print("\n=== Coherence ===")
+    print(json.dumps(results["discovery"].get("coherence"), indent=2))
+    if args.explain:
+        from backend.infrastructure.llm.images import png_images
+        from backend.services.discovery.literature import literature_context
+        from backend.services.discovery.report import explanation_data_spec, merge_explanations
+        from backend.services.llm_service import generate_equation_explanation
+
+        explanation = await asyncio.to_thread(
+            generate_equation_explanation,
+            project_spec_json=json.dumps(desc),
+            data_spec_json=json.dumps(explanation_data_spec(results)),
+            literature_context=literature_context(results["discovery"].get("literature")),
+            shap_plots=png_images([p["b64"] for p in session.shap_plots]),
+        )
+        results["explanations"], _ = merge_explanations(explanation, results["equations"])
+        print("\n=== Explanation coherence ===")
+        print(json.dumps(explanation.get("coherence"), indent=2))
     if args.output:
         Path(args.output).write_text(json.dumps(results, indent=2))
         print(f"Results written to {args.output}")
@@ -140,6 +158,7 @@ if __name__ == "__main__":
     parser.add_argument("--minutes", type=float, default=10)
     parser.add_argument("--pysr-delay", type=float, default=20, help="Seconds a mock search takes")
     parser.add_argument("--output", help="Write the full results JSON here")
+    parser.add_argument("--explain", action="store_true", help="Also run the explanation LLM")
     parser.add_argument(
         "--no-shap-images", action="store_true", help="Text SHAP only (no plots for the agent)"
     )

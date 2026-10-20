@@ -2,7 +2,13 @@
  * Discovery report helpers shared by the results UI and the PDF export
  */
 
-import type { MetricBasis, RejectedForm, ScatterData } from '@/types';
+import type {
+  CoherenceStatus,
+  DomainCoherence,
+  MetricBasis,
+  RejectedForm,
+  ScatterData,
+} from '@/types';
 
 /**
  * Renders an LLM-authored value as text. Stored runs may hold objects where a string
@@ -111,3 +117,34 @@ export const variableLegend = (variables: Record<string, string> | undefined): [
   Object.entries(variables ?? {}).filter(
     ([alias, col]) => typeof col === 'string' && alias !== col
   );
+
+/** Wording of a coherence check's status (results page and PDF) */
+export const COHERENCE_LABEL: Record<CoherenceStatus, string> = {
+  pass: 'agrees',
+  warn: 'caution',
+  fail: 'conflict',
+  na: 'not available',
+};
+
+/** Overall coherence verdict */
+export const COHERENCE_OVERALL_LABEL: Record<CoherenceStatus, string> = {
+  pass: 'Coherent',
+  warn: 'Partly coherent',
+  fail: 'Conflicting evidence',
+  na: 'Not assessed',
+};
+
+/** The explanation AI's domain-plausibility status mapped onto the check statuses */
+export const DOMAIN_STATUS: Record<string, CoherenceStatus> = {
+  consistent: 'pass',
+  questionable: 'warn',
+  inconsistent: 'fail',
+};
+
+/** The AI's domain checks, dropping entries that are not objects (LLM output is unvalidated) */
+export const domainChecksOf = (
+  domain: DomainCoherence | null | undefined
+): NonNullable<DomainCoherence['domain_checks']> =>
+  Array.isArray(domain?.domain_checks)
+    ? domain.domain_checks.filter((d) => d !== null && typeof d === 'object')
+    : [];

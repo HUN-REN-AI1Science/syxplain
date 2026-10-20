@@ -527,21 +527,25 @@ def profile_shape(
         return {"shape": "constant feature", "bins": []}
     edges = np.unique(np.quantile(x, np.linspace(0, 1, n_bins + 1)))
     labels = np.clip(np.searchsorted(edges, x, side="right") - 1, 0, len(edges) - 2)
-    bins = []
+    bins, raw_mids, raw_means = [], [], []
     for b in range(len(edges) - 1):
         m = labels == b
         if m.sum() == 0:
             continue
+        raw_mids.append(float(np.median(x[m])))
+        raw_means.append(float(y[m].mean()))
         bins.append(
             {
-                "x_mid": _g(np.median(x[m])),
-                "y_mean": _g(y[m].mean()),
+                "x_mid": _g(raw_mids[-1]),
+                "y_mean": _g(raw_means[-1]),
                 "y_sd": _g(y[m].std()),
                 "n": int(m.sum()),
             }
         )
-    means = np.array([b["y_mean"] for b in bins], dtype=float)
-    mids = np.array([b["x_mid"] for b in bins], dtype=float)
+    # Unrounded: the 4-digit display values quantize slopes when the spread is small
+    # relative to the offset (e.g. pH 6.80-7.70, latitudes).
+    means = np.array(raw_means)
+    mids = np.array(raw_mids)
     mean_n = max(np.mean([b["n"] for b in bins]), 1.0)
 
     dep = binned_dependence(y - y.mean(), x)
@@ -586,7 +590,13 @@ def _classify(mids: np.ndarray, means: np.ndarray, se: float) -> str:
     direction = "increasing" if rho > 0 else "decreasing"
     if abs(rho) < 0.6:
         return "non-monotonic / noisy"
-    d = np.diff(means) * (1 if rho > 0 else -1)
+    # Slopes, not steps: quantile bins have uneven widths, and on skewed data a straight
+    # line would otherwise read as bending.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        d = np.diff(means) / np.diff(mids) * (1 if rho > 0 else -1)
+    d = d[np.isfinite(d)]
+    if len(d) < 3:
+        return f"roughly linear {direction}"
     third = max(1, len(d) // 3)
     first, middle, last = (
         d[:third].mean(),

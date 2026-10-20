@@ -149,10 +149,21 @@ export interface RunWarning {
   message: string;
 }
 
+/** The explanation AI's domain-plausibility judgement of the headline */
+export interface DomainCoherence {
+  domain_checks?: {
+    aspect: string;
+    status: 'consistent' | 'questionable' | 'inconsistent';
+    explanation: string;
+  }[];
+  assessment?: string;
+}
+
 export interface EquationResults {
   equations: Equation[];
   summary: Summary;
   recommendation: Recommendation;
+  coherence?: DomainCoherence | null;
   _parse_error?: string;
   /** Set when the LLM explanation step failed; equations are raw discovery output */
   _explanation_error?: boolean;
@@ -270,6 +281,22 @@ export interface ShapAgreement {
   effect_size_ratio?: number;
 }
 
+export type CoherenceStatus = 'pass' | 'warn' | 'fail' | 'na';
+
+/** One backend check of whether a line of evidence agrees with the headline */
+export interface CoherenceCheck {
+  key: string;
+  label: string;
+  status: CoherenceStatus;
+  detail: string;
+}
+
+export interface CoherenceReport {
+  model_id: string;
+  overall: CoherenceStatus;
+  checks: CoherenceCheck[];
+}
+
 export interface DiscoverySplit {
   complete_rows: number;
   train: number;
@@ -339,6 +366,7 @@ export interface DiscoveryReport {
   shap?: ShapSummary | null;
   shap_plots?: ShapPlot[];
   shap_agreement?: ShapAgreement[];
+  coherence?: CoherenceReport | null;
   selection?: DiscoverySelection;
   n_models_total?: number;
   leaderboard: LeaderboardEntry[];

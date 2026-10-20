@@ -9,13 +9,17 @@ the LLM's narration back onto the backend's equations by ``model_id``.
 Every number shown anywhere comes from here, never from an LLM.
 """
 
+import logging
 import math
 import re
 from typing import Any
 
+from backend.services.discovery.coherence import coherence_report
 from backend.services.discovery.fitting import ModelResult
 from backend.services.discovery.selection import Selection, guard, select
 from backend.services.discovery.session import MODEL_ID_RE, DiscoverySession
+
+logger = logging.getLogger(__name__)
 
 MAX_UI_EQUATIONS = 12
 MAX_SYMBOLIC = 8
@@ -91,7 +95,7 @@ def _equation_entry(
         "target_transform": m.target_transform,
         "verdict": m.verdict,
         "reasons": m.reasons[:3],
-        "n_undefined": m.n_undefined + ((m.holdout or {}).get("n_undefined") or 0),
+        "n_undefined": m.n_undefined_total,
         "variables": session.variables_for(m.features),
         "target_alias": session.target_alias,
         "is_headline": selection.headline is m,
@@ -181,6 +185,7 @@ def build_results(
 
     failed = [m for m in session.snapshot() if m.error and m.kind != "symbolic"]
     profile = session._profile or {}
+    shap_agreement = session.shap_agreement(selection.headline)
     discovery = {
         "target": {"alias": session.target_alias, "column": session.target_column},
         "aliases": {a: c for a, c in session.column_of.items() if a != session.target_alias},
@@ -191,7 +196,7 @@ def build_results(
         "has_signal": session.fit_data.has_signal,
         "feature_profile": profile.get("features", []),
         "shap": profile.get("shap"),
-        "shap_agreement": session.shap_agreement(selection.headline),
+        "shap_agreement": shap_agreement,
         "shap_plots": [{k: p[k] for k in ("name", "title")} for p in session.shap_plots],
         "selection": selection.to_dict(),
         "n_models_total": len(ranked),
@@ -224,6 +229,13 @@ def build_results(
     }
     if session.known_laws is not None:
         discovery["literature"] = session.known_laws
+    try:
+        discovery["coherence"] = coherence_report(
+            session, selection, ranked, shap_agreement, report
+        )
+    except Exception as e:  # a display-only check must never sink the results
+        logger.warning(f"Coherence report failed: {e}")
+        discovery["coherence"] = None
     return json_safe(
         {
             "equations": equations,
@@ -314,6 +326,7 @@ def explanation_data_spec(results: dict[str, Any]) -> dict[str, Any]:
                 for k in ("reliable", "importance", "interactions", "partial_effects")
             },
             "headline_vs_shap": discovery.get("shap_agreement", []),
+            "coherence": discovery.get("coherence"),
             "classic_baselines": classic,
             "notebook": [
                 {k: n.get(k) for k in ("kind", "text", "evidence", "model_ids")}

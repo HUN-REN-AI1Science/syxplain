@@ -48,6 +48,14 @@ class Selection:
     agent_pick_rejected: list[dict[str, str]] = field(default_factory=list)
     tie_threshold: float | None = None
 
+    def is_tied(self, m: ModelResult) -> bool:
+        """Within one SE of the best (any model, whether or not it passed the guards)."""
+        return (
+            self.tie_threshold is not None
+            and m.cv_rmse is not None
+            and m.cv_rmse <= self.tie_threshold
+        )
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "headline_model_id": self.headline.model_id if self.headline else None,

@@ -1327,6 +1327,24 @@ class DiscoverySession:
                 continue
             m.holdout = score_holdout(m.parsed, m.params, X, y, m.target_transform, fill)
 
+    def partial_dependence(
+        self,
+        model: ModelResult,
+        feature: str,
+        values: np.ndarray,
+        background: dict[str, np.ndarray],
+    ) -> np.ndarray:
+        """
+        The equation's mean prediction with ``feature`` set to each of ``values`` and
+        the other features taken from every background row (NaN where undefined).
+        """
+        n, k = len(values), len(next(iter(background.values())))
+        X = {g: np.tile(v, n) for g, v in background.items() if g != feature}
+        X[feature] = np.repeat(values, k)
+        pred = predict(model.parsed, model.params, X, model.target_transform).reshape(n, -1)
+        with np.errstate(all="ignore"):
+            return np.nanmean(np.where(np.isfinite(pred), pred, np.nan), axis=1)
+
     def shap_agreement(
         self, model: ModelResult | None, max_features: int = 6, background: int = 100
     ) -> list[dict[str, Any]]:
@@ -1344,12 +1362,7 @@ class DiscoverySession:
         Xs, values = self._shap_sample
         n = len(Xs)
         bg = np.random.default_rng(self.seed).choice(n, size=min(background, n), replace=False)
-        # Every sample row paired with every background row (only the model's features).
-        grid = {
-            g: np.tile(Xs[bg, self.features.index(g)], n)
-            for g in model.features
-            if g in self.features
-        }
+        others = {g: Xs[bg, self.features.index(g)] for g in model.features if g in self.features}
         out = []
         for d in shap.get("importance", [])[:max_features]:
             f = d["feature"]
@@ -1365,10 +1378,7 @@ class DiscoverySession:
                     f"{d['share']:.0%} of the SHAP attribution",
                 }
                 continue
-            X = grid | {f: np.repeat(Xs[:, j], len(bg))}
-            pred = predict(model.parsed, model.params, X, model.target_transform).reshape(n, -1)
-            with np.errstate(all="ignore"):
-                pdp = np.nanmean(np.where(np.isfinite(pred), pred, np.nan), axis=1)
+            pdp = self.partial_dependence(model, f, Xs[:, j], others)
             effect = values[:, j]
             ok = np.isfinite(pdp)
             if ok.sum() < 5 or np.ptp(pdp[ok]) == 0 or np.ptp(effect[ok]) == 0:

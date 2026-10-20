@@ -7,6 +7,9 @@ import jsPDF from 'jspdf';
 import {
   asText,
   basisOf,
+  COHERENCE_LABEL,
+  COHERENCE_OVERALL_LABEL,
+  domainChecksOf,
   fmtCeiling,
   headlineReasonText,
   metricLabel,
@@ -15,7 +18,14 @@ import {
   scatterBasisLabel,
   variableLegend,
 } from '@utils/discovery';
-import type { DiscoveryReport, EquationResults, Equation, RunWarning } from '@/types';
+import type {
+  CoherenceReport,
+  DiscoveryReport,
+  DomainCoherence,
+  EquationResults,
+  Equation,
+  RunWarning,
+} from '@/types';
 
 // ============================================================================
 // Constants
@@ -278,18 +288,9 @@ function renderHeader(ctx: PdfContext, runId: string): void {
 }
 
 function renderSummary(ctx: PdfContext, summary: EquationResults['summary']): void {
-  const { pdf, margin, pageWidth } = ctx;
+  const { pdf, margin } = ctx;
 
-  // Section header
-  pdf.setFontSize(14);
-  pdf.setFont('helvetica', 'bold');
-  pdf.setTextColor(BRAND_COLORS.blue[0], BRAND_COLORS.blue[1], BRAND_COLORS.blue[2]);
-  pdf.text('Analysis Summary', margin, ctx.y);
-  pdf.setDrawColor(200, 200, 200);
-  pdf.setLineWidth(0.2);
-  pdf.line(margin, ctx.y + 2, pageWidth - margin, ctx.y + 2);
-
-  ctx.y += 8;
+  renderSectionHeading(ctx, 'Analysis Summary');
 
   if (summary.key_drivers?.length > 0) {
     pdf.setFontSize(10);
@@ -669,28 +670,31 @@ function renderEquations(
   targetVariable: string | null | undefined,
   recommendedId: number
 ): void {
-  const { pdf, margin, pageWidth } = ctx;
+  const { pdf } = ctx;
 
   if (!equations?.length) return;
 
   pdf.addPage();
   ctx.y = 30;
 
-  // Section header
-  pdf.setFontSize(14);
-  pdf.setFont('helvetica', 'bold');
-  pdf.setTextColor(BRAND_COLORS.blue[0], BRAND_COLORS.blue[1], BRAND_COLORS.blue[2]);
-  pdf.text('Detailed Equation Analysis', margin, ctx.y);
-
-  pdf.setDrawColor(200, 200, 200);
-  pdf.setLineWidth(0.2);
-  pdf.line(margin, ctx.y + 2, pageWidth - margin, ctx.y + 2);
-
-  ctx.y += 12;
+  renderSectionHeading(ctx, 'Detailed Equation Analysis');
+  ctx.y += 4;
 
   equations.forEach((eq, idx) => {
     renderEquation(ctx, eq, idx, equations.length, targetVariable, eq.id === recommendedId);
   });
+}
+
+function renderSectionHeading(ctx: PdfContext, title: string): void {
+  const { pdf, margin, pageWidth } = ctx;
+  pdf.setFontSize(14);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setTextColor(BRAND_COLORS.blue[0], BRAND_COLORS.blue[1], BRAND_COLORS.blue[2]);
+  pdf.text(sanitizeWinAnsi(title), margin, ctx.y);
+  pdf.setDrawColor(200, 200, 200);
+  pdf.setLineWidth(0.2);
+  pdf.line(margin, ctx.y + 2, pageWidth - margin, ctx.y + 2);
+  ctx.y += 8;
 }
 
 function renderSubheading(ctx: PdfContext, title: string): void {
@@ -702,8 +706,45 @@ function renderSubheading(ctx: PdfContext, title: string): void {
   ctx.y += 5;
 }
 
+function renderCoherence(
+  ctx: PdfContext,
+  report: CoherenceReport,
+  domain: DomainCoherence | null | undefined
+): void {
+  checkPageBreak(ctx, 40);
+  renderSectionHeading(ctx, 'Coherence of the Recommended Equation');
+
+  addText(
+    ctx,
+    `Overall: ${COHERENCE_OVERALL_LABEL[report.overall] ?? w(report.overall)} (${w(report.model_id)})`,
+    10,
+    true,
+    [20, 20, 20]
+  );
+  for (const c of Array.isArray(report.checks) ? report.checks : []) {
+    addText(
+      ctx,
+      `${w(c.label)} (${COHERENCE_LABEL[c.status] ?? w(c.status)}): ${w(c.detail)}`,
+      9,
+      false,
+      [60, 60, 60]
+    );
+  }
+  const domainChecks = domainChecksOf(domain);
+  if (domainChecks.length > 0 || domain?.assessment) {
+    ctx.y += 3;
+    renderSubheading(ctx, 'Domain plausibility (AI assessment)');
+    for (const d of domainChecks) {
+      addText(ctx, `${w(d.aspect)} (${w(d.status)}): ${w(d.explanation)}`, 9, false, [60, 60, 60]);
+    }
+    if (domain?.assessment) {
+      addText(ctx, w(domain.assessment), 10, false, [20, 20, 20], 'justify');
+    }
+  }
+  ctx.y += 6;
+}
+
 function renderDiscovery(ctx: PdfContext, report: DiscoveryReport): void {
-  const { pdf, margin, pageWidth } = ctx;
   const r2 = (v: number | null | undefined) => (typeof v === 'number' ? v.toFixed(3) : '-');
   const list = <T>(x: T[] | null | undefined): T[] => (Array.isArray(x) ? x : []);
   const agent = report.agent ?? ({} as Partial<DiscoveryReport['agent']>);
@@ -713,14 +754,7 @@ function renderDiscovery(ctx: PdfContext, report: DiscoveryReport): void {
   const ceiling = fmtCeiling(report.noise_ceiling_r2, report.noise_ceiling_sd);
 
   checkPageBreak(ctx, 40);
-  pdf.setFontSize(14);
-  pdf.setFont('helvetica', 'bold');
-  pdf.setTextColor(BRAND_COLORS.blue[0], BRAND_COLORS.blue[1], BRAND_COLORS.blue[2]);
-  pdf.text('How the Equations Were Found', margin, ctx.y);
-  pdf.setDrawColor(200, 200, 200);
-  pdf.setLineWidth(0.2);
-  pdf.line(margin, ctx.y + 2, pageWidth - margin, ctx.y + 2);
-  ctx.y += 8;
+  renderSectionHeading(ctx, 'How the Equations Were Found');
 
   if (report.has_signal === false) {
     addText(
@@ -920,6 +954,9 @@ export async function generateResultsPdf(
     targetVariable,
     discovery?.selection?.headline_reason
   );
+  if (discovery?.coherence) {
+    renderCoherence(ctx, discovery.coherence, data.coherence);
+  }
   renderEquations(ctx, equations, targetVariable, headline?.id ?? recommendation?.equation_id ?? 0);
 
   if (discovery) {
