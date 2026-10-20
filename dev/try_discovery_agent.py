@@ -91,13 +91,14 @@ async def main(args: argparse.Namespace) -> None:
         launcher=MockLauncher(args.pysr_delay),
         on_event=show,
     )
-    await session.start_search(
-        session.features,
-        ["exp", "log", "sqrt"],
-        ["+", "-", "*", "/"],
-        rationale="Baseline: all features",
-        enforce_budget=False,
-    )
+    if session.continuous_features:
+        await session.start_search(
+            session.continuous_features,
+            ["exp", "log", "sqrt"],
+            ["+", "-", "*", "/"],
+            rationale="Baseline: all continuous features",
+            enforce_budget=False,
+        )
     project = {
         "project_description": desc.get("project_description", ""),
         "target": {"alias": session.target_alias, "column": desc["target_variable"]},

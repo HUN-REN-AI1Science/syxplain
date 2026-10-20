@@ -162,8 +162,11 @@ def build_tools(
     ) -> str:
         """Fit your own formula. Use feature aliases exactly (case-sensitive) as variables; every
         other identifier is a free parameter (max 12) fitted by least squares — an identifier that
-        looks like a misspelled alias is rejected. Allowed: + - * / ^, numbers, pi, and functions
-        {functions}. Categorical codes may only appear as level(x, k) indicators.
+        looks like a misspelled alias is rejected. Allowed: + - * / ^, numbers, the constants pi and
+        e (Euler's number, never a parameter name), and functions {functions}. Categorical codes may
+        only appear as level(x, k) indicators.
+        With target_transform, the expression models the TRANSFORMED target (e.g. 'log' means
+        log(y) = expression) and predictions are back-transformed, so do not wrap it in exp().
         Example: 'a*P/(b + P) * exp(c*pH)'. Give initial_params for nonlinear parameters when you
         can (default 1.0). Returns the same metrics and diagnosed reasons as fit_families."""
 

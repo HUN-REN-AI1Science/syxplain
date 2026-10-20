@@ -630,21 +630,28 @@ class AnalysisOrchestrator:
             await progress.update_progress_async(
                 "compute_submission", status="Submitting baseline symbolic regression search"
             )
-            baseline_features = session.continuous_features or session.features
-            await session.start_search(
-                features=baseline_features,
-                unary_operators=[
-                    u for u in pysr_config.get("unary_operators") or [] if u in ALLOWED_UNARY
-                ],
-                binary_operators=[
-                    b for b in pysr_config.get("binary_operators") or [] if b in ALLOWED_BINARY
-                ]
-                or ["+", "-", "*", "/"],
-                maxsize=pysr_config.get("maxsize"),
-                niterations=pysr_config.get("niterations"),
-                rationale="Baseline: all continuous features, operators chosen from the feature plots",
-                enforce_budget=False,
-            )
+            # Categorical codes have no magnitude, so PySR only gets continuous features.
+            if not session.continuous_features:
+                session.note(
+                    "data_issue",
+                    "Every predictor is categorical, so no symbolic regression search was "
+                    "started; category effects are modelled with level(name, k) indicators",
+                )
+            else:
+                await session.start_search(
+                    features=session.continuous_features,
+                    unary_operators=[
+                        u for u in pysr_config.get("unary_operators") or [] if u in ALLOWED_UNARY
+                    ],
+                    binary_operators=[
+                        b for b in pysr_config.get("binary_operators") or [] if b in ALLOWED_BINARY
+                    ]
+                    or ["+", "-", "*", "/"],
+                    maxsize=pysr_config.get("maxsize"),
+                    niterations=pysr_config.get("niterations"),
+                    rationale="Baseline: all continuous features, operators chosen from the feature plots",
+                    enforce_budget=False,
+                )
             if self._wants_literature(context):
                 features_for_lit = literature_features(
                     session,

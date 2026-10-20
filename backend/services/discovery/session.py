@@ -832,6 +832,27 @@ class DiscoverySession:
                     fitted += 1
                 except ValueError:
                     continue
+        # One step per category level: the classic baseline for an integer-coded category.
+        for feature in self.categorical_features[:n_univariate]:
+            levels = self.levels[feature]
+            prefix = next(
+                (
+                    p
+                    for p in ("c", "k", "q", "w")
+                    if not any(f.startswith(p) for f in self.features)
+                ),
+                None,
+            )
+            if prefix is None:
+                break
+            terms = [f"{prefix}0"] + [
+                f"{prefix}{i}*level({feature}, {lv:g})" for i, lv in enumerate(levels[1:], 1)
+            ]
+            try:
+                self.fit_custom(" + ".join(terms), label=f"Level means of {feature}")
+                fitted += 1
+            except ValueError:
+                continue
         return fitted
 
     def leaderboard(self, top: int = 10, kind: str | None = None) -> list[dict[str, Any]]:

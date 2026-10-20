@@ -147,3 +147,41 @@ def test_late_callback_does_not_touch_a_finished_run():
     run.status = "running"
     assert _store_task_result(run, "pysr_2", {"equations": [1]}) is True
     assert run.results["tasks"]["pysr_2"] == {"equations": [1]}
+
+
+def test_all_categorical_run_skips_pysr_and_keeps_classic_models(monkeypatch):
+    from backend.core.config import clear_settings_cache
+    from backend.services.orchestrator_service import AnalysisContext, AnalysisOrchestrator
+    from backend.tests.test_discovery_orchestrator import PYSR_CONFIG, FakeBackend, StubProgress
+
+    monkeypatch.setenv("DISCOVERY_WALL_CLOCK_MIN", "5")
+    monkeypatch.setenv("DISCOVERY_REVIEW_STEPS", "0")
+    monkeypatch.setenv("DISCOVERY_AGENT_ENABLED", "false")
+    clear_settings_cache()
+    try:
+        orch = AnalysisOrchestrator(backend=FakeBackend())
+        monkeypatch.setattr(orch, "_is_run_terminal", lambda run_id: None)
+        monkeypatch.setattr(orch, "_store_slurm_job_ids", lambda run_id, ids: None)
+        rng = np.random.default_rng(0)
+        soil = rng.integers(1, 5, 300).astype(float)
+        df = pd.DataFrame({"soil_code": soil, "y": 3 * (soil == 2) + rng.normal(0, 0.2, 300)})
+        context = AnalysisContext(
+            run_id="run-cat",
+            user_id="u",
+            problem_description={
+                "project_description": "soil classes",
+                "target_variable": "y",
+                "features": {"soil_code": "soil class code"},
+            },
+            data=df,
+            target_column="y",
+            predictor_columns=["soil_code"],
+        )
+        results = asyncio.run(orch._run_discovery(context, PYSR_CONFIG, StubProgress()))
+    finally:
+        clear_settings_cache()
+    assert orch.backend.inputs == {}
+    d = results["discovery"]
+    assert d["searches"] == []
+    assert any(n["kind"] == "data_issue" and "categorical" in n["text"] for n in d["notebook"])
+    assert results["warnings"][-1]["stage"] == "symbolic_regression"
