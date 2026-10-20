@@ -78,8 +78,6 @@ dependencies:
 
   - pip:
     - alembic
-    - langfuse
-    - openinference-instrumentation-dspy
     - dspy
     - rich
     - httpx

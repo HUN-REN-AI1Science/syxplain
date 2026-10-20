@@ -7,5 +7,5 @@ export { ProjectDetailsSection } from './ProjectDetailsSection';
 export { TargetVariableSection } from './TargetVariableSection';
 export { FeaturesSection } from './FeaturesSection';
 export { JsonConfigUpload } from './JsonConfigUpload';
-export { AnalysisTypeSelector } from './AnalysisTypeSelector';
+export { RunAnalysisActions } from './RunAnalysisActions';
 export { ApiKeyInputSection } from './ApiKeyInputSection';

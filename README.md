@@ -63,14 +63,22 @@ PySR symbolic-regression searches are submitted to an external **Slurm cluster**
 
 Equations are found by an **AI-scientist agent** (DSPy ReAct, `backend/services/discovery/`) that runs in the backend:
 
-1. A baseline PySR search (all features, operators chosen by an LLM from the feature plots) is submitted first, so the cluster queue wait overlaps with the agent's work.
+1. A baseline PySR search (all continuous features, operators chosen by an LLM from the feature plots) is submitted first, so the cluster queue wait overlaps with the agent's work. Integer-coded categories (soil type codes and the like) are never used as magnitudes, only as `level(x, k)` indicators.
 2. The agent profiles the data: correlations, mutual information, random-forest permutation importance, a **noise ceiling** (out-of-fold random-forest R², roughly the best achievable accuracy) and **SHAP** on that forest: importance, interacting feature pairs (candidates for product terms and multiplicative laws) and each feature's partial-effect shape with the other features accounted for.
 3. It fits **classic named laws** (Mitscherlich, Michaelis-Menten/Langmuir, Freundlich/power, logistic, Gompertz, linear/quadratic-plateau, Gaussian peak, Mitscherlich-Baule, Cobb-Douglas, ...) and its own formulas. Each fit comes back with **diagnosed reasons it falls short**: wrong curve shape (and where), missing variable (and which one), variance growing with the value, unidentifiable parameters, or "matches the noise ceiling".
 4. Guided by those reasons, it launches **targeted PySR searches** (feature subset, operators, target transform, its best formulas as warm-start guesses) and compares the results with the classic laws.
 5. It records findings in a **lab notebook** (rejected forms with reasons, insights, data issues), which the explanation LLM reads.
-6. All models are scored on **held-out rows** that neither the agent nor PySR saw.
+6. A literature scout searches the web in the background (the main model, `OPENAI_MODEL_NAME`, with the Responses API web-search tool, maximum search context) for published laws, writes them solved for the target, and fits each one to the data like any other model, so the agent can say whether the published law holds for these samples.
+7. **Code, not an LLM, picks the headline model**: models are ranked by 5-fold cross-validation on the training rows, checked by guards, and the simplest model within one standard error of the best wins. The 20% holdout is scored once at the end; datasets under 40 rows use cross-validation only.
 
-The agent is bounded by a budget (`DISCOVERY_*` variables, per quick/deep analysis). If it fails, the run still finishes with the baseline search and an automatic screen of the classic catalog. `python test_worker_local.py --task classic --example 1` runs the classic-law screen locally without any services.
+The agent is bounded by a budget (`DISCOVERY_*` variables; ceilings, it stops earlier when done). If it fails, the run still finishes with the baseline search and an automatic screen of the classic catalog. `python test_worker_local.py --task classic --example 1` runs the classic-law screen locally without any services.
+
+**Cost per analysis.** Every LLM call of a run is counted (tokens per model, cached and reasoning tokens, web searches) and priced. Each run logs one line and stores the same summary under `results.usage`:
+
+```bash
+docker logs syxplain-backend 2>&1 | grep "ANALYTICS run_usage"
+# ANALYTICS run_usage {"run_id":"...","outcome":"completed","models":{"openai/gpt-6.1-sol":{"calls":17,"input_tokens":...,"cost_usd":0.41}},"total_cost_usd":0.41,...}
+```
 
 ## Prerequisites
 
@@ -132,7 +140,6 @@ Copy `.env.example` to `.env` and configure:
 - `OPENAI_API_BASE` - Custom LLM endpoint
 - `OPENAI_MODEL_NAME` - Model name (default: `gpt-4o`)
 - `SLURM_PARTITION` - Slurm partition (default: `batch_cpu_m2.large`)
-- `LANGFUSE_*` - For LLM tracing
 - `GITHUB_FEEDBACK_TOKEN` - GitHub personal access token for creating feedback issues
 - `GITHUB_FEEDBACK_REPO_OWNER` - GitHub repository owner (e.g. `HUN-REN-AI1Science`)
 - `GITHUB_FEEDBACK_REPO_NAME` - GitHub repository name (e.g. `syxplain`)

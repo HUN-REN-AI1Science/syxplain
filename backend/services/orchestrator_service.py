@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+import dspy
 import pandas as pd
 
 from backend.core.config import (
@@ -24,6 +25,8 @@ from backend.core.config import (
 from backend.core.constants import RunStatus
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
+from backend.infrastructure.llm.client import LITERATURE_TIMEOUT_S, literature_available
+from backend.infrastructure.monitoring.llm_costs import log_run_usage, summarize
 from backend.infrastructure.slurm import (
     JobState,
     SlurmBackend,
@@ -121,8 +124,6 @@ class AnalysisContext:
     data: pd.DataFrame
     target_column: str
     predictor_columns: list[str]
-    analysis_type: str = "quick"
-    deep_research_model: str | None = None
     progress: ProgressTracker | None = None
     # User-provided API keys (not stored, only in memory)
     user_api_key: str | None = None
@@ -143,10 +144,10 @@ class AnalysisOrchestrator:
     1. Data preparation
     2. LLM generates the config of a baseline PySR search, which is submitted
     3. Discovery agent fits classic laws, diagnoses failures and steers more PySR searches
-    4. Every model is scored on held-out data
+       (a literature scout finds published laws by web search, which are fitted too)
+    4. The Selector ranks every model by cross-validation; the holdout is scored once
     5. LLM explains results (with the agent's notebook as context)
-    6. (Optional) Deep research with o4-mini
-    7. Store final results
+    6. Store final results
     """
 
     def __init__(
@@ -302,75 +303,88 @@ class AnalysisOrchestrator:
         progress = context.progress or ProgressTracker(run_id=run_id)
 
         logger.info(
-            f"Starting orchestrated analysis for run {run_id} "
-            f"(type={context.analysis_type}, backend={self.backend.name})"
+            f"Starting orchestrated analysis for run {run_id} (backend={self.backend.name})"
         )
 
-        try:
-            # Update status to running
-            self._update_run_status(run_id, RunStatus.RUNNING)
-            await progress.update_progress_async("initialization", status="Initializing analysis")
+        # Every LLM call of the run (agent, literature search, explanation, ...) is counted
+        # here; the summary is stored with the results and logged as "ANALYTICS run_usage".
+        outcome = "failed"
+        with dspy.track_usage() as usage:
+            try:
+                # Update status to running
+                self._update_run_status(run_id, RunStatus.RUNNING)
+                await progress.update_progress_async(
+                    "initialization", status="Initializing analysis"
+                )
 
-            # Step 1: Data summary
-            await progress.update_progress_async("data_summary", status="Analyzing dataset")
-            data_summary = self._generate_data_summary(context)
+                # Step 1: Data summary
+                await progress.update_progress_async("data_summary", status="Analyzing dataset")
+                data_summary = self._generate_data_summary(context)
 
-            # Step 1.5: Generate feature visualizations for LLM
-            await progress.update_progress_async(
-                "visualization", status="Generating feature visualizations"
-            )
-            feature_visualizations = await asyncio.to_thread(
-                self._generate_feature_visualizations, context
-            )
+                # Step 1.5: Generate feature visualizations for LLM
+                await progress.update_progress_async(
+                    "visualization", status="Generating feature visualizations"
+                )
+                feature_visualizations = await asyncio.to_thread(
+                    self._generate_feature_visualizations, context
+                )
 
-            # Step 2: Generate PySR config using LLM
-            await progress.update_progress_async(
-                "pysr_config_generation", status="Generating symbolic regression configuration"
-            )
-            pysr_config = await self._generate_pysr_config(
-                context, data_summary, visualizations_b64=feature_visualizations
-            )
+                # Step 2: Generate PySR config using LLM
+                await progress.update_progress_async(
+                    "pysr_config_generation", status="Generating symbolic regression configuration"
+                )
+                pysr_config = await self._generate_pysr_config(
+                    context, data_summary, visualizations_b64=feature_visualizations
+                )
 
-            # Step 3: Agentic discovery (baseline PySR search + agent-driven loop)
-            discovery_results = await self._run_discovery(context, pysr_config, progress)
-            warnings = discovery_results.pop("warnings", [])
+                # Step 3: Agentic discovery (baseline PySR search + agent-driven loop)
+                discovery_results = await self._run_discovery(context, pysr_config, progress)
+                warnings = discovery_results.pop("warnings", [])
 
-            # The discovery brief is complete on its own: persist it before narration,
-            # so a failing explanation step can never lose it.
-            await asyncio.to_thread(self._store_results, run_id, discovery_results)
+                # The discovery brief is complete on its own: persist it before narration,
+                # so a failing explanation step can never lose it.
+                await asyncio.to_thread(self._store_results, run_id, discovery_results)
 
-            # Step 4: Narration (best-effort for every key type)
-            explanations = await self._narrate(context, discovery_results, progress, warnings)
+                # Step 4: Narration (best-effort for every key type)
+                explanations = await self._narrate(context, discovery_results, progress, warnings)
 
-            # Step 5: Finalize and store results
-            await progress.update_progress_async("finalization", status="Finalizing results")
-            final_results = self._compile_final_results(
-                context, discovery_results, explanations, warnings
-            )
+                # Step 5: Finalize and store results
+                await progress.update_progress_async("finalization", status="Finalizing results")
+                final_results = self._compile_final_results(
+                    context, discovery_results, explanations, warnings
+                )
 
-            visualizations = [
-                {"filename": f"feature_{i + 1}_vs_target.png", "content_b64": b64}
-                for i, b64 in enumerate(feature_visualizations)
-            ]
-            self._save_artifacts(run_id, final_results, progress, visualizations=visualizations)
+                visualizations = [
+                    {"filename": f"feature_{i + 1}_vs_target.png", "content_b64": b64}
+                    for i, b64 in enumerate(feature_visualizations)
+                ]
+                self._save_artifacts(run_id, final_results, progress, visualizations=visualizations)
 
-            # Mark as completed (also broadcasts via SSE)
-            if not self._update_run_status(run_id, RunStatus.COMPLETED, results=final_results):
-                self._update_run_status(run_id, RunStatus.FAILED, error="Failed to store results")
-                raise OrchestratorError("Failed to store results")
+                final_results["usage"] = summarize(usage)
 
-            logger.info(f"Analysis completed successfully for run {run_id}")
-            return final_results
+                # Mark as completed (also broadcasts via SSE)
+                if not self._update_run_status(run_id, RunStatus.COMPLETED, results=final_results):
+                    self._update_run_status(
+                        run_id, RunStatus.FAILED, error="Failed to store results"
+                    )
+                    raise OrchestratorError("Failed to store results")
 
-        except AnalysisCancelledError:
-            logger.info(f"Analysis cancelled for run {run_id}")
-            # Don't overwrite — cancel_run already set status to "cancelled"
-            raise
-        except Exception as e:
-            logger.error(f"Analysis failed for run {run_id}: {e}", exc_info=True)
-            error_msg = _format_user_facing_error(e)
-            self._update_run_status(run_id, RunStatus.FAILED, error=error_msg)
-            raise OrchestratorError(f"Analysis failed: {error_msg}") from e
+                logger.info(f"Analysis completed successfully for run {run_id}")
+                outcome = "completed"
+                return final_results
+
+            except AnalysisCancelledError:
+                outcome = "cancelled"
+                logger.info(f"Analysis cancelled for run {run_id}")
+                # Don't overwrite — cancel_run already set status to "cancelled"
+                raise
+            except Exception as e:
+                logger.error(f"Analysis failed for run {run_id}: {e}", exc_info=True)
+                error_msg = _format_user_facing_error(e)
+                self._update_run_status(run_id, RunStatus.FAILED, error=error_msg)
+                raise OrchestratorError(f"Analysis failed: {error_msg}") from e
+            finally:
+                log_run_usage(run_id, outcome, summarize(usage))
 
     def _generate_data_summary(self, context: AnalysisContext) -> dict[str, Any]:
         """Generate a summary of the input data."""
@@ -545,9 +559,9 @@ class AnalysisOrchestrator:
 
         return config
 
-    def _discovery_budget(self, analysis_type: str) -> DiscoveryBudget:
+    def _discovery_budget(self) -> DiscoveryBudget:
         settings = get_discovery_settings()
-        limits = settings.for_type(analysis_type)
+        limits = settings.limits()
         budget = DiscoveryBudget(
             max_iters=limits["max_iters"],
             max_pysr_runs=limits["max_pysr_runs"],
@@ -589,7 +603,7 @@ class AnalysisOrchestrator:
         """
         Agentic equation discovery (the run controller's EXPLORE..SELECT phases).
 
-        LAUNCH: the baseline PySR search (and, in deep mode, the literature scout) start
+        LAUNCH: the baseline PySR search and the literature scout start
         first so the Slurm queue and the research model overlap with profiling and the
         agent. PROFILE runs in a separate process. EXPLORE is the agent's budget. SETTLE
         waits for searches, RECONCILE makes the agent's report consistent with what
@@ -603,7 +617,7 @@ class AnalysisOrchestrator:
         from backend.services.discovery.report import build_results
 
         settings = get_discovery_settings()
-        budget = self._discovery_budget(context.analysis_type)
+        budget = self._discovery_budget()
         manager = get_connection_manager()
         warnings: list[dict[str, str]] = []
 
@@ -659,7 +673,16 @@ class AnalysisOrchestrator:
                     context.problem_description.get("project_description", ""),
                 )
                 session.literature_task = asyncio.create_task(
-                    run_literature(session, self._literature_lookup(context, features_for_lit))
+                    run_literature(
+                        session, self._literature_lookup(context.user_openai_key, features_for_lit)
+                    )
+                )
+            elif context.user_api_key:
+                warnings.append(
+                    {
+                        "stage": "literature",
+                        "message": "No literature search: it needs an OpenAI API key",
+                    }
                 )
 
             # PROFILE (separate process; not charged to the agent's budget)
@@ -696,7 +719,9 @@ class AnalysisOrchestrator:
             self._raise_if_cancelled(context, session)
             if session.literature_task is not None:
                 with contextlib.suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(asyncio.shield(session.literature_task), timeout=600)
+                    await asyncio.wait_for(
+                        asyncio.shield(session.literature_task), timeout=LITERATURE_TIMEOUT_S
+                    )
                 if not session.literature_task.done():
                     session.literature_task.cancel()
                     warnings.append(
@@ -868,18 +893,15 @@ class AnalysisOrchestrator:
         )
 
     def _wants_literature(self, context: AnalysisContext) -> bool:
-        return context.analysis_type == "deep" and bool(context.deep_research_model)
+        return literature_available(context.user_api_key, context.user_openai_key)
 
-    def _literature_lookup(self, context: AnalysisContext, features: dict[str, str]):
-        """Deep mode: one call to the research model (features keyed by alias, with the target)."""
-        from backend.services.llm_service import deep_research_equations
+    def _literature_lookup(self, user_openai_key: str | None, features: dict[str, str]):
+        """One call to the literature search (features keyed by alias, with the target)."""
+        from backend.services.llm_service import find_literature_laws
 
         async def lookup() -> dict[str, Any]:
             return await asyncio.to_thread(
-                deep_research_equations,
-                features_dict=features,
-                model_name=context.deep_research_model,
-                user_api_key=context.user_openai_key,
+                find_literature_laws, features_dict=features, user_api_key=user_openai_key
             )
 
         return lookup
@@ -918,19 +940,18 @@ class AnalysisOrchestrator:
         warnings: list[dict[str, str]],
     ) -> dict[str, Any]:
         """
-        Explanation (and, in deep mode, literature-grounded explanation). Best-effort for
+        Explanation, grounded in the fitted literature laws when there are any. Best-effort for
         every key type: the discovery brief is complete without it, so a failure becomes
         a warning, never a failed run.
         """
-        from backend.services.discovery.literature import deep_research_context
+        from backend.services.discovery.literature import literature_context
 
-        deep_ctx = None
-        if self._wants_literature(context):
-            await progress.update_progress_async("deep_research", status="Integrating literature")
-            deep_ctx = deep_research_context(discovery_results["discovery"].get("literature"))
+        lit_ctx = literature_context(discovery_results["discovery"].get("literature"))
+        if lit_ctx is not None:
+            await progress.update_progress_async("literature", status="Integrating literature")
         await progress.update_progress_async("llm_explanation", status="Generating explanations")
         try:
-            return await self._generate_explanations(context, discovery_results, deep_ctx)
+            return await self._generate_explanations(context, discovery_results, lit_ctx)
         except (asyncio.CancelledError, AnalysisCancelledError):
             raise
         except Exception as e:
@@ -943,7 +964,7 @@ class AnalysisOrchestrator:
         self,
         context: AnalysisContext,
         discovery_results: dict[str, Any],
-        deep_research_context: dict[str, Any] | None = None,
+        literature_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Generate LLM explanations for the discovery brief (raises on failure)."""
         from backend.services.discovery.report import explanation_data_spec
@@ -955,7 +976,7 @@ class AnalysisOrchestrator:
             generate_equation_explanation,
             project_spec_json=json.dumps(context.problem_description),
             data_spec_json=json.dumps(data_spec),
-            deep_research_context=deep_research_context,
+            literature_context=literature_context,
             user_api_key=context.user_api_key,
             user_model=context.user_model,
         )
@@ -990,7 +1011,6 @@ class AnalysisOrchestrator:
                 "scatter_data": discovery_results.get("scatter_data", {}),
                 "discovery": discovery_results.get("discovery"),
                 "warnings": warnings or [],
-                "analysis_type": context.analysis_type,
                 "compute_backend": self.backend.name,
                 "completed_at": datetime.utcnow().isoformat(),
             }
@@ -1205,8 +1225,6 @@ async def run_orchestrated_analysis(
     problem_desc: dict[str, Any],
     data: pd.DataFrame,
     user_id: str,
-    analysis_type: str = "quick",
-    deep_research_model: str | None = None,
     user_api_key: str | None = None,
     user_model: str | None = None,
     user_openai_key: str | None = None,
@@ -1219,11 +1237,9 @@ async def run_orchestrated_analysis(
         problem_desc: Problem description dictionary
         data: Input DataFrame
         user_id: Owner user ID
-        analysis_type: 'quick' or 'deep'
-        deep_research_model: Model for deep analysis
         user_api_key: Optional user-provided Gemini API key
         user_model: Optional user-specified Gemini model
-        user_openai_key: Optional user-provided OpenAI API key for deep research
+        user_openai_key: Optional user-provided OpenAI API key for the literature search
 
     Returns:
         Analysis results
@@ -1245,8 +1261,6 @@ async def run_orchestrated_analysis(
         data=data,
         target_column=target_column,
         predictor_columns=numeric_predictors,
-        analysis_type=analysis_type,
-        deep_research_model=deep_research_model,
         user_api_key=user_api_key,
         user_model=user_model,
         user_openai_key=user_openai_key,

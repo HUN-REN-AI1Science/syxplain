@@ -10,6 +10,7 @@ import { Tag } from 'primereact/tag';
 import { ProgressBar } from 'primereact/progressbar';
 import { runsService } from '@services/api';
 import { formatFileSize } from '@utils/formatting';
+import { LegacyAnalysisModeCard } from './LegacyAnalysisModeCard';
 import type { RunDetails } from '@/types';
 
 interface RunSettingsPanelProps {
@@ -205,29 +206,7 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
               </div>
             </div>
 
-            {/* Analysis Mode - Compact */}
-            <div className="rounded-xl p-4 border bg-surface-alt border-[var(--color-border)]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <i
-                    className={`pi ${runDetails.analysis_type === 'deep' ? 'pi-search' : 'pi-bolt'} text-muted text-lg mr-3 flex-shrink-0`}
-                  ></i>
-                  <div>
-                    <h4 className="font-bold text-primary">Analysis Mode</h4>
-                    <p className="text-sm text-secondary">
-                      {runDetails.analysis_type === 'deep'
-                        ? 'Enhanced with scientific literature research'
-                        : 'Standard analysis workflow'}
-                    </p>
-                  </div>
-                </div>
-                <Tag
-                  value={runDetails.analysis_type === 'deep' ? 'Deep Analysis' : 'Quick Analysis'}
-                  severity={runDetails.analysis_type === 'deep' ? 'warning' : 'info'}
-                  className="text-base px-3 py-1"
-                />
-              </div>
-            </div>
+            <LegacyAnalysisModeCard analysisType={runDetails.analysis_type} />
 
             {/* Project Description */}
             <div className="bg-surface-alt rounded-xl p-5 border border-[var(--color-border)]">

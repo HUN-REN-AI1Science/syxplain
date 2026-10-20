@@ -80,6 +80,8 @@ def orchestrator(monkeypatch):
     o = AnalysisOrchestrator(backend=FakeBackend())
     monkeypatch.setattr(o, "_is_run_terminal", lambda run_id: None)
     monkeypatch.setattr(o, "_store_slurm_job_ids", lambda run_id, ids: None)
+    # No real web search in tests; the literature tests switch it on with a fake lookup
+    monkeypatch.setattr(o, "_wants_literature", lambda ctx: False)
     yield o
     clear_settings_cache()
 
@@ -275,7 +277,8 @@ def test_compile_joins_narration_by_model_id(orchestrator):
     json.dumps(final, allow_nan=False)
 
 
-def test_deep_mode_calls_literature_once_with_target(orchestrator, monkeypatch):
+def test_literature_called_once_with_target(orchestrator, monkeypatch):
+    monkeypatch.setattr(orchestrator, "_wants_literature", lambda ctx: True)
     monkeypatch.setenv("DISCOVERY_AGENT_ENABLED", "false")
     clear_settings_cache()
     calls, deep_contexts = [], []
@@ -285,12 +288,12 @@ def test_deep_mode_calls_literature_once_with_target(orchestrator, monkeypatch):
         return {"equations": [{"equation": "response = a*dose/(b + dose)", "citations": ["c"]}]}
 
     def explain(**kwargs):
-        deep_contexts.append(kwargs["deep_research_context"])
+        deep_contexts.append(kwargs["literature_context"])
         return {"equations": [], "summary": {}, "recommendation": {}}
 
-    monkeypatch.setattr(llm_service, "deep_research_equations", research)
+    monkeypatch.setattr(llm_service, "find_literature_laws", research)
     monkeypatch.setattr(llm_service, "generate_equation_explanation", explain)
-    ctx = _context(analysis_type="deep", deep_research_model="o4-mini-deep-research")
+    ctx = _context()
 
     async def run():
         progress = StubProgress()
@@ -301,28 +304,29 @@ def test_deep_mode_calls_literature_once_with_target(orchestrator, monkeypatch):
 
     results, _explanations, warnings = asyncio.run(run())
     assert len(calls) == 1
-    assert calls[0]["response"].startswith("target variable")
+    assert calls[0]["response"].startswith("TARGET variable")
     law = results["discovery"]["literature"]["laws"][0]
     assert law["model_id"].startswith("L") and law["cv_r2"] > 0.9
     assert deep_contexts[0]["equations"][0]["model_id"] == law["model_id"]
     assert not warnings
 
 
-def test_deep_mode_without_laws_warns_and_explains_plainly(orchestrator, monkeypatch):
+def test_no_laws_found_warns_and_explains_plainly(orchestrator, monkeypatch):
+    monkeypatch.setattr(orchestrator, "_wants_literature", lambda ctx: True)
     monkeypatch.setenv("DISCOVERY_AGENT_ENABLED", "false")
     clear_settings_cache()
     deep_contexts = []
     monkeypatch.setattr(
         llm_service,
-        "deep_research_equations",
+        "find_literature_laws",
         lambda **k: {"equations": [], "_parse_error": "x"},
     )
     monkeypatch.setattr(
         llm_service,
         "generate_equation_explanation",
-        lambda **k: deep_contexts.append(k["deep_research_context"]) or {"equations": []},
+        lambda **k: deep_contexts.append(k["literature_context"]) or {"equations": []},
     )
-    ctx = _context(analysis_type="deep", deep_research_model="o4-mini-deep-research")
+    ctx = _context()
 
     async def run():
         progress = StubProgress()

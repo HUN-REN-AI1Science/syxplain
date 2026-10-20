@@ -1,7 +1,7 @@
 /**
  * ApiKeyInputSection Component
  * Displays API key input fields for users without HUN-REN access.
- * Always shows Gemini key input; conditionally shows OpenAI key for deep research.
+ * Shows the required Gemini key input and an optional OpenAI key for the literature search.
  */
 
 import React from 'react';
@@ -18,12 +18,8 @@ interface ApiKeyInputSectionProps {
   onGeminiModelChange: (value: string) => void;
   geminiError?: string | null;
   geminiValidationStatus?: 'idle' | 'validating' | 'valid' | 'invalid';
-  showOpenAiInput: boolean;
   openaiApiKey: string;
   onOpenaiApiKeyChange: (value: string) => void;
-  openaiModel: string;
-  openaiModels: string[];
-  onOpenaiModelChange: (value: string) => void;
   openaiError?: string | null;
   openaiValidationStatus?: 'idle' | 'validating' | 'valid' | 'invalid';
 }
@@ -50,7 +46,7 @@ const ApiKeyHelpContent = () => (
       <h4 className="font-heading font-semibold text-secondary mb-2">Estimated Token Usage</h4>
       <p className="text-sm">
         A typical analysis uses approximately <strong>5,000-15,000 tokens</strong> depending on data
-        complexity. Deep research may use additional tokens.
+        complexity. The literature search (when an OpenAI key is provided) uses additional tokens.
       </p>
     </div>
 
@@ -74,12 +70,8 @@ export const ApiKeyInputSection: React.FC<ApiKeyInputSectionProps> = ({
   onGeminiModelChange,
   geminiError,
   geminiValidationStatus = 'idle',
-  showOpenAiInput,
   openaiApiKey,
   onOpenaiApiKeyChange,
-  openaiModel,
-  openaiModels,
-  onOpenaiModelChange,
   openaiError,
   openaiValidationStatus = 'idle',
 }) => {
@@ -160,68 +152,53 @@ export const ApiKeyInputSection: React.FC<ApiKeyInputSectionProps> = ({
         </div>
       </div>
 
-      {/* OpenAI card — only when deep research is selected */}
-      {showOpenAiInput && (
-        <div className="bg-surface-alt border border-[var(--color-border)] rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-0.5">
-            <h4 className="font-heading font-semibold text-secondary">OpenAI</h4>
-            <span className="text-xs font-medium text-muted bg-[var(--color-border)] rounded-full px-2 py-0.5">
-              Deep Research
-            </span>
-          </div>
-          <p className="text-sm text-muted mb-4">
-            Scientific literature search using an OpenAI model.
-          </p>
-
-          {openaiError && <Message severity="error" text={openaiError} className="mb-3 w-full" />}
-
-          {openaiValidationStatus === 'valid' && (
-            <Message
-              severity="success"
-              text="OpenAI API key validated successfully."
-              className="mb-3 w-full"
-            />
-          )}
-
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-secondary mb-1">API Key</label>
-              <InputText
-                type="password"
-                value={openaiApiKey}
-                onChange={(e) => onOpenaiApiKeyChange(e.target.value)}
-                placeholder="sk-..."
-                className="w-full"
-              />
-              <small className="text-muted">
-                Get your key from{' '}
-                <a
-                  href="https://platform.openai.com/api-keys"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-link hover:underline"
-                >
-                  platform.openai.com/api-keys
-                </a>
-              </small>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-secondary mb-1">Model</label>
-              <Dropdown
-                value={openaiModel}
-                options={openaiModels.map((m, index) => ({
-                  label: index === 0 ? `${m} (Recommended)` : m,
-                  value: m,
-                }))}
-                onChange={(e) => onOpenaiModelChange(e.value)}
-                className="w-full"
-                disabled={openaiModels.length === 0}
-              />
-            </div>
-          </div>
+      {/* OpenAI card — optional, enables the literature search */}
+      <div className="bg-surface-alt border border-[var(--color-border)] rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-0.5">
+          <h4 className="font-heading font-semibold text-secondary">OpenAI</h4>
+          <span className="text-xs font-medium text-muted bg-[var(--color-border)] rounded-full px-2 py-0.5">
+            Optional
+          </span>
         </div>
-      )}
+        <p className="text-sm text-muted mb-4">
+          Enables the literature search. Without it the analysis still runs, just without the
+          literature step.
+        </p>
+
+        {openaiError && <Message severity="error" text={openaiError} className="mb-3 w-full" />}
+
+        {openaiValidationStatus === 'valid' && (
+          <Message
+            severity="success"
+            text="OpenAI API key validated successfully."
+            className="mb-3 w-full"
+          />
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-secondary mb-1">
+            OpenAI API key (optional)
+          </label>
+          <InputText
+            type="password"
+            value={openaiApiKey}
+            onChange={(e) => onOpenaiApiKeyChange(e.target.value)}
+            placeholder="sk-..."
+            className="w-full"
+          />
+          <small className="text-muted">
+            Get your key from{' '}
+            <a
+              href="https://platform.openai.com/api-keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-link hover:underline"
+            >
+              platform.openai.com/api-keys
+            </a>
+          </small>
+        </div>
+      </div>
     </div>
   );
 };

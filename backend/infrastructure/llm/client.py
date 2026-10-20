@@ -56,54 +56,50 @@ def create_dspy_model(
     )
 
 
-_DEFAULT_DEEP_RESEARCH_MODEL = "o4-mini-deep-research"
+# Model for the literature search on a user's own OpenAI key (server keys use OPENAI_MODEL_NAME)
+_DEFAULT_LITERATURE_MODEL = "gpt-6.1-sol"
+# Web searches per literature search: the main cost and latency lever
+_LITERATURE_MAX_TOOL_CALLS = 60
+# The orchestrator waits this long for the search; the request gives up at the same point,
+# so an abandoned search does not keep running (and billing) in its thread
+LITERATURE_TIMEOUT_S = 900
 
 
-def create_deep_research_model(
-    model_name: str | None = None,
-    user_api_key: str | None = None,
-) -> dspy.LM:
+def literature_available(user_api_key: str | None, user_openai_key: str | None) -> bool:
+    """Server keys always search the literature; a user's own keys need an OpenAI key."""
+    if user_api_key:
+        return bool(user_openai_key)
+    return bool(get_settings().llm.openai_api_key)
+
+
+def create_literature_model(user_api_key: str | None = None) -> dspy.LM:
     """
-    Create a DSPy LM client configured for Deep Research (web search).
+    The main model, set up to search the literature on the web as broadly as the retired
+    deep-research models did: the Responses API web-search tool (Chat Completions accepts
+    only function tools) with the largest search context and high reasoning effort.
 
     Args:
-        model_name: Optional model name override.
         user_api_key: Optional user-provided OpenAI API key.
-
-    Returns:
-        Configured dspy.LM instance with search tools enabled.
 
     Raises:
         ValueError: If no API key is available.
     """
-    settings = get_settings().llm
-
-    # Deep research models require at least one of web_search_preview/mcp/file_search.
-    extra_body = {"tools": [{"type": "web_search_preview", "search_context_size": "medium"}]}
-
+    research_kwargs = {
+        "model_type": "responses",
+        "tools": [{"type": "web_search", "search_context_size": "high"}],
+        "max_tool_calls": _LITERATURE_MAX_TOOL_CALLS,
+        "reasoning": {"effort": "high"},
+        "timeout": LITERATURE_TIMEOUT_S,
+        "num_retries": 0,  # a retry could not finish within the wait anyway
+        # OPENAI_MODEL_NAME may be a non-reasoning model (gpt-4o), which rejects
+        # reasoning.effort; drop what the model does not support instead of failing
+        "drop_params": True,
+    }
     if user_api_key:
-        # User key: direct to OpenAI with selected model
         return dspy.LM(
-            model=f"openai/{model_name or _DEFAULT_DEEP_RESEARCH_MODEL}",
+            model=f"openai/{_DEFAULT_LITERATURE_MODEL}",
             api_key=user_api_key,
             api_base=None,  # Use default OpenAI endpoint
-            extra_body=extra_body,
+            **research_kwargs,
         )
-
-    # Server key: use configured settings
-    if not settings.deep_research_api_key:
-        raise ValueError("DEEP_RESEARCH_API_KEY is not configured.")
-
-    # Determine model name
-    effective_model = model_name
-    if not effective_model:
-        # Parse from comma-separated list or fallback
-        models = settings.get_deep_research_model_list()
-        effective_model = models[0] if models else _DEFAULT_DEEP_RESEARCH_MODEL
-
-    return dspy.LM(
-        model=f"openai/{effective_model}",
-        api_key=settings.deep_research_api_key,
-        api_base=settings.deep_research_api_base,
-        extra_body=extra_body,
-    )
+    return create_dspy_model(**research_kwargs)

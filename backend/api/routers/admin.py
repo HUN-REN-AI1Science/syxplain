@@ -199,7 +199,6 @@ def get_all_runs(
     sort_field: SortField = Query(default=SortField.CREATED_AT),
     sort_order: SortOrder = Query(default=SortOrder.DESC),
     status: str | None = None,
-    analysis_type: str | None = None,
     user_id: str | None = None,
     search: str | None = None,
     date_from: datetime | None = None,
@@ -211,7 +210,6 @@ def get_all_runs(
     """Get all runs across all users with filtering."""
     filters = AdminRunFilters(
         status=status,
-        analysis_type=analysis_type,
         user_id=user_id,
         search=search,
         date_from=date_from,

@@ -14,6 +14,7 @@ import { Dropdown } from 'primereact/dropdown';
 import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
 import { adminService } from '@services/api';
+import { legacyAnalysisTypeLabel } from '@utils/formatting';
 import type { AdminRunSummary, ErrorDistributionItem, ErrorTrendItem } from '@/types';
 
 interface ErrorMonitoringProps {
@@ -339,10 +340,12 @@ const ErrorMonitoring: React.FC<ErrorMonitoringProps> = ({ toast }) => {
                 <label className="text-sm text-secondary">File</label>
                 <p>{selectedError.csv_filename}</p>
               </div>
-              <div>
-                <label className="text-sm text-secondary">Analysis Type</label>
-                <p>{selectedError.analysis_type}</p>
-              </div>
+              {legacyAnalysisTypeLabel(selectedError.analysis_type) && (
+                <div>
+                  <label className="text-sm text-secondary">Analysis Type</label>
+                  <p>{legacyAnalysisTypeLabel(selectedError.analysis_type)}</p>
+                </div>
+              )}
               <div>
                 <label className="text-sm text-secondary">Created</label>
                 <p>{new Date(selectedError.created_at).toLocaleString()}</p>

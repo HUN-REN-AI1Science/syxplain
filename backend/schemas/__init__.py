@@ -7,7 +7,6 @@ from backend.schemas.requests import (
 )
 from backend.schemas.responses import (
     CSVMetadata,
-    DeepResearchModelsResponse,
     ErrorResponse,
     FileUploadResponse,
     MessageResponse,
@@ -29,7 +28,6 @@ from backend.schemas.responses import (
 __all__ = [
     # Responses
     "CSVMetadata",
-    "DeepResearchModelsResponse",
     "ErrorResponse",
     "FileUploadResponse",
     "MessageResponse",

@@ -23,7 +23,6 @@ class RunFilters:
     """Filter parameters for run queries."""
 
     status: str | None = None
-    analysis_type: str | None = None
     search: str | None = None
 
 
@@ -114,8 +113,6 @@ class RunRepository(BaseRepository[Run]):
         # Apply filters
         if filters.status:
             query = query.filter(Run.status == filters.status)
-        if filters.analysis_type:
-            query = query.filter(Run.analysis_type == filters.analysis_type)
         if filters.search:
             search_pattern = f"%{filters.search}%"
             query = query.filter(
@@ -133,7 +130,6 @@ class RunRepository(BaseRepository[Run]):
             "created_at": Run.created_at,
             "csv_filename": Run.csv_filename,
             "status": Run.status,
-            "analysis_type": Run.analysis_type,
             "target_variable": Run.problem_description["target_variable"].astext,
         }
         sort_column = sort_columns.get(pagination.sort_field, Run.created_at)
@@ -357,8 +353,6 @@ class RunRepository(BaseRepository[Run]):
         # Apply filters
         if filters.status:
             query = query.filter(Run.status == filters.status)
-        if filters.analysis_type:
-            query = query.filter(Run.analysis_type == filters.analysis_type)
         if filters.search:
             search_pattern = f"%{filters.search}%"
             query = query.filter(
@@ -386,7 +380,6 @@ class RunRepository(BaseRepository[Run]):
             "created_at": Run.created_at,
             "csv_filename": Run.csv_filename,
             "status": Run.status,
-            "analysis_type": Run.analysis_type,
         }
         sort_column = sort_columns.get(pagination.sort_field, Run.created_at)
 

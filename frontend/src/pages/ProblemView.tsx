@@ -15,7 +15,7 @@ import {
   TargetVariableSection,
   FeaturesSection,
   JsonConfigUpload,
-  AnalysisTypeSelector,
+  RunAnalysisActions,
   ApiKeyInputSection,
 } from '@components/Problem';
 
@@ -36,13 +36,6 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   const [mode, setMode] = useState<'form' | 'json'>('form');
   const [jsonContent, setJsonContent] = useState('');
   const toast = useRef<Toast>(null);
-
-  // Analysis type state
-  const [analysisType, setAnalysisType] = useState<'quick' | 'deep'>('quick');
-
-  // Deep research model state
-  const [deepResearchModels, setDeepResearchModels] = useState<string[]>([]);
-  const [selectedDeepModel, setSelectedDeepModel] = useState<string | null>(null);
 
   // Form state
   const [projectDescription, setProjectDescription] = useState('');
@@ -152,32 +145,12 @@ const ProblemView: React.FC<ProblemViewProps> = ({
     triggerSuggestions();
   };
 
-  // OpenAI API key state (for deep research only)
+  // OpenAI API key state (optional; enables the literature search)
   const [openaiApiKey, setOpenaiApiKey] = useState('');
-  const [openaiModel, setOpenaiModel] = useState('');
   const [openaiKeyError, setOpenaiKeyError] = useState<string | null>(null);
   const [openaiValidationStatus, setOpenaiValidationStatus] = useState<
     'idle' | 'validating' | 'valid' | 'invalid'
   >('idle');
-
-  // Fetch available deep research models on mount
-  useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        const response = await configService.getDeepResearchModels();
-        const models = response.data.models || [];
-        setDeepResearchModels(models);
-        // Auto-select first model if available
-        if (models.length > 0) {
-          setSelectedDeepModel(models[0]);
-          setOpenaiModel(models[0]);
-        }
-      } catch (e) {
-        console.error('Failed to fetch deep research models:', e);
-      }
-    };
-    fetchModels();
-  }, []);
 
   // Fetch available Gemini models on mount
   useEffect(() => {
@@ -301,18 +274,15 @@ const ProblemView: React.FC<ProblemViewProps> = ({
     }
   };
 
-  // Validate OpenAI API key with backend (format + live check)
+  // Validate the optional OpenAI API key with backend (format + live check)
   const validateOpenaiKey = async (): Promise<boolean> => {
-    if (!openaiApiKey.trim()) {
-      setOpenaiKeyError('OpenAI API key is required for deep research');
-      return false;
-    }
+    if (!openaiApiKey.trim()) return true;
 
     setOpenaiValidationStatus('validating');
     setOpenaiKeyError(null);
 
     try {
-      await permissionsService.validateKeys({ openai_api_key: openaiApiKey });
+      await permissionsService.validateKeys({ openai_api_key: openaiApiKey.trim() });
       setOpenaiValidationStatus('valid');
       return true;
     } catch (error: unknown) {
@@ -327,14 +297,12 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   const handleSubmit = async () => {
     // Validate API keys for users without HUN-REN access
     if (!hasHunrenAccess) {
-      const isGeminiValid = await validateGeminiKey();
-      if (!isGeminiValid) return;
-
-      // Also validate OpenAI key if deep analysis is selected
-      if (analysisType === 'deep') {
-        const isOpenaiValid = await validateOpenaiKey();
-        if (!isOpenaiValid) return;
-      }
+      // Independent checks; the OpenAI key is optional and validated only when provided
+      const [isGeminiValid, isOpenaiValid] = await Promise.all([
+        validateGeminiKey(),
+        validateOpenaiKey(),
+      ]);
+      if (!isGeminiValid || !isOpenaiValid) return;
     }
 
     // Build user_api_keys payload
@@ -342,7 +310,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       ? {
           gemini_api_key: geminiApiKey,
           gemini_model: geminiModel,
-          ...(analysisType === 'deep' && openaiApiKey ? { openai_api_key: openaiApiKey } : {}),
+          ...(openaiApiKey.trim() ? { openai_api_key: openaiApiKey.trim() } : {}),
         }
       : undefined;
 
@@ -430,23 +398,11 @@ const ProblemView: React.FC<ProblemViewProps> = ({
           return;
         }
 
-        // Validate deep research model selection
-        const deepModel = hasHunrenAccess
-          ? selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null)
-          : openaiModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null);
-        if (analysisType === 'deep' && !deepModel) {
-          toast.current?.show({
-            severity: 'error',
-            summary: 'Model Required',
-            detail: 'Please select a deep research model.',
-          });
-          return;
-        }
-
+        // Drop legacy analysis-mode fields that older exported configs may carry
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { analysis_type, deep_research_model, ...problem } = parsed;
         onSubmit({
-          ...parsed,
-          analysis_type: analysisType,
-          deep_research_model: analysisType === 'deep' ? deepModel : null,
+          ...problem,
           user_api_keys: userApiKeys,
         });
       } catch (e) {
@@ -460,23 +416,8 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       // Validation for Form Mode
       const payload = validateAndGetPayload();
       if (payload) {
-        // Validate deep research model selection
-        const deepModel = hasHunrenAccess
-          ? selectedDeepModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null)
-          : openaiModel || (deepResearchModels.length > 0 ? deepResearchModels[0] : null);
-        if (analysisType === 'deep' && !deepModel) {
-          toast.current?.show({
-            severity: 'error',
-            summary: 'Model Required',
-            detail: 'Please select a deep research model.',
-          });
-          return;
-        }
-
         onSubmit({
           ...payload,
-          analysis_type: analysisType,
-          deep_research_model: analysisType === 'deep' ? deepModel : null,
           user_api_keys: userApiKeys,
         });
       }
@@ -612,33 +553,22 @@ const ProblemView: React.FC<ProblemViewProps> = ({
             onGeminiModelChange={setGeminiModel}
             geminiError={geminiKeyError}
             geminiValidationStatus={geminiValidationStatus}
-            showOpenAiInput={analysisType === 'deep'}
             openaiApiKey={openaiApiKey}
             onOpenaiApiKeyChange={(value) => {
               setOpenaiApiKey(value);
               setOpenaiKeyError(null);
               setOpenaiValidationStatus('idle');
             }}
-            openaiModel={openaiModel}
-            openaiModels={deepResearchModels}
-            onOpenaiModelChange={setOpenaiModel}
             openaiError={openaiKeyError}
             openaiValidationStatus={openaiValidationStatus}
           />
         </div>
       )}
 
-      <AnalysisTypeSelector
-        analysisType={analysisType}
-        onAnalysisTypeChange={setAnalysisType}
-        deepResearchModels={deepResearchModels}
-        selectedDeepModel={selectedDeepModel}
-        onDeepModelChange={setSelectedDeepModel}
+      <RunAnalysisActions
         onSubmit={handleSubmit}
-        onExportJson={handleExportJson}
+        onExportJson={mode === 'form' ? handleExportJson : undefined}
         disabled={isSubmitDisabled}
-        showExportButton={mode === 'form'}
-        hasHunrenAccess={hasHunrenAccess}
       />
     </div>
   );

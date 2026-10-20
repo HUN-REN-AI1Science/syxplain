@@ -9,7 +9,7 @@ import asyncio
 import logging
 from typing import Any
 
-from backend.core.constants import RunStatus
+from backend.core.constants import STANDARD_ANALYSIS, RunStatus
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import File as DbFile
 from backend.infrastructure.database.models import Run
@@ -118,8 +118,6 @@ async def _run_analysis(
     run_id: str,
     problem_desc: dict[str, Any],
     csv_filename: str,
-    analysis_type: str = "quick",
-    deep_research_model: str | None = None,
     user_api_key: str | None = None,
     user_model: str | None = None,
     user_openai_key: str | None = None,
@@ -137,11 +135,6 @@ async def _run_analysis(
 
     configure_logging()
     configure_debug_mode()
-
-    # Initialize Langfuse tracing
-    from backend.infrastructure.monitoring import init_langfuse
-
-    init_langfuse()
 
     logger.info(f"Analysis task started for Run ID: {run_id}")
 
@@ -176,8 +169,6 @@ async def _run_analysis(
             problem_desc=problem_desc,
             data=data,
             user_id=user_id,
-            analysis_type=analysis_type,
-            deep_research_model=deep_research_model,
             user_api_key=user_api_key,
             user_model=user_model,
             user_openai_key=user_openai_key,
@@ -202,8 +193,6 @@ def start_analysis_run(
     problem_desc: dict[str, Any],
     csv_filename: str,
     user_id: str,
-    analysis_type: str = "quick",
-    deep_research_model: str | None = None,
     user_api_key: str | None = None,
     user_model: str | None = None,
     user_openai_key: str | None = None,
@@ -215,11 +204,9 @@ def start_analysis_run(
         problem_desc: Problem description dictionary
         csv_filename: Name of the file to analyze
         user_id: Owner's UUID as string
-        analysis_type: 'quick' or 'deep'
-        deep_research_model: Model for deep analysis
         user_api_key: Optional user-provided Gemini API key (not stored, only in memory)
         user_model: Optional user-specified Gemini model
-        user_openai_key: Optional user-provided OpenAI API key for deep research
+        user_openai_key: Optional user-provided OpenAI API key for the literature search
 
     Returns:
         The run UUID as string
@@ -231,7 +218,7 @@ def start_analysis_run(
             csv_filename=csv_filename,
             status=RunStatus.PENDING,
             user_id=user_id,
-            analysis_type=analysis_type,
+            analysis_type=STANDARD_ANALYSIS,
         )
         db.add(run)
         db.commit()
@@ -239,8 +226,7 @@ def start_analysis_run(
         run_id = str(run.id)
 
     logger.info(
-        f"Starting background task for Run ID: {run_id} "
-        f"(analysis_type={analysis_type}, model={deep_research_model}, using_user_key={user_api_key is not None})"
+        f"Starting background task for Run ID: {run_id} (using_user_key={user_api_key is not None})"
     )
 
     # Start async background task (user keys passed in memory only)
@@ -249,8 +235,6 @@ def start_analysis_run(
             run_id,
             problem_desc,
             csv_filename,
-            analysis_type,
-            deep_research_model,
             user_api_key=user_api_key,
             user_model=user_model,
             user_openai_key=user_openai_key,

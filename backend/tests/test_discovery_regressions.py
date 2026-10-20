@@ -162,6 +162,7 @@ def test_all_categorical_run_skips_pysr_and_keeps_classic_models(monkeypatch):
         orch = AnalysisOrchestrator(backend=FakeBackend())
         monkeypatch.setattr(orch, "_is_run_terminal", lambda run_id: None)
         monkeypatch.setattr(orch, "_store_slurm_job_ids", lambda run_id, ids: None)
+        monkeypatch.setattr(orch, "_wants_literature", lambda ctx: False)
         rng = np.random.default_rng(0)
         soil = rng.integers(1, 5, 300).astype(float)
         df = pd.DataFrame({"soil_code": soil, "y": 3 * (soil == 2) + rng.normal(0, 0.2, 300)})
@@ -185,3 +186,76 @@ def test_all_categorical_run_skips_pysr_and_keeps_classic_models(monkeypatch):
     assert d["searches"] == []
     assert any(n["kind"] == "data_issue" and "categorical" in n["text"] for n in d["notebook"])
     assert results["warnings"][-1]["stage"] == "symbolic_regression"
+
+
+def test_one_analysis_mode_and_who_gets_the_literature_search(monkeypatch):
+    from backend.core.config import clear_settings_cache
+    from backend.schemas.requests import RunRequest
+    from backend.services.orchestrator_service import AnalysisContext, AnalysisOrchestrator
+    from backend.tests.test_discovery_orchestrator import FakeBackend
+
+    req = RunRequest(
+        problem_description={
+            "project_description": "p",
+            "target_variable": "y",
+            "features": {"x": "x"},
+        },
+        csv_filename="a.csv",
+        analysis_type="deep",  # legacy clients keep working
+        deep_research_model="o4-mini-deep-research",
+    )
+    assert "analysis_type" not in req.model_dump()  # accepted and ignored
+
+    monkeypatch.setenv("OPENAI_API_KEY", "server-key")
+    clear_settings_cache()
+    try:
+        orch = AnalysisOrchestrator(backend=FakeBackend())
+        base = {
+            "run_id": "r",
+            "user_id": "u",
+            "problem_description": {},
+            "data": pd.DataFrame(),
+            "target_column": "y",
+            "predictor_columns": [],
+        }
+        assert orch._wants_literature(AnalysisContext(**base))  # server keys
+        assert not orch._wants_literature(AnalysisContext(**base, user_api_key="gemini"))
+        assert orch._wants_literature(
+            AnalysisContext(**base, user_api_key="gemini", user_openai_key="openai")
+        )
+    finally:
+        clear_settings_cache()
+
+
+def test_run_usage_is_priced_per_model_with_cache_and_web_searches(monkeypatch):
+    from backend.infrastructure.monitoring.llm_costs import WEB_SEARCHES_KEY, summarize
+
+    with dspy.track_usage() as usage:
+        tracker = dspy.settings.usage_tracker
+        tracker.add_usage(
+            "openai/gpt-6.1-sol",
+            {
+                "prompt_tokens": 1_000_000,
+                "completion_tokens": 100_000,
+                "prompt_tokens_details": {"cached_tokens": 400_000},
+                "completion_tokens_details": {"reasoning_tokens": 60_000},
+            },
+        )
+        # Responses API usage shape, plus the searches of that call
+        tracker.add_usage("openai/gpt-6.1-sol", {"input_tokens": 10_000, "output_tokens": 1_000})
+        tracker.add_usage("openai/gpt-6.1-sol", {WEB_SEARCHES_KEY: 7})
+        tracker.add_usage("openai/gpt-5.5-2026-04-23", {"prompt_tokens": 1_000_000})
+        tracker.add_usage("gemini/gemini-3.1-pro-preview", {"prompt_tokens": 5})
+    s = summarize(usage)
+    sol = s["models"]["openai/gpt-6.1-sol"]
+    assert sol["calls"] == 2 and sol["web_search_calls"] == 7
+    assert sol["input_tokens"] == 1_010_000 and sol["cached_input_tokens"] == 400_000
+    assert sol["reasoning_tokens"] == 60_000
+    # 610k uncached * $2 + 400k cached * $0.10 + 101k out * $10, per 1M; 7 searches * $0.01
+    assert sol["cost_usd"] == pytest.approx(1.22 + 0.04 + 1.01 + 0.07)
+    assert s["models"]["openai/gpt-5.5-2026-04-23"]["cost_usd"] == pytest.approx(5.0)
+    assert s["unpriced_models"] == ["gemini/gemini-3.1-pro-preview"]
+    assert s["total_cost_usd"] == pytest.approx(sol["cost_usd"] + 5.0)
+
+    monkeypatch.setenv("LLM_PRICES_JSON", '{"gemini-3.1-pro-preview": [2, 0.2, 12]}')
+    assert summarize(usage)["unpriced_models"] == []

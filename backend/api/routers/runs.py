@@ -123,8 +123,6 @@ async def run_analysis(
             csv_filename=request.csv_filename,
             target_variable=request.problem_description.target_variable,
             features=request.problem_description.features,
-            analysis_type=request.analysis_type,
-            deep_research_model=request.deep_research_model,
             user_id=current_user.user_id,
             has_hunren_access=has_hunren_access,
             user_api_key=user_api_key,
@@ -136,8 +134,6 @@ async def run_analysis(
             problem_desc=request.problem_description.model_dump(),
             csv_filename=request.csv_filename,
             user_id=current_user.user_id,
-            analysis_type=request.analysis_type,
-            deep_research_model=request.deep_research_model,
             user_api_key=user_api_key if not has_hunren_access else None,
             user_model=user_model if not has_hunren_access else None,
             user_openai_key=user_openai_key if not has_hunren_access else None,
@@ -145,8 +141,7 @@ async def run_analysis(
 
         logger.info(
             f"Analysis started with Run ID: {run_id} "
-            f"(analysis_type={request.analysis_type}, model={request.deep_research_model}, "
-            f"using_user_key={not has_hunren_access and user_api_key is not None})"
+            f"(using_user_key={not has_hunren_access and user_api_key is not None})"
         )
 
         return RunResponse(
@@ -172,7 +167,6 @@ def list_runs(
     sort_field: SortField = Query(SortField.CREATED_AT, description="Field to sort by"),
     sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order: asc or desc"),
     status: str | None = Query(None, description="Filter by status"),
-    analysis_type: str | None = Query(None, description="Filter by analysis type"),
     search: str | None = Query(None, description="Search in filename and target variable"),
     current_user: User = Depends(get_current_user_jwt_only),
     run_service: RunService = Depends(get_run_service),
@@ -186,7 +180,6 @@ def list_runs(
         sort_field: Field to sort by
         sort_order: Sort direction
         status: Optional status filter
-        analysis_type: Optional analysis type filter
         search: Optional search query
 
     Returns:
@@ -199,7 +192,6 @@ def list_runs(
         sort_field=sort_field.value,
         sort_order=sort_order.value,
         status=status,
-        analysis_type=analysis_type,
         search=search,
     )
 

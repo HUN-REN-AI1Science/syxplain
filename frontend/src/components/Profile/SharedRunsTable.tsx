@@ -51,9 +51,6 @@ export const SharedRunsTable: React.FC<SharedRunsTableProps> = ({
                   Target
                 </th>
                 <th className="hidden md:table-cell px-3 py-2 sm:px-4 sm:py-3 text-xs font-semibold text-secondary uppercase">
-                  Type
-                </th>
-                <th className="hidden md:table-cell px-3 py-2 sm:px-4 sm:py-3 text-xs font-semibold text-secondary uppercase">
                   Created
                 </th>
                 <th className="px-3 py-2 sm:px-4 sm:py-3 text-xs font-semibold text-secondary uppercase">
@@ -82,13 +79,6 @@ export const SharedRunsTable: React.FC<SharedRunsTableProps> = ({
                   </td>
                   <td className="px-3 py-2 sm:px-4 sm:py-3 font-medium text-primary font-mono text-sm">
                     {run.target_variable || '-'}
-                  </td>
-                  <td className="hidden md:table-cell px-3 py-2 sm:px-4 sm:py-3">
-                    <span
-                      className={`text-xs font-medium px-2 py-1 rounded-full ${run.analysis_type === 'deep' ? 'bg-blue-100 text-brand-500' : 'bg-orange-100 text-orange-700'}`}
-                    >
-                      {run.analysis_type === 'deep' ? 'Deep' : 'Quick'}
-                    </span>
                   </td>
                   <td className="hidden md:table-cell px-3 py-2 sm:px-4 sm:py-3 text-secondary text-sm">
                     {run.created_at ? new Date(run.created_at).toLocaleDateString() : '-'}

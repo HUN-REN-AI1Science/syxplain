@@ -15,6 +15,7 @@ import { Tag } from 'primereact/tag';
 import { Dialog } from 'primereact/dialog';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { adminService } from '@services/api';
+import { legacyAnalysisTypeLabel } from '@utils/formatting';
 import type { AdminRunSummary, AdminRunDetail } from '@/types';
 
 interface RunManagementProps {
@@ -36,7 +37,6 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState('');
   const [dateFrom, setDateFrom] = useState<Date | null>(null);
   const [dateTo, setDateTo] = useState<Date | null>(null);
@@ -51,12 +51,6 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
     { label: 'Cancelled', value: 'cancelled' },
   ];
 
-  const typeOptions = [
-    { label: 'All Types', value: null },
-    { label: 'Quick', value: 'quick' },
-    { label: 'Deep', value: 'deep' },
-  ];
-
   const fetchRuns = useCallback(async () => {
     try {
       setLoading(true);
@@ -66,7 +60,6 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
         sort_field: sortField,
         sort_order: sortOrder,
         status: statusFilter || undefined,
-        analysis_type: typeFilter || undefined,
         search: searchFilter || undefined,
         date_from: dateFrom?.toISOString(),
         date_to: dateTo?.toISOString(),
@@ -82,18 +75,7 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
     } finally {
       setLoading(false);
     }
-  }, [
-    page,
-    pageSize,
-    sortField,
-    sortOrder,
-    statusFilter,
-    typeFilter,
-    searchFilter,
-    dateFrom,
-    dateTo,
-    toast,
-  ]);
+  }, [page, pageSize, sortField, sortOrder, statusFilter, searchFilter, dateFrom, dateTo, toast]);
 
   useEffect(() => {
     fetchRuns();
@@ -296,15 +278,6 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
           />
         </div>
         <div>
-          <label className="block text-sm text-secondary mb-1">Type</label>
-          <Dropdown
-            value={typeFilter}
-            options={typeOptions}
-            onChange={(e) => setTypeFilter(e.value)}
-            className="w-full"
-          />
-        </div>
-        <div>
           <label className="block text-sm text-secondary mb-1">Date From</label>
           <Calendar
             value={dateFrom}
@@ -360,7 +333,6 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
         <Column field="id" header="ID" body={(row) => row.id.substring(0, 8) + '...'} />
         <Column header="User" body={userTemplate} />
         <Column field="status" header="Status" body={statusTemplate} sortable />
-        <Column field="analysis_type" header="Type" sortable />
         <Column field="created_at" header="Created" body={dateTemplate} sortable />
         <Column header="Duration" body={durationTemplate} />
         <Column header="Actions" body={actionsTemplate} />
@@ -394,10 +366,12 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
                   />
                 </p>
               </div>
-              <div>
-                <label className="text-sm text-secondary">Analysis Type</label>
-                <p>{selectedRun.analysis_type}</p>
-              </div>
+              {legacyAnalysisTypeLabel(selectedRun.analysis_type) && (
+                <div>
+                  <label className="text-sm text-secondary">Analysis Type</label>
+                  <p>{legacyAnalysisTypeLabel(selectedRun.analysis_type)}</p>
+                </div>
+              )}
               <div>
                 <label className="text-sm text-secondary">File</label>
                 <p>

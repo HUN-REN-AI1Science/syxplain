@@ -11,6 +11,7 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
+import { analysisTypeDisplay } from '@utils/formatting';
 import { ProgressBar } from 'primereact/progressbar';
 import { adminService } from '@services/api';
 import type { PerformanceStats, PerformanceByTypeItem, RunTrendItem } from '@/types';
@@ -131,7 +132,7 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
 
   // Comparison chart data
   const comparisonChartData = {
-    labels: byType.map((t) => t.type.charAt(0).toUpperCase() + t.type.slice(1)),
+    labels: byType.map((t) => analysisTypeDisplay(t.type).label),
     datasets: [
       {
         label: 'Total Runs',
@@ -166,12 +167,10 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
     },
   };
 
-  const typeTemplate = (rowData: PerformanceByTypeItem) => (
-    <Tag
-      value={rowData.type.charAt(0).toUpperCase() + rowData.type.slice(1)}
-      severity={rowData.type === 'quick' ? 'info' : 'warning'}
-    />
-  );
+  const typeTemplate = (rowData: PerformanceByTypeItem) => {
+    const { label, severity } = analysisTypeDisplay(rowData.type);
+    return <Tag value={label} severity={severity} />;
+  };
 
   const durationTemplate = (rowData: PerformanceByTypeItem) => (
     <span className="font-mono">{formatDuration(rowData.avg_duration)}</span>
@@ -278,10 +277,10 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
           </div>
         </Card>
 
-        {/* Quick vs Deep Comparison */}
+        {/* Comparison by analysis type (standard vs legacy quick/deep runs) */}
         <Card className="shadow-md">
           <h3 className="text-base sm:text-lg font-semibold font-heading text-primary mb-4">
-            Quick vs Deep
+            Runs by Analysis Type
           </h3>
           <div className="h-56 sm:h-64">
             <Chart type="bar" data={comparisonChartData} options={comparisonChartOptions} />
@@ -316,7 +315,7 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
           {byType.map((type) => (
             <div key={type.type} className="bg-surface rounded-lg p-4 shadow-sm">
               <h4 className="font-medium font-heading text-primary mb-2">
-                {type.type.charAt(0).toUpperCase() + type.type.slice(1)} Analysis
+                {analysisTypeDisplay(type.type).label} Analysis
               </h4>
               <ul className="text-sm text-secondary space-y-1">
                 <li>

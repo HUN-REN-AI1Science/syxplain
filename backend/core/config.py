@@ -79,29 +79,12 @@ class LLMSettings:
         default_factory=lambda: os.environ.get("SMALL_USER_MODEL_NAME", "gemini-2.5-flash")
     )
 
-    # Deep research settings
-    deep_research_api_key: str = field(
-        default_factory=lambda: os.environ.get("DEEP_RESEARCH_API_KEY", "")
-    )
-    deep_research_api_base: str | None = field(
-        default_factory=lambda: os.environ.get("DEEP_RESEARCH_API_BASE")
-    )
-    deep_research_models: str = field(
-        default_factory=lambda: os.environ.get("DEEP_RESEARCH_MODEL", "")
-    )
-
     # User-provided key model options (comma-separated)
     user_api_models: str = field(
         default_factory=lambda: os.environ.get(
             "USER_API_MODELS", "gemini-3.1-pro-preview,gemini-3-pro-preview,gemini-2.5-pro"
         )
     )
-
-    def get_deep_research_model_list(self) -> list[str]:
-        """Parse comma-separated model list."""
-        if not self.deep_research_models:
-            return []
-        return [m.strip() for m in self.deep_research_models.split(",") if m.strip()]
 
     def get_user_api_model_list(self) -> list[str]:
         """Parse comma-separated user API model list."""
@@ -139,25 +122,23 @@ class AnalysisSettings:
         return self.max_file_size_mb * 1024 * 1024
 
 
-def _per_analysis_type(raw: str, default: tuple[float, float]) -> tuple[float, float]:
-    """Parse "quick,deep" (or a single value for both)."""
+def _budget_value(name: str, default: float) -> float:
+    """
+    One budget ceiling. Values in the former "quick,deep" form (still in older .env
+    files) use their last part, the deep value that is now the single budget.
+    """
+    raw = os.environ.get(name, "")
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
     try:
-        parts = [float(p) for p in raw.split(",") if p.strip()]
+        return float(parts[-1]) if parts else default
     except ValueError:
         return default
-    if len(parts) == 1:
-        return parts[0], parts[0]
-    if len(parts) >= 2:
-        return parts[0], parts[1]
-    return default
 
 
 @dataclass
 class DiscoverySettings:
     """
-    Budget of the agentic equation-discovery loop.
-
-    Values given as "quick,deep" apply per analysis type.
+    Budget of the agentic equation-discovery loop (ceilings: the agent stops when it is done).
     """
 
     enabled: bool = field(
@@ -165,20 +146,12 @@ class DiscoverySettings:
     )
     # Model for the agent (server keys); empty = OPENAI_MODEL_NAME
     model_name: str = field(default_factory=lambda: os.environ.get("DISCOVERY_AGENT_MODEL", ""))
-    max_iters: tuple[float, float] = field(
-        default_factory=lambda: _per_analysis_type(
-            os.environ.get("DISCOVERY_MAX_ITERS", "30,40"), (30, 40)
-        )
+    max_iters: float = field(default_factory=lambda: _budget_value("DISCOVERY_MAX_ITERS", 40))
+    max_pysr_runs: float = field(
+        default_factory=lambda: _budget_value("DISCOVERY_MAX_PYSR_RUNS", 6)
     )
-    max_pysr_runs: tuple[float, float] = field(
-        default_factory=lambda: _per_analysis_type(
-            os.environ.get("DISCOVERY_MAX_PYSR_RUNS", "3,6"), (3, 6)
-        )
-    )
-    wall_clock_minutes: tuple[float, float] = field(
-        default_factory=lambda: _per_analysis_type(
-            os.environ.get("DISCOVERY_WALL_CLOCK_MIN", "45,150"), (45, 150)
-        )
+    wall_clock_minutes: float = field(
+        default_factory=lambda: _budget_value("DISCOVERY_WALL_CLOCK_MIN", 150)
     )
     max_concurrent_pysr: int = field(
         default_factory=lambda: int(os.environ.get("DISCOVERY_MAX_CONCURRENT_PYSR", "2"))
@@ -202,31 +175,16 @@ class DiscoverySettings:
         default_factory=lambda: int(os.environ.get("DISCOVERY_MAX_CATEGORICAL_LEVELS", "10"))
     )
 
-    def for_type(self, analysis_type: str) -> dict[str, float]:
-        i = 1 if analysis_type == "deep" else 0
+    def limits(self) -> dict[str, float]:
         return {
-            "max_iters": int(self.max_iters[i]),
-            "max_pysr_runs": int(self.max_pysr_runs[i]),
-            "wall_clock_s": float(self.wall_clock_minutes[i]) * 60,
+            "max_iters": int(self.max_iters),
+            "max_pysr_runs": int(self.max_pysr_runs),
+            "wall_clock_s": float(self.wall_clock_minutes) * 60,
             "max_concurrent_pysr": self.max_concurrent_pysr,
             "pysr_timeout_s": self.pysr_timeout_s,
             # Safety net for runaway tool use; the agent is budgeted in steps.
-            "max_tool_calls": int(self.max_iters[i]) * 2,
+            "max_tool_calls": int(self.max_iters) * 2,
         }
-
-
-@dataclass
-class LangfuseSettings:
-    """Langfuse tracing settings."""
-
-    public_key: str = field(default_factory=lambda: os.environ.get("LANGFUSE_PUBLIC_KEY", ""))
-    secret_key: str = field(default_factory=lambda: os.environ.get("LANGFUSE_SECRET_KEY", ""))
-    base_url: str = field(
-        default_factory=lambda: os.environ.get("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
-    )
-    enabled: bool = field(
-        default_factory=lambda: os.environ.get("LANGFUSE_ENABLED", "true").lower() == "true"
-    )
 
 
 @dataclass
@@ -240,7 +198,9 @@ class SlurmSettings:
     api_url: str = field(default_factory=lambda: os.environ.get("SLURM_API_URL", ""))
     auth_token: str = field(default_factory=lambda: os.environ.get("SLURM_AUTH_TOKEN", ""))
     user_name: str = field(default_factory=lambda: os.environ.get("SLURM_USER_NAME", "slurm"))
-    partition: str = field(default_factory=lambda: os.environ.get("SLURM_PARTITION", "compute"))
+    partition: str = field(
+        default_factory=lambda: os.environ.get("SLURM_PARTITION", "cpu_m2.2xlarge")
+    )
     staging_dir: str = field(
         default_factory=lambda: os.environ.get("SLURM_STAGING_DIR", "/tmp/syxplain")
     )
@@ -315,7 +275,6 @@ class Settings:
     cors: CORSSettings = field(default_factory=CORSSettings)
     analysis: AnalysisSettings = field(default_factory=AnalysisSettings)
     discovery: DiscoverySettings = field(default_factory=DiscoverySettings)
-    langfuse: LangfuseSettings = field(default_factory=LangfuseSettings)
     slurm: SlurmSettings = field(default_factory=SlurmSettings)
     compute: ComputeSettings = field(default_factory=ComputeSettings)
     github: GitHubSettings = field(default_factory=GitHubSettings)

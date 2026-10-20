@@ -4,7 +4,7 @@ LLM Service.
 Orchestrates LLM interactions for the application, including:
 - PySR configuration generation
 - Equation explanation
-- Deep research
+- Literature search
 """
 
 import asyncio
@@ -15,21 +15,20 @@ from typing import Any
 import dspy
 
 from backend.core.config import get_settings
-from backend.infrastructure.llm.client import create_deep_research_model, create_dspy_model
+from backend.infrastructure.llm.client import create_dspy_model, create_literature_model
 from backend.infrastructure.llm.signatures import (
-    DeepResearchEquations,
     ExplainPySrEquations,
-    ExplainPySrEquationsDeep,
+    ExplainPySrEquationsWithLiterature,
     GuessColumnDescriptions,
+    LiteratureLaws,
     PySrConfigGenerator,
 )
-from backend.infrastructure.monitoring.langfuse_service import flush_traces, observe, report_usage
+from backend.infrastructure.monitoring.llm_costs import record_web_searches
 from backend.utils.json_utils import clean_and_fix_json_string
 
 logger = logging.getLogger(__name__)
 
 
-@observe(name="generate_pysr_config", as_type="generation")
 def generate_pysr_config(
     project_description: str,
     dataset_statistics: str,
@@ -71,16 +70,13 @@ def generate_pysr_config(
         try:
             json.loads(cleaned_json)
         except json.JSONDecodeError as e:
-            flush_traces()
             logger.error(f"Failed to parse LLM response: {e}")
             raise ValueError(f"Failed to parse LLM response as valid JSON: {e}")
 
-        report_usage(lm)
         return cleaned_json
 
     except Exception as e:
         logger.error(f"Error in generate_pysr_config: {e}")
-        flush_traces()
         raise
 
 
@@ -88,7 +84,6 @@ def generate_pysr_config(
 SUGGESTION_BATCH_SIZE = 8
 
 
-@observe(name="guess_column_descriptions_batch", as_type="generation")
 def guess_column_descriptions_batch(
     project_description: str,
     target_variable: str,
@@ -134,8 +129,6 @@ def guess_column_descriptions_batch(
 
         cleaned_json = clean_and_fix_json_string(response.descriptions_json)
         parsed = json.loads(cleaned_json)
-        report_usage(lm)
-
         requested = set(columns)
         return {
             col: desc.strip()
@@ -145,7 +138,6 @@ def guess_column_descriptions_batch(
 
     except Exception as e:
         logger.error(f"Error in guess_column_descriptions_batch: {e}")
-        flush_traces()
         raise
 
 
@@ -199,34 +191,32 @@ async def suggest_column_descriptions(
     return descriptions, failed_columns
 
 
-@observe(name="deep_research_equations", as_type="generation")
-def deep_research_equations(
-    features_dict: dict[str, str], model_name: str | None = None, user_api_key: str | None = None
+def find_literature_laws(
+    features_dict: dict[str, str], user_api_key: str | None = None
 ) -> dict[str, Any]:
     """
-    Performs deep scientific research to find equations relating features.
+    Searches the scientific literature on the web for equations relating the features.
 
     Args:
         features_dict: Dictionary mapping variable names to descriptions
-        model_name: Optional override for model name (only used with server keys)
-        user_api_key: Optional user-provided API key
+        user_api_key: Optional user-provided OpenAI API key
 
     Returns:
         Dictionary with 'equations' list
     """
     try:
-        lm = create_deep_research_model(model_name=model_name, user_api_key=user_api_key)
+        lm = create_literature_model(user_api_key=user_api_key)
 
         features_json = json.dumps(features_dict, indent=2)
-        predictor = dspy.Predict(DeepResearchEquations)
+        predictor = dspy.Predict(LiteratureLaws)
 
         with dspy.settings.context(lm=lm):
             response = predictor(features_json=features_json)
-
-        report_usage(lm, model_name=model_name)
+        n_searches = record_web_searches(lm)
+        logger.info(f"Literature search used {n_searches} web searches")
 
         equations_str = response.equations
-        logger.debug(f"Deep Research Output: {equations_str}")
+        logger.debug(f"Literature search output: {equations_str}")
         cleaned_json = clean_and_fix_json_string(equations_str)
 
         try:
@@ -238,20 +228,18 @@ def deep_research_equations(
                 parsed.setdefault("equations", [])
             return parsed
         except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse deep research JSON: {e}. Raw: {cleaned_json[:200]}")
+            logger.warning(f"Failed to parse literature JSON: {e}. Raw: {cleaned_json[:200]}")
             return {"equations": [], "_parse_error": str(e)}
 
     except Exception as e:
-        logger.error(f"Error in deep_research_equations: {e}")
-        flush_traces()
+        logger.error(f"Error in find_literature_laws: {e}")
         raise
 
 
-@observe(name="generate_equation_explanation", as_type="generation")
 def generate_equation_explanation(
     project_spec_json: str,
     data_spec_json: str,
-    deep_research_context: dict[str, Any] | None = None,
+    literature_context: dict[str, Any] | None = None,
     user_api_key: str | None = None,
     user_model: str | None = None,
 ) -> dict[str, Any]:
@@ -261,37 +249,35 @@ def generate_equation_explanation(
     Args:
         project_spec_json: JSON string of project specification
         data_spec_json: JSON string of equations data
-        deep_research_context: Optional dict from deep research step
+        literature_context: Optional dict of fitted published laws
         user_api_key: Optional user-provided API key
         user_model: Optional user-specified model
 
     Returns:
         Dict with structured equation explanations (equations, summary, recommendation)
     """
-    is_deep_analysis = deep_research_context and deep_research_context.get("equations")
+    has_literature = literature_context and literature_context.get("equations")
 
     # The explanation step never searches the web — it only integrates citations already
-    # produced by the deep research step — so the plain chat model is used with no web
+    # produced by the literature search — so the plain chat model is used with no web
     # search tool.
     lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
 
-    # Deep analysis additionally enriches the project spec with the researched equations.
-    if is_deep_analysis:
+    # With published laws, the project spec is enriched with them.
+    if has_literature:
         try:
             enhanced_project_spec = json.loads(project_spec_json)
-            enhanced_project_spec["deep_research_equations"] = deep_research_context.get(
-                "equations", []
-            )
+            enhanced_project_spec["literature_equations"] = literature_context.get("equations", [])
             project_spec_json = json.dumps(enhanced_project_spec, indent=2)
         except json.JSONDecodeError:
             logger.warning(
                 "Failed to parse project_spec_json for enhancement, proceeding with original"
             )
 
-    signature = ExplainPySrEquationsDeep if is_deep_analysis else ExplainPySrEquations
+    signature = ExplainPySrEquationsWithLiterature if has_literature else ExplainPySrEquations
     predictor = dspy.Predict(signature)
 
-    logger.info(f"Generating explanations. Deep Analysis: {is_deep_analysis}")
+    logger.info(f"Generating explanations. With literature: {bool(has_literature)}")
 
     try:
         with dspy.settings.context(lm=lm):
@@ -299,8 +285,6 @@ def generate_equation_explanation(
             logger.debug(f"Explain Equations Input - Data Spec: {data_spec_json}")
 
             response = predictor(project_spec_json=project_spec_json, data_spec_json=data_spec_json)
-        report_usage(lm)
-
         explanation_json = response.explanation_json
         logger.debug(f"Explain Equations Output: {explanation_json}")
 
@@ -369,5 +353,4 @@ def generate_equation_explanation(
 
     except Exception as e:
         logger.error(f"Error in generate_equation_explanation: {e}")
-        flush_traces()
         raise

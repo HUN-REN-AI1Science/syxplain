@@ -39,10 +39,6 @@ class AnalyzeParams(BaseModel):
             "examples": [{"pH": "Soil pH (H2O)", "organic_C": "Organic carbon (%)"}]
         },
     )
-    analysis_type: str = Field(
-        default="quick",
-        description="Type of analysis: 'quick' (PySR only) or 'deep' (PySR + deep research)",
-    )
     gemini_api_key: str | None = Field(
         default=None,
         description="Google Gemini API key (required for users without HUN-REN access)",
@@ -53,11 +49,7 @@ class AnalyzeParams(BaseModel):
     )
     openai_api_key: str | None = Field(
         default=None,
-        description="OpenAI API key (required for deep analysis)",
-    )
-    deep_research_model: str | None = Field(
-        default=None,
-        description="Model for deep analysis (required when analysis_type='deep')",
+        description="OpenAI API key for the literature search (without one, users on their own keys get no literature step)",
     )
 
     @field_validator("features")
@@ -65,13 +57,6 @@ class AnalyzeParams(BaseModel):
     def features_not_empty(cls, v: dict[str, str]) -> dict[str, str]:
         if not v:
             raise ValueError("At least one feature must be specified")
-        return v
-
-    @field_validator("analysis_type")
-    @classmethod
-    def validate_analysis_type(cls, v: str) -> str:
-        if v not in ("quick", "deep"):
-            raise ValueError("analysis_type must be 'quick' or 'deep'")
         return v
 
     class Config:
@@ -84,7 +69,6 @@ class AnalyzeParams(BaseModel):
                     "organic_C": "Organic carbon content (%)",
                     "clay": "Clay fraction (%)",
                 },
-                "analysis_type": "quick",
                 "gemini_api_key": "AIza...",
                 "gemini_model": "gemini-3.1-pro-preview",
             }
@@ -148,7 +132,7 @@ class RunStatusResponse(BaseModel):
     progress: int = Field(ge=0, le=100, description="Completion percentage (0-100)")
     analysis_type: str = Field(
         default="quick",
-        description="Type of analysis: 'quick' or 'deep'",
+        description="'standard'; runs from before the single analysis mode keep 'quick' or 'deep'",
     )
     created_at: datetime | None = Field(
         default=None, description="Timestamp when the run was created (ISO 8601)"
@@ -185,7 +169,7 @@ class RunStatusResponse(BaseModel):
                     "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                     "status": "running",
                     "progress": 45,
-                    "analysis_type": "quick",
+                    "analysis_type": "standard",
                     "created_at": "2026-02-27T10:00:00",
                     "start_time": "2026-02-27T10:00:05",
                     "finish_time": None,
@@ -198,7 +182,7 @@ class RunStatusResponse(BaseModel):
                     "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                     "status": "completed",
                     "progress": 100,
-                    "analysis_type": "quick",
+                    "analysis_type": "standard",
                     "created_at": "2026-02-27T10:00:00",
                     "start_time": "2026-02-27T10:00:05",
                     "finish_time": "2026-02-27T10:03:42",
@@ -231,7 +215,7 @@ class RunSummary(BaseModel):
     progress: int = Field(ge=0, le=100, description="Completion percentage (0-100)")
     analysis_type: str = Field(
         default="quick",
-        description="Type of analysis: 'quick' or 'deep'",
+        description="'standard'; runs from before the single analysis mode keep 'quick' or 'deep'",
     )
     csv_filename: str = Field(..., description="Name of the uploaded data file")
     target_variable: str | None = Field(
@@ -255,7 +239,7 @@ class RunSummary(BaseModel):
                 "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 "status": "completed",
                 "progress": 100,
-                "analysis_type": "quick",
+                "analysis_type": "standard",
                 "csv_filename": "soil_data.csv",
                 "target_variable": "P_availability",
                 "created_at": "2026-02-27T10:00:00",
@@ -282,7 +266,7 @@ class RunListResponse(BaseModel):
                         "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                         "status": "completed",
                         "progress": 100,
-                        "analysis_type": "quick",
+                        "analysis_type": "standard",
                         "csv_filename": "soil_data.csv",
                         "target_variable": "P_availability",
                         "created_at": "2026-02-27T10:00:00",
@@ -342,9 +326,6 @@ class ModelsResponse(BaseModel):
     gemini_models: list[str] = Field(
         ..., description="Available Gemini model identifiers for LLM operations"
     )
-    deep_research_models: list[str] = Field(
-        ..., description="Available model identifiers for deep research analysis"
-    )
 
     class Config:
         json_schema_extra = {
@@ -352,10 +333,6 @@ class ModelsResponse(BaseModel):
                 "gemini_models": [
                     "gemini-3.1-pro-preview",
                     "gemini-2.5-flash",
-                ],
-                "deep_research_models": [
-                    "o3",
-                    "o4-mini",
                 ],
             }
         }

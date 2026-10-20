@@ -104,7 +104,6 @@ class RunService:
         sort_field: str = "created_at",
         sort_order: str = "desc",
         status: str | None = None,
-        analysis_type: str | None = None,
         search: str | None = None,
     ) -> PaginatedResult:
         """
@@ -117,13 +116,12 @@ class RunService:
             sort_field: Field to sort by
             sort_order: Sort direction ('asc' or 'desc')
             status: Optional status filter
-            analysis_type: Optional analysis type filter
             search: Optional search query
 
         Returns:
             PaginatedResult with runs
         """
-        filters = RunFilters(status=status, analysis_type=analysis_type, search=search)
+        filters = RunFilters(status=status, search=search)
         pagination = PaginationParams(
             page=page, page_size=page_size, sort_field=sort_field, sort_order=sort_order
         )
@@ -168,8 +166,6 @@ class RunService:
         csv_filename: str,
         target_variable: str,
         features: dict[str, str],
-        analysis_type: str,
-        deep_research_model: str | None,
         user_id: str,
         has_hunren_access: bool = True,
         user_api_key: str | None = None,
@@ -182,12 +178,10 @@ class RunService:
             csv_filename: Name of the uploaded file
             target_variable: Target column name
             features: Dictionary of feature columns
-            analysis_type: 'quick' or 'deep'
-            deep_research_model: Model for deep analysis
             user_id: User UUID as string
             has_hunren_access: Whether user has HUN-REN key permission
             user_api_key: User-provided Gemini API key (if any)
-            user_openai_key: User-provided OpenAI API key for deep research (if any)
+            user_openai_key: User-provided OpenAI API key for the literature search (optional)
 
         Raises:
             EntityNotFoundError: If file not found
@@ -201,28 +195,6 @@ class RunService:
                 raise ConfigurationError(
                     "OPENAI_API_KEY not set on server", config_key="OPENAI_API_KEY"
                 )
-
-            # Validate deep analysis configuration for server keys
-            if analysis_type == "deep":
-                if not self.settings.llm.deep_research_api_key:
-                    raise ConfigurationError(
-                        "Deep analysis is not configured on this server. DEEP_RESEARCH_API_KEY is missing.",
-                        config_key="DEEP_RESEARCH_API_KEY",
-                    )
-
-                if not deep_research_model:
-                    raise ValidationError(
-                        "deep_research_model is required for deep analysis",
-                        field="deep_research_model",
-                    )
-
-                allowed_models = self.settings.llm.get_deep_research_model_list()
-                if deep_research_model not in allowed_models:
-                    raise ValidationError(
-                        f"Invalid deep_research_model '{deep_research_model}'. Allowed models: {', '.join(allowed_models)}",
-                        field="deep_research_model",
-                        value=deep_research_model,
-                    )
         else:
             # User must provide their Gemini API key
             if not user_api_key:
@@ -230,19 +202,6 @@ class RunService:
                     "API key required. Please provide your Google Gemini API key.",
                     field="user_api_keys",
                 )
-
-            # Deep analysis requires an OpenAI key and a model selection
-            if analysis_type == "deep":
-                if not user_openai_key:
-                    raise ValidationError(
-                        "Deep research requires an OpenAI API key in addition to your Gemini key.",
-                        field="user_api_keys",
-                    )
-                if not deep_research_model:
-                    raise ValidationError(
-                        "deep_research_model is required for deep analysis",
-                        field="deep_research_model",
-                    )
 
         # Verify file exists and belongs to user
         db_file = self.file_repo.get_latest_by_filename(csv_filename, parse_uuid(user_id))

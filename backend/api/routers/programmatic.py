@@ -78,11 +78,9 @@ cancelling the run.
 | `project_description` | string | Yes | Description of the project and analysis goals |
 | `target_variable` | string | Yes | Name of the target column to predict |
 | `features` | object | Yes | Mapping of feature column names to descriptions (e.g. `{"pH": "Soil pH"}`) |
-| `analysis_type` | string | No | `"quick"` (default) or `"deep"` |
 | `gemini_api_key` | string | No | Google Gemini API key (required without HUN-REN access) |
 | `gemini_model` | string | No | Gemini model identifier (default: `"gemini-3.1-pro-preview"`) |
-| `openai_api_key` | string | No | OpenAI API key (required for deep analysis) |
-| `deep_research_model` | string | No | Deep research model (required when `analysis_type` is `"deep"`) |
+| `openai_api_key` | string | No | OpenAI API key for the literature search (without HUN-REN access; omitted = no literature step) |
 
 **Example `params` value:**
 
@@ -91,7 +89,6 @@ cancelling the run.
   "project_description": "Predict soil phosphorus availability",
   "target_variable": "P_availability",
   "features": {"pH": "Soil pH (H2O)", "organic_C": "Organic carbon (%)"},
-  "analysis_type": "quick",
   "gemini_api_key": "AIza..."
 }
 ```
@@ -160,8 +157,6 @@ async def analyze(
             csv_filename=csv_filename,
             target_variable=analyze_params.target_variable,
             features=analyze_params.features,
-            analysis_type=analyze_params.analysis_type,
-            deep_research_model=analyze_params.deep_research_model,
             user_id=current_user.user_id,
             has_hunren_access=has_hunren_access,
             user_api_key=user_api_key,
@@ -185,8 +180,6 @@ async def analyze(
         problem_desc=problem_desc,
         csv_filename=csv_filename,
         user_id=current_user.user_id,
-        analysis_type=analyze_params.analysis_type,
-        deep_research_model=analyze_params.deep_research_model,
         user_api_key=user_api_key if not has_hunren_access else None,
         user_model=user_model if not has_hunren_access else None,
         user_openai_key=user_openai_key if not has_hunren_access else None,
@@ -447,9 +440,8 @@ def download_artifact(
     description="""
 Returns the available models that can be used in analysis requests.
 
-Lists both Gemini models (used for the main LLM pipeline) and deep research models
-(used when `analysis_type` is `deep`). Use the returned model identifiers in the
-`gemini_model` and `deep_research_model` fields of the analyze request.
+Lists the Gemini models for the main LLM pipeline with your own key; pass one as
+`gemini_model`.
 """,
     responses={
         200: {"description": "Lists of available model identifiers", "model": ModelsResponse},
@@ -461,5 +453,4 @@ def list_models(request: Request, current_user: User = Depends(get_current_user)
     settings = get_settings()
     return ModelsResponse(
         gemini_models=settings.llm.get_user_api_model_list(),
-        deep_research_models=settings.llm.get_deep_research_model_list(),
     )

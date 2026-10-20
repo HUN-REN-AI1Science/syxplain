@@ -1,5 +1,5 @@
 """
-Literature scout (deep mode): published laws, fitted to the data.
+Literature scout: published laws, found by web search and fitted to the data.
 
 The scout runs once, in the background, from the start of the run (it is slow: a
 web-searching research model). Its laws are parsed, their variables mapped onto
@@ -63,7 +63,7 @@ def literature_features(
         if col in session.alias_of
     }
     target_desc = descriptions.get(session.target_column) or project_description[:300]
-    out[session.target_alias] = f"target variable ({session.target_column})" + (
+    out[session.target_alias] = f"TARGET variable ({session.target_column})" + (
         f": {target_desc}" if target_desc else ""
     )
     return out
@@ -211,8 +211,8 @@ def literature_summary(session: DiscoverySession) -> dict[str, Any]:
     }
 
 
-def deep_research_context(known_laws: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Shape expected by the deep explanation signature, or None when nothing was found."""
+def literature_context(known_laws: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Shape expected by the literature explanation signature, or None when nothing was found."""
     if not known_laws or known_laws.get("status") != "ok" or not known_laws.get("laws"):
         return None
     return {

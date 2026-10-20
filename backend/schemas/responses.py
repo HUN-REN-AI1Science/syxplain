@@ -204,12 +204,6 @@ class ProgressConfigResponse(BaseModel):
     phases: list[ProgressPhase]
 
 
-class DeepResearchModelsResponse(BaseModel):
-    """Available deep research models."""
-
-    models: list[str]
-
-
 class UserApiModelsResponse(BaseModel):
     """Available models for user-provided API keys."""
 
@@ -564,7 +558,7 @@ class FeaturesConfig(BaseModel):
     """Feature flags."""
 
     slurm_configured: bool
-    deep_research_enabled: bool
+    literature_search_enabled: bool
     user_api_keys_enabled: bool
 
 
@@ -572,7 +566,6 @@ class SecretsConfig(BaseModel):
     """Masked secrets configuration."""
 
     openai_api_key: str | None = None
-    deep_research_api_key: str | None = None
     slurm_auth_token: str | None = None
     database_host: str | None = None
 

@@ -45,9 +45,6 @@ services:
       - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4o}
       - SMALL_MODEL_NAME=${SMALL_MODEL_NAME:-gpt-5-mini}
       - SMALL_USER_MODEL_NAME=${SMALL_USER_MODEL_NAME:-gemini-2.5-flash}
-      - DEEP_RESEARCH_MODEL=${DEEP_RESEARCH_MODEL:-}
-      - DEEP_RESEARCH_API_KEY=${DEEP_RESEARCH_API_KEY:-}
-      - DEEP_RESEARCH_API_BASE=${DEEP_RESEARCH_API_BASE:-}
       - USER_API_MODELS=${USER_API_MODELS:-gpt-4o,gpt-4.1}
       # GitHub Feedback (optional)
       - GITHUB_FEEDBACK_TOKEN=${GITHUB_FEEDBACK_TOKEN:-}
@@ -66,7 +63,7 @@ services:
       - SLURM_API_URL=${SLURM_API_URL:-http://mock-slurm:6820}
       - SLURM_AUTH_TOKEN=${SLURM_AUTH_TOKEN:-mock-token}
       - SLURM_USER_NAME=${SLURM_USER_NAME:-ai4science}
-      - SLURM_PARTITION=${SLURM_PARTITION:-batch_cpu_m2.large}
+      - SLURM_PARTITION=${SLURM_PARTITION:-cpu_m2.2xlarge}
       - SLURM_STAGING_DIR=${SLURM_STAGING_DIR:-/storage/ai4science/syxplain}
       - SLURM_CPUS=${SLURM_CPUS:-4}
       - SLURM_MEMORY=${SLURM_MEMORY:-8G}
@@ -79,15 +76,10 @@ services:
       # Analysis Settings (sensible defaults for dev)
       - DISCOVERY_AGENT_ENABLED=${DISCOVERY_AGENT_ENABLED:-true}
       - DISCOVERY_AGENT_MODEL=${DISCOVERY_AGENT_MODEL:-}
-      - DISCOVERY_WALL_CLOCK_MIN=${DISCOVERY_WALL_CLOCK_MIN:-15,30}
+      - DISCOVERY_WALL_CLOCK_MIN=${DISCOVERY_WALL_CLOCK_MIN:-30}
       - ANALYSIS_TIMEOUT_HOURS=2
       # CORS (allow all for local dev)
       - CORS_ORIGINS=*
-      # Langfuse (optional tracing)
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
-      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-}
-      - LANGFUSE_ENABLED=false
     volumes:
       - ./backend:/app/backend  # Mount source for hot reload
       - ./data:/app/data

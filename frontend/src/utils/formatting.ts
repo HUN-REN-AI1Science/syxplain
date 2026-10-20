@@ -30,3 +30,26 @@ export function escapeForAsciiMath(text: string): string {
 
   return result;
 }
+
+export interface AnalysisTypeDisplay {
+  label: string;
+  icon: string;
+  severity: 'info' | 'warning' | 'success';
+}
+
+/**
+ * Display of a run's analysis type. Current runs ('standard') have a single mode;
+ * runs from before it keep their 'quick'/'deep' label.
+ */
+export function analysisTypeDisplay(analysisType?: string | null): AnalysisTypeDisplay {
+  if (analysisType === 'quick') return { label: 'Quick', icon: 'pi-bolt', severity: 'info' };
+  if (analysisType === 'deep') return { label: 'Deep', icon: 'pi-search', severity: 'warning' };
+  return { label: 'Standard', icon: 'pi-cog', severity: 'success' };
+}
+
+/** Label for legacy quick/deep runs; null for current runs, which need none. */
+export function legacyAnalysisTypeLabel(analysisType?: string | null): string | null {
+  return analysisType === 'quick' || analysisType === 'deep'
+    ? analysisTypeDisplay(analysisType).label
+    : null;
+}

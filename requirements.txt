@@ -20,8 +20,8 @@ alembic
 pyjwt[crypto]
 # Pinned: the discovery agent extends dspy.ReAct internals
 dspy>=3.4,<3.5
-langfuse
-openinference-instrumentation-dspy
+# LiteLLM imports it for every Responses API call with tools (literature web search)
+mcp>=1.0
 openpyxl
 rich
 httpx

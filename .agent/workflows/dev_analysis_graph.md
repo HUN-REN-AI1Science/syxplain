@@ -18,7 +18,7 @@ The core analysis logic resides in `syxplain_lib.py`, which implements a LangGra
 
 ### 2. `backend/services/analysis_service.py`
 - Manages analysis run lifecycle (asyncio background tasks).
-- Initializes environment (Logging, Database, Langfuse).
+- Initializes environment (Logging, Database).
 - Delegates compute to orchestrator, which submits tasks to Slurm.
 
 ### 3. `syxplain.py` (CLI)
@@ -37,7 +37,7 @@ The core analysis logic resides in `syxplain_lib.py`, which implements a LangGra
 ### Modifying LLM Calls
 - **Do not** implement raw LLM calls in `syxplain_lib.py`.
 - Implement them in `backend/services/llm_service.py` and import the function.
-- This ensures Langfuse tracing and standard configuration are used.
+- This ensures standard configuration and run cost accounting are used.
 
 ### Testing Changes
 - **Quick Test (CLI)**: Run `python syxplain.py` (Requires local `.env` setup).

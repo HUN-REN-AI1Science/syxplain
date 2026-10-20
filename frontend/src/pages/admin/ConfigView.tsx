@@ -120,8 +120,8 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
             icon="pi pi-sitemap"
           />
           <ConfigItem
-            label="Deep Research Mode"
-            value={config.features.deep_research_enabled}
+            label="Literature Search"
+            value={config.features.literature_search_enabled}
             icon="pi pi-search"
           />
           <ConfigItem
@@ -172,24 +172,6 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
                     <Tag value="Set" severity="success" />
                     <code className="font-mono text-xs bg-surface-alt px-2 py-1 rounded text-secondary">
                       {config.secrets.openai_api_key}
-                    </code>
-                  </>
-                ) : (
-                  <Tag value="Not Set" severity="secondary" />
-                )}
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 border-b border-[var(--color-border)] gap-2">
-              <div className="flex items-center gap-2">
-                <i className="pi pi-search text-muted" />
-                <span className="text-secondary text-sm">Deep Research Key</span>
-              </div>
-              <div className="flex items-center gap-2 sm:ml-0">
-                {config.secrets.deep_research_api_key ? (
-                  <>
-                    <Tag value="Set" severity="success" />
-                    <code className="font-mono text-xs bg-surface-alt px-2 py-1 rounded text-secondary">
-                      {config.secrets.deep_research_api_key}
                     </code>
                   </>
                 ) : (
@@ -257,12 +239,12 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
           </div>
           <div className="flex items-center gap-3 p-3 bg-surface-alt rounded-lg">
             <i
-              className={`pi ${config.features.deep_research_enabled ? 'pi-check-circle text-green-500' : 'pi-minus-circle text-muted'}`}
+              className={`pi ${config.features.literature_search_enabled ? 'pi-check-circle text-green-500' : 'pi-minus-circle text-muted'}`}
             />
             <div>
-              <p className="font-medium text-primary">Deep Research</p>
+              <p className="font-medium text-primary">Literature Search</p>
               <p className="text-sm text-secondary">
-                {config.features.deep_research_enabled
+                {config.features.literature_search_enabled
                   ? 'API key configured'
                   : 'Optional - not enabled'}
               </p>
