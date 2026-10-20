@@ -113,6 +113,7 @@ print('Julia pre-compilation complete')
     # /storage (the runtime depot) is not mounted during a build: use a scratch depot.
     # juliacall loads the baked environment directly (%environment), so this fails if a job
     # would still need to resolve or download anything.
+    cd "$(mktemp -d)"  # PySR writes checkpoints to ./outputs; the image itself is read-only
     JULIA_DEPOT_PATH="$(mktemp -d):/opt/julia-depot" python -c "
 import time
 t = time.time()
