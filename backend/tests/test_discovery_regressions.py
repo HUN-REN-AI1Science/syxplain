@@ -204,7 +204,7 @@ def test_one_analysis_mode_and_who_gets_the_literature_search(monkeypatch):
         analysis_type="deep",  # legacy clients keep working
         deep_research_model="o4-mini-deep-research",
     )
-    assert req.analysis_type == "standard"
+    assert "analysis_type" not in req.model_dump()  # accepted and ignored
 
     monkeypatch.setenv("OPENAI_API_KEY", "server-key")
     clear_settings_cache()

@@ -122,15 +122,6 @@ class AnalysisSettings:
         return self.max_file_size_mb * 1024 * 1024
 
 
-def _budget_value(raw: str, default: float) -> float:
-    """One budget value; a legacy "quick,deep" pair uses its second (full) value."""
-    try:
-        parts = [float(p) for p in raw.split(",") if p.strip()]
-    except ValueError:
-        return default
-    return parts[-1] if parts else default
-
-
 @dataclass
 class DiscoverySettings:
     """
@@ -143,15 +134,13 @@ class DiscoverySettings:
     # Model for the agent (server keys); empty = OPENAI_MODEL_NAME
     model_name: str = field(default_factory=lambda: os.environ.get("DISCOVERY_AGENT_MODEL", ""))
     max_iters: float = field(
-        default_factory=lambda: _budget_value(os.environ.get("DISCOVERY_MAX_ITERS", "40"), 40)
+        default_factory=lambda: float(os.environ.get("DISCOVERY_MAX_ITERS", "40"))
     )
     max_pysr_runs: float = field(
-        default_factory=lambda: _budget_value(os.environ.get("DISCOVERY_MAX_PYSR_RUNS", "6"), 6)
+        default_factory=lambda: float(os.environ.get("DISCOVERY_MAX_PYSR_RUNS", "6"))
     )
     wall_clock_minutes: float = field(
-        default_factory=lambda: _budget_value(
-            os.environ.get("DISCOVERY_WALL_CLOCK_MIN", "150"), 150
-        )
+        default_factory=lambda: float(os.environ.get("DISCOVERY_WALL_CLOCK_MIN", "150"))
     )
     max_concurrent_pysr: int = field(
         default_factory=lambda: int(os.environ.get("DISCOVERY_MAX_CONCURRENT_PYSR", "2"))
@@ -212,7 +201,9 @@ class SlurmSettings:
     api_url: str = field(default_factory=lambda: os.environ.get("SLURM_API_URL", ""))
     auth_token: str = field(default_factory=lambda: os.environ.get("SLURM_AUTH_TOKEN", ""))
     user_name: str = field(default_factory=lambda: os.environ.get("SLURM_USER_NAME", "slurm"))
-    partition: str = field(default_factory=lambda: os.environ.get("SLURM_PARTITION", "compute"))
+    partition: str = field(
+        default_factory=lambda: os.environ.get("SLURM_PARTITION", "cpu_m2.2xlarge")
+    )
     staging_dir: str = field(
         default_factory=lambda: os.environ.get("SLURM_STAGING_DIR", "/tmp/syxplain")
     )

@@ -297,12 +297,12 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   const handleSubmit = async () => {
     // Validate API keys for users without HUN-REN access
     if (!hasHunrenAccess) {
-      const isGeminiValid = await validateGeminiKey();
-      if (!isGeminiValid) return;
-
-      // The OpenAI key is optional; validate it only when provided
-      const isOpenaiValid = await validateOpenaiKey();
-      if (!isOpenaiValid) return;
+      // Independent checks; the OpenAI key is optional and validated only when provided
+      const [isGeminiValid, isOpenaiValid] = await Promise.all([
+        validateGeminiKey(),
+        validateOpenaiKey(),
+      ]);
+      if (!isGeminiValid || !isOpenaiValid) return;
     }
 
     // Build user_api_keys payload
@@ -567,9 +567,8 @@ const ProblemView: React.FC<ProblemViewProps> = ({
 
       <RunAnalysisActions
         onSubmit={handleSubmit}
-        onExportJson={handleExportJson}
+        onExportJson={mode === 'form' ? handleExportJson : undefined}
         disabled={isSubmitDisabled}
-        showExportButton={mode === 'form'}
       />
     </div>
   );

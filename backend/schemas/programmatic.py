@@ -10,8 +10,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from backend.core.constants import STANDARD_ANALYSIS
-
 
 class AnalyzeParams(BaseModel):
     """
@@ -41,10 +39,6 @@ class AnalyzeParams(BaseModel):
             "examples": [{"pH": "Soil pH (H2O)", "organic_C": "Organic carbon (%)"}]
         },
     )
-    analysis_type: str = Field(
-        default=STANDARD_ANALYSIS,
-        description="Deprecated and ignored: every analysis runs the full pipeline, including the literature search",
-    )
     gemini_api_key: str | None = Field(
         default=None,
         description="Google Gemini API key (required for users without HUN-REN access)",
@@ -57,10 +51,6 @@ class AnalyzeParams(BaseModel):
         default=None,
         description="OpenAI API key for the literature search (without one, users on their own keys get no literature step)",
     )
-    deep_research_model: str | None = Field(
-        default=None,
-        description="Deprecated and ignored",
-    )
 
     @field_validator("features")
     @classmethod
@@ -68,12 +58,6 @@ class AnalyzeParams(BaseModel):
         if not v:
             raise ValueError("At least one feature must be specified")
         return v
-
-    @field_validator("analysis_type")
-    @classmethod
-    def validate_analysis_type(cls, v: str) -> str:
-        # Legacy 'quick'/'deep' are accepted so existing clients keep working
-        return STANDARD_ANALYSIS
 
     class Config:
         json_schema_extra = {
@@ -148,7 +132,7 @@ class RunStatusResponse(BaseModel):
     progress: int = Field(ge=0, le=100, description="Completion percentage (0-100)")
     analysis_type: str = Field(
         default="quick",
-        description="Type of analysis: 'quick' or 'deep'",
+        description="'standard'; runs from before the single analysis mode keep 'quick' or 'deep'",
     )
     created_at: datetime | None = Field(
         default=None, description="Timestamp when the run was created (ISO 8601)"
@@ -231,7 +215,7 @@ class RunSummary(BaseModel):
     progress: int = Field(ge=0, le=100, description="Completion percentage (0-100)")
     analysis_type: str = Field(
         default="quick",
-        description="Type of analysis: 'quick' or 'deep'",
+        description="'standard'; runs from before the single analysis mode keep 'quick' or 'deep'",
     )
     csv_filename: str = Field(..., description="Name of the uploaded data file")
     target_variable: str | None = Field(

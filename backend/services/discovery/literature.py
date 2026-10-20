@@ -212,7 +212,7 @@ def literature_summary(session: DiscoverySession) -> dict[str, Any]:
 
 
 def literature_context(known_laws: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Shape expected by the deep explanation signature, or None when nothing was found."""
+    """Shape expected by the literature explanation signature, or None when nothing was found."""
     if not known_laws or known_laws.get("status") != "ok" or not known_laws.get("laws"):
         return None
     return {

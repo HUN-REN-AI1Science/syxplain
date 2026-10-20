@@ -19,12 +19,12 @@ import pandas as pd
 from backend.core.config import (
     get_compute_settings,
     get_discovery_settings,
-    get_settings,
     get_slurm_settings,
 )
-from backend.core.constants import STANDARD_ANALYSIS, RunStatus
+from backend.core.constants import RunStatus
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
+from backend.infrastructure.llm.client import LITERATURE_TIMEOUT_S, literature_available
 from backend.infrastructure.slurm import (
     JobState,
     SlurmBackend,
@@ -650,22 +650,23 @@ class AnalysisOrchestrator:
                     rationale="Baseline: all continuous features, operators chosen from the feature plots",
                     enforce_budget=False,
                 )
-            if not self._wants_literature(context):
-                if context.user_api_key:
-                    warnings.append(
-                        {
-                            "stage": "literature",
-                            "message": "No literature search: it needs an OpenAI API key",
-                        }
-                    )
-            else:
+            if self._wants_literature(context):
                 features_for_lit = literature_features(
                     session,
                     descriptions,
                     context.problem_description.get("project_description", ""),
                 )
                 session.literature_task = asyncio.create_task(
-                    run_literature(session, self._literature_lookup(context, features_for_lit))
+                    run_literature(
+                        session, self._literature_lookup(context.user_openai_key, features_for_lit)
+                    )
+                )
+            elif context.user_api_key:
+                warnings.append(
+                    {
+                        "stage": "literature",
+                        "message": "No literature search: it needs an OpenAI API key",
+                    }
                 )
 
             # PROFILE (separate process; not charged to the agent's budget)
@@ -702,7 +703,9 @@ class AnalysisOrchestrator:
             self._raise_if_cancelled(context, session)
             if session.literature_task is not None:
                 with contextlib.suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(asyncio.shield(session.literature_task), timeout=600)
+                    await asyncio.wait_for(
+                        asyncio.shield(session.literature_task), timeout=LITERATURE_TIMEOUT_S
+                    )
                 if not session.literature_task.done():
                     session.literature_task.cancel()
                     warnings.append(
@@ -874,20 +877,15 @@ class AnalysisOrchestrator:
         )
 
     def _wants_literature(self, context: AnalysisContext) -> bool:
-        """Every analysis searches the literature when a research key is available."""
-        if context.user_api_key:  # the user's own keys: only with an OpenAI key
-            return bool(context.user_openai_key)
-        return bool(get_settings().llm.openai_api_key)
+        return literature_available(context.user_api_key, context.user_openai_key)
 
-    def _literature_lookup(self, context: AnalysisContext, features: dict[str, str]):
+    def _literature_lookup(self, user_openai_key: str | None, features: dict[str, str]):
         """One call to the literature search (features keyed by alias, with the target)."""
         from backend.services.llm_service import find_literature_laws
 
         async def lookup() -> dict[str, Any]:
             return await asyncio.to_thread(
-                find_literature_laws,
-                features_dict=features,
-                user_api_key=context.user_openai_key,
+                find_literature_laws, features_dict=features, user_api_key=user_openai_key
             )
 
         return lookup
@@ -932,13 +930,12 @@ class AnalysisOrchestrator:
         """
         from backend.services.discovery.literature import literature_context
 
-        deep_ctx = None
-        if self._wants_literature(context):
+        lit_ctx = literature_context(discovery_results["discovery"].get("literature"))
+        if lit_ctx is not None:
             await progress.update_progress_async("literature", status="Integrating literature")
-            deep_ctx = literature_context(discovery_results["discovery"].get("literature"))
         await progress.update_progress_async("llm_explanation", status="Generating explanations")
         try:
-            return await self._generate_explanations(context, discovery_results, deep_ctx)
+            return await self._generate_explanations(context, discovery_results, lit_ctx)
         except (asyncio.CancelledError, AnalysisCancelledError):
             raise
         except Exception as e:
@@ -998,7 +995,6 @@ class AnalysisOrchestrator:
                 "scatter_data": discovery_results.get("scatter_data", {}),
                 "discovery": discovery_results.get("discovery"),
                 "warnings": warnings or [],
-                "analysis_type": STANDARD_ANALYSIS,
                 "compute_backend": self.backend.name,
                 "completed_at": datetime.utcnow().isoformat(),
             }

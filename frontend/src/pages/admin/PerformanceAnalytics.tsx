@@ -11,6 +11,7 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
+import { analysisTypeDisplay } from '@utils/formatting';
 import { ProgressBar } from 'primereact/progressbar';
 import { adminService } from '@services/api';
 import type { PerformanceStats, PerformanceByTypeItem, RunTrendItem } from '@/types';
@@ -166,12 +167,10 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
     },
   };
 
-  const typeTemplate = (rowData: PerformanceByTypeItem) => (
-    <Tag
-      value={rowData.type.charAt(0).toUpperCase() + rowData.type.slice(1)}
-      severity={rowData.type === 'deep' ? 'warning' : rowData.type === 'quick' ? 'info' : 'success'}
-    />
-  );
+  const typeTemplate = (rowData: PerformanceByTypeItem) => {
+    const { label, severity } = analysisTypeDisplay(rowData.type);
+    return <Tag value={label} severity={severity} />;
+  };
 
   const durationTemplate = (rowData: PerformanceByTypeItem) => (
     <span className="font-mono">{formatDuration(rowData.avg_duration)}</span>

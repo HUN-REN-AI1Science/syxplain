@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from backend.core.config import get_settings, get_slurm_settings
 from backend.infrastructure.database.models import Run
+from backend.infrastructure.llm.client import literature_available
 
 logger = logging.getLogger(__name__)
 
@@ -325,7 +326,7 @@ class SystemMonitorService:
             },
             "features": {
                 "slurm_configured": self._is_slurm_configured(),
-                "literature_search_enabled": bool(settings.llm.openai_api_key),
+                "literature_search_enabled": literature_available(None, None),
                 "user_api_keys_enabled": True,
             },
             "secrets": {

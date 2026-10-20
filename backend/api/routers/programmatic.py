@@ -78,11 +78,9 @@ cancelling the run.
 | `project_description` | string | Yes | Description of the project and analysis goals |
 | `target_variable` | string | Yes | Name of the target column to predict |
 | `features` | object | Yes | Mapping of feature column names to descriptions (e.g. `{"pH": "Soil pH"}`) |
-| `analysis_type` | string | No | Deprecated and ignored: every analysis runs the full pipeline |
 | `gemini_api_key` | string | No | Google Gemini API key (required without HUN-REN access) |
 | `gemini_model` | string | No | Gemini model identifier (default: `"gemini-3.1-pro-preview"`) |
 | `openai_api_key` | string | No | OpenAI API key for the literature search (without HUN-REN access; omitted = no literature step) |
-| `deep_research_model` | string | No | Deprecated and ignored |
 
 **Example `params` value:**
 

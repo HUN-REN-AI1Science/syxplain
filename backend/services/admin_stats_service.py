@@ -297,7 +297,7 @@ class AdminStatsService:
         Returns:
             List of per-type performance stats
         """
-        types = ["quick", "deep"]
+        types = [t for (t,) in self.db.query(Run.analysis_type).distinct() if t]
         result = []
 
         for analysis_type in types:

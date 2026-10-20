@@ -104,7 +104,6 @@ class RunService:
         sort_field: str = "created_at",
         sort_order: str = "desc",
         status: str | None = None,
-        analysis_type: str | None = None,
         search: str | None = None,
     ) -> PaginatedResult:
         """
@@ -117,13 +116,12 @@ class RunService:
             sort_field: Field to sort by
             sort_order: Sort direction ('asc' or 'desc')
             status: Optional status filter
-            analysis_type: Optional analysis type filter
             search: Optional search query
 
         Returns:
             PaginatedResult with runs
         """
-        filters = RunFilters(status=status, analysis_type=analysis_type, search=search)
+        filters = RunFilters(status=status, search=search)
         pagination = PaginationParams(
             page=page, page_size=page_size, sort_field=sort_field, sort_order=sort_order
         )

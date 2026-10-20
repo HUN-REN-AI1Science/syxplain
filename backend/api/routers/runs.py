@@ -167,7 +167,6 @@ def list_runs(
     sort_field: SortField = Query(SortField.CREATED_AT, description="Field to sort by"),
     sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order: asc or desc"),
     status: str | None = Query(None, description="Filter by status"),
-    analysis_type: str | None = Query(None, description="Filter by analysis type"),
     search: str | None = Query(None, description="Search in filename and target variable"),
     current_user: User = Depends(get_current_user_jwt_only),
     run_service: RunService = Depends(get_run_service),
@@ -181,7 +180,6 @@ def list_runs(
         sort_field: Field to sort by
         sort_order: Sort direction
         status: Optional status filter
-        analysis_type: Optional analysis type filter
         search: Optional search query
 
     Returns:
@@ -194,7 +192,6 @@ def list_runs(
         sort_field=sort_field.value,
         sort_order=sort_order.value,
         status=status,
-        analysis_type=analysis_type,
         search=search,
     )
 

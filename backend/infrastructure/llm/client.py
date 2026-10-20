@@ -60,6 +60,16 @@ def create_dspy_model(
 _DEFAULT_LITERATURE_MODEL = "gpt-6.1-sol"
 # Web searches per literature search: the main cost and latency lever
 _LITERATURE_MAX_TOOL_CALLS = 60
+# The orchestrator waits this long for the search; the request gives up at the same point,
+# so an abandoned search does not keep running (and billing) in its thread
+LITERATURE_TIMEOUT_S = 900
+
+
+def literature_available(user_api_key: str | None, user_openai_key: str | None) -> bool:
+    """Server keys always search the literature; a user's own keys need an OpenAI key."""
+    if user_api_key:
+        return bool(user_openai_key)
+    return bool(get_settings().llm.openai_api_key)
 
 
 def create_literature_model(user_api_key: str | None = None) -> dspy.LM:
@@ -74,13 +84,13 @@ def create_literature_model(user_api_key: str | None = None) -> dspy.LM:
     Raises:
         ValueError: If no API key is available.
     """
-    settings = get_settings().llm
     research_kwargs = {
         "model_type": "responses",
         "tools": [{"type": "web_search", "search_context_size": "high"}],
         "max_tool_calls": _LITERATURE_MAX_TOOL_CALLS,
         "reasoning": {"effort": "high"},
-        "timeout": 1800,
+        "timeout": LITERATURE_TIMEOUT_S,
+        "num_retries": 0,  # a retry could not finish within the wait anyway
     }
     if user_api_key:
         return dspy.LM(
@@ -89,11 +99,4 @@ def create_literature_model(user_api_key: str | None = None) -> dspy.LM:
             api_base=None,  # Use default OpenAI endpoint
             **research_kwargs,
         )
-    if not settings.openai_api_key:
-        raise ValueError("OPENAI_API_KEY is not configured.")
-    return dspy.LM(
-        model=f"openai/{settings.openai_model_name}",
-        api_key=settings.openai_api_key,
-        api_base=settings.openai_api_base,
-        **research_kwargs,
-    )
+    return create_dspy_model(**research_kwargs)

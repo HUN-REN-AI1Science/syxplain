@@ -9,8 +9,6 @@ from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
 
-from backend.core.constants import STANDARD_ANALYSIS
-
 
 class SortField(str, Enum):
     """Valid fields for sorting runs."""
@@ -18,7 +16,6 @@ class SortField(str, Enum):
     CREATED_AT = "created_at"
     CSV_FILENAME = "csv_filename"
     STATUS = "status"
-    ANALYSIS_TYPE = "analysis_type"
 
 
 class SortOrder(str, Enum):
@@ -64,21 +61,10 @@ class RunRequest(BaseModel):
 
     problem_description: ProblemDescription
     csv_filename: str = Field(..., min_length=1, description="Name of the uploaded file to analyze")
-    analysis_type: str = Field(
-        default=STANDARD_ANALYSIS,
-        description="Deprecated and ignored: there is one analysis, which always runs the full pipeline",
-    )
-    deep_research_model: str | None = Field(default=None, description="Deprecated and ignored")
     user_api_keys: UserApiKeys | None = Field(
         default=None,
         description="User-provided API keys (required for users without HUN-REN access)",
     )
-
-    @field_validator("analysis_type")
-    @classmethod
-    def validate_analysis_type(cls, v: str) -> str:
-        # Legacy 'quick'/'deep' are accepted so existing clients keep working
-        return STANDARD_ANALYSIS
 
     class Config:
         json_schema_extra = {

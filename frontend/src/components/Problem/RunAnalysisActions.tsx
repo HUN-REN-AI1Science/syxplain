@@ -10,22 +10,21 @@ import { useNavigation } from '@contexts/NavigationContext';
 
 interface RunAnalysisActionsProps {
   onSubmit: () => void;
+  /** Omitted = no Export JSON button */
   onExportJson?: () => void;
   disabled: boolean;
-  showExportButton: boolean;
 }
 
 export const RunAnalysisActions: React.FC<RunAnalysisActionsProps> = ({
   onSubmit,
   onExportJson,
   disabled,
-  showExportButton,
 }) => {
   const { navigateTo } = useNavigation();
 
   return (
     <div className="mt-4 flex justify-end items-center space-x-4">
-      {showExportButton && onExportJson && (
+      {onExportJson && (
         <>
           <Tooltip target=".btn-export-json" position="bottom" autoHide={false}>
             <span>
