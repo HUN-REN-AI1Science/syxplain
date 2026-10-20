@@ -23,13 +23,12 @@ from backend.infrastructure.llm.signatures import (
     LiteratureLaws,
     PySrConfigGenerator,
 )
-from backend.infrastructure.monitoring.langfuse_service import flush_traces, observe, report_usage
+from backend.infrastructure.monitoring.llm_costs import record_web_searches
 from backend.utils.json_utils import clean_and_fix_json_string
 
 logger = logging.getLogger(__name__)
 
 
-@observe(name="generate_pysr_config", as_type="generation")
 def generate_pysr_config(
     project_description: str,
     dataset_statistics: str,
@@ -71,16 +70,13 @@ def generate_pysr_config(
         try:
             json.loads(cleaned_json)
         except json.JSONDecodeError as e:
-            flush_traces()
             logger.error(f"Failed to parse LLM response: {e}")
             raise ValueError(f"Failed to parse LLM response as valid JSON: {e}")
 
-        report_usage(lm)
         return cleaned_json
 
     except Exception as e:
         logger.error(f"Error in generate_pysr_config: {e}")
-        flush_traces()
         raise
 
 
@@ -88,7 +84,6 @@ def generate_pysr_config(
 SUGGESTION_BATCH_SIZE = 8
 
 
-@observe(name="guess_column_descriptions_batch", as_type="generation")
 def guess_column_descriptions_batch(
     project_description: str,
     target_variable: str,
@@ -134,8 +129,6 @@ def guess_column_descriptions_batch(
 
         cleaned_json = clean_and_fix_json_string(response.descriptions_json)
         parsed = json.loads(cleaned_json)
-        report_usage(lm)
-
         requested = set(columns)
         return {
             col: desc.strip()
@@ -145,7 +138,6 @@ def guess_column_descriptions_batch(
 
     except Exception as e:
         logger.error(f"Error in guess_column_descriptions_batch: {e}")
-        flush_traces()
         raise
 
 
@@ -199,7 +191,6 @@ async def suggest_column_descriptions(
     return descriptions, failed_columns
 
 
-@observe(name="find_literature_laws", as_type="generation")
 def find_literature_laws(
     features_dict: dict[str, str], user_api_key: str | None = None
 ) -> dict[str, Any]:
@@ -221,8 +212,8 @@ def find_literature_laws(
 
         with dspy.settings.context(lm=lm):
             response = predictor(features_json=features_json)
-
-        report_usage(lm, model_name=lm.model.split("/", 1)[-1])
+        n_searches = record_web_searches(lm)
+        logger.info(f"Literature search used {n_searches} web searches")
 
         equations_str = response.equations
         logger.debug(f"Literature search output: {equations_str}")
@@ -242,11 +233,9 @@ def find_literature_laws(
 
     except Exception as e:
         logger.error(f"Error in find_literature_laws: {e}")
-        flush_traces()
         raise
 
 
-@observe(name="generate_equation_explanation", as_type="generation")
 def generate_equation_explanation(
     project_spec_json: str,
     data_spec_json: str,
@@ -296,8 +285,6 @@ def generate_equation_explanation(
             logger.debug(f"Explain Equations Input - Data Spec: {data_spec_json}")
 
             response = predictor(project_spec_json=project_spec_json, data_spec_json=data_spec_json)
-        report_usage(lm)
-
         explanation_json = response.explanation_json
         logger.debug(f"Explain Equations Output: {explanation_json}")
 
@@ -366,5 +353,4 @@ def generate_equation_explanation(
 
     except Exception as e:
         logger.error(f"Error in generate_equation_explanation: {e}")
-        flush_traces()
         raise

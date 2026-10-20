@@ -188,20 +188,6 @@ class DiscoverySettings:
 
 
 @dataclass
-class LangfuseSettings:
-    """Langfuse tracing settings."""
-
-    public_key: str = field(default_factory=lambda: os.environ.get("LANGFUSE_PUBLIC_KEY", ""))
-    secret_key: str = field(default_factory=lambda: os.environ.get("LANGFUSE_SECRET_KEY", ""))
-    base_url: str = field(
-        default_factory=lambda: os.environ.get("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
-    )
-    enabled: bool = field(
-        default_factory=lambda: os.environ.get("LANGFUSE_ENABLED", "true").lower() == "true"
-    )
-
-
-@dataclass
 class SlurmSettings:
     """
     Slurm cluster settings for slurmrestd API integration.
@@ -289,7 +275,6 @@ class Settings:
     cors: CORSSettings = field(default_factory=CORSSettings)
     analysis: AnalysisSettings = field(default_factory=AnalysisSettings)
     discovery: DiscoverySettings = field(default_factory=DiscoverySettings)
-    langfuse: LangfuseSettings = field(default_factory=LangfuseSettings)
     slurm: SlurmSettings = field(default_factory=SlurmSettings)
     compute: ComputeSettings = field(default_factory=ComputeSettings)
     github: GitHubSettings = field(default_factory=GitHubSettings)

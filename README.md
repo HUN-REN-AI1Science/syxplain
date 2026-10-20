@@ -73,6 +73,13 @@ Equations are found by an **AI-scientist agent** (DSPy ReAct, `backend/services/
 
 The agent is bounded by a budget (`DISCOVERY_*` variables; ceilings, it stops earlier when done). If it fails, the run still finishes with the baseline search and an automatic screen of the classic catalog. `python test_worker_local.py --task classic --example 1` runs the classic-law screen locally without any services.
 
+**Cost per analysis.** Every LLM call of a run is counted (tokens per model, cached and reasoning tokens, web searches) and priced. Each run logs one line and stores the same summary under `results.usage`:
+
+```bash
+docker logs syxplain-backend 2>&1 | grep "ANALYTICS run_usage"
+# ANALYTICS run_usage {"run_id":"...","outcome":"completed","models":{"openai/gpt-6.1-sol":{"calls":17,"input_tokens":...,"cost_usd":0.41}},"total_cost_usd":0.41,...}
+```
+
 ## Prerequisites
 
 - Docker and Docker Compose
@@ -133,7 +140,6 @@ Copy `.env.example` to `.env` and configure:
 - `OPENAI_API_BASE` - Custom LLM endpoint
 - `OPENAI_MODEL_NAME` - Model name (default: `gpt-4o`)
 - `SLURM_PARTITION` - Slurm partition (default: `batch_cpu_m2.large`)
-- `LANGFUSE_*` - For LLM tracing
 - `GITHUB_FEEDBACK_TOKEN` - GitHub personal access token for creating feedback issues
 - `GITHUB_FEEDBACK_REPO_OWNER` - GitHub repository owner (e.g. `HUN-REN-AI1Science`)
 - `GITHUB_FEEDBACK_REPO_NAME` - GitHub repository name (e.g. `syxplain`)

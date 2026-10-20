@@ -22,8 +22,6 @@ pyjwt[crypto]
 dspy>=3.4,<3.5
 # LiteLLM imports it for every Responses API call with tools (literature web search)
 mcp>=1.0
-langfuse
-openinference-instrumentation-dspy
 openpyxl
 rich
 httpx

@@ -142,5 +142,11 @@ if __name__ == "__main__":
     parser.add_argument("--output", help="Write the full results JSON here")
     cli_args = parser.parse_args()
     load_env(ROOT / ".env")
-    os.environ.setdefault("LANGFUSE_ENABLED", "false")
-    asyncio.run(main(cli_args))
+    import dspy
+
+    from backend.infrastructure.monitoring.llm_costs import summarize
+
+    with dspy.track_usage() as usage:
+        asyncio.run(main(cli_args))
+    print("\n=== LLM usage and cost ===")
+    print(json.dumps(summarize(usage), indent=2))

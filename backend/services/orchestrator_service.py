@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+import dspy
 import pandas as pd
 
 from backend.core.config import (
@@ -25,6 +26,7 @@ from backend.core.constants import RunStatus
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
 from backend.infrastructure.llm.client import LITERATURE_TIMEOUT_S, literature_available
+from backend.infrastructure.monitoring.llm_costs import log_run_usage, summarize
 from backend.infrastructure.slurm import (
     JobState,
     SlurmBackend,
@@ -304,71 +306,85 @@ class AnalysisOrchestrator:
             f"Starting orchestrated analysis for run {run_id} (backend={self.backend.name})"
         )
 
-        try:
-            # Update status to running
-            self._update_run_status(run_id, RunStatus.RUNNING)
-            await progress.update_progress_async("initialization", status="Initializing analysis")
+        # Every LLM call of the run (agent, literature search, explanation, ...) is counted
+        # here; the summary is stored with the results and logged as "ANALYTICS run_usage".
+        outcome = "failed"
+        with dspy.track_usage() as usage:
+            try:
+                # Update status to running
+                self._update_run_status(run_id, RunStatus.RUNNING)
+                await progress.update_progress_async(
+                    "initialization", status="Initializing analysis"
+                )
 
-            # Step 1: Data summary
-            await progress.update_progress_async("data_summary", status="Analyzing dataset")
-            data_summary = self._generate_data_summary(context)
+                # Step 1: Data summary
+                await progress.update_progress_async("data_summary", status="Analyzing dataset")
+                data_summary = self._generate_data_summary(context)
 
-            # Step 1.5: Generate feature visualizations for LLM
-            await progress.update_progress_async(
-                "visualization", status="Generating feature visualizations"
-            )
-            feature_visualizations = await asyncio.to_thread(
-                self._generate_feature_visualizations, context
-            )
+                # Step 1.5: Generate feature visualizations for LLM
+                await progress.update_progress_async(
+                    "visualization", status="Generating feature visualizations"
+                )
+                feature_visualizations = await asyncio.to_thread(
+                    self._generate_feature_visualizations, context
+                )
 
-            # Step 2: Generate PySR config using LLM
-            await progress.update_progress_async(
-                "pysr_config_generation", status="Generating symbolic regression configuration"
-            )
-            pysr_config = await self._generate_pysr_config(
-                context, data_summary, visualizations_b64=feature_visualizations
-            )
+                # Step 2: Generate PySR config using LLM
+                await progress.update_progress_async(
+                    "pysr_config_generation", status="Generating symbolic regression configuration"
+                )
+                pysr_config = await self._generate_pysr_config(
+                    context, data_summary, visualizations_b64=feature_visualizations
+                )
 
-            # Step 3: Agentic discovery (baseline PySR search + agent-driven loop)
-            discovery_results = await self._run_discovery(context, pysr_config, progress)
-            warnings = discovery_results.pop("warnings", [])
+                # Step 3: Agentic discovery (baseline PySR search + agent-driven loop)
+                discovery_results = await self._run_discovery(context, pysr_config, progress)
+                warnings = discovery_results.pop("warnings", [])
 
-            # The discovery brief is complete on its own: persist it before narration,
-            # so a failing explanation step can never lose it.
-            await asyncio.to_thread(self._store_results, run_id, discovery_results)
+                # The discovery brief is complete on its own: persist it before narration,
+                # so a failing explanation step can never lose it.
+                await asyncio.to_thread(self._store_results, run_id, discovery_results)
 
-            # Step 4: Narration (best-effort for every key type)
-            explanations = await self._narrate(context, discovery_results, progress, warnings)
+                # Step 4: Narration (best-effort for every key type)
+                explanations = await self._narrate(context, discovery_results, progress, warnings)
 
-            # Step 5: Finalize and store results
-            await progress.update_progress_async("finalization", status="Finalizing results")
-            final_results = self._compile_final_results(
-                context, discovery_results, explanations, warnings
-            )
+                # Step 5: Finalize and store results
+                await progress.update_progress_async("finalization", status="Finalizing results")
+                final_results = self._compile_final_results(
+                    context, discovery_results, explanations, warnings
+                )
 
-            visualizations = [
-                {"filename": f"feature_{i + 1}_vs_target.png", "content_b64": b64}
-                for i, b64 in enumerate(feature_visualizations)
-            ]
-            self._save_artifacts(run_id, final_results, progress, visualizations=visualizations)
+                visualizations = [
+                    {"filename": f"feature_{i + 1}_vs_target.png", "content_b64": b64}
+                    for i, b64 in enumerate(feature_visualizations)
+                ]
+                self._save_artifacts(run_id, final_results, progress, visualizations=visualizations)
 
-            # Mark as completed (also broadcasts via SSE)
-            if not self._update_run_status(run_id, RunStatus.COMPLETED, results=final_results):
-                self._update_run_status(run_id, RunStatus.FAILED, error="Failed to store results")
-                raise OrchestratorError("Failed to store results")
+                final_results["usage"] = summarize(usage)
 
-            logger.info(f"Analysis completed successfully for run {run_id}")
-            return final_results
+                # Mark as completed (also broadcasts via SSE)
+                if not self._update_run_status(run_id, RunStatus.COMPLETED, results=final_results):
+                    self._update_run_status(
+                        run_id, RunStatus.FAILED, error="Failed to store results"
+                    )
+                    raise OrchestratorError("Failed to store results")
 
-        except AnalysisCancelledError:
-            logger.info(f"Analysis cancelled for run {run_id}")
-            # Don't overwrite — cancel_run already set status to "cancelled"
-            raise
-        except Exception as e:
-            logger.error(f"Analysis failed for run {run_id}: {e}", exc_info=True)
-            error_msg = _format_user_facing_error(e)
-            self._update_run_status(run_id, RunStatus.FAILED, error=error_msg)
-            raise OrchestratorError(f"Analysis failed: {error_msg}") from e
+                logger.info(f"Analysis completed successfully for run {run_id}")
+                outcome = "completed"
+                return final_results
+
+            except AnalysisCancelledError:
+                outcome = "cancelled"
+                logger.info(f"Analysis cancelled for run {run_id}")
+                # Don't overwrite — cancel_run already set status to "cancelled"
+                raise
+            except Exception as e:
+                logger.error(f"Analysis failed for run {run_id}: {e}", exc_info=True)
+                error_msg = _format_user_facing_error(e)
+                self._update_run_status(run_id, RunStatus.FAILED, error=error_msg)
+                raise OrchestratorError(f"Analysis failed: {error_msg}") from e
+            finally:
+                log_run_usage(run_id, outcome, summarize(usage))
 
     def _generate_data_summary(self, context: AnalysisContext) -> dict[str, Any]:
         """Generate a summary of the input data."""

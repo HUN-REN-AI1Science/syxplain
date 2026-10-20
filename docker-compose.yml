@@ -80,11 +80,6 @@ services:
       - ANALYSIS_TIMEOUT_HOURS=2
       # CORS (allow all for local dev)
       - CORS_ORIGINS=*
-      # Langfuse (optional tracing)
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
-      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-}
-      - LANGFUSE_ENABLED=false
     volumes:
       - ./backend:/app/backend  # Mount source for hot reload
       - ./data:/app/data

@@ -136,11 +136,6 @@ async def _run_analysis(
     configure_logging()
     configure_debug_mode()
 
-    # Initialize Langfuse tracing
-    from backend.infrastructure.monitoring import init_langfuse
-
-    init_langfuse()
-
     logger.info(f"Analysis task started for Run ID: {run_id}")
 
     try:

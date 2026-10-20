@@ -98,6 +98,9 @@ services:
       - WORKER_CALLBACK_TOKEN=${WORKER_CALLBACK_TOKEN:-}
       - JOB_POLL_INTERVAL=${JOB_POLL_INTERVAL:-10}
       - COMPUTE_MAX_RETRIES=${COMPUTE_MAX_RETRIES:-3}
+      # LLM cost accounting (prices for OpenAI models are built in)
+      - LLM_PRICES_JSON=${LLM_PRICES_JSON:-}
+      - LLM_WEB_SEARCH_USD=${LLM_WEB_SEARCH_USD:-0.01}
       # Analysis Settings
       - DISCOVERY_AGENT_ENABLED=${DISCOVERY_AGENT_ENABLED:-true}
       - DISCOVERY_AGENT_MODEL=${DISCOVERY_AGENT_MODEL:-}
@@ -114,11 +117,6 @@ services:
       - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
       # CORS (REQUIRED - set to your frontend domain)
       - CORS_ORIGINS=${CORS_ORIGINS:?CORS_ORIGINS is required}
-      # Langfuse (optional tracing)
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
-      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
-      - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
     volumes:
       - ${SLURM_STAGING_DIR}:${SLURM_STAGING_DIR}
       - app_data:/app/data
