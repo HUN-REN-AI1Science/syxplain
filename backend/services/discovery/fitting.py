@@ -157,7 +157,7 @@ def _least_squares(
     max_nfev: int,
 ) -> tuple[np.ndarray, float, Any] | None:
     names = expr.parameters
-    penalty = 1e3 * (np.std(z) + 1.0)
+    penalty = 1e3 * (np.nanstd(z) + 1.0) if np.isfinite(z).any() else 1e3
 
     def residuals(p: np.ndarray) -> np.ndarray:
         pred = expr.evaluate(X, dict(zip(names, p, strict=True)))
@@ -207,12 +207,13 @@ def fit_model(
     fwd, inv = TRANSFORMS[result.target_transform]
 
     y = data.y
-    if result.target_transform in ("log", "sqrt") and np.any(
-        y <= 0 if result.target_transform == "log" else y < 0
-    ):
-        return _fail(
-            result, f"target_transform='{result.target_transform}' needs a positive target"
-        )
+    domain = {
+        "log": (y <= 0, "a positive target"),
+        "sqrt": (y < 0, "a non-negative target"),
+        "log1p": (y <= -1, "a target above -1"),
+    }.get(result.target_transform)
+    if domain is not None and np.any(domain[0]):
+        return _fail(result, f"target_transform='{result.target_transform}' needs {domain[1]}")
     with np.errstate(all="ignore"):
         z = fwd(y)
 
@@ -282,8 +283,14 @@ def fit_model(
             out = _least_squares(expr, X_tr, z[train_mask], p_hat, lower, max_nfev)
             if out is not None and np.isfinite(out[1]):
                 fold_params = dict(zip(names, out[0], strict=True))
-        with np.errstate(all="ignore"):
-            fold_pred = inv(expr.evaluate(_subset(data.X, test_idx), fold_params))
+            else:
+                # The full-data fit has seen this fold, so it must not score it.
+                fold_params = None
+        if fold_params is None:
+            fold_pred = np.full(len(test_idx), np.nan)
+        else:
+            with np.errstate(all="ignore"):
+                fold_pred = inv(expr.evaluate(_subset(data.X, test_idx), fold_params))
         bad = ~np.isfinite(fold_pred)
         if bad.any():
             n_undefined += int(bad.sum())

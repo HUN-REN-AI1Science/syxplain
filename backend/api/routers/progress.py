@@ -61,13 +61,22 @@ class WorkerCompletionReport(BaseModel):
     task_key: str | None = Field(None, description="Task key within the run (e.g. pysr_2)")
 
 
-def _store_task_result(run: Run, task_key: str, result: dict[str, Any]) -> None:
-    """Store one keyed task's result under Run.results["tasks"] (reassign so JSONB is dirty)."""
+def _store_task_result(run: Run, task_key: str, result: dict[str, Any]) -> bool:
+    """
+    Store one keyed task's result under Run.results["tasks"] (reassign so JSONB is dirty).
+    A late callback for a finished run is ignored, so it cannot leak into the final results.
+    """
+    if RunStatus.is_terminal(run.status):
+        logger.info(
+            f"[Run {str(run.id)[:8]}] Ignoring late {task_key} callback; run is {run.status}"
+        )
+        return False
     results = dict(run.results or {})
     tasks = dict(results.get("tasks") or {})
     tasks[task_key] = result
     results["tasks"] = tasks
     run.results = results
+    return True
 
 
 def _validate_worker_token(token: str) -> bool:

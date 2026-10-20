@@ -138,7 +138,13 @@ export interface Recommendation {
 
 /** A non-fatal problem during the run; the results are still usable */
 export interface RunWarning {
-  stage: 'agent' | 'explanation' | 'deep_research' | 'literature' | 'storage';
+  stage:
+    | 'agent'
+    | 'explanation'
+    | 'deep_research'
+    | 'literature'
+    | 'storage'
+    | 'symbolic_regression';
   message: string;
 }
 

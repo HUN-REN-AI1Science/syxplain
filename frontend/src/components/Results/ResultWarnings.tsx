@@ -13,6 +13,7 @@ const STAGE_LABEL: Record<string, string> = {
   deep_research: 'Literature research',
   literature: 'Literature laws',
   storage: 'Storage',
+  symbolic_regression: 'Symbolic regression',
 };
 
 interface ResultWarningsProps {

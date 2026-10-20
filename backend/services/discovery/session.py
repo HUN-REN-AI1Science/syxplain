@@ -199,6 +199,7 @@ class DiscoverySession:
         self.notebook: list[dict[str, Any]] = []
         self.models: dict[str, ModelResult] = {}
         self.searches: dict[str, SearchRecord] = {}
+        self._cancelled_jobs: set[str] = set()
         self.known_laws: dict[str, Any] | None = None
         self.literature_task: asyncio.Task | None = None
         self.agent_finished_at: float | None = None
@@ -741,13 +742,7 @@ class DiscoverySession:
             )
         if len(expr.parameters) > 12:
             raise ExpressionError("At most 12 free parameters are allowed")
-        misused = names_outside_call(expr, self.categorical_features, "level")
-        if misused:
-            name = sorted(misused)[0]
-            raise ExpressionError(
-                f"{sorted(misused)} are integer-coded categories; use them only as "
-                f"level({name}, k) indicators (levels: {self.levels[name]})"
-            )
+        self._check_categorical_use(expr)
         prefix = {"custom": "M", "literature": "L"}[kind]
         result = ModelResult(
             model_id=self._new_id(prefix),
@@ -771,12 +766,23 @@ class DiscoverySession:
         )
         return self._register(result)
 
+    def _check_categorical_use(self, expr) -> None:
+        misused = names_outside_call(expr, self.categorical_features, "level")
+        if misused:
+            name = sorted(misused)[0]
+            raise ExpressionError(
+                f"{sorted(misused)} are integer-coded categories; use them only as "
+                f"level({name}, k) indicators (levels: {self.levels[name]})"
+            )
+
     def score_symbolic(
         self, equation: str, source: str, target_transform: str | None = None
     ) -> ModelResult:
         """Score a PySR equation like the classic models (constants refit per CV fold). Not registered."""
         template, values = parameterize_constants(equation, taken=self.features)
         expr = parse_expression(template, self.features, parameters=list(values))
+        # A category's integer code has no magnitude, so an equation using it as one is invalid.
+        self._check_categorical_use(expr)
         result = ModelResult(
             model_id=self._new_id("S"),
             kind="symbolic",
@@ -899,6 +905,13 @@ class DiscoverySession:
         niterations: int | None,
     ) -> dict[str, Any]:
         self._require_features(features)
+        categorical = [f for f in features if f in self.categorical_features]
+        if categorical:
+            raise ValueError(
+                f"{categorical} are integer-coded categories; PySR would treat their codes as "
+                "magnitudes. Search on continuous features and model category effects with "
+                "fit_formula and level(name, k) indicators."
+            )
         bad_u = [u for u in unary_operators if u not in ALLOWED_UNARY]
         bad_b = [b for b in binary_operators if b not in ALLOWED_BINARY]
         if bad_u or bad_b:
@@ -1025,11 +1038,23 @@ class DiscoverySession:
 
     async def _run_search(self, record: SearchRecord, input_data: dict[str, Any]) -> None:
         try:
-            job_id = await self.launcher.submit(
-                record.search_id, input_data, lambda jid: self._set_job_id(record, jid)
+            submit = asyncio.ensure_future(
+                self.launcher.submit(
+                    record.search_id, input_data, lambda jid: self._set_job_id(record, jid)
+                )
             )
+            try:
+                # Shielded: a cancel during the submit round trip must not lose the job id.
+                job_id = await asyncio.shield(submit)
+            except asyncio.CancelledError:
+                # Let the submit finish (one HTTP round trip) so its job can be cancelled.
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(submit, timeout=60)
+                    await self._cancel_job(submit.result(), record.search_id)
+                raise
             record.job_id = job_id
             if record.status == "cancelled":
+                await self._cancel_job(job_id, record.search_id)
                 return
             record.status = "queued"
             ok, result, error = await self.launcher.wait(job_id)
@@ -1073,13 +1098,10 @@ class DiscoverySession:
                 search_id=record.search_id,
             )
         except asyncio.CancelledError:
-            # cancel_search() already told Slurm; only an outside cancellation (run teardown)
-            # still has to.
-            outside = record.status != "cancelled"
+            # _cancel_job is idempotent, so a job cancel_search() already sent is not repeated.
             record.status = "cancelled"
-            if outside and record.job_id and self.launcher:
-                with contextlib.suppress(Exception):
-                    await asyncio.shield(self.launcher.cancel(record.job_id))
+            if record.job_id:
+                await asyncio.shield(self._cancel_job(record.job_id, record.search_id))
             raise
         except Exception as e:
             logger.warning(f"Search {record.search_id} crashed: {e}", exc_info=True)
@@ -1133,6 +1155,24 @@ class DiscoverySession:
             )
         return [r for r in records if r.done]
 
+    async def _cancel_job(self, job_id: str, search_id: str) -> None:
+        if not self.launcher or job_id in self._cancelled_jobs:
+            return
+        self._cancelled_jobs.add(job_id)
+        try:
+            await self.launcher.cancel(job_id)
+        except Exception as e:
+            logger.warning(f"Failed to cancel {search_id}: {e}")
+
+    async def _stop_search(self, record: SearchRecord) -> None:
+        if record.job_id:
+            await self._cancel_job(record.job_id, record.search_id)
+        if record.task and not record.task.done():
+            record.task.cancel()
+            # A search cancelled mid-submit cancels its own job once the id arrives.
+            with contextlib.suppress(BaseException):
+                await record.task
+
     async def cancel_search(self, search_id: str) -> SearchRecord:
         record = self._get_search(search_id)
         if record.done:
@@ -1143,14 +1183,9 @@ class DiscoverySession:
                 await asyncio.shield(record.task)
             return record
         record.status = "cancelled"
-        if record.job_id and self.launcher:
-            try:
-                await self.launcher.cancel(record.job_id)
-            except Exception as e:
-                logger.warning(f"Failed to cancel {search_id}: {e}")
-        if record.task:
-            record.task.cancel()
         record.finished_at = time.monotonic()
+        # Shielded: the Slurm cancel must go out even if our caller is cancelled now.
+        await asyncio.shield(self._stop_search(record))
         await self.emit("search_cancelled", f"Cancelled {search_id}", search_id=search_id)
         return record
 

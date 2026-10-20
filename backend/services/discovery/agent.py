@@ -101,10 +101,11 @@ class BudgetedReAct(dspy.ReAct):
     # -- prompt size -------------------------------------------------------
 
     def _format_trajectory(self, trajectory: dict[str, Any]):
-        n_steps = sum(1 for k in trajectory if k.startswith("tool_name_"))
-        if n_steps <= KEEP_VERBATIM_STEPS:
+        # DSPy's truncation drops the oldest steps, so indices need not start at 0.
+        idxs = sorted({int(k.rsplit("_", 1)[1]) for k in trajectory if k.startswith("tool_name_")})
+        if len(idxs) <= KEEP_VERBATIM_STEPS:
             return super()._format_trajectory(trajectory)
-        cutoff = n_steps - KEEP_VERBATIM_STEPS
+        cutoff = idxs[-KEEP_VERBATIM_STEPS]
         compact: dict[str, Any] = {}
         for key, value in trajectory.items():
             idx = int(key.rsplit("_", 1)[1])

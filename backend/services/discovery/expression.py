@@ -116,6 +116,11 @@ def parse_expression(
     used_vars: list[str] = []
     used_params: list[str] = []
     nodes = 0
+    call_names = {
+        id(n.func)
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+    }
 
     for node in ast.walk(tree):
         nodes += 1
@@ -145,7 +150,9 @@ def parse_expression(
                 raise ExpressionError("Assignment is not allowed")
             name = node.id
             if name in _FUNCTIONS:
-                continue  # function name inside a Call
+                if id(node) not in call_names:
+                    raise ExpressionError(f"'{name}' is a function; call it as {name}(...)")
+                continue
             if name in variable_set:
                 if name not in used_vars:
                     used_vars.append(name)
@@ -161,6 +168,11 @@ def parse_expression(
         elif isinstance(node, ast.Constant):
             if isinstance(node.value, bool) or not isinstance(node.value, int | float):
                 raise ExpressionError("Only numeric literals are allowed")
+            try:
+                if not np.isfinite(float(node.value)):
+                    raise OverflowError
+            except OverflowError:
+                raise ExpressionError("Numeric literal is out of range") from None
         elif isinstance(node, ast.operator | ast.unaryop | ast.expr_context):
             continue
         else:

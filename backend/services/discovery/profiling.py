@@ -328,7 +328,7 @@ def describe_features(
     """Per-feature summary: range, sign, correlations, mutual information, importance."""
     out = []
     for name, x in X.items():
-        const = np.ptp(x) == 0
+        const = np.ptp(x) == 0 or np.ptp(y) == 0
         imp = importance.get(name)
         out.append(
             {

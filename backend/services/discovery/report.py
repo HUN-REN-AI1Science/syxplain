@@ -350,24 +350,30 @@ def merge_explanations(
     if not isinstance(explanations, dict) or not isinstance(explanations.get("equations"), list):
         return explanations, 0
     cards = [c for c in explanations["equations"] if isinstance(c, dict)]
+    # New ids skip every id the LLM used, so a stale reference cannot hit a new card.
+    next_id = max([c.get("id", 0) for c in cards if isinstance(c.get("id"), int)] + [0]) + 1
     by_id = {e["model_id"]: e for e in equations}
     by_norm = {_normalize(e["equation"]): e for e in equations}
     used: set[str] = set()
-    matched = 0
+    kept: list[dict[str, Any]] = []
     same_count = len(cards) == len(equations)
     for i, card in enumerate(cards):
-        src = by_id.get(card.get("model_id"))
+        model_id = card.get("model_id")
+        src = by_id.get(model_id) if isinstance(model_id, str) else None
         if src is None and same_count and equations[i]["model_id"] not in used:
             src = equations[i]
         if src is None:
             src = by_norm.get(_normalize(card.get("equation", "")))
+        # A card that matches no backend equation (or repeats one) carries only
+        # LLM-made numbers, so it is dropped.
         if src is None or src["model_id"] in used:
             continue
         used.add(src["model_id"])
-        matched += 1
         for key in EQUATION_FIELDS:
             card[key] = src.get(key)
-    next_id = max([c.get("id", 0) for c in cards if isinstance(c.get("id"), int)] + [0]) + 1
+        kept.append(card)
+    cards = kept
+    matched = len(kept)
     for e in equations:
         if e["model_id"] in used:
             continue

@@ -672,7 +672,7 @@ class AnalysisOrchestrator:
             self._raise_if_cancelled(context, session)
 
             # Classic baselines must exist even when the agent was off or failed early.
-            if sum(1 for m in session.snapshot() if m.kind != "symbolic") < 3:
+            if sum(1 for m in session.snapshot() if m.kind != "symbolic" and not m.error) < 3:
                 await session.emit("agent", "Screening the classic function catalog")
                 await asyncio.to_thread(session.auto_screen)
 
@@ -965,7 +965,11 @@ class AnalysisOrchestrator:
 
         equations = discovery_results.get("equations", [])
         if "error" not in explanations:
-            explanations, matched = merge_explanations(explanations, equations)
+            try:
+                explanations, matched = merge_explanations(explanations, equations)
+            except Exception as e:
+                logger.warning(f"Could not join the explanation to the equations: {e}")
+                explanations, matched = {"error": str(e), "equations": equations}, 0
             if matched < len(equations):
                 logger.warning(
                     f"Explanation covered {matched} of {len(equations)} equations; the rest are "
