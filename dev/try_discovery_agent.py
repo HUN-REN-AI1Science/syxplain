@@ -140,7 +140,12 @@ if __name__ == "__main__":
     parser.add_argument("--minutes", type=float, default=10)
     parser.add_argument("--pysr-delay", type=float, default=20, help="Seconds a mock search takes")
     parser.add_argument("--output", help="Write the full results JSON here")
+    parser.add_argument(
+        "--no-shap-images", action="store_true", help="Text SHAP only (no plots for the agent)"
+    )
     cli_args = parser.parse_args()
+    if cli_args.no_shap_images:
+        os.environ["DISCOVERY_SHAP_IMAGES"] = "false"
     load_env(ROOT / ".env")
     import dspy
 

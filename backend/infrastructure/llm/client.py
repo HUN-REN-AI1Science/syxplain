@@ -11,6 +11,7 @@ def create_dspy_model(
     model_name: str | None = None,
     user_api_key: str | None = None,
     user_model: str | None = None,
+    cache_key: str | None = None,
     **kwargs,
 ) -> dspy.LM:
     """
@@ -22,6 +23,8 @@ def create_dspy_model(
     Args:
         model_name: Optional model name to override default (for server keys).
         user_api_key: Optional user-provided Gemini API key.
+        cache_key: OpenAI prompt-cache routing key for calls that share a long prefix
+            (best-effort; prompts carrying images were often not served from cache).
         user_model: Optional user-specified Gemini model (used with user_api_key).
         **kwargs: Additional arguments for dspy.LM
 
@@ -48,6 +51,8 @@ def create_dspy_model(
 
     effective_model = model_name or settings.openai_model_name
 
+    if cache_key:
+        kwargs["prompt_cache_key"] = cache_key
     return dspy.LM(
         model=f"openai/{effective_model}",
         api_key=settings.openai_api_key,

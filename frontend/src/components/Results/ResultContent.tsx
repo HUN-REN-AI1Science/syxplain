@@ -19,6 +19,8 @@ interface ResultContentProps {
   resultsRef?: React.RefObject<HTMLDivElement>;
   /** Target variable name to prepend to equations (e.g. "y = ...") */
   targetVariable?: string | null;
+  /** Fetches a run artifact (SHAP plots); without it the plots are not shown */
+  loadPlot?: (filename: string) => Promise<Blob>;
 }
 
 /**
@@ -70,6 +72,7 @@ export const ResultContent: React.FC<ResultContentProps> = ({
   result,
   resultsRef,
   targetVariable,
+  loadPlot,
 }) => {
   if (!result) {
     return null;
@@ -99,7 +102,7 @@ export const ResultContent: React.FC<ResultContentProps> = ({
         />
         {discovery && (
           <SectionErrorBoundary name="The discovery report">
-            <DiscoveryReportPanel report={discovery} />
+            <DiscoveryReportPanel report={discovery} loadPlot={loadPlot} />
           </SectionErrorBoundary>
         )}
       </div>

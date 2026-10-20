@@ -142,6 +142,11 @@ export const runsService = {
 
   downloadCsv: (id: string) => api.get(`/runs/${id}/download-csv`, { responseType: 'blob' }),
 
+  downloadFile: (id: string, filename: string) =>
+    api.get<Blob>(`/runs/${id}/download/${encodeURIComponent(filename)}`, {
+      responseType: 'blob',
+    }),
+
   delete: (id: string) => api.delete<{ message: string }>(`/runs/${id}`),
 
   cancel: (id: string) => api.post<{ message: string }>(`/runs/${id}/cancel`),
@@ -229,6 +234,11 @@ export const publicService = {
 
   downloadCsv: (token: string) =>
     publicApi.get(`/public/${token}/download-csv`, { responseType: 'blob' }),
+
+  downloadPlot: (token: string, filename: string) =>
+    publicApi.get<Blob>(`/public/${token}/plots/${encodeURIComponent(filename)}`, {
+      responseType: 'blob',
+    }),
 };
 
 // ============================================================================

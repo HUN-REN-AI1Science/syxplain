@@ -27,6 +27,13 @@ TRANSFORMS = {
     "sqrt": (np.sqrt, np.square),
 }
 
+
+def target_space(y: np.ndarray, transform: str | None) -> np.ndarray:
+    """The target as a model with this transform sees it (may hold NaN/inf)."""
+    with np.errstate(all="ignore"):
+        return TRANSFORMS[transform][0](y)
+
+
 # A model whose CV R2 is within this distance of the noise ceiling "matches" it
 # (widened by twice the ceiling's own uncertainty when that is known).
 CEILING_TOL = 0.02

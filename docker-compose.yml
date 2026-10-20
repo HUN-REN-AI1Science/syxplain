@@ -76,6 +76,7 @@ services:
       # Analysis Settings (sensible defaults for dev)
       - DISCOVERY_AGENT_ENABLED=${DISCOVERY_AGENT_ENABLED:-true}
       - DISCOVERY_AGENT_MODEL=${DISCOVERY_AGENT_MODEL:-}
+      - DISCOVERY_SHAP_IMAGES=${DISCOVERY_SHAP_IMAGES:-true}
       - DISCOVERY_WALL_CLOCK_MIN=${DISCOVERY_WALL_CLOCK_MIN:-30}
       - ANALYSIS_TIMEOUT_HOURS=2
       # CORS (allow all for local dev)

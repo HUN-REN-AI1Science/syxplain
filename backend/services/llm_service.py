@@ -16,6 +16,7 @@ import dspy
 
 from backend.core.config import get_settings
 from backend.infrastructure.llm.client import create_dspy_model, create_literature_model
+from backend.infrastructure.llm.images import png_images
 from backend.infrastructure.llm.signatures import (
     ExplainPySrEquations,
     ExplainPySrEquationsWithLiterature,
@@ -50,9 +51,7 @@ def generate_pysr_config(
         JSON string containing PySR configuration
     """
     lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
-    visual_inputs = [
-        dspy.Image(f"data:image/png;base64,{img_b64}") for img_b64 in visualizations_b64
-    ]
+    visual_inputs = png_images(visualizations_b64)
 
     predictor = dspy.Predict(PySrConfigGenerator)
 
@@ -242,6 +241,7 @@ def generate_equation_explanation(
     literature_context: dict[str, Any] | None = None,
     user_api_key: str | None = None,
     user_model: str | None = None,
+    shap_plots: list[dspy.Image] | None = None,
 ) -> dict[str, Any]:
     """
     Generates explanation for PySR equations as structured JSON.
@@ -252,6 +252,7 @@ def generate_equation_explanation(
         literature_context: Optional dict of fitted published laws
         user_api_key: Optional user-provided API key
         user_model: Optional user-specified model
+        shap_plots: Optional SHAP plot images
 
     Returns:
         Dict with structured equation explanations (equations, summary, recommendation)
@@ -284,7 +285,11 @@ def generate_equation_explanation(
             logger.debug(f"Explain Equations Input - Project Spec: {project_spec_json}")
             logger.debug(f"Explain Equations Input - Data Spec: {data_spec_json}")
 
-            response = predictor(project_spec_json=project_spec_json, data_spec_json=data_spec_json)
+            response = predictor(
+                project_spec_json=project_spec_json,
+                data_spec_json=data_spec_json,
+                shap_plots=shap_plots or [],
+            )
         explanation_json = response.explanation_json
         logger.debug(f"Explain Equations Output: {explanation_json}")
 
