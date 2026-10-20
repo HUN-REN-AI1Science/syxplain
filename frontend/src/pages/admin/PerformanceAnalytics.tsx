@@ -169,7 +169,7 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
   const typeTemplate = (rowData: PerformanceByTypeItem) => (
     <Tag
       value={rowData.type.charAt(0).toUpperCase() + rowData.type.slice(1)}
-      severity={rowData.type === 'quick' ? 'info' : 'warning'}
+      severity={rowData.type === 'deep' ? 'warning' : rowData.type === 'quick' ? 'info' : 'success'}
     />
   );
 
@@ -278,10 +278,10 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
           </div>
         </Card>
 
-        {/* Quick vs Deep Comparison */}
+        {/* Comparison by analysis type (standard vs legacy quick/deep runs) */}
         <Card className="shadow-md">
           <h3 className="text-base sm:text-lg font-semibold font-heading text-primary mb-4">
-            Quick vs Deep
+            Runs by Analysis Type
           </h3>
           <div className="h-56 sm:h-64">
             <Chart type="bar" data={comparisonChartData} options={comparisonChartOptions} />

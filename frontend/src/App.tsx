@@ -79,13 +79,10 @@ function MainApp() {
     setActiveIndex(2);
 
     try {
-      const { analysis_type, deep_research_model, user_api_keys, ...problemDescription } =
-        problemData;
+      const { user_api_keys, ...problemDescription } = problemData;
       const response = await runsService.create({
         problem_description: problemDescription,
         csv_filename: filename!,
-        analysis_type: (analysis_type as string) || 'quick',
-        deep_research_model: (deep_research_model as string | null) || null,
         user_api_keys: user_api_keys as UserApiKeys | undefined,
       });
       setRunId(response.data.run_id);

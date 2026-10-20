@@ -68,10 +68,10 @@ Equations are found by an **AI-scientist agent** (DSPy ReAct, `backend/services/
 3. It fits **classic named laws** (Mitscherlich, Michaelis-Menten/Langmuir, Freundlich/power, logistic, Gompertz, linear/quadratic-plateau, Gaussian peak, Mitscherlich-Baule, Cobb-Douglas, ...) and its own formulas. Each fit comes back with **diagnosed reasons it falls short**: wrong curve shape (and where), missing variable (and which one), variance growing with the value, unidentifiable parameters, or "matches the noise ceiling".
 4. Guided by those reasons, it launches **targeted PySR searches** (feature subset, operators, target transform, its best formulas as warm-start guesses) and compares the results with the classic laws.
 5. It records findings in a **lab notebook** (rejected forms with reasons, insights, data issues), which the explanation LLM reads.
-6. In **deep** analyses a literature scout searches the web in the background (`DEEP_RESEARCH_MODEL`, a reasoning model with the Responses API web-search tool) for published laws, writes them solved for the target, and fits each one to the data like any other model, so the agent can say whether the published law holds for these samples.
+6. A literature scout searches the web in the background (the main model, `OPENAI_MODEL_NAME`, with the Responses API web-search tool, maximum search context) for published laws, writes them solved for the target, and fits each one to the data like any other model, so the agent can say whether the published law holds for these samples.
 7. **Code, not an LLM, picks the headline model**: models are ranked by 5-fold cross-validation on the training rows, checked by guards, and the simplest model within one standard error of the best wins. The 20% holdout is scored once at the end; datasets under 40 rows use cross-validation only.
 
-The agent is bounded by a budget (`DISCOVERY_*` variables, per quick/deep analysis). If it fails, the run still finishes with the baseline search and an automatic screen of the classic catalog. `python test_worker_local.py --task classic --example 1` runs the classic-law screen locally without any services.
+The agent is bounded by a budget (`DISCOVERY_*` variables; ceilings, it stops earlier when done). If it fails, the run still finishes with the baseline search and an automatic screen of the classic catalog. `python test_worker_local.py --task classic --example 1` runs the classic-law screen locally without any services.
 
 ## Prerequisites
 

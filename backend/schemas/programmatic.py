@@ -10,6 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from backend.core.constants import STANDARD_ANALYSIS
+
 
 class AnalyzeParams(BaseModel):
     """
@@ -40,8 +42,8 @@ class AnalyzeParams(BaseModel):
         },
     )
     analysis_type: str = Field(
-        default="quick",
-        description="Type of analysis: 'quick' (PySR only) or 'deep' (PySR + deep research)",
+        default=STANDARD_ANALYSIS,
+        description="Deprecated and ignored: every analysis runs the full pipeline, including the literature search",
     )
     gemini_api_key: str | None = Field(
         default=None,
@@ -53,11 +55,11 @@ class AnalyzeParams(BaseModel):
     )
     openai_api_key: str | None = Field(
         default=None,
-        description="OpenAI API key (required for deep analysis)",
+        description="OpenAI API key for the literature search (without one, users on their own keys get no literature step)",
     )
     deep_research_model: str | None = Field(
         default=None,
-        description="Model for deep analysis (required when analysis_type='deep')",
+        description="Deprecated and ignored",
     )
 
     @field_validator("features")
@@ -70,9 +72,8 @@ class AnalyzeParams(BaseModel):
     @field_validator("analysis_type")
     @classmethod
     def validate_analysis_type(cls, v: str) -> str:
-        if v not in ("quick", "deep"):
-            raise ValueError("analysis_type must be 'quick' or 'deep'")
-        return v
+        # Legacy 'quick'/'deep' are accepted so existing clients keep working
+        return STANDARD_ANALYSIS
 
     class Config:
         json_schema_extra = {
@@ -84,7 +85,6 @@ class AnalyzeParams(BaseModel):
                     "organic_C": "Organic carbon content (%)",
                     "clay": "Clay fraction (%)",
                 },
-                "analysis_type": "quick",
                 "gemini_api_key": "AIza...",
                 "gemini_model": "gemini-3.1-pro-preview",
             }
@@ -185,7 +185,7 @@ class RunStatusResponse(BaseModel):
                     "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                     "status": "running",
                     "progress": 45,
-                    "analysis_type": "quick",
+                    "analysis_type": "standard",
                     "created_at": "2026-02-27T10:00:00",
                     "start_time": "2026-02-27T10:00:05",
                     "finish_time": None,
@@ -198,7 +198,7 @@ class RunStatusResponse(BaseModel):
                     "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                     "status": "completed",
                     "progress": 100,
-                    "analysis_type": "quick",
+                    "analysis_type": "standard",
                     "created_at": "2026-02-27T10:00:00",
                     "start_time": "2026-02-27T10:00:05",
                     "finish_time": "2026-02-27T10:03:42",
@@ -255,7 +255,7 @@ class RunSummary(BaseModel):
                 "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 "status": "completed",
                 "progress": 100,
-                "analysis_type": "quick",
+                "analysis_type": "standard",
                 "csv_filename": "soil_data.csv",
                 "target_variable": "P_availability",
                 "created_at": "2026-02-27T10:00:00",
@@ -282,7 +282,7 @@ class RunListResponse(BaseModel):
                         "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                         "status": "completed",
                         "progress": 100,
-                        "analysis_type": "quick",
+                        "analysis_type": "standard",
                         "csv_filename": "soil_data.csv",
                         "target_variable": "P_availability",
                         "created_at": "2026-02-27T10:00:00",
@@ -342,9 +342,6 @@ class ModelsResponse(BaseModel):
     gemini_models: list[str] = Field(
         ..., description="Available Gemini model identifiers for LLM operations"
     )
-    deep_research_models: list[str] = Field(
-        ..., description="Available model identifiers for deep research analysis"
-    )
 
     class Config:
         json_schema_extra = {
@@ -352,9 +349,6 @@ class ModelsResponse(BaseModel):
                 "gemini_models": [
                     "gemini-3.1-pro-preview",
                     "gemini-2.5-flash",
-                ],
-                "deep_research_models": [
-                    "gpt-6.1-sol",
                 ],
             }
         }

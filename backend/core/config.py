@@ -79,29 +79,12 @@ class LLMSettings:
         default_factory=lambda: os.environ.get("SMALL_USER_MODEL_NAME", "gemini-2.5-flash")
     )
 
-    # Deep research settings
-    deep_research_api_key: str = field(
-        default_factory=lambda: os.environ.get("DEEP_RESEARCH_API_KEY", "")
-    )
-    deep_research_api_base: str | None = field(
-        default_factory=lambda: os.environ.get("DEEP_RESEARCH_API_BASE")
-    )
-    deep_research_models: str = field(
-        default_factory=lambda: os.environ.get("DEEP_RESEARCH_MODEL", "")
-    )
-
     # User-provided key model options (comma-separated)
     user_api_models: str = field(
         default_factory=lambda: os.environ.get(
             "USER_API_MODELS", "gemini-3.1-pro-preview,gemini-3-pro-preview,gemini-2.5-pro"
         )
     )
-
-    def get_deep_research_model_list(self) -> list[str]:
-        """Parse comma-separated model list."""
-        if not self.deep_research_models:
-            return []
-        return [m.strip() for m in self.deep_research_models.split(",") if m.strip()]
 
     def get_user_api_model_list(self) -> list[str]:
         """Parse comma-separated user API model list."""
@@ -139,25 +122,19 @@ class AnalysisSettings:
         return self.max_file_size_mb * 1024 * 1024
 
 
-def _per_analysis_type(raw: str, default: tuple[float, float]) -> tuple[float, float]:
-    """Parse "quick,deep" (or a single value for both)."""
+def _budget_value(raw: str, default: float) -> float:
+    """One budget value; a legacy "quick,deep" pair uses its second (full) value."""
     try:
         parts = [float(p) for p in raw.split(",") if p.strip()]
     except ValueError:
         return default
-    if len(parts) == 1:
-        return parts[0], parts[0]
-    if len(parts) >= 2:
-        return parts[0], parts[1]
-    return default
+    return parts[-1] if parts else default
 
 
 @dataclass
 class DiscoverySettings:
     """
-    Budget of the agentic equation-discovery loop.
-
-    Values given as "quick,deep" apply per analysis type.
+    Budget of the agentic equation-discovery loop (ceilings: the agent stops when it is done).
     """
 
     enabled: bool = field(
@@ -165,19 +142,15 @@ class DiscoverySettings:
     )
     # Model for the agent (server keys); empty = OPENAI_MODEL_NAME
     model_name: str = field(default_factory=lambda: os.environ.get("DISCOVERY_AGENT_MODEL", ""))
-    max_iters: tuple[float, float] = field(
-        default_factory=lambda: _per_analysis_type(
-            os.environ.get("DISCOVERY_MAX_ITERS", "30,40"), (30, 40)
-        )
+    max_iters: float = field(
+        default_factory=lambda: _budget_value(os.environ.get("DISCOVERY_MAX_ITERS", "40"), 40)
     )
-    max_pysr_runs: tuple[float, float] = field(
-        default_factory=lambda: _per_analysis_type(
-            os.environ.get("DISCOVERY_MAX_PYSR_RUNS", "3,6"), (3, 6)
-        )
+    max_pysr_runs: float = field(
+        default_factory=lambda: _budget_value(os.environ.get("DISCOVERY_MAX_PYSR_RUNS", "6"), 6)
     )
-    wall_clock_minutes: tuple[float, float] = field(
-        default_factory=lambda: _per_analysis_type(
-            os.environ.get("DISCOVERY_WALL_CLOCK_MIN", "45,150"), (45, 150)
+    wall_clock_minutes: float = field(
+        default_factory=lambda: _budget_value(
+            os.environ.get("DISCOVERY_WALL_CLOCK_MIN", "150"), 150
         )
     )
     max_concurrent_pysr: int = field(
@@ -202,16 +175,15 @@ class DiscoverySettings:
         default_factory=lambda: int(os.environ.get("DISCOVERY_MAX_CATEGORICAL_LEVELS", "10"))
     )
 
-    def for_type(self, analysis_type: str) -> dict[str, float]:
-        i = 1 if analysis_type == "deep" else 0
+    def limits(self) -> dict[str, float]:
         return {
-            "max_iters": int(self.max_iters[i]),
-            "max_pysr_runs": int(self.max_pysr_runs[i]),
-            "wall_clock_s": float(self.wall_clock_minutes[i]) * 60,
+            "max_iters": int(self.max_iters),
+            "max_pysr_runs": int(self.max_pysr_runs),
+            "wall_clock_s": float(self.wall_clock_minutes) * 60,
             "max_concurrent_pysr": self.max_concurrent_pysr,
             "pysr_timeout_s": self.pysr_timeout_s,
             # Safety net for runaway tool use; the agent is budgeted in steps.
-            "max_tool_calls": int(self.max_iters[i]) * 2,
+            "max_tool_calls": int(self.max_iters) * 2,
         }
 
 

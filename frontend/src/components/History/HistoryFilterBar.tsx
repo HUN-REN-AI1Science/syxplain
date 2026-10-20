@@ -17,19 +17,11 @@ const STATUS_OPTIONS = [
   { label: 'Timeout', value: 'timeout' },
 ];
 
-const ANALYSIS_TYPE_OPTIONS = [
-  { label: 'All Types', value: '' },
-  { label: 'Quick', value: 'quick' },
-  { label: 'Deep', value: 'deep' },
-];
-
 interface HistoryFilterBarProps {
   searchQuery: string;
   onSearchChange: (value: string) => void;
   statusFilter: string;
   onStatusChange: (value: string) => void;
-  analysisTypeFilter: string;
-  onAnalysisTypeChange: (value: string) => void;
   onClearFilters: () => void;
   onRefresh: () => void;
   hasActiveFilters: boolean;
@@ -40,8 +32,6 @@ export const HistoryFilterBar: React.FC<HistoryFilterBarProps> = ({
   onSearchChange,
   statusFilter,
   onStatusChange,
-  analysisTypeFilter,
-  onAnalysisTypeChange,
   onClearFilters,
   onRefresh,
   hasActiveFilters,
@@ -60,17 +50,6 @@ export const HistoryFilterBar: React.FC<HistoryFilterBarProps> = ({
           className="w-full"
         />
       </div>
-
-      {/* Analysis Type Filter */}
-      <Dropdown
-        value={analysisTypeFilter}
-        options={ANALYSIS_TYPE_OPTIONS}
-        optionLabel="label"
-        optionValue="value"
-        onChange={(e) => onAnalysisTypeChange(e.value)}
-        placeholder="Type"
-        className="w-full sm:w-[160px]"
-      />
 
       {/* Status Filter */}
       <Dropdown

@@ -123,8 +123,6 @@ async def run_analysis(
             csv_filename=request.csv_filename,
             target_variable=request.problem_description.target_variable,
             features=request.problem_description.features,
-            analysis_type=request.analysis_type,
-            deep_research_model=request.deep_research_model,
             user_id=current_user.user_id,
             has_hunren_access=has_hunren_access,
             user_api_key=user_api_key,
@@ -136,8 +134,6 @@ async def run_analysis(
             problem_desc=request.problem_description.model_dump(),
             csv_filename=request.csv_filename,
             user_id=current_user.user_id,
-            analysis_type=request.analysis_type,
-            deep_research_model=request.deep_research_model,
             user_api_key=user_api_key if not has_hunren_access else None,
             user_model=user_model if not has_hunren_access else None,
             user_openai_key=user_openai_key if not has_hunren_access else None,
@@ -145,8 +141,7 @@ async def run_analysis(
 
         logger.info(
             f"Analysis started with Run ID: {run_id} "
-            f"(analysis_type={request.analysis_type}, model={request.deep_research_model}, "
-            f"using_user_key={not has_hunren_access and user_api_key is not None})"
+            f"(using_user_key={not has_hunren_access and user_api_key is not None})"
         )
 
         return RunResponse(

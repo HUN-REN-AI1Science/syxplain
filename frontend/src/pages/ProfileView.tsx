@@ -153,10 +153,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
               <h2 className="font-heading text-2xl font-bold text-primary">Profile</h2>
               <HelpButton title="Your Profile">
                 <h4>Usage Statistics</h4>
-                <p>
-                  Track your analysis activity including total runs, quick vs deep analysis
-                  distribution, and account creation date.
-                </p>
+                <p>Track your analysis activity including total runs and account creation date.</p>
 
                 <h4>Shared Runs</h4>
                 <p>

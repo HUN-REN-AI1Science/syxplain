@@ -31,8 +31,7 @@ const NAV: NavItem[] = [
     id: 'analysis',
     label: 'Analysis',
     children: [
-      { id: 'quick-analysis', label: 'Quick Analysis' },
-      { id: 'deep-analysis', label: 'Deep Analysis' },
+      { id: 'running-analysis', label: 'Running an analysis' },
       { id: 'understanding-results', label: 'Understanding results' },
     ],
   },
@@ -178,30 +177,17 @@ const Analysis: React.FC = () => (
   <>
     <SectionHeading id="analysis" title="Analysis" />
 
-    <SubHeading id="quick-analysis" title="Quick Analysis" />
+    <SubHeading id="running-analysis" title="Running an analysis" />
     <Prose>
-      Quick Analysis runs the <strong>core Syxplain algorithm</strong> on your data. The LLM
-      generates explanations using your problem description and data context directly — no external
-      research is performed. It is the right starting point for most use cases: faster, more
-      cost-effective, and ideal for initial exploration or iterative experimentation.
+      Every analysis runs the full <strong>Syxplain pipeline</strong>: the data is profiled, a
+      discovery agent fits and screens candidate models, symbolic regression searches for equations,
+      and a <strong>literature search</strong> (web search by the main model) looks for established
+      domain knowledge and formulas relevant to your problem. The LLM then uses this context to
+      explain the discovered equations.
     </Prose>
     <InfoBox variant="tip">
-      Start with Quick Analysis to explore your data. Upgrade to Deep Analysis when you need results
-      grounded in scientific literature.
-    </InfoBox>
-
-    <SubHeading id="deep-analysis" title="Deep Analysis" />
-    <Prose>
-      Deep Analysis extends the <strong>core Syxplain algorithm</strong> with internet search.
-      Before symbolic regression runs, it queries scientific literature and known domain formulas to
-      build a richer understanding of your problem. This context informs both the symbolic
-      regression configuration and the final explanations, resulting in more grounded results. This
-      operating mode can create more detail rich results if established theory exists, but comes at
-      a higher computational cost and longer processing time.
-    </Prose>
-    <InfoBox variant="warning">
-      Deep Analysis is more resource-intensive. It is currently available in experimental mode and
-      may be subject to usage limits in the future.
+      If you use your own API keys, an OpenAI key is optional — it enables the literature search.
+      Without it the analysis still runs, just without the literature step.
     </InfoBox>
 
     <SubHeading id="understanding-results" title="Understanding results" />

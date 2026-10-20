@@ -10,7 +10,7 @@ import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
 import { ProgressBar } from 'primereact/progressbar';
 import { publicService } from '@services/api';
-import { formatFileSize } from '@utils/formatting';
+import { formatFileSize, legacyAnalysisTypeLabel } from '@utils/formatting';
 import type { RunDetails } from '@/types';
 
 interface PublicRunSettingsPanelProps {
@@ -205,29 +205,27 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
               </div>
             </div>
 
-            {/* Analysis Mode */}
-            <div className="rounded-xl p-4 border bg-surface-alt border-[var(--color-border)]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <i
-                    className={`pi ${runDetails.analysis_type === 'deep' ? 'pi-search' : 'pi-bolt'} text-muted text-lg mr-3 flex-shrink-0`}
-                  ></i>
-                  <div>
-                    <h4 className="font-bold text-primary">Analysis Mode</h4>
-                    <p className="text-sm text-secondary">
-                      {runDetails.analysis_type === 'deep'
-                        ? 'Enhanced with scientific literature research'
-                        : 'Standard analysis workflow'}
-                    </p>
+            {/* Analysis Mode - only for legacy quick/deep runs */}
+            {legacyAnalysisTypeLabel(runDetails.analysis_type) && (
+              <div className="rounded-xl p-4 border bg-surface-alt border-[var(--color-border)]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <i
+                      className={`pi ${runDetails.analysis_type === 'deep' ? 'pi-search' : 'pi-bolt'} text-muted text-lg mr-3 flex-shrink-0`}
+                    ></i>
+                    <div>
+                      <h4 className="font-bold text-primary">Analysis Mode</h4>
+                      <p className="text-sm text-secondary">Legacy analysis mode of this run</p>
+                    </div>
                   </div>
+                  <Tag
+                    value={`${legacyAnalysisTypeLabel(runDetails.analysis_type)} Analysis`}
+                    severity={runDetails.analysis_type === 'deep' ? 'warning' : 'info'}
+                    className="text-base px-3 py-1"
+                  />
                 </div>
-                <Tag
-                  value={runDetails.analysis_type === 'deep' ? 'Deep Analysis' : 'Quick Analysis'}
-                  severity={runDetails.analysis_type === 'deep' ? 'warning' : 'info'}
-                  className="text-base px-3 py-1"
-                />
               </div>
-            </div>
+            )}
 
             {/* Project Description */}
             <div className="bg-surface-alt rounded-xl p-5 border border-[var(--color-border)]">

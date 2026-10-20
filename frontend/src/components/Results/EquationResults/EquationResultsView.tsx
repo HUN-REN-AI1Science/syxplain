@@ -492,7 +492,7 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({
               <h4>Findings</h4>
               <p>
                 A synthesized interpretation of what the analysis discovered about your data,
-                validated against scientific literature (in Deep Analysis mode).
+                validated against scientific literature when the literature search ran.
               </p>
             </HelpButton>
           </div>

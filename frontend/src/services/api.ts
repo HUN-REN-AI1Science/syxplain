@@ -102,7 +102,6 @@ export interface GetRunsParams {
   sort_field: string;
   sort_order: 'asc' | 'desc';
   status?: string;
-  analysis_type?: string;
   search?: string;
 }
 
@@ -116,7 +115,6 @@ export const runsService = {
     });
 
     if (params.status) searchParams.append('status', params.status);
-    if (params.analysis_type) searchParams.append('analysis_type', params.analysis_type);
     if (params.search) searchParams.append('search', params.search);
 
     return api.get<PaginatedResponse<RunSummary>>(`/runs?${searchParams.toString()}`);
@@ -139,8 +137,6 @@ export const runsService = {
   create: (data: {
     problem_description: object;
     csv_filename: string;
-    analysis_type: string;
-    deep_research_model: string | null;
     user_api_keys?: UserApiKeys;
   }) => api.post<{ run_id: string; progress_phases?: ProgressPhase[] }>('/run', data),
 
@@ -170,8 +166,6 @@ export const uploadService = {
 // ============================================================================
 
 export const configService = {
-  getDeepResearchModels: () => api.get<{ models: string[] }>('/config/deep-research-models'),
-
   getUserApiModels: () => api.get<{ models: string[] }>('/config/user-api-models'),
 };
 
@@ -295,7 +289,6 @@ export interface AdminRunsParams {
   sort_field?: string;
   sort_order?: 'asc' | 'desc';
   status?: string;
-  analysis_type?: string;
   user_id?: string;
   search?: string;
   date_from?: string;
@@ -334,7 +327,6 @@ export const adminService = {
     if (params.sort_field) searchParams.append('sort_field', params.sort_field);
     if (params.sort_order) searchParams.append('sort_order', params.sort_order);
     if (params.status) searchParams.append('status', params.status);
-    if (params.analysis_type) searchParams.append('analysis_type', params.analysis_type);
     if (params.user_id) searchParams.append('user_id', params.user_id);
     if (params.search) searchParams.append('search', params.search);
     if (params.date_from) searchParams.append('date_from', params.date_from);

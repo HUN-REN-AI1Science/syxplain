@@ -72,7 +72,6 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
 
   // Filter state
   const [statusFilter, setStatusFilter] = useState('');
-  const [analysisTypeFilter, setAnalysisTypeFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -95,7 +94,6 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
         sort_field: sortField,
         sort_order: sortOrder === 1 ? 'asc' : 'desc',
         status: statusFilter || undefined,
-        analysis_type: analysisTypeFilter || undefined,
         search: debouncedSearch || undefined,
       });
       setRuns(response.data.items);
@@ -105,7 +103,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, sortField, sortOrder, statusFilter, analysisTypeFilter, debouncedSearch]);
+  }, [page, pageSize, sortField, sortOrder, statusFilter, debouncedSearch]);
 
   useEffect(() => {
     loadRuns();
@@ -123,13 +121,12 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
 
   const clearFilters = () => {
     setStatusFilter('');
-    setAnalysisTypeFilter('');
     setSearchQuery('');
     setPage(1);
   };
 
   // Computed values
-  const hasActiveFilters = !!(statusFilter || analysisTypeFilter || searchQuery);
+  const hasActiveFilters = !!(statusFilter || searchQuery);
 
   // Column templates
   const statusTemplate = (rowData: RunSummary) => {
@@ -159,17 +156,6 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
 
   const dateTemplate = (rowData: RunSummary) => {
     return new Date(rowData.created_at).toLocaleString();
-  };
-
-  const analysisTypeTemplate = (rowData: RunSummary) => {
-    const isDeep = rowData.analysis_type === 'deep';
-    return (
-      <Tag
-        value={isDeep ? 'Deep' : 'Quick'}
-        severity={isDeep ? 'warning' : 'info'}
-        icon={isDeep ? 'pi pi-search' : 'pi pi-bolt'}
-      />
-    );
   };
 
   const durationTemplate = (rowData: RunSummary) => {
@@ -231,11 +217,6 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
           setStatusFilter(value);
           setPage(1);
         }}
-        analysisTypeFilter={analysisTypeFilter}
-        onAnalysisTypeChange={(value) => {
-          setAnalysisTypeFilter(value);
-          setPage(1);
-        }}
         onClearFilters={clearFilters}
         onRefresh={loadRuns}
         hasActiveFilters={hasActiveFilters}
@@ -270,7 +251,6 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
           <Column field="created_at" header="Date" body={dateTemplate} sortable />
           <Column field="csv_filename" header="Dataset" sortable />
           {!isMobile && <Column field="target_variable" header="Target Variable" sortable />}
-          <Column field="analysis_type" header="Type" body={analysisTypeTemplate} sortable />
           <Column field="status" header="Status" body={statusTemplate} sortable />
           {!isMobile && <Column header="Duration" body={durationTemplate} />}
           <Column header="Actions" body={actionTemplate} />

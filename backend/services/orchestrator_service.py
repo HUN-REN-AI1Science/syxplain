@@ -19,9 +19,10 @@ import pandas as pd
 from backend.core.config import (
     get_compute_settings,
     get_discovery_settings,
+    get_settings,
     get_slurm_settings,
 )
-from backend.core.constants import RunStatus
+from backend.core.constants import STANDARD_ANALYSIS, RunStatus
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
 from backend.infrastructure.slurm import (
@@ -121,8 +122,6 @@ class AnalysisContext:
     data: pd.DataFrame
     target_column: str
     predictor_columns: list[str]
-    analysis_type: str = "quick"
-    deep_research_model: str | None = None
     progress: ProgressTracker | None = None
     # User-provided API keys (not stored, only in memory)
     user_api_key: str | None = None
@@ -143,7 +142,7 @@ class AnalysisOrchestrator:
     1. Data preparation
     2. LLM generates the config of a baseline PySR search, which is submitted
     3. Discovery agent fits classic laws, diagnoses failures and steers more PySR searches
-       (deep mode: a literature scout finds published laws by web search, which are fitted too)
+       (a literature scout finds published laws by web search, which are fitted too)
     4. The Selector ranks every model by cross-validation; the holdout is scored once
     5. LLM explains results (with the agent's notebook as context)
     6. Store final results
@@ -302,8 +301,7 @@ class AnalysisOrchestrator:
         progress = context.progress or ProgressTracker(run_id=run_id)
 
         logger.info(
-            f"Starting orchestrated analysis for run {run_id} "
-            f"(type={context.analysis_type}, backend={self.backend.name})"
+            f"Starting orchestrated analysis for run {run_id} (backend={self.backend.name})"
         )
 
         try:
@@ -545,9 +543,9 @@ class AnalysisOrchestrator:
 
         return config
 
-    def _discovery_budget(self, analysis_type: str) -> DiscoveryBudget:
+    def _discovery_budget(self) -> DiscoveryBudget:
         settings = get_discovery_settings()
-        limits = settings.for_type(analysis_type)
+        limits = settings.limits()
         budget = DiscoveryBudget(
             max_iters=limits["max_iters"],
             max_pysr_runs=limits["max_pysr_runs"],
@@ -589,7 +587,7 @@ class AnalysisOrchestrator:
         """
         Agentic equation discovery (the run controller's EXPLORE..SELECT phases).
 
-        LAUNCH: the baseline PySR search (and, in deep mode, the literature scout) start
+        LAUNCH: the baseline PySR search and the literature scout start
         first so the Slurm queue and the research model overlap with profiling and the
         agent. PROFILE runs in a separate process. EXPLORE is the agent's budget. SETTLE
         waits for searches, RECONCILE makes the agent's report consistent with what
@@ -603,7 +601,7 @@ class AnalysisOrchestrator:
         from backend.services.discovery.report import build_results
 
         settings = get_discovery_settings()
-        budget = self._discovery_budget(context.analysis_type)
+        budget = self._discovery_budget()
         manager = get_connection_manager()
         warnings: list[dict[str, str]] = []
 
@@ -652,7 +650,15 @@ class AnalysisOrchestrator:
                     rationale="Baseline: all continuous features, operators chosen from the feature plots",
                     enforce_budget=False,
                 )
-            if self._wants_literature(context):
+            if not self._wants_literature(context):
+                if context.user_api_key:
+                    warnings.append(
+                        {
+                            "stage": "literature",
+                            "message": "No literature search: it needs an OpenAI API key",
+                        }
+                    )
+            else:
                 features_for_lit = literature_features(
                     session,
                     descriptions,
@@ -868,17 +874,19 @@ class AnalysisOrchestrator:
         )
 
     def _wants_literature(self, context: AnalysisContext) -> bool:
-        return context.analysis_type == "deep" and bool(context.deep_research_model)
+        """Every analysis searches the literature when a research key is available."""
+        if context.user_api_key:  # the user's own keys: only with an OpenAI key
+            return bool(context.user_openai_key)
+        return bool(get_settings().llm.openai_api_key)
 
     def _literature_lookup(self, context: AnalysisContext, features: dict[str, str]):
-        """Deep mode: one call to the research model (features keyed by alias, with the target)."""
-        from backend.services.llm_service import deep_research_equations
+        """One call to the literature search (features keyed by alias, with the target)."""
+        from backend.services.llm_service import find_literature_laws
 
         async def lookup() -> dict[str, Any]:
             return await asyncio.to_thread(
-                deep_research_equations,
+                find_literature_laws,
                 features_dict=features,
-                model_name=context.deep_research_model,
                 user_api_key=context.user_openai_key,
             )
 
@@ -918,16 +926,16 @@ class AnalysisOrchestrator:
         warnings: list[dict[str, str]],
     ) -> dict[str, Any]:
         """
-        Explanation (and, in deep mode, literature-grounded explanation). Best-effort for
+        Explanation, grounded in the fitted literature laws when there are any. Best-effort for
         every key type: the discovery brief is complete without it, so a failure becomes
         a warning, never a failed run.
         """
-        from backend.services.discovery.literature import deep_research_context
+        from backend.services.discovery.literature import literature_context
 
         deep_ctx = None
         if self._wants_literature(context):
-            await progress.update_progress_async("deep_research", status="Integrating literature")
-            deep_ctx = deep_research_context(discovery_results["discovery"].get("literature"))
+            await progress.update_progress_async("literature", status="Integrating literature")
+            deep_ctx = literature_context(discovery_results["discovery"].get("literature"))
         await progress.update_progress_async("llm_explanation", status="Generating explanations")
         try:
             return await self._generate_explanations(context, discovery_results, deep_ctx)
@@ -943,7 +951,7 @@ class AnalysisOrchestrator:
         self,
         context: AnalysisContext,
         discovery_results: dict[str, Any],
-        deep_research_context: dict[str, Any] | None = None,
+        literature_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Generate LLM explanations for the discovery brief (raises on failure)."""
         from backend.services.discovery.report import explanation_data_spec
@@ -955,7 +963,7 @@ class AnalysisOrchestrator:
             generate_equation_explanation,
             project_spec_json=json.dumps(context.problem_description),
             data_spec_json=json.dumps(data_spec),
-            deep_research_context=deep_research_context,
+            literature_context=literature_context,
             user_api_key=context.user_api_key,
             user_model=context.user_model,
         )
@@ -990,7 +998,7 @@ class AnalysisOrchestrator:
                 "scatter_data": discovery_results.get("scatter_data", {}),
                 "discovery": discovery_results.get("discovery"),
                 "warnings": warnings or [],
-                "analysis_type": context.analysis_type,
+                "analysis_type": STANDARD_ANALYSIS,
                 "compute_backend": self.backend.name,
                 "completed_at": datetime.utcnow().isoformat(),
             }
@@ -1205,8 +1213,6 @@ async def run_orchestrated_analysis(
     problem_desc: dict[str, Any],
     data: pd.DataFrame,
     user_id: str,
-    analysis_type: str = "quick",
-    deep_research_model: str | None = None,
     user_api_key: str | None = None,
     user_model: str | None = None,
     user_openai_key: str | None = None,
@@ -1219,11 +1225,9 @@ async def run_orchestrated_analysis(
         problem_desc: Problem description dictionary
         data: Input DataFrame
         user_id: Owner user ID
-        analysis_type: 'quick' or 'deep'
-        deep_research_model: Model for deep analysis
         user_api_key: Optional user-provided Gemini API key
         user_model: Optional user-specified Gemini model
-        user_openai_key: Optional user-provided OpenAI API key for deep research
+        user_openai_key: Optional user-provided OpenAI API key for the literature search
 
     Returns:
         Analysis results
@@ -1245,8 +1249,6 @@ async def run_orchestrated_analysis(
         data=data,
         target_column=target_column,
         predictor_columns=numeric_predictors,
-        analysis_type=analysis_type,
-        deep_research_model=deep_research_model,
         user_api_key=user_api_key,
         user_model=user_model,
         user_openai_key=user_openai_key,

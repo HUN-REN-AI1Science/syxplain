@@ -4,6 +4,10 @@ Shared constants for the Syxplain backend.
 
 from enum import Enum
 
+# Every new run is one analysis that runs the full pipeline (agent, PySR, literature).
+# Old runs keep the "quick"/"deep" they were stored with.
+STANDARD_ANALYSIS = "standard"
+
 
 class RunStatus(str, Enum):
     """Run lifecycle statuses. Inherits from str so comparisons with raw strings still work."""

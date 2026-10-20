@@ -9,6 +9,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
 
+from backend.core.constants import STANDARD_ANALYSIS
+
 
 class SortField(str, Enum):
     """Valid fields for sorting runs."""
@@ -53,7 +55,7 @@ class UserApiKeys(BaseModel):
     gemini_api_key: str = Field(..., min_length=1, description="Google Gemini API key for analysis")
     gemini_model: str = Field(default="gemini-3.1-pro-preview", description="Gemini model to use")
     openai_api_key: str | None = Field(
-        default=None, description="OpenAI API key for deep research (optional)"
+        default=None, description="OpenAI API key for the literature search (optional)"
     )
 
 
@@ -62,11 +64,11 @@ class RunRequest(BaseModel):
 
     problem_description: ProblemDescription
     csv_filename: str = Field(..., min_length=1, description="Name of the uploaded file to analyze")
-    analysis_type: str = Field(default="quick", description="Type of analysis: 'quick' or 'deep'")
-    deep_research_model: str | None = Field(
-        default=None,
-        description="Model to use for deep analysis (required when analysis_type is 'deep')",
+    analysis_type: str = Field(
+        default=STANDARD_ANALYSIS,
+        description="Deprecated and ignored: there is one analysis, which always runs the full pipeline",
     )
+    deep_research_model: str | None = Field(default=None, description="Deprecated and ignored")
     user_api_keys: UserApiKeys | None = Field(
         default=None,
         description="User-provided API keys (required for users without HUN-REN access)",
@@ -75,9 +77,8 @@ class RunRequest(BaseModel):
     @field_validator("analysis_type")
     @classmethod
     def validate_analysis_type(cls, v: str) -> str:
-        if v not in ["quick", "deep"]:
-            raise ValueError("analysis_type must be 'quick' or 'deep'")
-        return v
+        # Legacy 'quick'/'deep' are accepted so existing clients keep working
+        return STANDARD_ANALYSIS
 
     class Config:
         json_schema_extra = {
@@ -91,7 +92,6 @@ class RunRequest(BaseModel):
                     },
                 },
                 "csv_filename": "houses.csv",
-                "analysis_type": "quick",
             }
         }
 

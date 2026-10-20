@@ -162,6 +162,7 @@ def test_all_categorical_run_skips_pysr_and_keeps_classic_models(monkeypatch):
         orch = AnalysisOrchestrator(backend=FakeBackend())
         monkeypatch.setattr(orch, "_is_run_terminal", lambda run_id: None)
         monkeypatch.setattr(orch, "_store_slurm_job_ids", lambda run_id, ids: None)
+        monkeypatch.setattr(orch, "_wants_literature", lambda ctx: False)
         rng = np.random.default_rng(0)
         soil = rng.integers(1, 5, 300).astype(float)
         df = pd.DataFrame({"soil_code": soil, "y": 3 * (soil == 2) + rng.normal(0, 0.2, 300)})
@@ -185,3 +186,42 @@ def test_all_categorical_run_skips_pysr_and_keeps_classic_models(monkeypatch):
     assert d["searches"] == []
     assert any(n["kind"] == "data_issue" and "categorical" in n["text"] for n in d["notebook"])
     assert results["warnings"][-1]["stage"] == "symbolic_regression"
+
+
+def test_one_analysis_mode_and_who_gets_the_literature_search(monkeypatch):
+    from backend.core.config import clear_settings_cache
+    from backend.schemas.requests import RunRequest
+    from backend.services.orchestrator_service import AnalysisContext, AnalysisOrchestrator
+    from backend.tests.test_discovery_orchestrator import FakeBackend
+
+    req = RunRequest(
+        problem_description={
+            "project_description": "p",
+            "target_variable": "y",
+            "features": {"x": "x"},
+        },
+        csv_filename="a.csv",
+        analysis_type="deep",  # legacy clients keep working
+        deep_research_model="o4-mini-deep-research",
+    )
+    assert req.analysis_type == "standard"
+
+    monkeypatch.setenv("OPENAI_API_KEY", "server-key")
+    clear_settings_cache()
+    try:
+        orch = AnalysisOrchestrator(backend=FakeBackend())
+        base = {
+            "run_id": "r",
+            "user_id": "u",
+            "problem_description": {},
+            "data": pd.DataFrame(),
+            "target_column": "y",
+            "predictor_columns": [],
+        }
+        assert orch._wants_literature(AnalysisContext(**base))  # server keys
+        assert not orch._wants_literature(AnalysisContext(**base, user_api_key="gemini"))
+        assert orch._wants_literature(
+            AnalysisContext(**base, user_api_key="gemini", user_openai_key="openai")
+        )
+    finally:
+        clear_settings_cache()

@@ -30,3 +30,13 @@ export function escapeForAsciiMath(text: string): string {
 
   return result;
 }
+
+/**
+ * Display label for the analysis mode of legacy runs.
+ * Current runs ('standard') have a single mode and get no label (null).
+ */
+export function legacyAnalysisTypeLabel(analysisType?: string | null): string | null {
+  if (analysisType === 'quick') return 'Quick';
+  if (analysisType === 'deep') return 'Deep';
+  return null;
+}

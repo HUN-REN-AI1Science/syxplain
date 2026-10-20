@@ -63,34 +63,10 @@ phases:
     progress_end: 75
     increment_rate: 0.25
 
-  # Deep research (75-82%, optional)
-  - name: deep_research
-    label: "Deep Research"
-    description: "Researching scientific literature to understand your equations..."
-    progress_end: 78
-    increment_rate: 0.25
-
-  - name: deep_research_start
-    label: "Deep Research"
-    description: "Researching scientific literature to understand your equations..."
-    progress_end: 78
-    increment_rate: 0.25
-
-  - name: deep_research_result
-    label: "Research Complete"
-    description: "Integrating scientific context into analysis..."
-    progress_end: 82
-    increment_rate: 0.25
-
-  - name: deep_research_error
-    label: "Research Error"
-    description: "Continuing without deep research context..."
-    progress_end: 82
-    increment_rate: 0.25
-
-  - name: deep_research_skip
-    label: "Standard Analysis"
-    description: "Proceeding with standard analysis..."
+  # Literature (75-82%): fitted published laws feed the explanation
+  - name: literature
+    label: "Literature"
+    description: "Comparing your equations with published laws..."
     progress_end: 82
     increment_rate: 0.25
 

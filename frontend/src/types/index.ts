@@ -45,7 +45,8 @@ export interface RunDetails {
 }
 
 export type RunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'timeout' | 'cancelled';
-export type AnalysisType = 'quick' | 'deep';
+/** 'standard' for current runs; 'quick' | 'deep' only appear on legacy runs. */
+export type AnalysisType = 'standard' | 'quick' | 'deep';
 
 export interface ProblemDescription {
   project_description: string;
@@ -397,8 +398,6 @@ export interface ProblemFormPayload {
   project_description: string;
   target_variable: string;
   features: Record<string, string>;
-  analysis_type: AnalysisType;
-  deep_research_model: string | null;
 }
 
 // ============================================================================
@@ -604,13 +603,12 @@ export interface RateLimitsConfig {
 
 export interface FeaturesConfig {
   slurm_configured: boolean;
-  deep_research_enabled: boolean;
+  literature_search_enabled: boolean;
   user_api_keys_enabled: boolean;
 }
 
 export interface SecretsConfig {
   openai_api_key: string | null;
-  deep_research_api_key: string | null;
   slurm_auth_token: string | null;
   database_host: string | null;
 }

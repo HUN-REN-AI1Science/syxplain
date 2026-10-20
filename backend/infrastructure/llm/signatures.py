@@ -147,7 +147,7 @@ class ExplainPySrEquations(dspy.Signature):
     )
 
 
-class DeepResearchEquations(dspy.Signature):
+class LiteratureLaws(dspy.Signature):
     """
     You are an expert scientific research agent. Your task is to take as input a dictionary of features in the form of key–value pairs, where the key is the variable name to be used in equations and the value is a short description of its meaning. Using this feature list, perform deep scientific research to identify physically based, semi-empirical, or empirical equations that relate two or more of the provided variables.
 
@@ -271,16 +271,16 @@ class GuessColumnDescriptions(dspy.Signature):
     )
 
 
-class ExplainPySrEquationsDeep(dspy.Signature):
+class ExplainPySrEquationsWithLiterature(dspy.Signature):
     """
     You are an agent who explains the output of symbolic regression with deep scientific research context.
 
     You will always receive exactly two JSON objects in the user message:
 
-    1) PROJECT_SPEC: regression context, target, feature dictionary, constraints, AND deep_research_equations from scientific literature search.
+    1) PROJECT_SPEC: regression context, target, feature dictionary, constraints, AND literature_equations from scientific literature search.
     2) DATA_SPEC: the discovery brief — DATA_SPEC.equations (objects with model_id, equation, origin, metrics, verdict, reasons), DATA_SPEC.split, DATA_SPEC.selection and DATA_SPEC.discovery (context).
 
-    Goal: Provide clear, concise explanations of the equations in DATA_SPEC in the context of PROJECT_SPEC. Utilize the "deep_research_equations" and their citations to enrich your explanations. After explaining all the equations please create a summary of the overall findings and selection of the most probable equation not just according to the metrics but more importantly according to the scientific understanding of the problem and its compatibility with existing deep research equations.
+    Goal: Provide clear, concise explanations of the equations in DATA_SPEC in the context of PROJECT_SPEC. Utilize the "literature_equations" and their citations to enrich your explanations. After explaining all the equations please create a summary of the overall findings and selection of the most probable equation not just according to the metrics but more importantly according to the scientific understanding of the problem and its compatibility with existing literature equations.
 
     Rules:
     - Parse both JSONs strictly. Optional context keys may be absent; work with what is there.
@@ -291,16 +291,16 @@ class ExplainPySrEquationsDeep(dspy.Signature):
     - Use the provided feature descriptions in explanations.
     - IMPORTANT: Explain the equations in the order of DATA_SPEC.equations, assign IDs 1, 2, 3, ... in that order (id = DATA_SPEC.equations[i].position), and ECHO each equation's model_id and its exact equation string.
 
-    ### MANDATORY CHECK: DEEP RESEARCH INTEGRATION
-    PROJECT_SPEC contains "deep_research_equations" - equations found in scientific literature with their citation URLs.
-    1. **Systematic Comparison**: You MUST compare EVERY equation in DATA_SPEC against the "deep_research_equations".
-    2. **Enrich Explanations**: Use the knowledge from these deep research equations to write the "overview" and "term_explanations". Explain how the generated equation relates to known scientific laws or empirical relationships found in the research.
-    3. **Check Compatibility**: Evaluate how compatible each equation is with the deep research equations. Does it share similar functional forms or variable interactions?
+    ### MANDATORY CHECK: LITERATURE INTEGRATION
+    PROJECT_SPEC contains "literature_equations" - equations found in scientific literature with their citation URLs.
+    1. **Systematic Comparison**: You MUST compare EVERY equation in DATA_SPEC against the "literature_equations".
+    2. **Enrich Explanations**: Use the knowledge from these literature equations to write the "overview" and "term_explanations". Explain how the generated equation relates to known scientific laws or empirical relationships found in the research.
+    3. **Check Compatibility**: Evaluate how compatible each equation is with the literature equations. Does it share similar functional forms or variable interactions?
     4. **Citations (REQUIRED FOR EQUATION DESCRIPTIONS ONLY)**:
-       - If an equation is scientifically related, similar, OR if the variables involved are discussed in the deep research equations, you MUST include the relevant citations in the "citations" field.
+       - If an equation is scientifically related, similar, OR if the variables involved are discussed in the literature equations, you MUST include the relevant citations in the "citations" field.
        - **IMPORTANT**: When you use the knowledge from a citation in the "overview" or "term_explanations", you MUST add a reference number in the text like [1], [2], etc., corresponding to the position of that citation URLs in the "citations" array (1-based index).
        - **DO NOT include citation numbers [1], [2], etc. in the "summary" or "recommendation" sections.** These sections should be written in plain text without any citation references.
-       - If you find NO link to the deep research, explicitly state "No direct match in provided deep research" in the overview, but this should be rare.
+       - If you find NO link to the literature, explicitly state "No direct match in provided literature" in the overview, but this should be rare.
 
     ### DISCOVERY CONTEXT
     The equations were found by a discovery agent that fitted classic named laws, its own formulas, published laws and symbolic-regression (PySR) equations, all scored identically. All numbers come from the backend: never invent or recompute metrics.
@@ -326,8 +326,8 @@ class ExplainPySrEquationsDeep(dspy.Signature):
     ### RECOMMENDATION CRITERIA
     When selecting the recommended equation:
     - Consider statistical metrics (loss, complexity).
-    - **CRITICAL**: Prioritize equations that are compatible with the "deep_research_equations". The best equation should align with established scientific knowledge found in the literature search.
-    - In the "rationale", explicitly mention if and how the recommended equation aligns with the deep research equations.
+    - **CRITICAL**: Prioritize equations that are compatible with the "literature_equations". The best equation should align with established scientific knowledge found in the literature search.
+    - In the "rationale", explicitly mention if and how the recommended equation aligns with the literature equations.
 
     ### OUTPUT FORMAT
     Return STRICT JSON only — no markdown, no code fences, no commentary. Output must parse with json.loads().
@@ -341,14 +341,14 @@ class ExplainPySrEquationsDeep(dspy.Signature):
                 "equation": "string - the exact equation from DATA_SPEC",
                 "loss": 4.04,
                 "complexity": 15,
-                "overview": "string - detailed description of what this equation models, including compatibility with deep research equations. Use [1], [2] for citations.",
+                "overview": "string - detailed description of what this equation models, including compatibility with literature equations. Use [1], [2] for citations.",
                 "term_explanations": [
                     {
                         "term": "(-24.26 * Tm_sprsum)",
                         "explanation": "string describing what this term represents scientifically. Use [1], [2] for citations."
                     }
                 ],
-                "citations": ["https://doi.org/... - array of citation URLs from deep research equations that are relevant, empty [] if none"]
+                "citations": ["https://doi.org/... - array of citation URLs from literature equations that are relevant, empty [] if none"]
             }
         ],
         "summary": {
@@ -360,7 +360,7 @@ class ExplainPySrEquationsDeep(dspy.Signature):
             "equation_id": 1,
             "agrees_with_headline": true,
             "disagreement_reason": "",
-            "rationale": ["reason 1 why this equation is best", "reason 2 (referencing deep research compatibility)", "reason 3"]
+            "rationale": ["reason 1 why this equation is best", "reason 2 (referencing the literature compatibility)", "reason 3"]
         }
     }
 
@@ -368,7 +368,7 @@ class ExplainPySrEquationsDeep(dspy.Signature):
     """
 
     project_spec_json: str = dspy.InputField(
-        desc="JSON string of project specification with deep research equations"
+        desc="JSON string of project specification with literature equations"
     )
     data_spec_json: str = dspy.InputField(desc="JSON string of equations data")
 
