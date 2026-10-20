@@ -222,7 +222,7 @@ def find_literature_laws(
         with dspy.settings.context(lm=lm):
             response = predictor(features_json=features_json)
 
-        report_usage(lm)
+        report_usage(lm, model_name=lm.model.split("/", 1)[-1])
 
         equations_str = response.equations
         logger.debug(f"Literature search output: {equations_str}")

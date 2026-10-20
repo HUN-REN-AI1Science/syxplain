@@ -91,6 +91,9 @@ def create_literature_model(user_api_key: str | None = None) -> dspy.LM:
         "reasoning": {"effort": "high"},
         "timeout": LITERATURE_TIMEOUT_S,
         "num_retries": 0,  # a retry could not finish within the wait anyway
+        # OPENAI_MODEL_NAME may be a non-reasoning model (gpt-4o), which rejects
+        # reasoning.effort; drop what the model does not support instead of failing
+        "drop_params": True,
     }
     if user_api_key:
         return dspy.LM(

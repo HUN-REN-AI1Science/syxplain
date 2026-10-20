@@ -132,7 +132,7 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
 
   // Comparison chart data
   const comparisonChartData = {
-    labels: byType.map((t) => t.type.charAt(0).toUpperCase() + t.type.slice(1)),
+    labels: byType.map((t) => analysisTypeDisplay(t.type).label),
     datasets: [
       {
         label: 'Total Runs',
@@ -315,7 +315,7 @@ const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({ toast }) =>
           {byType.map((type) => (
             <div key={type.type} className="bg-surface rounded-lg p-4 shadow-sm">
               <h4 className="font-medium font-heading text-primary mb-2">
-                {type.type.charAt(0).toUpperCase() + type.type.slice(1)} Analysis
+                {analysisTypeDisplay(type.type).label} Analysis
               </h4>
               <ul className="text-sm text-secondary space-y-1">
                 <li>

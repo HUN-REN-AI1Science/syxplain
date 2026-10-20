@@ -122,6 +122,19 @@ class AnalysisSettings:
         return self.max_file_size_mb * 1024 * 1024
 
 
+def _budget_value(name: str, default: float) -> float:
+    """
+    One budget ceiling. Values in the former "quick,deep" form (still in older .env
+    files) use their last part, the deep value that is now the single budget.
+    """
+    raw = os.environ.get(name, "")
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    try:
+        return float(parts[-1]) if parts else default
+    except ValueError:
+        return default
+
+
 @dataclass
 class DiscoverySettings:
     """
@@ -133,14 +146,12 @@ class DiscoverySettings:
     )
     # Model for the agent (server keys); empty = OPENAI_MODEL_NAME
     model_name: str = field(default_factory=lambda: os.environ.get("DISCOVERY_AGENT_MODEL", ""))
-    max_iters: float = field(
-        default_factory=lambda: float(os.environ.get("DISCOVERY_MAX_ITERS", "40"))
-    )
+    max_iters: float = field(default_factory=lambda: _budget_value("DISCOVERY_MAX_ITERS", 40))
     max_pysr_runs: float = field(
-        default_factory=lambda: float(os.environ.get("DISCOVERY_MAX_PYSR_RUNS", "6"))
+        default_factory=lambda: _budget_value("DISCOVERY_MAX_PYSR_RUNS", 6)
     )
     wall_clock_minutes: float = field(
-        default_factory=lambda: float(os.environ.get("DISCOVERY_WALL_CLOCK_MIN", "150"))
+        default_factory=lambda: _budget_value("DISCOVERY_WALL_CLOCK_MIN", 150)
     )
     max_concurrent_pysr: int = field(
         default_factory=lambda: int(os.environ.get("DISCOVERY_MAX_CONCURRENT_PYSR", "2"))

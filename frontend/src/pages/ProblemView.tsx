@@ -282,7 +282,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
     setOpenaiKeyError(null);
 
     try {
-      await permissionsService.validateKeys({ openai_api_key: openaiApiKey });
+      await permissionsService.validateKeys({ openai_api_key: openaiApiKey.trim() });
       setOpenaiValidationStatus('valid');
       return true;
     } catch (error: unknown) {
