@@ -77,11 +77,17 @@ class TaskInput:
     Contains all information needed to execute a task on Slurm.
     """
 
-    task_type: str  # "shap" or "pysr"
+    task_type: str  # e.g. "pysr"
     run_id: str  # Associated run ID for progress tracking
     input_data: dict[str, Any]  # Serialized task input
     callback_url: str | None = None  # URL for progress updates
     callback_token: str | None = None  # Auth token for callbacks
+    task_key: str | None = None  # Distinguishes several tasks of one type in a run (e.g. "pysr_2")
+
+    @property
+    def key(self) -> str:
+        """Key under which input and results of this task are stored on the Run."""
+        return self.task_key or self.task_type
 
 
 @dataclass

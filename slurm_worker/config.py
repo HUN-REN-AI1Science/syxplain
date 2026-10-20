@@ -31,20 +31,6 @@ class CallbackConfig:
 
 
 @dataclass(frozen=True)
-class SHAPConfig:
-    """Configuration for SHAP analysis."""
-
-    subsample_fraction: float = 0.1
-    subsample_min: int = 1000
-    subsample_max: int = 5000
-    percent_of_total_mass: float = 80.0
-    generate_visualizations: bool = True
-    max_interaction_plots: int = 10
-    random_seed: int = 845506771
-    n_estimators: int = 200
-
-
-@dataclass(frozen=True)
 class PySRConfig:
     """Configuration for PySR symbolic regression."""
 
@@ -72,6 +58,7 @@ class WorkerConfig:
     output_path: str
     input_path: str = ""  # Optional - if empty, fetches via HTTP
     callback: CallbackConfig = field(default_factory=CallbackConfig.from_env)
+    task_key: str = ""  # Key within the run (e.g. pysr_2); defaults to task_type
 
     @classmethod
     def from_args(cls, args) -> "WorkerConfig":
@@ -86,4 +73,5 @@ class WorkerConfig:
             input_path=getattr(args, "input", "") or "",
             output_path=args.output,
             callback=callback,
+            task_key=getattr(args, "task_key", "") or args.task_type,
         )

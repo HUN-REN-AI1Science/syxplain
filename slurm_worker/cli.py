@@ -12,6 +12,7 @@ from typing import Any
 
 import requests
 
+from slurm_worker import __version__
 from slurm_worker.config import WorkerConfig
 from slurm_worker.io import FileHandler
 from slurm_worker.logging_config import get_logger, setup_logging
@@ -33,8 +34,8 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --task-type shap --input input.json --output output.json
-  %(prog)s --task-type pysr --input input.json --output output.json --run-id abc123
+  %(prog)s --task-type pysr --input input.json --output output.json
+  %(prog)s --task-type pysr --task-key pysr_2 --output output.json --run-id abc123
         """,
     )
 
@@ -43,6 +44,11 @@ Examples:
         required=True,
         choices=TaskRegistry.available_tasks(),
         help="Type of task to execute",
+    )
+    parser.add_argument(
+        "--task-key",
+        default="",
+        help="Key of this task within the run, e.g. pysr_2 (default: the task type)",
     )
     parser.add_argument(
         "--run-id",
@@ -96,7 +102,9 @@ class WorkerRunner:
             config: Worker configuration
         """
         self.config = config
-        self.reporter = ProgressReporter(config.run_id, config.callback, task_type=config.task_type)
+        self.reporter = ProgressReporter(
+            config.run_id, config.callback, task_type=config.task_type, task_key=config.task_key
+        )
         self.file_handler = FileHandler()
 
     def run(self) -> int:
@@ -126,7 +134,11 @@ class WorkerRunner:
 
         response = requests.get(
             url,
-            params={"task_type": self.config.task_type},
+            params={
+                "task_type": self.config.task_type,
+                "task_key": self.config.task_key,
+                "worker_version": __version__,
+            },
             headers={"X-Worker-Token": self.config.callback.token},
             timeout=60,
         )

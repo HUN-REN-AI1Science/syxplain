@@ -86,6 +86,7 @@ class SlurmBackend:
 
         # Validate identifiers to prevent injection
         validate_slurm_identifier(task.task_type, "task_type")
+        validate_slurm_identifier(task.key, "task_key")
         validate_slurm_identifier(task.run_id, "run_id")
 
         # Build environment variables
@@ -113,6 +114,7 @@ singularity run \\
     --env PYTHON_JULIAPKG_EXE=/usr/local/bin/julia \\
     {escaped_container} \\
     --task-type {task.task_type} \\
+    --task-key {task.key} \\
     --run-id {task.run_id} \\
     --output {escaped_output_path}"""
         else:
@@ -124,13 +126,14 @@ fi
 
 python -m slurm_worker \\
     --task-type {task.task_type} \\
+    --task-key {task.key} \\
     --run-id {task.run_id} \\
     --output {escaped_output_path}"""
 
         output_dir = "/".join(output_path.split("/")[:-1])
 
         return f"""#!/bin/bash
-#SBATCH --job-name=syxplain-{task.task_type}-{task.run_id[:8]}
+#SBATCH --job-name=syxplain-{task.key}-{task.run_id[:8]}
 #SBATCH --output={stdout_path}
 #SBATCH --error={stderr_path}
 
@@ -156,14 +159,14 @@ exit $?
         slurm_settings = get_slurm_settings()
 
         job_uuid = str(uuid.uuid4())
-        logger.info(f"Submitting {task.task_type} task to Slurm for run {task.run_id}")
+        logger.info(f"Submitting {task.key} task to Slurm for run {task.run_id}")
 
         # Store input data in Run record for worker to fetch via HTTP
         with get_db_session() as db:
             run = db.query(Run).filter(Run.id == task.run_id).first()
             if run:
                 input_store = dict(run.input_data) if run.input_data else {}
-                input_store[task.task_type] = task.input_data
+                input_store[task.key] = task.input_data
                 run.input_data = input_store
                 db.commit()
 
@@ -176,7 +179,7 @@ exit $?
             run_id_short = task.run_id[:8]
             job_uuid_short = job_uuid[:8]
             log_dir = f"{slurm_settings.staging_dir}/logs/{log_date}"
-            log_basename = f"{log_timestamp}_{task.task_type}_{run_id_short}_{job_uuid_short}"
+            log_basename = f"{log_timestamp}_{task.key}_{run_id_short}_{job_uuid_short}"
             stdout_path = f"{log_dir}/{log_basename}.stdout"
             stderr_path = f"{log_dir}/{log_basename}.stderr"
 
@@ -186,7 +189,7 @@ exit $?
 
             submission = SlurmJobSubmission(
                 script=script,
-                name=f"syxplain-{task.task_type}-{task.run_id[:8]}",
+                name=f"syxplain-{task.key}-{task.run_id[:8]}",
                 partition=slurm_settings.partition,
                 cpus=slurm_settings.cpus,
                 memory=slurm_settings.memory,
@@ -202,6 +205,7 @@ exit $?
                 "slurm_job_id": slurm_job_id,
                 "task": task,
                 "output_path": output_path,
+                "stderr_path": stderr_path,
                 "submitted_at": datetime.utcnow(),
             }
 
@@ -267,13 +271,14 @@ exit $?
         task_data = self._tasks[job_id]
         task = task_data["task"]
 
-        # Results are stored in Run record via worker callback — check DB first
-        # to avoid hitting slurmrestd (job may already be purged)
+        # Results are stored in Run.results["tasks"][task_key] via worker callback —
+        # check DB first to avoid hitting slurmrestd (job may already be purged)
         with get_db_session() as db:
             run = db.query(Run).filter(Run.id == task.run_id).first()
-            if run and run.results:
-                logger.info(f"Retrieved results for job {job_id} from database")
-                return run.results
+            task_result = ((run.results or {}).get("tasks") or {}).get(task.key) if run else None
+            if task_result is not None:
+                logger.info(f"Retrieved results for job {job_id} ({task.key}) from database")
+                return task_result
 
         # Results not in DB yet — check if job is still running
         status = await self.get_task_status(job_id)

@@ -4,6 +4,7 @@ PySR symbolic regression task.
 Discovers mathematical equations that fit the data using genetic programming.
 """
 
+import inspect
 import os
 import tempfile
 from typing import Any
@@ -16,6 +17,21 @@ from slurm_worker.tasks.base import DataFrameInput, Task, TaskResult
 from slurm_worker.tasks.registry import TaskRegistry
 
 logger = get_logger("tasks.pysr")
+
+# Target transforms the backend may request; PySR then searches f(X) ~ transform(y).
+# The backend wraps the returned equations with the inverse when scoring them.
+TARGET_TRANSFORMS = {
+    "log": np.log,
+    "log1p": np.log1p,
+    "sqrt": np.sqrt,
+}
+
+
+def _supports_guesses() -> bool:
+    """Warm-start guesses arrived in newer PySR releases; older ones lack the argument."""
+    from pysr import PySRRegressor
+
+    return "guesses" in inspect.signature(PySRRegressor.__init__).parameters
 
 
 class PySRConfigBuilder:
@@ -102,16 +118,19 @@ class EquationExtractor:
     Handles equation selection and scatter data generation.
     """
 
-    def __init__(self, max_scatter_points: int = 500, seed: int = 42):
+    def __init__(self, max_scatter_points: int = 500, seed: int = 42, full_front: bool = False):
         """
         Initialize extractor.
 
         Args:
             max_scatter_points: Maximum points for scatter plots
             seed: Random seed for subsampling
+            full_front: Return the whole hall of fame without scatter data (the backend
+                re-scores every equation itself)
         """
         self.max_scatter_points = max_scatter_points
         self.seed = seed
+        self.full_front = full_front
 
     def extract_equations(
         self,
@@ -140,7 +159,10 @@ class EquationExtractor:
 
         # Select equations with loss < best_loss * 1.5
         best_loss = float(equations_df["loss"].min())
-        selected = equations_df[equations_df["loss"] < best_loss * 1.5].copy()
+        if self.full_front:
+            selected = equations_df.copy()
+        else:
+            selected = equations_df[equations_df["loss"] < best_loss * 1.5].copy()
 
         # Prepare scatter data samples
         X_sample, y_sample = self._subsample_for_scatter(X, y)
@@ -150,6 +172,8 @@ class EquationExtractor:
         for idx, row in selected.iterrows():
             eq_dict = self._row_to_dict(row)
             equations_list.append(eq_dict)
+            if self.full_front:
+                continue
 
             # Generate predictions
             scatter = self._generate_scatter(model, row, idx, X_sample, X_sample_np, y_sample)
@@ -239,6 +263,10 @@ class PySRTask(Task):
         if not input_data["predictor_columns"]:
             raise ValueError("predictor_columns cannot be empty")
 
+        transform = input_data.get("target_transform")
+        if transform and transform not in TARGET_TRANSFORMS:
+            raise ValueError(f"Unsupported target_transform: {transform}")
+
     def _get_config(self, input_data: dict[str, Any]) -> PySRConfig:
         """Extract PySR configuration from input data."""
         config_dict = input_data.get("config", {})
@@ -267,13 +295,22 @@ class PySRTask(Task):
         config = self._get_config(input_data)
         run_id = input_data.get("run_id", os.environ.get("SLURM_JOB_ID", "unknown"))
 
+        X, y = df_input.X, df_input.y
+        transform = input_data.get("target_transform")
+        if transform:
+            with np.errstate(all="ignore"):
+                y = TARGET_TRANSFORMS[transform](y)
+            if not np.all(np.isfinite(y)):
+                raise ValueError(f"target_transform={transform} produced non-finite values")
+            logger.info(f"Fitting transformed target: {transform}(y)")
+
         logger.info(f"Loaded data: {df_input.n_rows} rows, {df_input.n_features} predictors")
 
         self._report(15, "Computing configuration", "pysr_config")
 
         # Build configuration
         config_builder = PySRConfigBuilder(config)
-        niterations = config_builder.get_niterations(df_input.X, df_input.y)
+        niterations = config_builder.get_niterations(X, y)
         constraints, nested_constraints = config_builder.build_constraints()
 
         # Get CPU count from SLURM allocation or fallback to os.cpu_count()
@@ -291,6 +328,15 @@ class PySRTask(Task):
         )
 
         self._report(20, "Creating PySR model", "pysr_model")
+
+        extra_kwargs: dict[str, Any] = {}
+        guesses = [g for g in input_data.get("guesses") or [] if isinstance(g, str) and g.strip()]
+        if guesses:
+            if _supports_guesses():
+                extra_kwargs["guesses"] = guesses
+                logger.info(f"Seeding search with {len(guesses)} guesses")
+            else:
+                logger.warning("Installed PySR does not support guesses; ignoring them")
 
         # Create model
         model = PySRRegressor(
@@ -313,10 +359,19 @@ class PySRTask(Task):
             verbosity=1,
             progress=True,
             tempdir=temp_dir,
+            **extra_kwargs,
         )
 
         self._report(30, "Running symbolic regression", "pysr_running")
-        model.fit(df_input.X, df_input.y)
+        try:
+            model.fit(X, y)
+        except Exception as e:
+            if "guesses" not in extra_kwargs:
+                raise
+            # An unparsable guess must not cost the whole search.
+            logger.warning(f"Fit with guesses failed ({e}); retrying without them")
+            model.set_params(guesses=None)
+            model.fit(X, y)
 
         self._report(85, "Extracting equations", "pysr_extracting")
 
@@ -324,10 +379,9 @@ class PySRTask(Task):
         extractor = EquationExtractor(
             max_scatter_points=config.max_scatter_points,
             seed=config.scatter_seed,
+            full_front=bool(input_data.get("return_full_front")),
         )
-        equations_list, scatter_data, best_equation = extractor.extract_equations(
-            model, df_input.X, df_input.y
-        )
+        equations_list, scatter_data, best_equation = extractor.extract_equations(model, X, y)
 
         self._report(90, "Finalizing", "pysr_finalizing")
 
@@ -338,4 +392,5 @@ class PySRTask(Task):
             best_equation=best_equation,
             iterations_completed=niterations,
             scatter_data=scatter_data,
+            target_transform=transform,
         )

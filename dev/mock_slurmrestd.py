@@ -4,9 +4,10 @@ Mock slurmrestd server for local development.
 Impersonates the slurmrestd REST API (v0.0.41) so the backend can submit
 and monitor jobs without a real Slurm cluster.
 
-- SHAP tasks: launched as real ``python -m slurm_worker`` subprocesses
-- PySR tasks: faked with mock results sent via HTTP callbacks (avoids
-  needing Julia/PySR installed)
+- PySR tasks: faked (avoids needing Julia/PySR installed). The mock fetches
+  the task input from the backend and returns least-squares equations over the
+  requested features, so agent-launched searches get plausible results.
+- Other task types: launched as real ``python -m slurm_worker`` subprocesses
 
 Usage:
     python dev/mock_slurmrestd.py --port 6820
@@ -60,6 +61,7 @@ class MockJob:
     script: str = ""
     env: dict[str, str] = field(default_factory=dict)
     task_type: str = ""
+    task_key: str = ""
     run_id: str = ""
     output_path: str = ""
 
@@ -130,6 +132,9 @@ def _extract_worker_args(script: str) -> dict[str, str]:
     m = re.search(r"--task-type\s+(\S+)", script)
     if m:
         args["task_type"] = m.group(1)
+    m = re.search(r"--task-key\s+(\S+)", script)
+    if m:
+        args["task_key"] = m.group(1)
     m = re.search(r"--run-id\s+(\S+)", script)
     if m:
         args["run_id"] = m.group(1)
@@ -143,6 +148,7 @@ def _parse_job_script(job: MockJob) -> tuple[str, str]:
     """Parse script and populate job fields. Returns (callback_url, callback_token)."""
     worker_args = _extract_worker_args(job.script)
     job.task_type = worker_args.get("task_type", "unknown")
+    job.task_key = worker_args.get("task_key", job.task_type)
     job.run_id = worker_args.get("run_id", "unknown")
     job.output_path = worker_args.get("output", "/tmp/output.json")
     callback_url = _extract_env_var(job.script, "CALLBACK_URL")
@@ -154,42 +160,78 @@ def _parse_job_script(job: MockJob) -> tuple[str, str]:
 # Mock PySR results
 # ---------------------------------------------------------------------------
 
-MOCK_PYSR_RESULTS = {
-    "status": "success",
-    "equations": [
-        {
-            "equation": "x0 * 0.42 + x1 * 0.15",
-            "complexity": 5,
-            "loss": 0.032,
-            "score": 0.85,
-            "sympy_format": "0.42*x0 + 0.15*x1",
-        },
-        {
-            "equation": "x0 * 0.38 + log(x1 + 1) * 0.22",
-            "complexity": 8,
-            "loss": 0.021,
-            "score": 0.91,
-            "sympy_format": "0.38*x0 + 0.22*log(x1 + 1)",
-        },
-        {
-            "equation": "sqrt(x0) * 0.55 + x1 * 0.12 - 0.03",
-            "complexity": 9,
-            "loss": 0.018,
-            "score": 0.93,
-            "sympy_format": "0.55*sqrt(x0) + 0.12*x1 - 0.03",
-        },
-    ],
-    "best_equation": {
-        "equation": "sqrt(x0) * 0.55 + x1 * 0.12 - 0.03",
-        "complexity": 9,
-        "loss": 0.018,
-        "score": 0.93,
-        "sympy_format": "0.55*sqrt(x0) + 0.12*x1 - 0.03",
-    },
-    "iterations_completed": 500,
-    "scatter_data": {},
-    "computation_time_seconds": 3.0,
-}
+
+def _mock_pysr_results(task_input: dict | None) -> dict:
+    """
+    Plausible PySR-style output: least-squares fits of a few simple forms over
+    the requested features (constants are real, so the backend re-scores sensibly).
+    """
+    import numpy as np
+
+    if not task_input:
+        return {"status": "success", "equations": [], "best_equation": None}
+
+    data = task_input["data"]
+    columns = data["columns"]
+    rows = np.asarray(data["data"], dtype=float)
+    target = task_input["target_column"]
+    features = task_input["predictor_columns"]
+    y = rows[:, columns.index(target)]
+    transform = task_input.get("target_transform")
+    if transform == "log":
+        y = np.log(y)
+    elif transform == "log1p":
+        y = np.log1p(y)
+    elif transform == "sqrt":
+        y = np.sqrt(y)
+
+    def fit(terms: list[tuple[str, np.ndarray]]) -> tuple[str, float]:
+        A = np.column_stack([np.ones(len(y))] + [col for _, col in terms])
+        coef, *_ = np.linalg.lstsq(A, y, rcond=None)
+        parts = [f"{coef[0]:.5g}"] + [
+            f"({c:.5g} * {name})" for c, (name, _) in zip(coef[1:], terms, strict=False)
+        ]
+        loss = float(np.mean((A @ coef - y) ** 2))
+        return " + ".join(parts), loss
+
+    cols = {f: rows[:, columns.index(f)] for f in features}
+    candidates = [[(f, cols[f])] for f in features[:1]]
+    candidates.append([(f, cols[f]) for f in features])
+    positive = [f for f in features if np.all(cols[f] > 0)]
+    if positive:
+        candidates.append(
+            [
+                (f"log({f})" if f in positive else f, np.log(cols[f]) if f in positive else cols[f])
+                for f in features
+            ]
+        )
+    if len(features) >= 2:
+        a, b = features[0], features[1]
+        candidates.append([(a, cols[a]), (b, cols[b]), (f"{a} * {b}", cols[a] * cols[b])])
+
+    equations = []
+    for terms in candidates:
+        eq, loss = fit(terms)
+        equations.append(
+            {
+                "equation": eq,
+                "complexity": 1 + 4 * len(terms),
+                "loss": loss,
+                "score": 0.0,
+                "sympy_format": eq,
+            }
+        )
+    best = min(equations, key=lambda e: e["loss"])
+    return {
+        "status": "success",
+        "equations": equations,
+        "best_equation": best,
+        "iterations_completed": 100,
+        "scatter_data": {},
+        "target_transform": transform,
+        "computation_time_seconds": 3.0,
+    }
+
 
 MOCK_PYSR_PROGRESS_STEPS = [
     (5, "Fetching input", "fetching_input"),
@@ -205,15 +247,28 @@ MOCK_PYSR_PROGRESS_STEPS = [
 
 
 def _run_mock_pysr(job: MockJob, callback_url: str, callback_token: str) -> None:
-    """Simulate PySR execution by sending fake progress + results via callbacks."""
+    """Simulate PySR execution: fetch input, send progress, report least-squares equations."""
     job.state = MockJobState.RUNNING
     job.start_time = int(time.time())
     headers = {"X-Worker-Token": callback_token}
     base_url = callback_url.rstrip("/")
 
-    logger.info(f"Job {job.job_id}: mock PySR started for run {job.run_id}")
+    logger.info(f"Job {job.job_id}: mock PySR ({job.task_key}) started for run {job.run_id}")
 
     try:
+        task_input = None
+        try:
+            resp = http_requests.get(
+                f"{base_url}/input/{job.run_id}",
+                params={"task_type": job.task_type, "task_key": job.task_key},
+                headers=headers,
+                timeout=30,
+            )
+            resp.raise_for_status()
+            task_input = resp.json()["input"]
+        except Exception as e:
+            logger.warning(f"Job {job.job_id}: input fetch failed: {e}")
+
         for progress, status, step in MOCK_PYSR_PROGRESS_STEPS:
             if job.state == MockJobState.CANCELLED:
                 return
@@ -223,6 +278,7 @@ def _run_mock_pysr(job: MockJob, callback_url: str, callback_token: str) -> None
                 "status": status,
                 "step_name": step,
                 "task_type": "pysr",
+                "task_key": job.task_key,
             }
             try:
                 http_requests.post(
@@ -235,13 +291,13 @@ def _run_mock_pysr(job: MockJob, callback_url: str, callback_token: str) -> None
                 logger.warning(f"Job {job.job_id}: progress callback failed: {e}")
 
             # Simulate work between steps
-            time.sleep(0.3)
+            time.sleep(0.5)
 
-        # Send completion
+        results = _mock_pysr_results(task_input)
         try:
             http_requests.post(
                 f"{base_url}/complete/{job.run_id}",
-                json={"results": MOCK_PYSR_RESULTS},
+                json={"results": results, "task_key": job.task_key},
                 headers=headers,
                 timeout=10,
             )
@@ -261,7 +317,7 @@ def _run_mock_pysr(job: MockJob, callback_url: str, callback_token: str) -> None
 
 
 # ---------------------------------------------------------------------------
-# Real subprocess launcher & monitor (for SHAP)
+# Real subprocess launcher & monitor (non-PySR task types)
 # ---------------------------------------------------------------------------
 
 
@@ -286,6 +342,8 @@ def _launch_worker(job: MockJob, callback_url: str, callback_token: str) -> None
         "slurm_worker",
         "--task-type",
         job.task_type,
+        "--task-key",
+        job.task_key,
         "--run-id",
         job.run_id,
         "--output",
@@ -386,7 +444,7 @@ def _job_to_slurm_json(job: MockJob) -> dict:
         "exit_code": {"return_code": job.exit_code},
         "nodes": "localhost",
         "state_reason": "None",
-        "name": f"syxplain-{job.task_type}-{job.run_id[:8] if job.run_id else 'unknown'}",
+        "name": f"syxplain-{job.task_key}-{job.run_id[:8] if job.run_id else 'unknown'}",
     }
 
 

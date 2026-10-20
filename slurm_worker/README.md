@@ -1,6 +1,6 @@
 # Syxplain Slurm Worker
 
-Standalone worker for executing compute-intensive tasks (SHAP and PySR) on Slurm clusters.
+Standalone worker for executing PySR symbolic-regression searches on Slurm clusters. Each search of a run has its own task key (`--task-key pysr_2`), under which the backend stores its input and results.
 
 > **Note:** For overall Slurm integration setup (environment variables, SSH tunnels, token management), see [SLURM.md](../SLURM.md).
 
@@ -47,8 +47,8 @@ This creates `syxplain-worker.sif` with all dependencies pre-installed and Julia
 On the cluster, verify it works:
 
 ```bash
-# Test SHAP import
-singularity exec ../containers/syxplain-worker.sif python -c "import shap; print('SHAP OK')"
+# Test PySR import
+singularity exec ../containers/syxplain-worker.sif python -c "import pysr; print('PySR', pysr.__version__)"
 
 # Test CLI help
 singularity run ../containers/syxplain-worker.sif --help
@@ -56,8 +56,8 @@ singularity run ../containers/syxplain-worker.sif --help
 
 Expected output:
 ```
-SHAP OK
-usage: __main__.py [-h] --task-type {pysr,shap} ...
+PySR 2.7.0
+usage: __main__.py [-h] --task-type {pysr} [--task-key TASK_KEY] ...
 ```
 
 ### 4. Update/Refresh the Container
@@ -82,14 +82,14 @@ Test tasks locally without Slurm using the example data:
 # Install dependencies (if not using container)
 pip install -r slurm_worker/requirements.txt
 
-# Run SHAP task on soil data example
-python test_worker_local.py --task shap --example 1
+# Screen classic laws (Mitscherlich, Langmuir, power law, ...) on the soil example
+python test_worker_local.py --task classic --example 1
 
 # Run PySR with limited iterations (faster)
-python test_worker_local.py --task pysr --example 1 --niterations 5
+python test_worker_local.py --task pysr --example 1 --niterations 5 --output results.json
 
-# Run both tasks
-python test_worker_local.py --task both --example 1 --output results.json
+# PySR on log(target), seeded with a guess
+python test_worker_local.py --task pysr --example 3 --target-transform log --guesses "Synapses + Degree"
 ```
 
 Available examples:
@@ -99,7 +99,7 @@ Available examples:
 
 Use custom data:
 ```bash
-python test_worker_local.py --task shap \
+python test_worker_local.py --task classic \
     --data path/to/data.csv \
     --target my_target \
     --predictors "col1,col2,col3"
@@ -110,8 +110,7 @@ python test_worker_local.py --task shap \
 The Singularity container is the recommended deployment method. It includes:
 
 - Python 3.11 with scientific computing stack
-- Julia 1.10.2 with PySR packages pre-compiled
-- SHAP and all required dependencies
+- Julia 1.11 with PySR 2.7.0 (pinned) packages pre-compiled
 - The worker code ready to execute
 
 Build instructions are in the [Quick Start](#quick-start) section above.
@@ -136,7 +135,8 @@ singularity run syxplain-worker.sif --help
 
 # With storage bind mount
 singularity run --bind /storage:/storage syxplain-worker.sif \
-    --task-type shap \
+    --task-type pysr \
+    --task-key pysr_1 \
     --run-id abc123 \
     --input /storage/user/staging/abc123/input.json \
     --output /storage/user/staging/abc123/output.json
@@ -153,39 +153,6 @@ singularity run --bind /storage:/storage \
 ```
 
 ## Task Types
-
-### SHAP (`--task-type shap`)
-
-Computes feature interactions using SHAP values.
-
-**Input JSON:**
-```json
-{
-  "data": {
-    "columns": ["x1", "x2", "y"],
-    "index": [0, 1, 2],
-    "data": [[1.0, 2.0, 3.0], ...]
-  },
-  "target_column": "y",
-  "predictor_columns": ["x1", "x2"],
-  "subsample_fraction": 0.1,
-  "subsample_min": 1000,
-  "subsample_max": 5000
-}
-```
-
-**Output JSON:**
-```json
-{
-  "status": "success",
-  "interactions": [
-    {"feature1": "x1", "feature2": "x2", "interaction_strength": 0.85, "rank": 1}
-  ],
-  "top_features": ["x1", "x2"],
-  "samples_used": 1000,
-  "computation_time_seconds": 45.2
-}
-```
 
 ### PySR (`--task-type pysr`)
 
@@ -207,9 +174,16 @@ Performs symbolic regression to discover equations.
     "binary_operators": ["+", "-", "*", "/"],
     "unary_operators": ["exp", "log", "sqrt"],
     "maxsize": 20
-  }
+  },
+  "target_transform": null,
+  "guesses": ["x1 + 2*x2"],
+  "return_full_front": true
 }
 ```
+
+- `target_transform` (`log`, `log1p`, `sqrt` or null): PySR searches `f(X) ~ transform(y)`; the backend applies the inverse when it scores the equations.
+- `guesses`: seed formulas (PySR's warm start). If a guess cannot be parsed, the search reruns without them.
+- `return_full_front`: return the whole hall of fame without scatter data (the backend re-scores every equation itself).
 
 **Output JSON:**
 ```json
@@ -329,9 +303,9 @@ cat > /tmp/test-input.json << 'EOF'
 }
 EOF
 
-# Run SHAP task
+# Run PySR task
 singularity run --bind /tmp:/tmp syxplain-worker.sif \
-    --task-type shap \
+    --task-type pysr \
     --run-id test \
     --input /tmp/test-input.json \
     --output /tmp/test-output.json

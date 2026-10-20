@@ -2,7 +2,7 @@
 Analysis service for background processing.
 
 Manages the lifecycle of analysis runs using asyncio background tasks.
-SHAP and PySR compute tasks run on Slurm, not locally.
+PySR searches run on Slurm; the discovery agent and classic fits run in the backend.
 """
 
 import asyncio
@@ -128,7 +128,7 @@ async def _run_analysis(
     Async function that runs the orchestrated analysis.
 
     Performs the actual analysis work by delegating to the orchestrator,
-    which coordinates compute tasks (SHAP, PySR) on Slurm and LLM operations.
+    which coordinates the discovery agent, PySR searches on Slurm and LLM operations.
     """
     # Yield control so the HTTP response (with run_id) is sent first
     await asyncio.sleep(0)

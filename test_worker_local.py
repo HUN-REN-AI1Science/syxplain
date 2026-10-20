@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
 """
-Local tester for slurm_worker tasks.
+Local tester for the compute side of the pipeline.
 
-Run SHAP and PySR tasks locally using example data from the data/ folder.
+- ``--task pysr``: run the PySR worker task (needs Julia/PySR installed)
+- ``--task classic``: screen the classic function catalog (Mitscherlich, Langmuir,
+  power law, ...) with the discovery agent's fitting engine and print each model's
+  held-out R2 and diagnosed reasons. No LLM, cluster or database needed.
 
 Usage:
-    # Run SHAP task on example 1
-    python test_worker_local.py --task shap --example 1
+    # Classic-law screen on the soil phosphate example
+    python test_worker_local.py --task classic --example 1
 
-    # Run PySR task with custom iterations
+    # Run PySR with custom iterations
     python test_worker_local.py --task pysr --example 3 --niterations 10
 
-    # Run both tasks
-    python test_worker_local.py --task both --example 1
+    # PySR on a log-transformed target, seeded with a guess
+    python test_worker_local.py --task pysr --example 3 --target-transform log --guesses "Synapses + Degree"
 
     # Save output to file
-    python test_worker_local.py --task shap --example 1 --output results.json
+    python test_worker_local.py --task pysr --example 1 --output results.json
 
     # Use custom data file
-    python test_worker_local.py --task shap --data path/to/data.csv --target my_target --predictors "col1,col2,col3"
+    python test_worker_local.py --task classic --data path/to/data.csv --target my_target --predictors "col1,col2,col3"
 """
 
 import argparse
@@ -58,13 +61,6 @@ EXAMPLES: dict[int, dict[str, Any]] = {
 }
 
 # Reduced parameters for quick local testing
-SHAP_LOCAL_CONFIG = {
-    "subsample_fraction": 0.5,
-    "subsample_min": 50,
-    "subsample_max": 500,
-    "generate_visualizations": False,
-}
-
 PYSR_LOCAL_CONFIG = {
     "niterations": 10,
     "populations": 5,
@@ -173,18 +169,20 @@ def prepare_input(
     df: pd.DataFrame,
     target: str,
     predictors: list[str] | None,
-    task_type: str,
     niterations: int | None = None,
+    target_transform: str | None = None,
+    guesses: list[str] | None = None,
 ) -> dict[str, Any]:
     """
-    Prepare input data for a specific task.
+    Prepare input data for the PySR task.
 
     Args:
         df: Source DataFrame
         target: Target column name
         predictors: List of predictor columns (None to auto-detect)
-        task_type: Task type ("shap" or "pysr")
         niterations: Optional override for PySR iterations
+        target_transform: Optional transform of the target (log, log1p, sqrt)
+        guesses: Optional seed formulas for the search
 
     Returns:
         Dictionary ready for task execution
@@ -202,14 +200,12 @@ def prepare_input(
     # Build base input
     input_data = dataframe_to_input(df, target, predictors)
 
-    # Add task-specific configuration
-    if task_type == "shap":
-        input_data.update(SHAP_LOCAL_CONFIG)
-    elif task_type == "pysr":
-        config = PYSR_LOCAL_CONFIG.copy()
-        if niterations is not None:
-            config["niterations"] = niterations
-        input_data["config"] = config
+    config = PYSR_LOCAL_CONFIG.copy()
+    if niterations is not None:
+        config["niterations"] = niterations
+    input_data["config"] = config
+    input_data["target_transform"] = target_transform
+    input_data["guesses"] = guesses or []
 
     return input_data
 
@@ -221,7 +217,7 @@ def run_task(
     Run a task and return results.
 
     Args:
-        task_type: Task type name ("shap" or "pysr")
+        task_type: Task type name ("pysr")
         input_data: Prepared input data
         reporter: Progress reporter
 
@@ -253,19 +249,7 @@ def print_results(task_type: str, results: dict[str, Any]) -> None:
         print(f"Error: {results.get('error')}")
         return
 
-    if task_type == "shap":
-        interactions = results.get("interactions", [])
-        print(f"Top {len(interactions)} interactions:")
-        for i, pair in enumerate(interactions[:10], 1):
-            print(
-                f"  {i}. {pair['feature1']} x {pair['feature2']}: {pair['interaction_strength']:.4f}"
-            )
-
-        print(f"\nTop features: {results.get('top_features', [])}")
-        print(f"Samples used: {results.get('samples_used')}")
-        print(f"Coverage: {results.get('covered_mass_percent', 0):.1f}%")
-
-    elif task_type == "pysr":
+    if task_type == "pysr":
         equations = results.get("equations", [])
         print(f"Found {len(equations)} equations:")
         for eq in equations[:5]:
@@ -277,30 +261,59 @@ def print_results(task_type: str, results: dict[str, Any]) -> None:
             print(f"\nBest equation: {best['equation']}")
 
 
+def run_classic_screen(
+    df: pd.DataFrame, target: str, predictors: list[str] | None
+) -> dict[str, Any]:
+    """Screen the classic catalog with the discovery engine and print the leaderboard."""
+    from backend.services.discovery.report import json_safe
+    from backend.services.discovery.session import DiscoverySession
+
+    if predictors is None:
+        predictors = auto_detect_predictors(df, target)
+    session = DiscoverySession(df, target, predictors)
+    profile = session.profile()
+    print(f"\nNoise ceiling (out-of-fold random-forest R2): {profile['noise_ceiling_r2']}")
+    print("Feature ranking:", ", ".join(f["alias"] for f in profile["features"]))
+
+    n = session.auto_screen()
+    session.final_scoring()
+    print(f"\nFitted {n} classic models. Top 10 by held-out R2:")
+    ranked = session.ranked_models()
+    for i, m in enumerate(ranked[:10], 1):
+        r2 = m.holdout["r2"] if m.holdout else m.cv_r2
+        print(f"\n{i:2d}. {m.label} on {', '.join(m.features)}  R2={r2:.3f}  [{m.verdict}]")
+        print(f"    {m.fitted_expression}")
+        for reason in m.reasons[:3]:
+            print(f"    - {reason}")
+    return json_safe(
+        {
+            "noise_ceiling_r2": profile["noise_ceiling_r2"],
+            "models": [m.to_dict() for m in ranked],
+        }
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Test slurm_worker tasks locally using example data.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run SHAP on soil data
-  python test_worker_local.py --task shap --example 1
+  # Screen classic laws on soil data (no Julia needed)
+  python test_worker_local.py --task classic --example 1
 
   # Run PySR with limited iterations (faster)
   python test_worker_local.py --task pysr --example 1 --niterations 5
 
-  # Run both tasks
-  python test_worker_local.py --task both --example 1
-
   # Use custom data file
-  python test_worker_local.py --task shap --data mydata.csv --target y --predictors "x1,x2,x3"
+  python test_worker_local.py --task classic --data mydata.csv --target y --predictors "x1,x2,x3"
         """,
     )
 
     # Task selection
     parser.add_argument(
         "--task",
-        choices=["shap", "pysr", "both"],
+        choices=["pysr", "classic"],
         required=True,
         help="Task type to run",
     )
@@ -337,6 +350,16 @@ Examples:
         type=int,
         help="Number of PySR iterations (default: 10 for local testing)",
     )
+    parser.add_argument(
+        "--target-transform",
+        choices=["log", "log1p", "sqrt"],
+        help="Fit PySR to a transformed target",
+    )
+    parser.add_argument(
+        "--guesses",
+        type=str,
+        help="Semicolon-separated seed formulas for PySR (column names as variables)",
+    )
 
     # Output options
     parser.add_argument(
@@ -367,30 +390,22 @@ Examples:
 
     print(f"Loaded {len(df)} rows, {len(df.columns)} columns")
 
-    # Create reporter
-    reporter = ConsoleReporter()
-
-    # Determine which tasks to run
-    tasks_to_run = ["shap", "pysr"] if args.task == "both" else [args.task]
-
     all_results = {}
 
-    for task_type in tasks_to_run:
-        # Prepare input
+    if args.task == "classic":
+        all_results["classic"] = run_classic_screen(df, target, predictors)
+    else:
         input_data = prepare_input(
             df=df,
             target=target,
             predictors=predictors,
-            task_type=task_type,
             niterations=args.niterations,
+            target_transform=args.target_transform,
+            guesses=[g.strip() for g in args.guesses.split(";")] if args.guesses else None,
         )
-
-        # Run task
-        results = run_task(task_type, input_data, reporter)
-        all_results[task_type] = results
-
-        # Print results
-        print_results(task_type, results)
+        results = run_task("pysr", input_data, ConsoleReporter())
+        all_results["pysr"] = results
+        print_results("pysr", results)
 
     # Save results if requested
     if args.output:

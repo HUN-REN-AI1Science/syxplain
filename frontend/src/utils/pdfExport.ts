@@ -4,7 +4,18 @@
  */
 
 import jsPDF from 'jspdf';
-import type { EquationResults, Equation } from '@/types';
+import {
+  asText,
+  basisOf,
+  fmtCeiling,
+  headlineReasonText,
+  metricLabel,
+  metricValue,
+  rejectedFormText,
+  scatterBasisLabel,
+  variableLegend,
+} from '@utils/discovery';
+import type { DiscoveryReport, EquationResults, Equation, RunWarning } from '@/types';
 
 // ============================================================================
 // Constants
@@ -23,6 +34,112 @@ const PAGE_SETTINGS = {
   format: 'a4' as const,
   margin: 20,
 };
+
+// ============================================================================
+// Text Sanitising
+// ============================================================================
+
+/** Replacements for common characters the standard PDF fonts (WinAnsi) cannot draw */
+const WINANSI_REPLACEMENTS: Record<string, string> = {
+  '≈': '~',
+  '→': '->',
+  '←': '<-',
+  '↔': '<->',
+  '⇒': '=>',
+  '≥': '>=',
+  '≤': '<=',
+  '≠': '!=',
+  '×': 'x',
+  '−': '-',
+  '—': '-',
+  '–': '-',
+  '‐': '-',
+  '‑': '-',
+  '‘': "'",
+  '’': "'",
+  '‚': ',',
+  '‛': "'",
+  '“': '"',
+  '”': '"',
+  '„': '"',
+  '′': "'",
+  '″': '"',
+  '√': 'sqrt',
+  '∞': 'inf',
+  '∑': 'sum',
+  '∂': 'd',
+  '∝': '~',
+  '⋅': '·',
+  '∙': '·',
+  '\u00a0': ' ',
+  '\u2009': ' ',
+  '\u202f': ' ',
+  '\u200b': '',
+  α: 'alpha',
+  β: 'beta',
+  γ: 'gamma',
+  δ: 'delta',
+  Δ: 'Delta',
+  ε: 'epsilon',
+  θ: 'theta',
+  κ: 'kappa',
+  λ: 'lambda',
+  μ: 'µ',
+  ν: 'nu',
+  π: 'pi',
+  ρ: 'rho',
+  σ: 'sigma',
+  Σ: 'Sigma',
+  τ: 'tau',
+  φ: 'phi',
+  χ: 'chi',
+  ψ: 'psi',
+  ω: 'omega',
+  Ω: 'Omega',
+  '⁰': '^0',
+  '⁴': '^4',
+  '⁵': '^5',
+  '⁶': '^6',
+  '⁷': '^7',
+  '⁸': '^8',
+  '⁹': '^9',
+  '⁻': '^-',
+  '₀': '0',
+  '₁': '1',
+  '₂': '2',
+  '₃': '3',
+};
+
+/** Windows-1252 characters outside Latin-1 that the standard fonts can draw */
+const CP1252_EXTRAS = new Set('€ƒ…†‡ˆ‰Š‹ŒŽ•˜™š›œžŸ');
+
+const isWinAnsi = (ch: string): boolean => {
+  const code = ch.codePointAt(0) ?? 0;
+  return (
+    code === 0x0a ||
+    code === 0x09 ||
+    (code >= 0x20 && code <= 0x7e) ||
+    (code >= 0xa0 && code <= 0xff) ||
+    CP1252_EXTRAS.has(ch)
+  );
+};
+
+/**
+ * Maps text to characters the standard PDF fonts can render (WinAnsi): common math symbols
+ * become ASCII ("≈" -> "~", "→" -> "->", "σ" -> "sigma"), anything else unrenderable becomes "?".
+ * Keeps WinAnsi characters such as ² ³ ± ° µ.
+ */
+export const sanitizeWinAnsi = (text: string): string => {
+  let out = '';
+  // for..of iterates code points, so an emoji becomes a single "?"
+  for (const ch of text.normalize('NFC')) {
+    if (ch in WINANSI_REPLACEMENTS) out += WINANSI_REPLACEMENTS[ch];
+    else out += isWinAnsi(ch) ? ch : '?';
+  }
+  return out;
+};
+
+const w = (x: unknown): string => sanitizeWinAnsi(asText(x));
 
 // ============================================================================
 // Helper Functions
@@ -102,7 +219,7 @@ function addText(
   pdf.setTextColor(color[0], color[1], color[2]);
 
   const lineHeightFactor = 0.5;
-  const lines = pdf.splitTextToSize(text, contentWidth - 2);
+  const lines = pdf.splitTextToSize(sanitizeWinAnsi(text), contentWidth - 2);
 
   lines.forEach((line: string) => {
     if (ctx.y > pageHeight - margin - 10) {
@@ -113,6 +230,18 @@ function addText(
     ctx.y += fontSize * lineHeightFactor + 1;
   });
   ctx.y += 2;
+}
+
+/** "lhs = rhs" with the equation's own target alias on the left when it has one */
+function equationText(eq: Equation, targetVariable?: string | null): string {
+  const lhs = eq.target_alias || targetVariable;
+  return w(lhs ? `${lhs} = ${eq.equation}` : eq.equation);
+}
+
+/** "where k = col_a, P = col_b" legend of the aliases an equation uses */
+function legendText(eq: Equation): string {
+  const pairs = variableLegend(eq.variables);
+  return pairs.length ? `where ${pairs.map(([a, c]) => `${a} = ${c}`).join(', ')}` : '';
 }
 
 function checkPageBreak(ctx: PdfContext, requiredSpace: number): void {
@@ -200,37 +329,47 @@ function renderSummary(ctx: PdfContext, summary: EquationResults['summary']): vo
 
 function renderRecommendation(
   ctx: PdfContext,
-  recommendation: EquationResults['recommendation'],
+  recommendation: EquationResults['recommendation'] | undefined,
   equations: Equation[],
-  targetVariable?: string | null
+  targetVariable?: string | null,
+  headlineReason?: string
 ): void {
   const { pdf, margin, contentWidth } = ctx;
 
-  if (!recommendation || recommendation.equation_id <= 0) return;
+  // The selector's headline is the recommended model; older runs use the explainer's pick
+  const headline = equations?.find((eq) => eq.is_headline);
+  const recommendedId = headline?.id ?? recommendation?.equation_id ?? 0;
+  if (recommendedId <= 0) return;
+
+  const recEq = equations?.find((eq) => eq.id === recommendedId);
+  const rationale =
+    recommendation && recommendation.equation_id === recommendedId
+      ? (recommendation.rationale ?? []).map((r) => w(r))
+      : [];
+  const reasonText = headline ? w(headlineReasonText(headlineReason)) : '';
 
   const recStartY = ctx.y;
-  const recEq = equations?.find((eq) => eq.id === recommendation.equation_id);
 
   // Estimate height
   let recHeight = 35;
   if (recEq) {
     pdf.setFontSize(12);
     pdf.setFont('times', 'italic');
-    const estText = targetVariable ? `${targetVariable} = ${recEq.equation}` : recEq.equation;
-    const lines = pdf.splitTextToSize(estText, contentWidth - 10);
+    const lines = pdf.splitTextToSize(equationText(recEq, targetVariable), contentWidth - 10);
     recHeight += lines.length * 6 + 10;
   }
 
-  if (recommendation.rationale?.length > 0) {
+  if (rationale.length > 0) {
     pdf.setFontSize(10);
     pdf.setFont('times', 'normal');
     let rationaleHeight = 6;
-    recommendation.rationale.forEach((reason: string) => {
+    rationale.forEach((reason) => {
       const lines = pdf.splitTextToSize(`• ${reason}`, contentWidth - 10);
       rationaleHeight += lines.length * 6;
     });
     recHeight += rationaleHeight;
   }
+  if (reasonText) recHeight += 8;
 
   drawSectionCard(ctx, recStartY, recHeight, BRAND_COLORS.green, BRAND_COLORS.lightGreen);
 
@@ -244,21 +383,24 @@ function renderRecommendation(
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(20, 20, 20);
-    pdf.text(`Equation ${recEq.id}`, margin + 2, ctx.y);
+    pdf.text(
+      `Equation ${recEq.id}${recEq.model_id ? ` (${w(recEq.model_id)})` : ''}`,
+      margin + 2,
+      ctx.y
+    );
     ctx.y += 6;
 
     pdf.setFontSize(12);
     pdf.setFont('times', 'italic');
     pdf.setTextColor(40, 40, 40);
-    const eqText = targetVariable ? `${targetVariable} = ${recEq.equation}` : recEq.equation;
-    const eqLines = pdf.splitTextToSize(eqText, contentWidth - 10);
+    const eqLines = pdf.splitTextToSize(equationText(recEq, targetVariable), contentWidth - 10);
     eqLines.forEach((line: string) => {
       pdf.text(line, margin + 5, ctx.y);
       ctx.y += 6;
     });
   }
 
-  if (recommendation.rationale?.length > 0) {
+  if (rationale.length > 0) {
     ctx.y += 3;
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'bold');
@@ -266,7 +408,7 @@ function renderRecommendation(
     pdf.text('Selection Rationale:', margin + 2, ctx.y);
     ctx.y += 5;
 
-    recommendation.rationale.forEach((reason: string) => {
+    rationale.forEach((reason) => {
       pdf.setFontSize(10);
       pdf.setFont('times', 'normal');
       pdf.setTextColor(40, 40, 40);
@@ -277,7 +419,38 @@ function renderRecommendation(
       });
     });
   }
+
+  if (reasonText) {
+    ctx.y += 2;
+    pdf.setFontSize(9);
+    pdf.setFont('times', 'italic');
+    pdf.setTextColor(80, 80, 80);
+    pdf
+      .splitTextToSize(`Model selection: ${reasonText}`, contentWidth - 10)
+      .forEach((line: string) => {
+        pdf.text(line, margin + 2, ctx.y);
+        ctx.y += 5;
+      });
+  }
   ctx.y += 10;
+
+  // The explanation AI may prefer another equation than the selector's headline
+  if (
+    headline &&
+    recommendation?.agrees_with_headline === false &&
+    recommendation.equation_id > 0 &&
+    recommendation.equation_id !== headline.id
+  ) {
+    addText(
+      ctx,
+      `The explanation AI prefers Equation ${recommendation.equation_id}` +
+        (recommendation.disagreement_reason ? `: ${w(recommendation.disagreement_reason)}` : '.'),
+      10,
+      false,
+      [40, 40, 40]
+    );
+    ctx.y += 4;
+  }
 }
 
 function renderEquation(
@@ -285,7 +458,8 @@ function renderEquation(
   eq: Equation,
   idx: number,
   totalCount: number,
-  targetVariable?: string | null
+  targetVariable: string | null | undefined,
+  isRecommended: boolean
 ): void {
   const { pdf, margin, pageWidth, contentWidth } = ctx;
 
@@ -301,18 +475,29 @@ function renderEquation(
 
   pdf.setFontSize(12);
   pdf.setTextColor(20, 20, 20);
-  pdf.text(`Equation Model ${eq.id}`, margin + 14, ctx.y + 1);
+  const markers = [
+    eq.model_id ? w(eq.model_id) : '',
+    isRecommended ? 'Recommended' : '',
+    eq.agent_recommended ? 'Agent pick' : '',
+  ].filter(Boolean);
+  pdf.text(
+    `Equation Model ${eq.id}${markers.length ? `  (${markers.join(', ')})` : ''}`,
+    margin + 14,
+    ctx.y + 1
+  );
+  ctx.y += 7;
 
   // Metrics
-  pdf.setFontSize(9);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setTextColor(80, 80, 80);
+  const r2 = metricValue(eq);
   const lossStr = typeof eq.loss === 'number' ? eq.loss.toFixed(4) : 'N/A';
   const complexityStr = eq.complexity != null ? String(eq.complexity) : 'N/A';
-  const metrics = `Loss: ${lossStr}   |   Complexity: ${complexityStr}`;
-  pdf.text(metrics, pageWidth - margin, ctx.y + 1, { align: 'right' });
-
-  ctx.y += 8;
+  const metrics = [
+    r2 !== null ? `${metricLabel(eq.metric_basis, eq.holdout_n)}: ${r2.toFixed(3)}` : '',
+    `Loss: ${lossStr}`,
+    `Complexity: ${complexityStr}`,
+  ].filter(Boolean);
+  addText(ctx, metrics.join('   |   '), 9, false, [80, 80, 80]);
+  ctx.y += 2;
 
   // Equation box
   pdf.setFillColor(250, 250, 250);
@@ -321,8 +506,7 @@ function renderEquation(
   pdf.setFontSize(10);
   pdf.setFont('times', 'italic');
   pdf.setTextColor(0, 0, 0);
-  const eqStr = targetVariable ? `${targetVariable} = ${eq.equation}` : eq.equation;
-  const eqText = pdf.splitTextToSize(eqStr, contentWidth - 10);
+  const eqText = pdf.splitTextToSize(equationText(eq, targetVariable), contentWidth - 10);
   const boxHeight = Math.max(12, eqText.length * 6 + 6);
 
   pdf.rect(margin, ctx.y - 3, contentWidth, boxHeight, 'FD');
@@ -332,11 +516,22 @@ function renderEquation(
     pdf.text(line, contentWidth / 2 + margin, textY, { align: 'center' });
     textY += 6;
   });
-  ctx.y += boxHeight + 6;
+  ctx.y += boxHeight + 4;
+
+  const legend = legendText(eq);
+  if (legend) {
+    addText(ctx, legend, 9, false, [90, 90, 90]);
+  }
+  ctx.y += 2;
 
   // Overview
   if (eq.overview) {
-    addText(ctx, eq.overview, 10, false, [40, 40, 40], 'justify');
+    addText(ctx, asText(eq.overview), 10, false, [40, 40, 40], 'justify');
+    ctx.y += 2;
+  }
+
+  if (eq.agent_recommended && eq.agent_why) {
+    addText(ctx, `Why the agent picked it: ${asText(eq.agent_why)}`, 9, false, [60, 60, 60]);
     ctx.y += 2;
   }
 
@@ -352,7 +547,7 @@ function renderEquation(
     eq.term_explanations.forEach((term) => {
       checkPageBreak(ctx, 20);
 
-      const termPrefix = `${term.term}: `;
+      const termPrefix = `${w(term.term)}: `;
       pdf.setFontSize(10);
       pdf.setFont('times', 'bold');
       pdf.setTextColor(0, 0, 0);
@@ -363,7 +558,7 @@ function renderEquation(
       pdf.setTextColor(60, 60, 60);
 
       const explanationLines = pdf.splitTextToSize(
-        term.explanation,
+        w(term.explanation),
         contentWidth - prefixWidth - 4
       );
       if (explanationLines.length > 0) {
@@ -392,7 +587,7 @@ function renderEquation(
       pdf.setFontSize(8);
       pdf.setFont('helvetica', 'normal');
       pdf.setTextColor(BRAND_COLORS.blue[0], BRAND_COLORS.blue[1], BRAND_COLORS.blue[2]);
-      pdf.text(`[${cIdx + 1}] ${citation}`, margin + 4, ctx.y);
+      pdf.text(`[${cIdx + 1}] ${w(citation)}`, margin + 4, ctx.y);
       ctx.y += 4;
     });
     ctx.y += 6;
@@ -405,7 +600,8 @@ function renderEquation(
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(40, 40, 40);
-    pdf.text('Predicted vs. Measured', margin, ctx.y);
+    const basisText = scatterBasisLabel(eq.scatter_data);
+    pdf.text(`Predicted vs. Measured${basisText ? ` (${basisText})` : ''}`, margin, ctx.y);
     ctx.y += 6;
 
     const chartX = margin + 10;
@@ -470,7 +666,8 @@ function renderEquation(
 function renderEquations(
   ctx: PdfContext,
   equations: Equation[],
-  targetVariable?: string | null
+  targetVariable: string | null | undefined,
+  recommendedId: number
 ): void {
   const { pdf, margin, pageWidth } = ctx;
 
@@ -492,8 +689,195 @@ function renderEquations(
   ctx.y += 12;
 
   equations.forEach((eq, idx) => {
-    renderEquation(ctx, eq, idx, equations.length, targetVariable);
+    renderEquation(ctx, eq, idx, equations.length, targetVariable, eq.id === recommendedId);
   });
+}
+
+function renderSubheading(ctx: PdfContext, title: string): void {
+  checkPageBreak(ctx, 20);
+  ctx.pdf.setFontSize(10);
+  ctx.pdf.setFont('helvetica', 'bold');
+  ctx.pdf.setTextColor(40, 40, 40);
+  ctx.pdf.text(sanitizeWinAnsi(title), ctx.margin, ctx.y);
+  ctx.y += 5;
+}
+
+function renderDiscovery(ctx: PdfContext, report: DiscoveryReport): void {
+  const { pdf, margin, pageWidth } = ctx;
+  const r2 = (v: number | null | undefined) => (typeof v === 'number' ? v.toFixed(3) : '-');
+  const list = <T>(x: T[] | null | undefined): T[] => (Array.isArray(x) ? x : []);
+  const agent = report.agent ?? ({} as Partial<DiscoveryReport['agent']>);
+  const split = report.split ?? { complete_rows: 0, train: 0, holdout: 0, scored_on: '' };
+  const leaderboard = list(report.leaderboard);
+  const basis = basisOf(split.metric_basis ?? leaderboard[0]?.metric_basis);
+  const ceiling = fmtCeiling(report.noise_ceiling_r2, report.noise_ceiling_sd);
+
+  checkPageBreak(ctx, 40);
+  pdf.setFontSize(14);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setTextColor(BRAND_COLORS.blue[0], BRAND_COLORS.blue[1], BRAND_COLORS.blue[2]);
+  pdf.text('How the Equations Were Found', margin, ctx.y);
+  pdf.setDrawColor(200, 200, 200);
+  pdf.setLineWidth(0.2);
+  pdf.line(margin, ctx.y + 2, pageWidth - margin, ctx.y + 2);
+  ctx.y += 8;
+
+  if (report.has_signal === false) {
+    addText(
+      ctx,
+      'No detectable relationship: even a flexible model cannot predict the target from these ' +
+        `variables (noise-ceiling R² ${ceiling}).`,
+      10,
+      true,
+      [160, 30, 30]
+    );
+  }
+  if (agent.source === 'auto_fallback') {
+    addText(
+      ctx,
+      'The agent did not write a final report; this summary was assembled automatically from its session.',
+      9,
+      false,
+      [120, 90, 20]
+    );
+  }
+  if (agent.summary) {
+    addText(ctx, asText(agent.summary), 10, false, [20, 20, 20], 'justify');
+  }
+  const lateSearches = list(agent.late_searches);
+  if (lateSearches.length > 0 || agent.stale) {
+    addText(
+      ctx,
+      `Searches finished after the agent stopped${lateSearches.length ? `: ${lateSearches.join(', ')}` : ''}; ` +
+        'their best models are included in the leaderboard but were not reviewed by the agent.',
+      9,
+      false,
+      [90, 90, 90]
+    );
+  }
+
+  const scoring =
+    basis === 'cv'
+      ? 'The dataset is too small for a holdout: all models are scored by cross-validation.'
+      : `All models scored on ${split.holdout || split.train} held-out rows (${split.scored_on}).`;
+  const rows =
+    typeof split.uploaded === 'number'
+      ? ` ${split.complete_rows} of ${split.uploaded} rows complete` +
+        (split.dropped_incomplete
+          ? ` (${split.dropped_incomplete} dropped for missing values).`
+          : '.')
+      : '';
+  addText(
+    ctx,
+    `Noise ceiling (best achievable R², estimated): ${ceiling}. ${scoring}${rows}`,
+    9,
+    false,
+    [90, 90, 90]
+  );
+  list(split.excluded_columns).forEach((c) =>
+    addText(ctx, `Excluded column ${asText(c.column)}: ${asText(c.reason)}`, 9, false, [90, 90, 90])
+  );
+  ctx.y += 2;
+
+  const nTotal = report.n_models_total ?? leaderboard.length;
+  const shown = Math.min(10, leaderboard.length);
+  renderSubheading(
+    ctx,
+    `Model leaderboard (top ${shown} of ${nTotal}; ${metricLabel(basis, split.holdout || null)})`
+  );
+  const headlineId = report.selection?.headline_model_id;
+  leaderboard.slice(0, 10).forEach((entry, i) => {
+    checkPageBreak(ctx, 20);
+    const marks = [
+      entry.is_headline || entry.model_id === headlineId ? 'recommended' : '',
+      entry.agent_recommended ? 'agent pick' : '',
+    ].filter(Boolean);
+    addText(
+      ctx,
+      `${i + 1}. ${entry.model_id} ${asText(entry.label)} [${entry.kind}]${marks.length ? ` (${marks.join(', ')})` : ''} ` +
+        `on ${list(entry.features).join(', ')}: R² ${r2(metricValue(entry))}, complexity ${entry.complexity}`,
+      9,
+      true,
+      [30, 30, 30]
+    );
+    addText(ctx, entry.equation, 9, false, [60, 60, 60]);
+    const reasons = list(entry.reasons).map(asText).filter(Boolean);
+    if (reasons.length > 0) {
+      addText(ctx, `Diagnosis: ${reasons.slice(0, 3).join('; ')}`, 9, false, [90, 90, 90]);
+    }
+  });
+
+  const rejected = [
+    ...list(agent.rejected_forms).map(rejectedFormText),
+    ...list(report.notebook)
+      .filter((n) => n.kind === 'rejected_form')
+      .map((n) => asText(n.text)),
+  ].filter(Boolean);
+  if (rejected.length > 0) {
+    ctx.y += 3;
+    renderSubheading(ctx, "Why these laws didn't fit");
+    rejected.forEach((text) => addText(ctx, `- ${text}`, 9, false, [40, 40, 40]));
+  }
+
+  const insights = [
+    ...list(agent.insights).map(asText),
+    ...list(report.notebook)
+      .filter((n) => n.kind === 'insight')
+      .map((n) => asText(n.text)),
+  ].filter(Boolean);
+  if (insights.length > 0) {
+    ctx.y += 3;
+    renderSubheading(ctx, 'Insights');
+    insights.forEach((text) => addText(ctx, `- ${text}`, 9, false, [40, 40, 40]));
+  }
+
+  const questions = list(agent.open_questions).map(asText).filter(Boolean);
+  if (questions.length > 0) {
+    ctx.y += 3;
+    renderSubheading(ctx, 'Open questions');
+    questions.forEach((text) => addText(ctx, `- ${text}`, 9, false, [40, 40, 40]));
+  }
+
+  const laws = list(report.literature?.laws);
+  if (laws.length > 0) {
+    ctx.y += 3;
+    renderSubheading(ctx, 'Published laws tested');
+    laws.forEach((law) => {
+      const unmapped = list(law.unmapped).map(asText).filter(Boolean);
+      const fit =
+        law.model_id && typeof law.cv_r2 === 'number'
+          ? `fitted as ${law.model_id}: CV R² ${r2(law.cv_r2)}`
+          : law.fit_error
+            ? `not fitted: ${asText(law.fit_error)}`
+            : unmapped.length
+              ? `not fitted: unmapped variables ${unmapped.join(', ')}`
+              : '';
+      addText(ctx, `- ${asText(law.equation)}${fit ? ` (${fit})` : ''}`, 9, false, [40, 40, 40]);
+      list(law.citations).forEach((c) => addText(ctx, `  ${asText(c)}`, 8, false, [0, 72, 180]));
+    });
+  }
+  ctx.y += 6;
+}
+
+function renderWarnings(
+  ctx: PdfContext,
+  warnings: RunWarning[],
+  explanationError: string | null
+): void {
+  if (explanationError !== null) {
+    addText(
+      ctx,
+      `AI explanation unavailable${explanationError ? `: ${explanationError}` : ''}. ` +
+        'The equations, scores and discovery report are complete; only the written interpretation is missing.',
+      10,
+      true,
+      [150, 90, 0]
+    );
+  }
+  warnings
+    .filter((wn) => wn.stage !== 'explanation' && wn.message)
+    .forEach((wn) => addText(ctx, `Note (${wn.stage}): ${wn.message}`, 9, false, [150, 90, 0]));
+  if (explanationError !== null || warnings.length > 0) ctx.y += 4;
 }
 
 // ============================================================================
@@ -506,20 +890,41 @@ function renderEquations(
 export async function generateResultsPdf(
   data: EquationResults,
   runId: string,
-  targetVariable?: string | null
+  targetVariable?: string | null,
+  discovery?: DiscoveryReport | null,
+  warnings: RunWarning[] = []
 ): Promise<void> {
-  const { equations, summary, recommendation } = data;
+  const { summary, recommendation } = data;
+  const equations = Array.isArray(data.equations) ? data.equations : [];
   const ctx = createPdfContext();
+
+  const explanationWarning = warnings.find((wn) => wn.stage === 'explanation');
+  const explanationError =
+    data._explanation_error || explanationWarning
+      ? (explanationWarning?.message ?? data._explanation_error_message ?? '')
+      : null;
 
   // Render sections
   renderHeader(ctx, runId);
+  renderWarnings(ctx, warnings, explanationError);
 
   if (summary) {
     renderSummary(ctx, summary);
   }
 
-  renderRecommendation(ctx, recommendation, equations, targetVariable);
-  renderEquations(ctx, equations, targetVariable);
+  const headline = equations.find((eq) => eq.is_headline);
+  renderRecommendation(
+    ctx,
+    recommendation,
+    equations,
+    targetVariable,
+    discovery?.selection?.headline_reason
+  );
+  renderEquations(ctx, equations, targetVariable, headline?.id ?? recommendation?.equation_id ?? 0);
+
+  if (discovery) {
+    renderDiscovery(ctx, discovery);
+  }
 
   // Add page footers
   addFooter(ctx);

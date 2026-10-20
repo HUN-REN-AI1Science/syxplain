@@ -2,7 +2,7 @@
  * SSE Types for Real-time Progress Updates
  */
 
-import type { EquationResults, RunStatus } from './index';
+import type { AgentEvent, EquationResults, RunStatus } from './index';
 
 // ============================================================================
 // Server -> Client Messages
@@ -15,6 +15,15 @@ export interface InitialStateMessage {
   progress: number;
   error: string | null;
   results: EquationResults | null;
+  /** Recent discovery-agent activity, replayed for clients that join mid-run */
+  recent_events?: AgentEventMessage[];
+}
+
+export interface AgentEventMessage {
+  type: 'agent_event';
+  run_id: string;
+  event: AgentEvent;
+  timestamp: string;
 }
 
 export interface ProgressUpdateMessage {
@@ -28,7 +37,7 @@ export interface ProgressUpdateMessage {
   timestamp: string;
 }
 
-export type ServerMessage = InitialStateMessage | ProgressUpdateMessage;
+export type ServerMessage = InitialStateMessage | ProgressUpdateMessage | AgentEventMessage;
 
 // ============================================================================
 // Connection State
@@ -87,4 +96,6 @@ export interface UseRunProgressReturn {
   connectionState: ConnectionState;
   /** Whether the initial data has been loaded */
   isReady: boolean;
+  /** Live discovery-agent activity (most recent last) */
+  activity: AgentEvent[];
 }

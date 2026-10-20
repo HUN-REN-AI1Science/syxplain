@@ -48,7 +48,11 @@ class ProgressReporter(ProgressObserver):
     """
 
     def __init__(
-        self, run_id: str, config: CallbackConfig | None = None, task_type: str | None = None
+        self,
+        run_id: str,
+        config: CallbackConfig | None = None,
+        task_type: str | None = None,
+        task_key: str | None = None,
     ):
         """
         Initialize progress reporter.
@@ -56,11 +60,13 @@ class ProgressReporter(ProgressObserver):
         Args:
             run_id: UUID of the run being processed
             config: Callback configuration (defaults to env vars)
-            task_type: Task type identifier (e.g., "shap", "pysr")
+            task_type: Task type identifier (e.g., "pysr")
+            task_key: Key of this task within the run (e.g., "pysr_2")
         """
         self.run_id = run_id
         self.config = config or CallbackConfig.from_env()
         self.task_type = task_type
+        self.task_key = task_key
         self._enabled = self.config.is_enabled
 
         if not self._enabled:
@@ -141,6 +147,8 @@ class ProgressReporter(ProgressObserver):
         }
         if self.task_type:
             payload["task_type"] = self.task_type
+        if self.task_key:
+            payload["task_key"] = self.task_key
         self._make_request("progress", payload)
 
     def on_error(self, error: str, details: dict[str, Any] | None = None) -> None:
@@ -152,7 +160,7 @@ class ProgressReporter(ProgressObserver):
             details: Additional error details
         """
         logger.error(f"Error: {error}")
-        self._make_request("error", {"error": error, "details": details})
+        self._make_request("error", {"error": error, "details": details, "task_key": self.task_key})
 
     def on_complete(self, results: dict[str, Any]) -> None:
         """
@@ -162,7 +170,7 @@ class ProgressReporter(ProgressObserver):
             results: Task results
         """
         logger.info("Task completed")
-        self._make_request("complete", {"results": results}, timeout=30)
+        self._make_request("complete", {"results": results, "task_key": self.task_key}, timeout=30)
 
     # Convenience methods for compatibility
     def report_progress(

@@ -5,7 +5,11 @@
 
 import React from 'react';
 import EquationResultsView from './EquationResults/EquationResultsView';
+import DiscoveryReportPanel from './Discovery/DiscoveryReportPanel';
 import LegacyResultsFallback from './LegacyResultsFallback';
+import ResultWarnings from './ResultWarnings';
+import SectionErrorBoundary from './SectionErrorBoundary';
+import { extractDiscovery, extractEquationResults, extractWarnings } from './resultUtils';
 import type { EquationResults } from '@/types';
 
 interface ResultContentProps {
@@ -16,37 +20,6 @@ interface ResultContentProps {
   /** Target variable name to prepend to equations (e.g. "y = ...") */
   targetVariable?: string | null;
 }
-
-/**
- * Extracts EquationResults from the backend's combined results format.
- *
- * The backend stores: { equations: [raw PySR], explanations: { equations: [enriched], summary, recommendation }, ... }
- * The frontend expects: { equations: [enriched], summary, recommendation }
- *
- * The enriched equations (with overview, term_explanations, citations, scatter_data)
- * live inside the `explanations` field. This function extracts them.
- */
-const extractFromBackendFormat = (result: Record<string, unknown>): EquationResults | null => {
-  const explanations = result.explanations;
-  if (
-    explanations &&
-    typeof explanations === 'object' &&
-    !Array.isArray(explanations) &&
-    'equations' in explanations
-  ) {
-    const data = explanations as unknown as EquationResults & { error?: string };
-    // When the LLM explanation step failed, explanations contains an error field
-    // and the equations are raw PySR output (no overviews, citations, etc.)
-    if (
-      'error' in explanations &&
-      typeof (explanations as Record<string, unknown>).error === 'string'
-    ) {
-      return { ...data, _explanation_error: true };
-    }
-    return data;
-  }
-  return null;
-};
 
 /**
  * Parses result data and returns the appropriate format
@@ -65,7 +38,7 @@ const parseResult = (
 
     // Backend combined format: the EquationResults are inside `explanations`
     if ('explanations' in result) {
-      const extracted = extractFromBackendFormat(result as Record<string, unknown>);
+      const extracted = extractEquationResults(result);
       if (extracted) {
         return { type: 'new', data: extracted };
       }
@@ -105,9 +78,30 @@ export const ResultContent: React.FC<ResultContentProps> = ({
   const { type, data } = parseResult(result);
 
   if (type === 'new') {
+    const equationData = data as EquationResults;
+    const discovery = extractDiscovery(result);
+    const warnings = equationData.warnings ?? extractWarnings(result);
+    // With discovery data a failed narration is not fatal: the equations, their scores
+    // and the report are complete. Legacy runs without it keep the "Analysis Failed" card.
+    const explanationWarning = warnings.find((w) => w.stage === 'explanation');
+    const explanationError =
+      discovery && (equationData._explanation_error || explanationWarning)
+        ? (explanationWarning?.message ?? equationData._explanation_error_message ?? '')
+        : null;
     return (
       <div ref={resultsRef} className="space-y-8 animate-fade-in">
-        <EquationResultsView data={data as EquationResults} targetVariable={targetVariable} />
+        <ResultWarnings warnings={warnings} explanationError={explanationError} />
+        <EquationResultsView
+          data={equationData}
+          targetVariable={targetVariable}
+          hasDiscovery={!!discovery}
+          selection={discovery?.selection}
+        />
+        {discovery && (
+          <SectionErrorBoundary name="The discovery report">
+            <DiscoveryReportPanel report={discovery} />
+          </SectionErrorBoundary>
+        )}
       </div>
     );
   }

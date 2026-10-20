@@ -295,6 +295,14 @@ class RunService:
 
         update_run_status(run_id, status=RunStatus.CANCELLED, error="Analysis cancelled by user")
 
+        # Stop the orchestrator right away (it would otherwise notice within ~10 s) so it
+        # stops the agent and cancels any search it launched after the job ids above.
+        from backend.services.analysis_service import _running_tasks
+
+        task = _running_tasks.get(run_id)
+        if task is not None and not task.done():
+            task.cancel()
+
         logger.info(f"User {user_id} cancelled run {run_id}")
         return True
 

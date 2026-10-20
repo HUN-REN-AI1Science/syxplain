@@ -26,10 +26,11 @@ router = APIRouter(prefix="/api/internal", tags=["Internal"])
 # Track cancel tasks (prevents GC of fire-and-forget asyncio tasks)
 _cancel_tasks: set[asyncio.Task] = set()
 
-# Maps each worker task_type to its allocated range of the overall progress bar.
-# Workers report 0-100% internally; the endpoint scales into these ranges.
+# Legacy workers (no task_key) report 0-100% for a single PySR task; the endpoint
+# scales that into this range of the overall progress bar. Keyed tasks (launched by
+# the discovery agent) do not move the bar — the orchestrator drives it — and are
+# streamed to the activity feed instead.
 TASK_PROGRESS_RANGES = {
-    "shap": (10, 25),
     "pysr": (25, 75),
 }
 
@@ -41,7 +42,8 @@ class WorkerProgressUpdate(BaseModel):
     status: str | None = Field(None, description="Human-readable status message")
     step_name: str | None = Field(None, description="Current step name")
     details: dict[str, Any] | None = Field(None, description="Additional details")
-    task_type: str | None = Field(None, description="Task type (shap, pysr)")
+    task_type: str | None = Field(None, description="Task type (pysr)")
+    task_key: str | None = Field(None, description="Task key within the run (e.g. pysr_2)")
 
 
 class WorkerErrorReport(BaseModel):
@@ -49,12 +51,32 @@ class WorkerErrorReport(BaseModel):
 
     error: str = Field(..., description="Error message")
     details: dict[str, Any] | None = Field(None, description="Additional error details")
+    task_key: str | None = Field(None, description="Task key within the run (e.g. pysr_2)")
 
 
 class WorkerCompletionReport(BaseModel):
     """Completion report from a Slurm worker."""
 
     results: dict[str, Any] = Field(..., description="Task results")
+    task_key: str | None = Field(None, description="Task key within the run (e.g. pysr_2)")
+
+
+def _store_task_result(run: Run, task_key: str, result: dict[str, Any]) -> bool:
+    """
+    Store one keyed task's result under Run.results["tasks"] (reassign so JSONB is dirty).
+    A late callback for a finished run is ignored, so it cannot leak into the final results.
+    """
+    if RunStatus.is_terminal(run.status):
+        logger.info(
+            f"[Run {str(run.id)[:8]}] Ignoring late {task_key} callback; run is {run.status}"
+        )
+        return False
+    results = dict(run.results or {})
+    tasks = dict(results.get("tasks") or {})
+    tasks[task_key] = result
+    results["tasks"] = tasks
+    run.results = results
+    return True
 
 
 def _validate_worker_token(token: str) -> bool:
@@ -134,6 +156,21 @@ async def receive_progress(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Run {run_id} not found",
                 )
+
+            if progress.task_key:
+                # Keyed (agent-launched) task: stream to the activity feed only
+                manager = get_connection_manager()
+                await manager.broadcast_event(
+                    run_id=run_id,
+                    event={
+                        "kind": "search_progress",
+                        "text": f"{progress.task_key}: {progress.status or progress.step_name} "
+                        f"({progress.progress}%)",
+                        "search_id": progress.task_key,
+                        "progress": progress.progress,
+                    },
+                )
+                return {"status": "ok", "progress": run.progress}
 
             # Scale worker progress into allocated range
             actual_progress = progress.progress
@@ -215,6 +252,22 @@ async def receive_error(
                     detail=f"Run {run_id} not found",
                 )
 
+            if error.task_key:
+                # One agent-launched search failed: record it, the run continues.
+                # The orchestrator decides whether the run as a whole has failed.
+                _store_task_result(run, error.task_key, {"status": "error", "error": error.error})
+                db.commit()
+                manager = get_connection_manager()
+                await manager.broadcast_event(
+                    run_id=run_id,
+                    event={
+                        "kind": "search_failed",
+                        "text": f"{error.task_key} failed on the cluster: {error.error[:200]}",
+                        "search_id": error.task_key,
+                    },
+                )
+                return {"status": "ok", "run_status": run.status}
+
             run.status = RunStatus.FAILED
             run.error = error.error
             slurm_job_ids = run.slurm_job_ids
@@ -289,6 +342,12 @@ async def receive_completion(
                     detail=f"Run {run_id} not found",
                 )
 
+            if completion.task_key:
+                _store_task_result(run, completion.task_key, completion.results)
+                db.commit()
+                logger.info(f"[Run {run_id[:8]}] Stored results for {completion.task_key}")
+                return {"status": "ok", "results_stored": True}
+
             # Store intermediate results - don't mark as completed yet
             # The orchestrator will continue with LLM processing
             if run.results:
@@ -327,6 +386,8 @@ async def receive_completion(
 async def get_job_input(
     run_id: str,
     task_type: str,
+    task_key: str | None = None,
+    worker_version: str | None = None,
     x_worker_token: str = Header(..., alias="X-Worker-Token"),
 ):
     """
@@ -336,7 +397,8 @@ async def get_job_input(
 
     Args:
         run_id: UUID of the run being processed
-        task_type: Type of task (e.g., "shap", "pysr")
+        task_type: Type of task (e.g., "pysr")
+        task_key: Key of the task within the run (e.g., "pysr_2"); defaults to task_type
         x_worker_token: Authentication token from worker
 
     Returns:
@@ -358,21 +420,27 @@ async def get_job_input(
                     detail=f"Run {run_id} not found",
                 )
 
-            if not run.input_data or task_type not in run.input_data:
+            key = task_key or task_type
+            if not run.input_data or key not in run.input_data:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Input for task {task_type} not found",
+                    detail=f"Input for task {key} not found",
                 )
 
-            input_data = run.input_data[task_type]
+            input_data = run.input_data[key]
+            if not input_data or (isinstance(input_data, dict) and input_data.get("fetched")):
+                raise HTTPException(
+                    status_code=status.HTTP_410_GONE,
+                    detail=f"Input for task {key} was already fetched",
+                )
 
-            # Clear input after fetch (one-time use, saves DB space)
+            # Clear input after fetch (one-time use, saves DB space); keep the worker version
             updated_input = dict(run.input_data)
-            updated_input[task_type] = None
+            updated_input[key] = {"fetched": True, "worker_version": worker_version or "<3.0"}
             run.input_data = updated_input
             db.commit()
 
-            logger.info(f"Input fetched for run {run_id}, task {task_type}")
+            logger.info(f"Input fetched for run {run_id}, task {key} (worker {worker_version})")
             return {"input": input_data}
 
     except HTTPException:

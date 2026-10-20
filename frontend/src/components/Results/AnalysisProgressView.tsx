@@ -5,6 +5,8 @@
 
 import React from 'react';
 import { ProgressBar } from 'primereact/progressbar';
+import { AgentActivityFeed } from './Discovery/AgentActivityFeed';
+import type { AgentEvent } from '@/types';
 
 interface AnalysisProgressViewProps {
   /** Current progress percentage (0-100) */
@@ -15,6 +17,8 @@ interface AnalysisProgressViewProps {
   isInQueuePhase?: boolean;
   /** Whether the job has been submitted to compute cluster */
   isJobSubmitted?: boolean;
+  /** Live discovery-agent activity */
+  activity?: AgentEvent[];
 }
 
 export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
@@ -22,6 +26,7 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
   stepDescription,
   isInQueuePhase = false,
   isJobSubmitted = false,
+  activity = [],
 }) => {
   return (
     <div className="text-center py-20">
@@ -71,9 +76,11 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
         {isInQueuePhase ? 'Waiting for resources...' : 'AI is analyzing your data'}
       </h3>
       <p className="text-secondary max-w-md mx-auto mb-4">
-        Discovering mathematical equations and computing feature importance using symbolic
-        regression.
+        An AI agent tests classic scientific laws against your data, works out why they fall short,
+        and steers symbolic regression towards better equations.
       </p>
+
+      <AgentActivityFeed events={activity} />
 
       {isJobSubmitted && (
         <div className="max-w-md mx-auto bg-surface-alt rounded-lg px-4 py-3 text-sm text-secondary">

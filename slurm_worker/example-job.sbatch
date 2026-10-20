@@ -13,7 +13,7 @@
 # The backend submits jobs programmatically, but this can be used for testing.
 #
 # Required environment variables (set by backend or manually for testing):
-#   TASK_TYPE    - Task type: "shap" or "pysr"
+#   TASK_TYPE    - Task type: "pysr"
 #   RUN_ID       - Unique run identifier
 #   INPUT_PATH   - Path to input JSON file
 #   OUTPUT_PATH  - Path for output JSON file

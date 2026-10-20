@@ -4,16 +4,15 @@
 #
 # This creates a container optimized for HPC environments with:
 # - Python 3.11 with scientific computing stack
-# - Julia 1.10.2 with PySR pre-compiled
-# - SHAP and all required dependencies
+# - Julia 1.11 with PySR pre-compiled
 
 Bootstrap: docker
 From: python:3.11-slim
 
 %labels
     Author Syxplain Team
-    Version 1.0
-    Description Syxplain compute worker for SHAP and PySR tasks on Slurm
+    Version 3.0.0
+    Description Syxplain compute worker for PySR tasks on Slurm
 
 %post
     # Install system dependencies
@@ -36,33 +35,42 @@ From: python:3.11-slim
 
     # Copy requirements and install Python dependencies
     # Note: requirements.txt must be in the same directory as the .def file during build
-    pip install --no-cache-dir numpy pandas scipy scikit-learn shap pysr juliacall requests
+    # PySR is pinned: the backend relies on its `guesses` argument and equation string format
+    pip install --no-cache-dir numpy pandas scipy pysr==2.7.0 juliacall requests
 
     # Pre-compile Julia packages into a fixed depot path (not /root/.julia)
     # so they persist and are readable at runtime
     export JULIA_DEPOT_PATH=/opt/julia-depot
-
     # Broad CPU target so precompiled native code is valid on HPC nodes
     export JULIA_CPU_TARGET="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
+    # The REAL binary, not the /usr/local/bin symlink: started through the symlink, embedded
+    # Julia looks for lib/julia/sys.so next to the link and fails to load
+    export JULIA_BIN=/opt/julia-${JULIA_VERSION}/bin/julia
+    # Keep juliacall's environment inside the image, so jobs reuse exactly what is resolved
+    # and precompiled here (%environment points juliacall at the same place)
+    export PYTHON_JULIAPKG_EXE=$JULIA_BIN
+    export PYTHON_JULIAPKG_PROJECT=/opt/julia-env
 
-    # Eagerly load all PySR Julia packages (triggers Pkg.precompile)
-    python -c "import pysr; pysr.load_all_packages()" || true
+    # Resolve, install and precompile every PySR Julia package, including the optional ones
+    # (LoopVectorization for turbo=True, Bumper, ...), so no job installs anything. No
+    # "|| true": a failure here must fail the build, not ship a half-loaded image.
+    python -c "import pysr; pysr.load_all_packages()"
 
-    # Warm up with turbo=True to match production config and precompile
-    # LoopVectorization dependencies (CpuId, Static, etc.)
-    python -c "
+    # Warm up exactly as jobs load Julia (juliacall pointed straight at the baked
+    # environment) with turbo=True, as in production
+    cd "$(mktemp -d)"
+    PYTHON_JULIACALL_EXE=$JULIA_BIN PYTHON_JULIACALL_PROJECT=/opt/julia-env python -c "
 from pysr import PySRRegressor
 import numpy as np
 print('Pre-compiling PySR Julia packages...')
-model = PySRRegressor(niterations=1, turbo=True, verbosity=0, progress=False)
-X = np.random.randn(10, 2)
-y = np.random.randn(10)
-try:
-    model.fit(X, y)
-except:
-    pass  # First run may fail but Julia is compiled
+X = np.random.randn(20, 2)
+PySRRegressor(niterations=2, turbo=True, verbosity=0, progress=False).fit(X, X[:, 0] * X[:, 1])
 print('Julia pre-compilation complete')
-" || true
+"
+    cd /
+
+    # Jobs run as an unprivileged user: everything preloaded must be readable
+    chmod -R a+rX /opt/julia-env /opt/julia-depot
 
     # Clean up (avoid /tmp and /var/tmp as they may contain host files with fakeroot)
     apt-get clean || true
@@ -78,7 +86,6 @@ print('Julia pre-compilation complete')
     io/ /app/slurm_worker/io
     reporting/ /app/slurm_worker/reporting
     tasks/ /app/slurm_worker/tasks
-    visualization/ /app/slurm_worker/visualization
 
 %environment
     export PYTHONUNBUFFERED=1
@@ -88,7 +95,12 @@ print('Julia pre-compilation complete')
     # Julia depot stacking: writable persistent storage on top of read-only precompiled depot
     export JULIA_DEPOT_PATH="/storage/ai4science/syxplain/.julia:/opt/julia-depot"
     # Force pyjuliapkg to use the container's Julia instead of downloading its own
-    export PYTHON_JULIAPKG_EXE=/usr/local/bin/julia
+    export PYTHON_JULIAPKG_EXE=/opt/julia-1.11.5/bin/julia
+    # Load the Julia environment resolved and precompiled at build time directly: with both
+    # set, juliacall skips juliapkg (no resolve, no lock file, no download) on the
+    # read-only image
+    export PYTHON_JULIACALL_EXE=/opt/julia-1.11.5/bin/julia
+    export PYTHON_JULIACALL_PROJECT=/opt/julia-env
     # Broad CPU target matching the build-time precompilation
     export JULIA_CPU_TARGET="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
     # Julia threading - will be overridden by SLURM_CPUS_PER_TASK in the worker
@@ -99,23 +111,33 @@ print('Julia pre-compilation complete')
 
 %test
     python -c "import sys; sys.path.insert(0, '/app'); from slurm_worker import __version__; print(f'Version: {__version__}')"
-    python -c "from pysr import PySRRegressor; print('PySR OK')"
-    python -c "import shap; print('SHAP OK')"
+    # /storage (the runtime depot) is not mounted during a build: use a scratch depot.
+    # juliacall loads the baked environment directly (%environment), so this fails if a job
+    # would still need to resolve or download anything.
+    cd "$(mktemp -d)"  # PySR writes checkpoints to ./outputs; the image itself is read-only
+    JULIA_DEPOT_PATH="$(mktemp -d):/opt/julia-depot" python -c "
+import time
+t = time.time()
+from pysr import PySRRegressor
+import numpy as np
+X = np.random.randn(20, 2)
+PySRRegressor(niterations=1, turbo=True, verbosity=0, progress=False).fit(X, X[:, 0] + X[:, 1])
+print(f'PySR OK: import + fit in {time.time() - t:.0f}s, offline')
+"
 
 %help
     Syxplain Worker Container
 
-    This container runs compute-intensive tasks (SHAP and PySR) for the Syxplain
+    This container runs compute-intensive PySR tasks for the Syxplain
     symbolic regression analysis platform.
 
     Usage:
         singularity run syxplain-worker.sif --help
-        singularity run syxplain-worker.sif --task-type shap --run-id <id> --input <file> --output <file>
         singularity run syxplain-worker.sif --task-type pysr --run-id <id> --input <file> --output <file>
 
     With bind mounts for data access:
         singularity run --bind /storage:/storage syxplain-worker.sif \
-            --task-type shap \
+            --task-type pysr \
             --run-id abc123 \
             --input /storage/staging/abc123/input.json \
             --output /storage/staging/abc123/output.json

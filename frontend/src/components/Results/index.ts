@@ -14,11 +14,24 @@ export { default as PublicHeader } from './PublicHeader';
 
 // Result Display
 export { ResultContent } from './ResultContent';
-export { hasExplanationError } from './resultUtils';
+export {
+  extractDiscovery,
+  extractEquationResults,
+  extractWarnings,
+  hasDiscoveryData,
+  hasExplanationError,
+  isResultIncomplete,
+} from './resultUtils';
+export { ResultWarnings } from './ResultWarnings';
+export { default as SectionErrorBoundary } from './SectionErrorBoundary';
 export { LegacyResultsFallback } from './LegacyResultsFallback';
 
 // Equation Results
 export { default as EquationResultsView } from './EquationResults/EquationResultsView';
+
+// Discovery agent
+export { default as DiscoveryReportPanel } from './Discovery/DiscoveryReportPanel';
+export { default as AgentActivityFeed } from './Discovery/AgentActivityFeed';
 
 // Run Settings
 export { default as RunSettingsPanel } from './RunSettings/RunSettingsPanel';
