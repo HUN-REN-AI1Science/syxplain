@@ -64,9 +64,10 @@ const Note: React.FC<{ tone: 'info' | 'warn'; children: React.ReactNode }> = ({
 
 interface DiscoveryReportPanelProps {
   report: DiscoveryReport;
+  loadPlot?: (filename: string) => Promise<Blob>;
 }
 
-export const DiscoveryReportPanel: React.FC<DiscoveryReportPanelProps> = ({ report }) => {
+export const DiscoveryReportPanel: React.FC<DiscoveryReportPanelProps> = ({ report, loadPlot }) => {
   const [showAll, setShowAll] = useState(false);
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const [scrollTarget, setScrollTarget] = useState<{ id: string; at: number } | null>(null);
@@ -310,7 +311,14 @@ export const DiscoveryReportPanel: React.FC<DiscoveryReportPanelProps> = ({ repo
         </div>
       )}
 
-      {report.shap?.available && <ShapSection shap={report.shap} />}
+      {report.shap?.available && (
+        <ShapSection
+          shap={report.shap}
+          plots={asArray(report.shap_plots)}
+          agreement={asArray(report.shap_agreement)}
+          loadPlot={loadPlot}
+        />
+      )}
 
       {leaderboard.length > 0 && (
         <div>

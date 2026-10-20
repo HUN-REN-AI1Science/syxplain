@@ -3,7 +3,7 @@
  * Displays shared run results for unauthenticated users
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card } from 'primereact/card';
 import { Message } from 'primereact/message';
@@ -24,6 +24,10 @@ const PublicResultsView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [runData, setRunData] = useState<PublicRunData | null>(null);
+  const loadPlot = useCallback(
+    (name: string) => publicService.downloadPlot(token ?? '', name).then((r) => r.data),
+    [token]
+  );
 
   useEffect(() => {
     if (!token) {
@@ -106,6 +110,7 @@ const PublicResultsView: React.FC = () => {
                   <ResultContent
                     result={runData.results as EquationResults | string}
                     targetVariable={runData.target_variable}
+                    loadPlot={token ? loadPlot : undefined}
                   />
                 ) : (
                   <Message severity="warn" text="No results available" className="w-full" />

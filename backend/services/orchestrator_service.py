@@ -10,7 +10,7 @@ import contextlib
 import json
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -26,6 +26,7 @@ from backend.core.constants import RunStatus
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
 from backend.infrastructure.llm.client import LITERATURE_TIMEOUT_S, literature_available
+from backend.infrastructure.llm.images import png_images
 from backend.infrastructure.monitoring.llm_costs import log_run_usage, summarize
 from backend.infrastructure.slurm import (
     JobState,
@@ -129,6 +130,8 @@ class AnalysisContext:
     user_api_key: str | None = None
     user_model: str | None = None
     user_openai_key: str | None = None
+    # SHAP plots of the training data: [{"name", "kind", "feature", "title", "b64"}]
+    shap_plots: list[dict[str, Any]] = field(default_factory=list)
 
 
 class AnalysisOrchestrator:
@@ -357,8 +360,10 @@ class AnalysisOrchestrator:
                 visualizations = [
                     {"filename": f"feature_{i + 1}_vs_target.png", "content_b64": b64}
                     for i, b64 in enumerate(feature_visualizations)
-                ]
-                self._save_artifacts(run_id, final_results, progress, visualizations=visualizations)
+                ] + [{"filename": p["name"], "content_b64": p["b64"]} for p in context.shap_plots]
+                await asyncio.to_thread(
+                    self._save_artifacts, run_id, final_results, progress, visualizations
+                )
 
                 final_results["usage"] = summarize(usage)
 
@@ -770,6 +775,7 @@ class AnalysisOrchestrator:
             # SELECT + PERSIST
             results = await asyncio.to_thread(build_results, session, agent_report, agent_error)
             results["warnings"] = warnings
+            context.shap_plots = session.shap_plots
             await progress.update_progress_async(
                 "final_scoring", status="Models scored and selected"
             )
@@ -890,6 +896,7 @@ class AnalysisOrchestrator:
             user_api_key=context.user_api_key,
             user_model=context.user_model,
             num_retries=6,
+            cache_key=f"syxplain-agent-{context.run_id}",
         )
 
     def _wants_literature(self, context: AnalysisContext) -> bool:
@@ -979,6 +986,7 @@ class AnalysisOrchestrator:
             literature_context=literature_context,
             user_api_key=context.user_api_key,
             user_model=context.user_model,
+            shap_plots=png_images([p["b64"] for p in context.shap_plots]),
         )
 
     def _compile_final_results(

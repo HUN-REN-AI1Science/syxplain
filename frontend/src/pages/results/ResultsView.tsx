@@ -51,6 +51,10 @@ const ResultsView: React.FC<ResultsViewProps> = ({
   const [exportingPdf, setExportingPdf] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const loadPlot = useCallback(
+    (name: string) => runsService.downloadFile(runId ?? '', name).then((r) => r.data),
+    [runId]
+  );
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -367,7 +371,12 @@ const ResultsView: React.FC<ResultsViewProps> = ({
 
         {/* Results - only show after run completes to avoid flashing legacy format during processing */}
         {result && isCompleted && (
-          <ResultContent result={result} resultsRef={resultsRef} targetVariable={targetVariable} />
+          <ResultContent
+            result={result}
+            resultsRef={resultsRef}
+            targetVariable={targetVariable}
+            loadPlot={runId ? loadPlot : undefined}
+          />
         )}
       </div>
 

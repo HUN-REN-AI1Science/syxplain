@@ -83,9 +83,15 @@ def get_share_service(
     run_repo: RunRepository = Depends(get_run_repository),
     file_repo: FileRepository = Depends(get_file_repository),
     file_service: FileService = Depends(get_file_service_dep),
+    artifact_repo: ArtifactRepository = Depends(get_artifact_repository),
 ) -> ShareService:
     """Provide ShareService instance with all dependencies."""
-    return ShareService(run_repo=run_repo, file_repo=file_repo, file_service=file_service)
+    return ShareService(
+        run_repo=run_repo,
+        file_repo=file_repo,
+        file_service=file_service,
+        artifact_repo=artifact_repo,
+    )
 
 
 def get_profile_service(

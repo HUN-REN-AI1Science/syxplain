@@ -159,6 +159,10 @@ class DiscoverySettings:
     pysr_timeout_s: int = field(
         default_factory=lambda: int(os.environ.get("DISCOVERY_PYSR_TIMEOUT_S", "1800"))
     )
+    # Show the SHAP plots to the agent as images (text SHAP is always given)
+    shap_images: bool = field(
+        default_factory=lambda: os.environ.get("DISCOVERY_SHAP_IMAGES", "true").lower() == "true"
+    )
     # Read-only review steps for searches that finish after the agent stopped (0 = off)
     review_steps: int = field(
         default_factory=lambda: int(os.environ.get("DISCOVERY_REVIEW_STEPS", "5"))

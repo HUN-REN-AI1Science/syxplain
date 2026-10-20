@@ -254,6 +254,22 @@ export interface ShapSummary {
   partial_effects?: Record<string, string>;
 }
 
+export interface ShapPlot {
+  /** Artifact filename, e.g. shap_dependence_P.png */
+  name: string;
+  title: string;
+}
+
+/** How the headline equation's effect of one feature compares with its SHAP effect */
+export interface ShapAgreement {
+  feature: string;
+  shap_share: number;
+  verdict: 'agrees' | 'disagrees' | 'opposite' | 'ignored' | 'undetermined';
+  note: string;
+  spearman_rho?: number;
+  effect_size_ratio?: number;
+}
+
 export interface DiscoverySplit {
   complete_rows: number;
   train: number;
@@ -321,6 +337,8 @@ export interface DiscoveryReport {
   /** False = no detectable relationship between the variables and the target */
   has_signal?: boolean;
   shap?: ShapSummary | null;
+  shap_plots?: ShapPlot[];
+  shap_agreement?: ShapAgreement[];
   selection?: DiscoverySelection;
   n_models_total?: number;
   leaderboard: LeaderboardEntry[];

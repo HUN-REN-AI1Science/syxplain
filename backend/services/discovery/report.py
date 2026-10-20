@@ -191,6 +191,8 @@ def build_results(
         "has_signal": session.fit_data.has_signal,
         "feature_profile": profile.get("features", []),
         "shap": profile.get("shap"),
+        "shap_agreement": session.shap_agreement(selection.headline),
+        "shap_plots": [{k: p[k] for k in ("name", "title")} for p in session.shap_plots],
         "selection": selection.to_dict(),
         "n_models_total": len(ranked),
         "leaderboard": [
@@ -311,6 +313,7 @@ def explanation_data_spec(results: dict[str, Any]) -> dict[str, Any]:
                 k: (discovery.get("shap") or {}).get(k)
                 for k in ("reliable", "importance", "interactions", "partial_effects")
             },
+            "headline_vs_shap": discovery.get("shap_agreement", []),
             "classic_baselines": classic,
             "notebook": [
                 {k: n.get(k) for k in ("kind", "text", "evidence", "model_ids")}

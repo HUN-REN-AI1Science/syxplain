@@ -239,7 +239,8 @@ def build_tools(
         take minutes). Returns a search_id. Keep fitting classic models meanwhile.
         maxsize 7-40 (complexity cap). niterations 50-5000 or null for auto.
         Seeds: guess_model_ids takes ids of your best fits (resolved in the right target space);
-        guesses takes up to 5 closed formulas with numeric constants. A seed using an operator you
+        guesses takes up to 5 closed formulas with numeric constants. Without seeds, the strongest
+        SHAP interaction among the features seeds the search (a*b, a/b). A seed using an operator you
         did not enable is rejected (the reply lists rejected seeds and why). Restrict features to
         the ones your diagnostics say matter, pick operators matching the shapes you found, and
         explain the purpose in rationale."""
@@ -256,13 +257,22 @@ def build_tools(
                 guess_model_ids=guess_model_ids or [],
                 rationale=rationale,
             )
-            return {
+            out = {
                 "search_id": record.search_id,
                 "config": record.config,
                 "accepted_guesses": record.guesses,
                 "rejected_guesses": record.rejected_guesses,
                 "budget": session.budget_status(),
             }
+            if record.seeded_from_shap:
+                out["seeded_from_shap"] = True
+            weak = session.weak_features(features)
+            if weak:
+                out["weak_features"] = (
+                    f"{weak} carry a negligible SHAP share and no permutation importance; they "
+                    "enlarge the search space without signal (drop them unless diagnostics flag them)"
+                )
+            return out
 
         return await guarded("start_pysr_search", run)
 

@@ -5,7 +5,7 @@ Cheap-to-read signals the agent can act on: correlations, mutual information,
 permutation importance, a nonparametric "noise ceiling" (out-of-fold R2 of
 flexible tree ensembles) that tells whether a poor classic fit is caused by noise
 or by the wrong functional form, and gated SHAP effects (importance, interacting
-pairs, partial-effect shapes).
+pairs, partial-effect shapes) with their plots.
 
 The CPU-heavy part (``compute_profile``) is a pure function of arrays so it can run
 in a separate process: tree ensembles and SHAP hold the GIL for long stretches and
@@ -177,7 +177,7 @@ def shap_analysis(
                     "flag it as a missing variable"
                 )
             else:
-                partial[names[j]] = profile_shape(Xs[:, j], values[:, j], ref_sd=y_sd)["shape"]
+                partial[names[j]] = _partial_label(Xs[:, j], values[:, j], X[:, j], y, y_sd)
 
         top = [int(j) for j in order[:max_interaction_features] if share[j] >= NEGLIGIBLE_SHARE]
         if len(top) >= 2:
@@ -223,15 +223,161 @@ def shap_analysis(
     return summary, Xs, values
 
 
+def _shape_kind(label: str) -> str:
+    """'saturating increasing — try ...' -> 'saturating increasing'."""
+    return label.split(" — ")[0].split(" (")[0]
+
+
+def _partial_label(
+    xs: np.ndarray, effect: np.ndarray, x: np.ndarray, y: np.ndarray, y_sd: float
+) -> str:
+    """
+    Shape of a feature's SHAP dependence. When it disagrees with the marginal curve
+    (binned target means), both are reported: a forest's step-function effect can
+    bend differently from the data at the ends of the range, and the plot decides.
+    """
+    partial = profile_shape(xs, effect, ref_sd=y_sd)["shape"]
+    marginal = profile_shape(x, y)["shape"]
+    kinds = {_shape_kind(partial), _shape_kind(marginal)}
+    if len(kinds) == 1 or any(k.startswith(("flat", "too few")) for k in kinds):
+        return partial
+    return (
+        f"{partial}; but the marginal curve looks {_shape_kind(marginal)}: the two disagree, "
+        "check the SHAP dependence plot"
+    )
+
+
+# ---------------------------------------------------------------------------
+# SHAP plots (rendered in the profiling process, shown to the agent and the user)
+# ---------------------------------------------------------------------------
+
+MAX_DEPENDENCE_PLOTS = 4
+
+
+def _png_b64(fig) -> str:
+    import base64
+    import io
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=100)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def render_shap_plots(
+    Xs: np.ndarray,
+    values: np.ndarray,
+    summary: dict[str, Any],
+    names: list[str],
+    labels: list[str],
+    categorical: list[bool],
+) -> list[dict[str, Any]]:
+    """
+    A beeswarm summary plus dependence plots of the most important continuous
+    features, each coloured by its strongest gated interaction partner. SHAP values
+    are in target units, so plateaus and bends read directly off the y-axis.
+
+    Returns:
+        [{"name", "kind" ("summary" | "dependence"), "feature", "title", "b64"}]
+    """
+    # Figure (not pyplot): no global state, so safe in the thread fallback too.
+    from matplotlib.figure import Figure
+
+    index = {n: j for j, n in enumerate(names)}
+    order = [index[d["feature"]] for d in summary["importance"]]
+    share = {d["feature"]: d["share"] for d in summary["importance"]}
+    plots = []
+
+    # Beeswarm: one row per feature, SHAP value on x, colour = the feature's value.
+    shown = order[:12][::-1]
+    fig = Figure(figsize=(6, 1.2 + 0.35 * len(shown)))
+    ax = fig.subplots()
+    rng = np.random.default_rng(0)
+    for row, j in enumerate(shown):
+        x = Xs[:, j]
+        span = float(np.subtract(*np.percentile(x, [95, 5]))) or 1.0
+        ax.scatter(
+            values[:, j],
+            row + rng.uniform(-0.3, 0.3, len(x)),
+            c=np.clip((x - np.percentile(x, 5)) / span, 0, 1),
+            cmap="coolwarm",
+            s=8,
+            alpha=0.7,
+        )
+    ax.axvline(0, color="grey", lw=0.8)
+    ax.set_yticks(range(len(shown)), [labels[j] for j in shown])
+    ax.set_xlabel("SHAP value (effect on the target, target units)")
+    ax.set_title("SHAP summary (colour: low → high feature value)", fontsize=10)
+    fig.tight_layout()
+    plots.append(
+        {
+            "name": "shap_summary.png",
+            "kind": "summary",
+            "feature": None,
+            "title": "SHAP summary",
+            "b64": _png_b64(fig),
+        }
+    )
+
+    partner: dict[str, str] = {}
+    for d in summary.get("interactions", []):  # strongest first
+        partner.setdefault(d["a"], d["b"])
+        partner.setdefault(d["b"], d["a"])
+    candidates = [j for j in order if not categorical[j] and share[names[j]] >= NEGLIGIBLE_SHARE][
+        :MAX_DEPENDENCE_PLOTS
+    ]
+    for j in candidates:
+        fig = Figure(figsize=(6, 4.5))
+        ax = fig.subplots()
+        other = partner.get(names[j])
+        if other is not None:
+            k = index[other]
+            # Percentile limits: one extreme value must not wash out the gradient.
+            lo, hi = np.percentile(Xs[:, k], [5, 95])
+            points = ax.scatter(
+                Xs[:, j],
+                values[:, j],
+                c=Xs[:, k],
+                cmap="coolwarm",
+                vmin=lo,
+                vmax=hi if hi > lo else None,
+                s=12,
+                alpha=0.8,
+            )
+            fig.colorbar(points, ax=ax, label=labels[k])
+        else:
+            ax.scatter(Xs[:, j], values[:, j], s=12, alpha=0.7)
+        ax.axhline(0, color="grey", lw=0.8)
+        ax.set_xlabel(labels[j])
+        ax.set_ylabel(f"SHAP value of {names[j]} (target units)")
+        ax.set_title(
+            f"SHAP dependence: {labels[j]}"
+            + (f"\ncolour: interaction partner {other}" if other else ""),
+            fontsize=10,
+        )
+        fig.tight_layout()
+        plots.append(
+            {
+                "name": f"shap_dependence_{names[j]}.png",
+                "kind": "dependence",
+                "feature": names[j],
+                "title": f"SHAP dependence: {labels[j]}",
+                "b64": _png_b64(fig),
+            }
+        )
+    return plots
+
+
 def compute_profile(
     X: np.ndarray,
     y: np.ndarray,
     names: list[str],
     categorical: list[bool],
     seed: int = 0,
+    labels: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     Everything CPU-heavy about the training data, as plain arrays/dicts (picklable).
+    ``labels`` are the axis names of the SHAP plots (default: ``names``).
     """
     from sklearn.feature_selection import mutual_info_regression
 
@@ -246,6 +392,7 @@ def compute_profile(
 
     shap_summary: dict[str, Any]
     sample = None
+    plots: list[dict[str, Any]] = []
     try:
         summary, Xs, values = shap_analysis(
             Xc, yc, names, categorical=categorical, ceiling_r2=ceiling, seed=seed
@@ -256,6 +403,11 @@ def compute_profile(
         shap_summary = {"available": False, "reason": "shap is not installed"}
     except Exception as e:  # SHAP is an aid, never a reason to fail profiling
         shap_summary = {"available": False, "reason": str(e)}
+    if sample is not None and shap_summary["reliable"]:
+        try:
+            plots = render_shap_plots(*sample, shap_summary, names, labels or names, categorical)
+        except Exception as e:  # plots are an aid too
+            logger.warning(f"SHAP plots failed: {e}")
 
     return {
         "ceiling_r2": ceiling,
@@ -267,6 +419,7 @@ def compute_profile(
         "rows_used": len(yc),
         "shap": shap_summary,
         "shap_sample": sample,
+        "shap_plots": plots,
     }
 
 
@@ -299,17 +452,10 @@ def _reset_executor() -> None:
         ex.shutdown(wait=False, cancel_futures=True)
 
 
-async def compute_profile_async(
-    X: np.ndarray,
-    y: np.ndarray,
-    names: list[str],
-    categorical: list[bool],
-    seed: int = 0,
-    timeout_s: float = PROFILE_TIMEOUT_S,
-) -> dict[str, Any]:
-    """Run ``compute_profile`` in the profiling process with a wall-clock cap."""
+async def compute_profile_async(*args: Any, timeout_s: float = PROFILE_TIMEOUT_S) -> dict[str, Any]:
+    """Run ``compute_profile(*args)`` in the profiling process with a wall-clock cap."""
     loop = asyncio.get_running_loop()
-    future = loop.run_in_executor(_get_executor(), compute_profile, X, y, names, categorical, seed)
+    future = loop.run_in_executor(_get_executor(), compute_profile, *args)
     try:
         return await asyncio.wait_for(future, timeout=timeout_s)
     except (asyncio.TimeoutError, BrokenProcessPool):

@@ -23,6 +23,8 @@ from typing import Any
 import dspy
 from dspy.utils.exceptions import ContextWindowExceededError
 
+from backend.core.config import get_discovery_settings
+from backend.infrastructure.llm.images import png_images
 from backend.infrastructure.llm.signatures import DiscoveryReview, EquationDiscoveryAgent
 from backend.services.discovery.selection import guard
 from backend.services.discovery.session import DiscoverySession
@@ -349,6 +351,11 @@ async def run_discovery_agent(
         prediction = await agent.acall(
             project_description=json.dumps(project_description, indent=1),
             data_overview=json.dumps(session.overview(), separators=(",", ":")),
+            shap_plots=(
+                png_images([p["b64"] for p in session.shap_plots])
+                if get_discovery_settings().shap_images
+                else []
+            ),
             budget=json.dumps(_budget_info(session, max_iters)),
             initial_searches=json.dumps(initial),
         )

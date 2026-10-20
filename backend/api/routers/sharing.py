@@ -185,3 +185,25 @@ def download_public_csv(
         )
     except EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
+
+
+@router.get("/api/public/{share_token}/plots/{filename}")
+@limiter.limit("60/minute")
+def download_public_plot(
+    request: Request,  # Required for rate limiting
+    share_token: str,
+    filename: str,
+    share_service: ShareService = Depends(get_share_service),
+):
+    """A SHAP plot (PNG) of a public run (no auth required)."""
+    try:
+        artifact = share_service.get_public_plot(share_token, filename)
+        # Artifacts never change once a run has finished; "private" keeps shared caches
+        # from serving the plot after the share link is revoked.
+        return Response(
+            content=artifact.content,
+            media_type=artifact.media_type,
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=e.message)

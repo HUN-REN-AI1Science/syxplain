@@ -20,6 +20,7 @@ from typing import Any, Protocol
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 from backend.services.discovery.expression import (
     ExpressionError,
@@ -38,8 +39,10 @@ from backend.services.discovery.fitting import (
     fit_model,
     predict,
     score_holdout,
+    target_space,
 )
 from backend.services.discovery.profiling import (
+    NEGLIGIBLE_SHARE,
     collinear_pairs,
     compute_profile,
     compute_profile_async,
@@ -111,6 +114,7 @@ class SearchRecord:
     guesses: list[str]
     rationale: str
     rejected_guesses: list[dict[str, str]] = field(default_factory=list)
+    seeded_from_shap: bool = False  # the guesses come from the strongest SHAP interaction
     # submitting | queued | ingesting | completed | failed | cancelled
     status: str = "submitting"
     job_id: str | None = None
@@ -144,6 +148,7 @@ class SearchRecord:
             "target_transform": self.target_transform,
             "guesses": self.guesses,
             "rejected_guesses": self.rejected_guesses,
+            **({"seeded_from_shap": True} if self.seeded_from_shap else {}),
             "rationale": self.rationale,
             "elapsed_s": round(elapsed),
             "timeout_s": timeout,
@@ -208,6 +213,8 @@ class DiscoverySession:
         self._model_counter = 0
         self._profile: dict[str, Any] | None = None
         self._shap_sample: tuple[np.ndarray, np.ndarray] | None = None
+        # SHAP summary/dependence PNGs: [{"name", "kind", "feature", "title", "b64"}]
+        self.shap_plots: list[dict[str, Any]] = []
         descriptions = descriptions or {}
 
         # --- clean, account for missingness ---------------------------------
@@ -438,32 +445,39 @@ class DiscoverySession:
     # Data understanding
     # ------------------------------------------------------------------
 
-    def _profile_inputs(self) -> tuple[np.ndarray, np.ndarray, list[str], list[bool]]:
+    def _profile_inputs(
+        self,
+    ) -> tuple[np.ndarray, np.ndarray, list[str], list[bool], int, list[str]]:
+        """compute_profile's arguments: X, y, names, categorical, seed, plot labels."""
         X = np.column_stack([self.fit_data.X[f] for f in self.features])
         cat = [self.kinds.get(f) == "categorical" for f in self.features]
-        return X, self.fit_data.y, list(self.features), cat
+        # 'P' or 'P (P_added mg/kg)': the agent's alias plus the column it stands for
+        labels = [
+            f if self.column_of.get(f, f) == f else f"{f} ({self.column_of[f]})"
+            for f in self.features
+        ]
+        return X, self.fit_data.y, list(self.features), cat, self.seed, labels
 
     async def ensure_profile(self, timeout_s: float = 240) -> dict[str, Any]:
         """Compute the profile in the profiling process (keeps the event loop free)."""
         if self._profile is not None:
             return self._profile
-        X, y, names, cat = self._profile_inputs()
+        args = self._profile_inputs()
         try:
-            raw = await compute_profile_async(X, y, names, cat, seed=self.seed, timeout_s=timeout_s)
+            raw = await compute_profile_async(*args, timeout_s=timeout_s)
         except asyncio.TimeoutError:
             logger.warning("Profiling timed out; continuing with a light profile")
             raw = None
         except Exception as e:
             logger.warning(f"Profiling process failed ({e}); computing in a thread")
-            raw = await asyncio.to_thread(compute_profile, X, y, names, cat, self.seed)
+            raw = await asyncio.to_thread(compute_profile, *args)
         return self._assemble_profile(raw)
 
     def profile(self) -> dict[str, Any]:
         """Synchronous profile (in-process); used by scripts, tests and fallbacks."""
         if self._profile is not None:
             return self._profile
-        X, y, names, cat = self._profile_inputs()
-        return self._assemble_profile(compute_profile(X, y, names, cat, self.seed))
+        return self._assemble_profile(compute_profile(*self._profile_inputs()))
 
     def _assemble_profile(self, raw: dict[str, Any] | None) -> dict[str, Any]:
         X, y = self.fit_data.X, self.fit_data.y
@@ -480,6 +494,7 @@ class DiscoverySession:
         self.fit_data.ceiling_r2 = raw["ceiling_r2"]
         self.fit_data.ceiling_sd = raw["ceiling_sd"]
         self._shap_sample = raw.get("shap_sample")
+        self.shap_plots = raw.get("shap_plots") or []
         importance = {
             f: (raw["importance_mean"][i], raw["importance_sd"][i])
             for i, f in enumerate(self.features)
@@ -691,10 +706,7 @@ class DiscoverySession:
             result.error = f"feature alias collides with a family parameter: {sorted(clash)}"
             result.reasons = [result.error]
             return self._register(result)
-        y = self.fit_data.y
-        fwd, _ = TRANSFORMS[transform]
-        with np.errstate(all="ignore"):
-            z = fwd(y) if transform else y
+        z = target_space(self.fit_data.y, transform)
         guess = fam.guess(xs, z) if np.all(np.isfinite(z)) else {}
         fit_model(
             result,
@@ -917,6 +929,55 @@ class DiscoverySession:
             return f"uses {missing} which are not among the binary operators {binary}"
         return None
 
+    def shap_seed_guesses(
+        self, features: list[str], transform: str | None, unary: list[str], binary: list[str]
+    ) -> list[str]:
+        """
+        Warm-start seeds from the strongest reliable SHAP interaction among ``features``:
+        ``c0 + c1*a*b`` and ``c0 + c1*a/b``, constants by least squares in the search's
+        target space. Empty without a profile (the baseline search starts before it).
+        """
+        shap = (self._profile or {}).get("shap") or {}
+        pair = next(
+            (p for p in shap.get("interactions", []) if p["a"] in features and p["b"] in features),
+            None,
+        )
+        if not shap.get("reliable") or pair is None:
+            return []
+        z = target_space(self.fit_data.y, transform)
+        if not np.all(np.isfinite(z)):
+            return []
+        a, b = pair["a"], pair["b"]
+        xa, xb = self.fit_data.X[a], self.fit_data.X[b]
+        seeds = []
+        with np.errstate(all="ignore"):
+            terms = {f"{a}*{b}": xa * xb, f"{a}/{b}": xa / xb}
+        for expr, t in terms.items():
+            if not np.all(np.isfinite(t)):
+                continue
+            coef, *_ = np.linalg.lstsq(np.column_stack([np.ones_like(t), t]), z, rcond=None)
+            c0, c1 = (float(c) for c in coef)
+            if c1 < 0 and "-" in binary:
+                seeds.append(f"{c0:.6g} - {-c1:.6g}*{expr}")
+            else:
+                seeds.append(f"{c0:.6g} + {c1:.6g}*{expr}")
+        # Only seeds this search's operators can express.
+        return [g for g in seeds if self._check_guess(g, features, unary, binary) is None]
+
+    def weak_features(self, features: list[str]) -> list[str]:
+        """Features with a negligible SHAP share and no permutation importance."""
+        profile = self._profile or {}
+        if not (profile.get("shap") or {}).get("reliable"):
+            return []
+        weak = []
+        for d in profile.get("features", []):
+            share, imp = d.get("shap_share"), d.get("permutation_importance")
+            if d["alias"] not in features or share is None or imp is None:
+                continue
+            if share < NEGLIGIBLE_SHARE and imp <= (d.get("permutation_importance_sd") or 0.0):
+                weak.append(d["alias"])
+        return weak
+
     def _validate_search(
         self,
         features: list[str],
@@ -1022,6 +1083,12 @@ class DiscoverySession:
                 )
             else:
                 candidates.append(m.fitted_core)
+        shap_seeds: list[str] = []
+        if not candidates and not rejected:
+            shap_seeds = self.shap_seed_guesses(
+                features, transform, config["unary_operators"], config["binary_operators"]
+            )
+            candidates = list(shap_seeds)
         accepted = []
         for g in candidates:
             reason = self._check_guess(
@@ -1041,6 +1108,7 @@ class DiscoverySession:
             target_transform=transform,
             guesses=accepted,
             rejected_guesses=rejected,
+            seeded_from_shap=bool(shap_seeds) and bool(accepted),
             rationale=str(rationale).strip()[:500],
         )
         self.searches[search_id] = record
@@ -1258,6 +1326,67 @@ class DiscoverySession:
             if m.error or m.parsed is None:
                 continue
             m.holdout = score_holdout(m.parsed, m.params, X, y, m.target_transform, fill)
+
+    def shap_agreement(
+        self, model: ModelResult | None, max_features: int = 6, background: int = 100
+    ) -> list[dict[str, Any]]:
+        """
+        Does the equation move with each important feature the way the data does?
+        Compares the equation's centred partial dependence on a feature (averaged over
+        background rows) with the forest's SHAP effect, on the SHAP sample rows.
+        Empty without reliable SHAP.
+        """
+        shap = (self._profile or {}).get("shap") or {}
+        if model is None or model.parsed is None or self._shap_sample is None:
+            return []
+        if not shap.get("reliable"):
+            return []
+        Xs, values = self._shap_sample
+        n = len(Xs)
+        bg = np.random.default_rng(self.seed).choice(n, size=min(background, n), replace=False)
+        # Every sample row paired with every background row (only the model's features).
+        grid = {
+            g: np.tile(Xs[bg, self.features.index(g)], n)
+            for g in model.features
+            if g in self.features
+        }
+        out = []
+        for d in shap.get("importance", [])[:max_features]:
+            f = d["feature"]
+            if d["share"] < NEGLIGIBLE_SHARE or self.kinds.get(f) == "categorical":
+                continue
+            j = self.features.index(f)
+            item: dict[str, Any] = {"feature": f, "shap_share": d["share"]}
+            out.append(item)
+            if f not in model.features:
+                item |= {
+                    "verdict": "ignored",
+                    "note": f"the equation does not use {f}, which carries "
+                    f"{d['share']:.0%} of the SHAP attribution",
+                }
+                continue
+            X = grid | {f: np.repeat(Xs[:, j], len(bg))}
+            pred = predict(model.parsed, model.params, X, model.target_transform).reshape(n, -1)
+            with np.errstate(all="ignore"):
+                pdp = np.nanmean(np.where(np.isfinite(pred), pred, np.nan), axis=1)
+            effect = values[:, j]
+            ok = np.isfinite(pdp)
+            if ok.sum() < 5 or np.ptp(pdp[ok]) == 0 or np.ptp(effect[ok]) == 0:
+                item |= {"verdict": "undetermined", "note": "no variation to compare"}
+                continue
+            rho = float(stats.spearmanr(pdp[ok], effect[ok]).statistic)
+            ratio = float(np.std(pdp[ok]) / np.std(effect[ok]))
+            item |= {
+                # |rho| < 0.5 is no clear relation either way, not a reversed effect
+                "verdict": "opposite" if rho <= -0.5 else "disagrees" if rho < 0.5 else "agrees",
+                "spearman_rho": round(rho, 3),
+                "effect_size_ratio": round(ratio, 2),
+                "note": (
+                    f"equation vs SHAP effect of {f}: rank correlation {rho:.2f}, "
+                    f"effect size {ratio:.2f}x the forest's"
+                ),
+            }
+        return out
 
     def scatter(self, model: ModelResult, max_points: int = 500) -> dict[str, Any] | None:
         """Measured vs predicted on the holdout, or out-of-fold CV predictions without one."""

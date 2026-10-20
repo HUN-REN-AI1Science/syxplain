@@ -11,6 +11,7 @@ from typing import Any
 from uuid import UUID
 
 from backend.core.exceptions import EntityNotFoundError
+from backend.repositories.artifact_repository import ArtifactRepository
 from backend.repositories.file_repository import FileRepository
 from backend.repositories.run_repository import RunRepository
 from backend.services.file_service import FileService, get_file_service
@@ -35,11 +36,13 @@ class ShareService:
         self,
         run_repo: RunRepository,
         file_repo: FileRepository,
+        artifact_repo: ArtifactRepository,
         file_service: FileService | None = None,
     ):
         self.run_repo = run_repo
         self.file_repo = file_repo
         self.file_service = file_service or get_file_service()
+        self.artifact_repo = artifact_repo
 
     def create_share_link(self, run_id: str, user_id: str) -> dict[str, str]:
         """
@@ -229,3 +232,22 @@ class ShareService:
             raise EntityNotFoundError("CSV file", run.csv_filename)
 
         return db_file
+
+    def get_public_plot(self, share_token: str, filename: str):
+        """
+        A plot of a shared run (no auth required). Only plots the shared results list
+        (``discovery.shap_plots``) are public: they picture what the page already shows.
+
+        Raises:
+            EntityNotFoundError: If the shared run or the plot is not found
+        """
+        run = self.run_repo.get_by_share_token(share_token)
+        if not run:
+            raise EntityNotFoundError("Shared run", share_token)
+        listed = ((run.results or {}).get("discovery") or {}).get("shap_plots") or []
+        if filename not in {p.get("name") for p in listed}:
+            raise EntityNotFoundError("Plot", filename)
+        artifact = self.artifact_repo.get_by_run_and_filename(run.id, filename)
+        if not artifact:
+            raise EntityNotFoundError("Plot", filename)
+        return artifact

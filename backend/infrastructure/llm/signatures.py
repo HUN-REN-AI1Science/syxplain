@@ -82,7 +82,8 @@ class ExplainPySrEquations(dspy.Signature):
     - verdict / reasons are the backend's diagnosis of each model (e.g. "matches the noise ceiling", "missing variable pH", "parameters not distinguishable from zero"). Reuse them; do not contradict them.
     - variable_aliases maps the variable names used in equations to the original column names in PROJECT_SPEC.features; variable_kinds marks integer-coded categorical variables (level(x, k) is 1 where x equals category k).
     - discovery.noise_ceiling_r2 estimates the best achievable R2; models close to it leave only noise. If discovery.has_signal is false there is no detectable relationship: say so plainly and do not over-interpret any equation.
-    - discovery.shap gives random-forest SHAP importance, interacting pairs and each feature's partial-effect shape (only when reliable). Use it to support key/secondary drivers and to explain interaction terms.
+    - discovery.shap gives random-forest SHAP importance, interacting pairs and each feature's partial-effect shape (only when reliable). Use it to support key/secondary drivers and to explain interaction terms. SHAP_PLOTS show the same effects as pictures (summary and dependence plots, effect in target units); describe what they show where it supports the explanation.
+    - discovery.headline_vs_shap checks the headline equation against SHAP feature by feature: "agrees" means the equation moves with that feature as the data does; "ignored", "disagrees" or "opposite" means it misses an effect the data shows. Mention every miss as a limitation.
     - discovery.classic_baselines lists named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
     Use this context: contrast symbolic equations with the classic baselines (what does a symbolic equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
@@ -141,6 +142,9 @@ class ExplainPySrEquations(dspy.Signature):
 
     project_spec_json: str = dspy.InputField(desc="JSON string of project specification")
     data_spec_json: str = dspy.InputField(desc="JSON string of equations data")
+    shap_plots: list[dspy.Image] = dspy.InputField(
+        desc="SHAP summary and dependence plots of the training data (may be empty)"
+    )
 
     explanation_json: str = dspy.OutputField(
         desc="JSON object with equations, summary, and recommendation"
@@ -309,7 +313,8 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
     - verdict / reasons are the backend's diagnosis of each model (e.g. "matches the noise ceiling", "missing variable pH", "parameters not distinguishable from zero"). Reuse them; do not contradict them.
     - variable_aliases maps the variable names used in equations to the original column names in PROJECT_SPEC.features; variable_kinds marks integer-coded categorical variables (level(x, k) is 1 where x equals category k).
     - discovery.noise_ceiling_r2 estimates the best achievable R2; models close to it leave only noise. If discovery.has_signal is false there is no detectable relationship: say so plainly and do not over-interpret any equation.
-    - discovery.shap gives random-forest SHAP importance, interacting pairs and each feature's partial-effect shape (only when reliable). Use it to support key/secondary drivers and to explain interaction terms.
+    - discovery.shap gives random-forest SHAP importance, interacting pairs and each feature's partial-effect shape (only when reliable). Use it to support key/secondary drivers and to explain interaction terms. SHAP_PLOTS show the same effects as pictures (summary and dependence plots, effect in target units); describe what they show where it supports the explanation.
+    - discovery.headline_vs_shap checks the headline equation against SHAP feature by feature: "agrees" means the equation moves with that feature as the data does; "ignored", "disagrees" or "opposite" means it misses an effect the data shows. Mention every miss as a limitation.
     - discovery.classic_baselines lists named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
     Use this context: contrast symbolic equations with the classic baselines (what does a symbolic equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
@@ -371,6 +376,9 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
         desc="JSON string of project specification with literature equations"
     )
     data_spec_json: str = dspy.InputField(desc="JSON string of equations data")
+    shap_plots: list[dspy.Image] = dspy.InputField(
+        desc="SHAP summary and dependence plots of the training data (may be empty)"
+    )
 
     explanation_json: str = dspy.OutputField(
         desc="JSON object with equations (including citations), summary, and recommendation"
@@ -394,7 +402,12 @@ class EquationDiscoveryAgent(dspy.Signature):
     1. DATA_OVERVIEW is already computed: features ranked by consensus importance, kind
        (continuous or categorical code), positivity, the noise ceiling (best achievable R2, roughly)
        and SHAP: partial-effect shapes (a feature's shape with the others accounted for) and
-       interacting pairs (candidates for products/ratios or multiplicative laws). If
+       interacting pairs (candidates for products/ratios or multiplicative laws). SHAP_PLOTS
+       (when present) show the same effects as pictures: a summary and one dependence plot per
+       top feature, effect in target units, coloured by its interaction partner. Read curvature,
+       plateaus, thresholds, outliers and spread off the plots before choosing families; the
+       shape labels are coarse hints, and the plot wins where they disagree. A colour gradient
+       across a dependence plot means an interaction worth a product or ratio term. If
        has_signal is false, there is no detectable relationship: confirm with one or two simple
        fits, record a data_issue note and finish — do not hunt for equations in noise.
     2. For the important continuous features, screen matching classic families with fit_families
@@ -442,6 +455,9 @@ class EquationDiscoveryAgent(dspy.Signature):
         desc="JSON: project description, target, and feature descriptions keyed by alias"
     )
     data_overview: str = dspy.InputField(desc="JSON: compact data profile")
+    shap_plots: list[dspy.Image] = dspy.InputField(
+        desc="SHAP summary and dependence plots of the training data (may be empty)"
+    )
     budget: str = dspy.InputField(desc="JSON: step, time and PySR-search limits")
     initial_searches: str = dspy.InputField(
         desc="JSON snapshot of PySR searches started before you (live status is in STATE lines)"
