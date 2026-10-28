@@ -150,6 +150,10 @@ class DiscoverySettings:
     max_pysr_runs: float = field(
         default_factory=lambda: _budget_value("DISCOVERY_MAX_PYSR_RUNS", 6)
     )
+    # SINDy rate-law searches (seconds each, run in the backend)
+    max_sindy_runs: float = field(
+        default_factory=lambda: _budget_value("DISCOVERY_MAX_SINDY_RUNS", 6)
+    )
     wall_clock_minutes: float = field(
         default_factory=lambda: _budget_value("DISCOVERY_WALL_CLOCK_MIN", 150)
     )
@@ -183,6 +187,7 @@ class DiscoverySettings:
         return {
             "max_iters": int(self.max_iters),
             "max_pysr_runs": int(self.max_pysr_runs),
+            "max_sindy_runs": int(self.max_sindy_runs),
             "wall_clock_s": float(self.wall_clock_minutes) * 60,
             "max_concurrent_pysr": self.max_concurrent_pysr,
             "pysr_timeout_s": self.pysr_timeout_s,

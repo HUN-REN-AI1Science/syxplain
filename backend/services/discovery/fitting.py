@@ -97,8 +97,16 @@ class ModelResult:
     source: str | None = None  # e.g. PySR search id
     holdout: dict[str, float] | None = None
     ill_conditioned: bool = False
+    # static: target = f(features); dynamic: d(target)/dt = f(target, inputs), scored on the
+    # derivative, so the two never share a ranking
+    problem: str = "static"
     parsed: ParsedExpression | None = field(default=None, repr=False, compare=False)
     oof_pred: np.ndarray | None = field(default=None, repr=False, compare=False)
+
+    @property
+    def simulation(self) -> dict[str, Any]:
+        """Rate laws: the law integrated over the training trajectories ({} if not run)."""
+        return self.diagnostics.get("simulation") or {}
 
     @property
     def n_undefined_total(self) -> int:
@@ -127,6 +135,9 @@ class ModelResult:
         }
         if self.target_transform:
             out["target_transform"] = self.target_transform
+        if self.simulation:
+            out["simulation_r2"] = self.simulation.get("r2")
+            out["simulation_diverged"] = self.simulation.get("n_diverged")
         if self.reasons:
             out["reasons"] = self.reasons
         return out
@@ -594,14 +605,18 @@ def score_holdout(
     bad = ~np.isfinite(pred)
     if bad.mean() > 0.5:
         return None
-    pred = np.where(bad, fill_value, pred)
+    return holdout_metrics(y, np.where(bad, fill_value, pred), bad)
+
+
+def holdout_metrics(y: np.ndarray, pred: np.ndarray, undefined: np.ndarray) -> dict[str, Any]:
+    """Held-out scores; ``undefined`` marks rows predicted by the fill value."""
     err = y - pred
     return {
         "r2": round(r2_score(y, pred), 4),
         "rmse": float(np.sqrt(np.mean(err**2))),
         "mae": float(np.mean(np.abs(err))),
         "n": len(y),
-        "n_undefined": int(bad.sum()),
+        "n_undefined": int(undefined.sum()),
     }
 
 

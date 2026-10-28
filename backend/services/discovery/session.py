@@ -2,8 +2,9 @@
 Discovery session: shared state for one agentic equation-discovery run.
 
 Owns the data contract (aliases, variable kinds, missingness, train/holdout split),
-the model registry, the lab notebook, the budget, the PySR searches and the agent's
-view of the world (state line, event inbox). Tools (``tools.py``) are thin wrappers
+the model registry, the lab notebook, the budget, the searches (PySR for static
+equations, SINDy for rate laws once the agent confirms a time structure) and the
+agent's view of the world (state line, event inbox). Tools (``tools.py``) are thin wrappers
 around these methods; the orchestrator, reconciler and selector read from here.
 """
 
@@ -49,6 +50,13 @@ from backend.services.discovery.profiling import (
     describe_features,
     profile_shape,
 )
+from backend.services.discovery.temporal import (
+    DynamicsData,
+    TimeStructure,
+    build_dynamics,
+    detect_time_structure,
+    simulate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +72,11 @@ INBOX_KINDS = ("search_completed", "search_failed", "search_cancelled", "data_is
 CATEGORICAL_WORDS = re.compile(
     r"\b(code|coded|class|classes|type|category|categorical|group|id)\b", re.I
 )
-MODEL_ID_RE = re.compile(r"\b[CMSL]\d+\b")
+MODEL_ID_PREFIXES = "CMSLD"  # classic, custom, symbolic, literature, rate law (dynamic)
+MODEL_ID_RE = re.compile(rf"\b[{MODEL_ID_PREFIXES}]\d+\b")
+SINDY_FUNCTIONS = ("exp", "log", "inv")
+SINDY_TIMEOUT_S = 300
+N_SIMULATED_PER_SEARCH = 5  # SINDy equations per front that are integrated at ingestion
 
 
 def _family_parameter_names() -> set[str]:
@@ -86,6 +98,7 @@ class DiscoveryBudget:
 
     max_iters: int = 30
     max_pysr_runs: int = 3
+    max_sindy_runs: int = 6
     max_concurrent_pysr: int = 2
     wall_clock_s: float = 45 * 60
     pysr_timeout_s: int = 1800
@@ -106,7 +119,7 @@ class SearchLauncher(Protocol):
 
 @dataclass
 class SearchRecord:
-    """One PySR search launched by the agent or the orchestrator."""
+    """One search (PySR or SINDy) launched by the agent or the orchestrator."""
 
     search_id: str
     features: list[str]
@@ -126,6 +139,7 @@ class SearchRecord:
     model_ids: list[str] = field(default_factory=list)
     n_front: int = 0
     task: asyncio.Task | None = field(default=None, repr=False)
+    engine: str = "pysr"  # pysr | sindy
 
     @property
     def done(self) -> bool:
@@ -140,16 +154,27 @@ class SearchRecord:
         timeout = int(self.config.get("timeout_in_seconds") or 0)
         out: dict[str, Any] = {
             "search_id": self.search_id,
+            "engine": self.engine,
             "status": self.status,
             "features": self.features,
-            "unary_operators": self.config.get("unary_operators"),
-            "binary_operators": self.config.get("binary_operators"),
-            "maxsize": self.config.get("maxsize"),
-            "niterations": self.config.get("niterations"),
-            "target_transform": self.target_transform,
-            "guesses": self.guesses,
-            "rejected_guesses": self.rejected_guesses,
-            **({"seeded_from_shap": True} if self.seeded_from_shap else {}),
+        }
+        if self.engine == "pysr":
+            out |= {
+                "unary_operators": self.config.get("unary_operators"),
+                "binary_operators": self.config.get("binary_operators"),
+                "maxsize": self.config.get("maxsize"),
+                "niterations": self.config.get("niterations"),
+                "target_transform": self.target_transform,
+                "guesses": self.guesses,
+                "rejected_guesses": self.rejected_guesses,
+                **({"seeded_from_shap": True} if self.seeded_from_shap else {}),
+            }
+        else:
+            out |= {
+                "problem": "dynamic",
+                **{k: v for k, v in self.config.items() if k != "timeout_in_seconds"},
+            }
+        out |= {
             "rationale": self.rationale,
             "elapsed_s": round(elapsed),
             "timeout_s": timeout,
@@ -192,9 +217,13 @@ class DiscoverySession:
         descriptions: dict[str, str] | None = None,
         sparse_column_threshold: float = 0.2,
         max_categorical_levels: int = 10,
+        launchers: dict[str, SearchLauncher] | None = None,
     ):
         self.budget = budget or DiscoveryBudget()
-        self.launcher = launcher
+        # Engine -> launcher; ``launcher`` is shorthand for the PySR one.
+        self.launchers: dict[str, SearchLauncher] = dict(launchers or {})
+        if launcher is not None:
+            self.launchers.setdefault("pysr", launcher)
         self._on_event = on_event
         self.seed = seed
         self.started_at = time.monotonic()
@@ -312,6 +341,17 @@ class DiscoverySession:
         for col in self.excluded_columns:
             self.note("data_issue", f"Column '{col['column']}' excluded: {col['reason']}")
 
+        # --- time structure (all uploaded columns: time is often not a predictor) ---
+        self.raw_data = data
+        self.dynamics: DynamicsData | None = None
+        try:
+            self.time_structure: TimeStructure | None = detect_time_structure(
+                data, target_column, descriptions
+            )
+        except Exception as e:  # a proposal only; never block the static analysis
+            logger.warning(f"Time-structure detection failed: {e}", exc_info=True)
+            self.time_structure = None
+
     # ------------------------------------------------------------------
     # Data contract
     # ------------------------------------------------------------------
@@ -387,10 +427,18 @@ class DiscoverySession:
             "remaining_min": round(self.remaining_s / 60, 1),
             "steps_used": self.steps_used,
             "steps_max": self.budget.max_iters,
-            "pysr_searches_used": len(self.searches),
+            "pysr_searches_used": self._n_searches("pysr"),
             "pysr_searches_max": self.budget.max_pysr_runs,
-            "pysr_running": sum(1 for s in self.searches.values() if not s.done),
+            "pysr_running": self._n_searches("pysr", running=True),
+            "sindy_searches_used": self._n_searches("sindy"),
+            "sindy_searches_max": self.budget.max_sindy_runs,
+            "dynamics": self.dynamics is not None,
         }
+
+    def _n_searches(self, engine: str, running: bool = False) -> int:
+        return sum(
+            1 for s in self.searches.values() if s.engine == engine and not (running and s.done)
+        )
 
     async def emit(self, kind: str, text: str, **extra: Any) -> None:
         event = {"t": round(self.elapsed_s, 1), "kind": kind, "text": text, **extra}
@@ -434,6 +482,15 @@ class DiscoverySession:
         if top:
             parts.append(
                 "top: " + ", ".join(f"{m['model_id']} {m['cv_r2']} {m['verdict']}" for m in top)
+            )
+        rates = self.leaderboard(top=2, problem="dynamic")
+        if rates:
+            parts.append(
+                "top rate laws: "
+                + ", ".join(
+                    f"{m['model_id']} dydt_r2={m['cv_r2']} sim_r2={m.get('simulation_r2')}"
+                    for m in rates
+                )
             )
         line = "STATE | " + " | ".join(parts)
         events = self.take_inbox()
@@ -591,6 +648,22 @@ class DiscoverySession:
             "shap_reliable": shap.get("reliable"),
             "collinear_pairs": p["collinear_pairs"][:6],
             "excluded_columns": p["excluded_columns"],
+            "time_structure": self.time_structure_brief(),
+        }
+
+    def time_structure_brief(self) -> dict[str, Any] | None:
+        """Compact time-structure proposal for DATA_OVERVIEW (None without a plausible one)."""
+        ts = self.time_structure
+        if ts is None or ts.time_column is None or ts.confidence == "none":
+            return None
+        return {
+            "time_column": ts.time_column,
+            "group_column": ts.group_column,
+            "confidence": ts.confidence,
+            "n_trajectories": ts.n_trajectories,
+            "points_min": ts.points_min,
+            "smoothness_along_time": ts.evidence.get("smoothness_along_time"),
+            "confirmed": self.dynamics is not None,
         }
 
     @property
@@ -664,8 +737,16 @@ class DiscoverySession:
             )
         return transform
 
-    def _others(self, used: list[str]) -> list[str]:
-        return [f for f in self.continuous_features if f not in used]
+    def _others(self, used: list[str], problem: str = "static") -> list[str]:
+        variables = self._space(problem)[0]
+        return [f for f in variables if f not in used and self.kinds.get(f) != "categorical"]
+
+    def _space(self, problem: str) -> tuple[list[str], FitData]:
+        """Variables and training data of a problem: static y = f(x), or the rate law."""
+        if problem == "dynamic":
+            dyn = self._require_dynamics()
+            return dyn.variables, dyn.fit_data
+        return self.features, self.fit_data
 
     def fit_family(
         self, family: str, features: list[str], target_transform: str | None = None
@@ -722,16 +803,23 @@ class DiscoverySession:
         )
         return self._register(result)
 
-    def _check_identifiers(self, expr, initial_params: dict[str, float]) -> None:
-        """Unbound identifiers that look like features are almost always typos."""
-        lowered = {f.lower(): f for f in self.features}
-        columns = {str(c): a for c, a in self.alias_of.items()}
+    def _check_identifiers(
+        self, expr, initial_params: dict[str, float], variables: list[str]
+    ) -> None:
+        """Unbound identifiers that look like variables are almost always typos."""
+        lowered = {f.lower(): f for f in variables}
+        columns = {str(c): a for a, c in self.column_of.items() if a in variables}
         for name in expr.parameters:
             if name in initial_params:
                 continue
+            if name in self.features:  # a feature that is not a variable of this problem
+                raise ExpressionError(
+                    f"'{name}' is not a variable here (time, trajectory and categorical columns "
+                    f"are not inputs of a rate law); variables: {variables}"
+                )
             match = lowered.get(name.lower()) or columns.get(name)
             if match is None and len(name) > 2:
-                close = difflib.get_close_matches(name, self.features, n=1, cutoff=0.8)
+                close = difflib.get_close_matches(name, variables, n=1, cutoff=0.8)
                 match = close[0] if close else None
             if match is not None:
                 raise ExpressionError(
@@ -746,27 +834,34 @@ class DiscoverySession:
         target_transform: str | None = None,
         label: str = "",
         kind: str = "custom",
+        problem: str = "static",
     ) -> ModelResult:
+        """
+        Fit a formula. problem="dynamic" fits a rate law: the expression is d(target)/dt
+        over the state and the inputs, and the fitted law is simulated.
+        """
         transform = self._check_transform(target_transform)
+        variables, data = self._space(problem)
         initial_params = dict(initial_params or {})
-        expr = parse_expression(expression, self.features)
-        self._check_identifiers(expr, initial_params)
+        expr = parse_expression(expression, variables)
+        self._check_identifiers(expr, initial_params, variables)
         if not expr.variables:
-            raise ExpressionError(
-                f"Expression must use at least one feature (aliases: {self.features})"
-            )
+            raise ExpressionError(f"Expression must use at least one variable ({variables})")
         if len(expr.parameters) > 12:
             raise ExpressionError("At most 12 free parameters are allowed")
         self._check_categorical_use(expr)
-        prefix = {"custom": "M", "literature": "L", "classic": "C"}[kind]
+        dynamic = problem == "dynamic"
+        prefix = "D" if dynamic else {"custom": "M", "literature": "L", "classic": "C"}[kind]
+        default_label = "Rate law" if dynamic else "Custom formula"
         result = ModelResult(
             model_id=self._new_id(prefix),
             kind=kind,
             name=label or kind,
-            label=label or ("Custom formula" if kind == "custom" else "Published law"),
+            label=label or (default_label if kind == "custom" else "Published law"),
             expression=expr.source.replace("**", "^"),
             features=list(expr.variables),
             target_transform=transform,
+            problem=problem,
         )
         p0 = dict.fromkeys(expr.parameters, 1.0) | {
             k: float(v) for k, v in initial_params.items() if k in expr.parameters
@@ -774,11 +869,13 @@ class DiscoverySession:
         fit_model(
             result,
             expr,
-            self.fit_data,
+            data,
             p0,
             seed=self.seed,
-            other_features=self._others(list(expr.variables)),
+            other_features=self._others(list(expr.variables), problem),
         )
+        if dynamic:
+            self._attach_simulation(result)
         return self._register(result)
 
     def _check_categorical_use(self, expr) -> None:
@@ -791,31 +888,41 @@ class DiscoverySession:
             )
 
     def score_symbolic(
-        self, equation: str, source: str, target_transform: str | None = None
+        self,
+        equation: str,
+        source: str,
+        target_transform: str | None = None,
+        problem: str = "static",
     ) -> ModelResult:
-        """Score a PySR equation like the classic models (constants refit per CV fold). Not registered."""
-        template, values = parameterize_constants(equation, taken=self.features)
-        expr = parse_expression(template, self.features, parameters=list(values))
+        """
+        Score a PySR equation (or, for problem="dynamic", a SINDy rate law) like the
+        other models: constants refit per CV fold. Not registered.
+        """
+        variables, data = self._space(problem)
+        template, values = parameterize_constants(equation, taken=variables)
+        expr = parse_expression(template, variables, parameters=list(values))
         # A category's integer code has no magnitude, so an equation using it as one is invalid.
         self._check_categorical_use(expr)
+        dynamic = problem == "dynamic"
         result = ModelResult(
-            model_id=self._new_id("S"),
+            model_id=self._new_id("D" if dynamic else "S"),
             kind="symbolic",
             name=source,
-            label=f"PySR ({source})",
+            label=f"{'SINDy' if dynamic else 'PySR'} ({source})",
             expression=equation.replace("**", "^"),
             features=list(expr.variables),
             target_transform=target_transform,
             source=source,
+            problem=problem,
         )
         fit_model(
             result,
             expr,
-            self.fit_data,
+            data,
             values,
             n_starts=1,
             seed=self.seed,
-            other_features=self._others(list(expr.variables)),
+            other_features=self._others(list(expr.variables), problem),
         )
         return result
 
@@ -877,21 +984,15 @@ class DiscoverySession:
                 continue
         return fitted
 
-    def leaderboard(self, top: int = 10, kind: str | None = None) -> list[dict[str, Any]]:
-        ranked = [m for m in self.ranked_models() if kind is None or m.kind == kind]
-        return [
-            {
-                "model_id": m.model_id,
-                "name": m.name,
-                "features": m.features,
-                "cv_r2": m.cv_r2 and round(m.cv_r2, 4),
-                "cv_se": m.cv_se and round(m.cv_se, 5),
-                "n_params": m.n_params,
-                "complexity": m.complexity,
-                "verdict": m.verdict,
-            }
-            for m in ranked[:top]
-        ]
+    def leaderboard(
+        self, top: int = 10, kind: str | None = None, problem: str = "static"
+    ) -> list[dict[str, Any]]:
+        """The agent's compact ranking; rate laws keep their equation (D ids say nothing)."""
+        ranked = [m for m in self.ranked_models(problem) if kind is None or m.kind == kind]
+        drop = {"cv_rmse", "aic", "reasons", "target_transform"}
+        if problem == "static":
+            drop.add("fitted")
+        return [{k: v for k, v in m.brief().items() if k not in drop} for m in ranked[:top]]
 
     def note(
         self,
@@ -915,6 +1016,95 @@ class DiscoverySession:
         }
         self.notebook.append(entry)
         return entry
+
+    # ------------------------------------------------------------------
+    # Dynamics (rate laws)
+    # ------------------------------------------------------------------
+
+    def _resolve_column(self, name: str | None) -> str | None:
+        """An uploaded column by its name or by a feature alias."""
+        if name in (None, "", "none", "None"):
+            return None
+        if name in self.raw_data.columns:
+            return str(name)
+        if name in self.column_of:
+            return self.column_of[name]
+        close = difflib.get_close_matches(str(name), [str(c) for c in self.raw_data.columns], n=1)
+        hint = f" (did you mean '{close[0]}'?)" if close else ""
+        raise ValueError(f"Unknown column {name!r}{hint}")
+
+    def set_dynamics(self, time_column: str, group_column: str | None = None) -> DynamicsData:
+        """Confirm a time structure and build the rate-of-change problem."""
+        tcol = self._resolve_column(time_column)
+        if tcol is None:
+            raise ValueError("time_column is required")
+        if tcol == self.target_column:
+            raise ValueError("The target cannot be the time axis")
+        gcol = self._resolve_column(group_column)
+        if gcol in (tcol, self.target_column):
+            raise ValueError("group_column must differ from the time column and the target")
+        detected = self.time_structure
+        if detected and detected.time_column == tcol and detected.group_column == gcol:
+            structure = detected
+        else:
+            structure = TimeStructure(time_column=tcol, group_column=gcol, confidence="agent")
+        inputs = {
+            a: self.column_of[a]
+            for a in self.continuous_features
+            if self.column_of[a] not in (tcol, gcol)
+        }
+        previous = self.dynamics
+        self.dynamics = build_dynamics(
+            self.raw_data, structure, self.target_column, self.target_alias, inputs, seed=self.seed
+        )
+        old_axes = previous and (previous.structure.time_column, previous.structure.group_column)
+        if old_axes and old_axes != (tcol, gcol):
+            # Laws fitted on the old derivative data are not comparable with the new ones.
+            for m in self.snapshot():
+                if m.problem == "dynamic" and not m.error:
+                    m.error = (
+                        f"superseded: fitted along {old_axes[0]} before set_dynamics changed "
+                        "the time structure"
+                    )
+        return self.dynamics
+
+    def _require_dynamics(self) -> DynamicsData:
+        if self.dynamics is None:
+            raise ValueError(
+                "No time structure confirmed yet: call set_dynamics(time_column, group_column) first"
+            )
+        return self.dynamics
+
+    def simulate_model(self, m: ModelResult, holdout: bool = False, traces: bool = False):
+        """Integrate a rate law over the training (or held-out) trajectories."""
+        dyn = self._require_dynamics()
+        episodes = dyn.holdout_episodes if holdout else dyn.train_episodes
+        return simulate(m.parsed, m.params, dyn.state, episodes, dyn.fill_value, traces=traces)
+
+    def _attach_simulation(self, m: ModelResult) -> ModelResult:
+        """Integrate a fitted rate law over the training trajectories (agent feedback)."""
+        if m.error or m.parsed is None:
+            return m
+        sim = self.simulate_model(m)
+        if sim is None:
+            return m
+        m.diagnostics["simulation"] = sim
+        if sim["n_diverged"]:
+            m.reasons.insert(
+                0,
+                f"simulation diverges or fails on {sim['n_diverged']} of {sim['n_episodes']} "
+                "training trajectories",
+            )
+        elif sim["r2"] < 0.5:
+            m.reasons.append(
+                f"fits the derivative but the integrated law tracks the trajectories poorly "
+                f"(simulation R2 {sim['r2']:.3f})"
+            )
+        else:
+            m.reasons.append(
+                f"simulated trajectories reproduce the data (simulation R2 {sim['r2']:.3f})"
+            )
+        return m
 
     # ------------------------------------------------------------------
     # PySR searches
@@ -1057,16 +1247,16 @@ class DiscoverySession:
         rationale: str = "",
         enforce_budget: bool = True,
     ) -> SearchRecord:
-        if self.launcher is None:
+        if self.launchers.get("pysr") is None:
             raise RuntimeError("No PySR launcher configured")
         if self.cancelled:
             raise BudgetExhausted("The run was cancelled")
         if enforce_budget:
-            if len(self.searches) >= self.budget.max_pysr_runs:
+            if self._n_searches("pysr") >= self.budget.max_pysr_runs:
                 raise BudgetExhausted(
                     f"PySR search budget used ({self.budget.max_pysr_runs}); refine with fit_formula or finish"
                 )
-            running = sum(1 for s in self.searches.values() if not s.done)
+            running = self._n_searches("pysr", running=True)
             if running >= self.budget.max_concurrent_pysr:
                 raise ValueError(
                     f"{running} searches already running (max {self.budget.max_concurrent_pysr}); "
@@ -1110,7 +1300,7 @@ class DiscoverySession:
                 accepted.append(g)
         accepted = accepted[:5]
 
-        search_id = f"pysr_{len(self.searches) + 1}"
+        search_id = f"pysr_{self._n_searches('pysr') + 1}"
         record = SearchRecord(
             search_id=search_id,
             features=list(features),
@@ -1121,12 +1311,70 @@ class DiscoverySession:
             seeded_from_shap=bool(shap_seeds) and bool(accepted),
             rationale=str(rationale).strip()[:500],
         )
+        return await self._launch(record, self.pysr_input(features, transform, config, accepted))
+
+    async def start_sindy_search(
+        self,
+        features: list[str] | None = None,
+        degree: int = 2,
+        extra_functions: list[str] | None = None,
+        include_state: bool = True,
+        rationale: str = "",
+    ) -> SearchRecord:
+        """Launch a SINDy search for the rate law over the state and the given inputs."""
+        if self.launchers.get("sindy") is None:
+            raise RuntimeError("No SINDy launcher configured")
+        if self.cancelled:
+            raise BudgetExhausted("The run was cancelled")
+        dyn = self._require_dynamics()
+        if self._n_searches("sindy") >= self.budget.max_sindy_runs:
+            raise BudgetExhausted(
+                f"SINDy search budget used ({self.budget.max_sindy_runs}); refine with fit_ode or finish"
+            )
+        features = [f for f in dict.fromkeys(features or []) if f != dyn.state]
+        unknown = [f for f in features if f not in dyn.inputs]
+        if unknown:
+            raise ValueError(f"{unknown} are not inputs of the rate law; inputs: {dyn.inputs}")
+        variables = ([dyn.state] if include_state else []) + features
+        if not variables:
+            raise ValueError("Include the state or at least one input")
+        if len(variables) > 6:
+            raise ValueError("At most 6 variables (the library grows combinatorially)")
+        extra = [f for f in dict.fromkeys(extra_functions or []) if f]
+        bad = [f for f in extra if f not in SINDY_FUNCTIONS]
+        if bad:
+            raise ValueError(f"Unsupported extra functions {bad}; allowed: {SINDY_FUNCTIONS}")
+        config = {
+            "degree": int(np.clip(degree, 1, 3)),
+            "extra_functions": extra,
+            "include_state": bool(include_state),
+            "timeout_in_seconds": SINDY_TIMEOUT_S,
+        }
+        record = SearchRecord(
+            search_id=f"sindy_{self._n_searches('sindy') + 1}",
+            features=variables,
+            config=config,
+            target_transform=None,
+            guesses=[],
+            rationale=str(rationale).strip()[:500],
+            engine="sindy",
+        )
+        input_data = {
+            "X": {v: dyn.fit_data.X[v] for v in variables},
+            "dydt": dyn.fit_data.y,
+            "variables": variables,
+            "degree": config["degree"],
+            "extra_functions": extra,
+        }
+        return await self._launch(record, input_data)
+
+    async def _launch(self, record: SearchRecord, input_data: dict[str, Any]) -> SearchRecord:
+        search_id = record.search_id
         self.searches[search_id] = record
-        input_data = self.pysr_input(features, transform, config, accepted)
         record.task = asyncio.create_task(self._run_search(record, input_data))
         await self.emit(
             "search_started",
-            f"Started {search_id} on {', '.join(features)}"
+            f"Started {search_id} on {', '.join(record.features)}"
             + (f" — {record.rationale}" if record.rationale else ""),
             search_id=search_id,
         )
@@ -1136,9 +1384,10 @@ class DiscoverySession:
         record.job_id = job_id
 
     async def _run_search(self, record: SearchRecord, input_data: dict[str, Any]) -> None:
+        launcher = self.launchers[record.engine]
         try:
             submit = asyncio.ensure_future(
-                self.launcher.submit(
+                launcher.submit(
                     record.search_id, input_data, lambda jid: self._set_job_id(record, jid)
                 )
             )
@@ -1156,7 +1405,7 @@ class DiscoverySession:
                 await self._cancel_job(job_id, record.search_id)
                 return
             record.status = "queued"
-            ok, result, error = await self.launcher.wait(job_id)
+            ok, result, error = await launcher.wait(job_id)
             if record.status == "cancelled":
                 return
             if not ok or not result:
@@ -1212,7 +1461,8 @@ class DiscoverySession:
     def _score_front(
         self, record: SearchRecord, equations: list[dict[str, Any]]
     ) -> list[ModelResult]:
-        """Score a PySR hall of fame (pure: nothing is registered here)."""
+        """Score a PySR hall of fame or a SINDy front (pure: nothing is registered here)."""
+        problem = "dynamic" if record.engine == "sindy" else "static"
         if len(equations) > MAX_FRONT:
             by_loss = sorted(equations, key=lambda e: e.get("loss", np.inf))[:30]
             by_size = sorted(equations, key=lambda e: e.get("complexity", 0))[:10]
@@ -1222,14 +1472,24 @@ class DiscoverySession:
         for eq in equations:
             text = eq.get("equation") or ""
             try:
-                model = self.score_symbolic(text, record.search_id, record.target_transform)
+                model = self.score_symbolic(
+                    text, record.search_id, record.target_transform, problem=problem
+                )
             except ExpressionError as e:
-                logger.info(f"Could not parse PySR equation {text!r}: {e}")
+                logger.info(f"Could not parse {record.engine} equation {text!r}: {e}")
                 continue
-            model.diagnostics["pysr_loss"] = eq.get("loss")
-            model.diagnostics["pysr_complexity"] = eq.get("complexity")
+            model.diagnostics[f"{record.engine}_loss"] = eq.get("loss")
+            model.diagnostics[f"{record.engine}_complexity"] = eq.get("complexity")
             model.diagnostics["structure_selected_in_sample"] = True
             scored.append(model)
+        if problem == "dynamic":
+            # Integrate the most accurate laws and the sparsest ones (the selection vetoes
+            # unsimulated laws, and prefers the simplest law within one standard error).
+            ok = [m for m in scored if not m.error and m.cv_r2 is not None]
+            best = sorted(ok, key=lambda m: -m.cv_r2)[:N_SIMULATED_PER_SEARCH]
+            simple = self.pareto(ok)[:N_SIMULATED_PER_SEARCH]
+            for m in {m.model_id: m for m in [*best, *simple]}.values():
+                self._attach_simulation(m)
         return scored
 
     def mark_read(self, search_id: str) -> None:
@@ -1255,11 +1515,13 @@ class DiscoverySession:
         return [r for r in records if r.done]
 
     async def _cancel_job(self, job_id: str, search_id: str) -> None:
-        if not self.launcher or job_id in self._cancelled_jobs:
+        record = self.searches.get(search_id)
+        launcher = self.launchers.get(record.engine if record else "pysr")
+        if not launcher or job_id in self._cancelled_jobs:
             return
         self._cancelled_jobs.add(job_id)
         try:
-            await self.launcher.cancel(job_id)
+            await launcher.cancel(job_id)
         except Exception as e:
             logger.warning(f"Failed to cancel {search_id}: {e}")
 
@@ -1314,7 +1576,10 @@ class DiscoverySession:
 
         if pending():
             await asyncio.wait(pending(), timeout=max(0.0, grace_s))
-        while pending() and not any(s.status == "completed" for s in self.searches.values()):
+        # The static analysis needs a PySR result: a (fast) SINDy search does not count.
+        while pending() and not any(
+            s.status == "completed" and s.engine == "pysr" for s in self.searches.values()
+        ):
             left = max_wait_s - (time.monotonic() - start)
             if left <= 0:
                 break
@@ -1333,7 +1598,8 @@ class DiscoverySession:
         y = self.holdout[self.target_alias].to_numpy(dtype=float)
         fill = float(self.train[self.target_alias].mean())
         for m in self.snapshot():
-            if m.error or m.parsed is None:
+            # Rate laws are scored by simulation, only for the ones reported (report.py).
+            if m.error or m.parsed is None or m.problem != "static":
                 continue
             m.holdout = score_holdout(m.parsed, m.params, X, y, m.target_transform, fill)
 
@@ -1437,10 +1703,13 @@ class DiscoverySession:
             out["note"] = f"model undefined on {int((~ok).sum())} rows (not plotted)"
         return out
 
-    def ranked_models(self) -> list[ModelResult]:
-        """All usable models by cross-validated R2 (the holdout never ranks)."""
+    def ranked_models(self, problem: str = "static") -> list[ModelResult]:
+        """
+        All usable models of a problem by cross-validated R2 (the holdout never ranks).
+        Rate laws are scored on the derivative, so problem="dynamic" ranks them apart.
+        """
         return sorted(
-            (m for m in self.snapshot() if not m.error),
+            (m for m in self.snapshot() if not m.error and m.problem == problem),
             key=lambda m: -(m.cv_r2 if m.cv_r2 is not None else -np.inf),
         )
 

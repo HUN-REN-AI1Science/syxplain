@@ -6,6 +6,8 @@ pandas
 numpy
 sympy
 pysr
+# SINDy rate-law searches (discovery agent, run in the backend)
+pysindy>=2.0,<3
 langchain
 langgraph
 langchain-core

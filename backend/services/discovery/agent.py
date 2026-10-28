@@ -27,7 +27,7 @@ from backend.core.config import get_discovery_settings
 from backend.infrastructure.llm.images import png_images
 from backend.infrastructure.llm.signatures import DiscoveryReview, EquationDiscoveryAgent
 from backend.services.discovery.selection import guard
-from backend.services.discovery.session import DiscoverySession
+from backend.services.discovery.session import MODEL_ID_PREFIXES, DiscoverySession
 from backend.utils.json_utils import clean_and_fix_json_string
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ TRANSIENT_ERRORS = tuple(_transient) or (ConnectionError,)
 
 BACKOFF_S = (15, 30, 60)
 KEEP_VERBATIM_STEPS = 6
-_ID_RE = re.compile(r'"model_id":"([CMSL]\d+)"')
+_ID_RE = re.compile(rf'"model_id":"([{MODEL_ID_PREFIXES}]\d+)"')
 _CV_RE = re.compile(r'"cv_r2":(-?[\d.]+|null)')
 _VERDICT_RE = re.compile(r'"verdict":"(\w+)"')
 
@@ -328,9 +328,10 @@ def _budget_info(session: DiscoverySession, max_iters: int) -> dict[str, Any]:
         "max_steps": max_iters,
         "wall_clock_minutes": round(session.remaining_s / 60),
         "pysr_searches_max": session.budget.max_pysr_runs,
-        "pysr_searches_used": len(session.searches),
+        "pysr_searches_used": session._n_searches("pysr"),
         "max_concurrent_pysr_searches": session.budget.max_concurrent_pysr,
         "pysr_timeout_minutes": round(session.budget.pysr_timeout_s / 60),
+        "sindy_searches_max": session.budget.max_sindy_runs,
     }
 
 

@@ -86,6 +86,7 @@ class ExplainPySrEquations(dspy.Signature):
     - discovery.headline_vs_shap checks the headline equation against SHAP feature by feature: "agrees" means the equation moves with that feature as the data does; "ignored", "disagrees" or "opposite" means it misses an effect the data shows. Mention every miss as a limitation.
     - discovery.classic_baselines lists the reference named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
+    - discovery.dynamics (when not null): the rows are measurements over time and the agent also looked for a rate law d(target)/dt = f(target, inputs) (the agent's own via fit_ode, or SINDy when source is a sindy_ search). headline is the recommended rate law; dydt_cv_r2 is its cross-validated R2 on the estimated derivative and is NOT comparable with the cv_r2 of the static equations; simulation_train_r2 and holdout_r2 come from integrating the law from each trajectory's start (holdout = whole held-out trajectories or the final part of each series). Explain the rate law as kinetics (what drives the rate, what the plateau or growth limit is) and relate it to the static equations: a static equation that saturates over time is often the integrated form of the rate law. Do not list rate laws among the numbered equations.
     Use this context: contrast the discovered equations with the reference laws (what does a discovered equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
 
     ### RELATION TO KNOWN LAWS
@@ -333,6 +334,7 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
     - discovery.headline_vs_shap checks the headline equation against SHAP feature by feature: "agrees" means the equation moves with that feature as the data does; "ignored", "disagrees" or "opposite" means it misses an effect the data shows. Mention every miss as a limitation.
     - discovery.classic_baselines lists the reference named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
+    - discovery.dynamics (when not null): the rows are measurements over time and the agent also looked for a rate law d(target)/dt = f(target, inputs) (the agent's own via fit_ode, or SINDy when source is a sindy_ search). headline is the recommended rate law; dydt_cv_r2 is its cross-validated R2 on the estimated derivative and is NOT comparable with the cv_r2 of the static equations; simulation_train_r2 and holdout_r2 come from integrating the law from each trajectory's start (holdout = whole held-out trajectories or the final part of each series). Explain the rate law as kinetics (what drives the rate, what the plateau or growth limit is) and relate it to the static equations: a static equation that saturates over time is often the integrated form of the rate law. Do not list rate laws among the numbered equations.
     Use this context: contrast the discovered equations with the reference laws (what does a discovered equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
 
     ### RELATION TO KNOWN LAWS
@@ -423,9 +425,11 @@ class EquationDiscoveryAgent(dspy.Signature):
     You work like a careful empiricist: form hypotheses from the data and the domain, test
     them with tools, explain every failure, and spend expensive compute where it pays.
 
-    Tools let you profile the data, fit your own formulas, launch and steer PySR
-    symbolic-regression searches on an HPC cluster, and write to a shared lab notebook that the
-    explanation agent and the final report read.
+    Tools let you profile the data, fit your own formulas, launch and steer symbolic searches
+    (PySR on an HPC cluster for static equations target = f(features); SINDy, sparse
+    regression in seconds, for rate laws d(target)/dt = f(target, inputs) when the rows are
+    measurements over time), and write to a shared lab notebook that the explanation agent and
+    the final report read.
 
     You work from the data alone. Do not start from named or textbook laws: derive every form
     from the shapes, interactions and residual diagnoses you observe, and let PySR search the
@@ -461,16 +465,28 @@ class EquationDiscoveryAgent(dspy.Signature):
        - "parameters not distinguishable from zero" -> drop that term
        - "matches the noise ceiling" / "exceeds the nonparametric benchmark" -> the form is sufficient
     4. Combine what you learned into multivariate formulas with fit_formula.
-    5. By about step 4-6, launch ONE targeted PySR search (start_pysr_search): restrict features to
+    5. Time structure. If DATA_OVERVIEW.time_structure is present (confidence strong or weak),
+       the rows may be repeated measurements over time (trajectories of samples, jars, plots).
+       Check it with describe_time_structure. If the time column really is time, confirm it
+       with set_dynamics and look for the rate law that generates the curves: start with
+       fit_ode (e.g. first-order approach k*(a - y), growth r*y*(1 - y/K), decay -k*y, and
+       inputs that scale the rate), and launch start_sindy_search (it is fast; vary degree,
+       features and extra_functions between searches). Judge rate laws by simulation_r2 (the
+       law integrated from each trajectory's start): a law that fits the derivative but
+       diverges or drifts when simulated is wrong. Rate-law scores are on the derivative and
+       are NOT comparable with static R2 (leaderboard(problem='dynamic') ranks them). Keep the
+       static analysis too; recommend the best static model AND, if one is sound, the best
+       rate law. Without a time structure, skip this step entirely.
+    6. By about step 4-6, launch ONE targeted PySR search (start_pysr_search): restrict features to
        those that matter, choose operators matching the shapes you found, seed it with your best
        models via guess_model_ids, and say why in rationale. The baseline search (INITIAL_SEARCHES)
        counts toward the search budget. Keep fitting while searches run; when [event] says a search
        completed, read it with search_results and compare it with your models. Use
        wait_for_searches only when you have nothing useful left to fit.
-    6. Record findings with note (batch several entries per call): mechanisms and interactions you
+    7. Record findings with note (batch several entries per call): mechanisms and interactions you
        established, directions that failed and why (with numbers), data issues, candidates. Cite
        model_ids. Do not note every routine rejected fit — the diagnoses are stored anyway.
-    7. Finish when a plausible model reaches the noise ceiling, or when the budget runs low — but
+    8. Finish when a plausible model reaches the noise ceiling, or when the budget runs low — but
        not while searches are pending or unread (finish is refused once in that case).
 
     ### PRINCIPLES
@@ -484,7 +500,7 @@ class EquationDiscoveryAgent(dspy.Signature):
     Return STRICT JSON only (double quotes, no markdown):
     {
         "summary": "3-6 sentences: what governs the target, which model(s) you recommend and why, what remains unexplained",
-        "recommended_models": [{"model_id": "M12", "why": "..."}],
+        "recommended_models": [{"model_id": "M12", "why": "..."}, {"model_id": "D7", "why": "rate law, simulation R2 0.97"}],
         "rejected_forms": [{"form": "saturating ratio a*P/(b + P)", "model_id": "M3", "reason": "residuals depend on pH (~40% of residual variance)"}],
         "insights": ["..."],
         "open_questions": ["..."]
@@ -498,9 +514,9 @@ class EquationDiscoveryAgent(dspy.Signature):
     shap_plots: list[dspy.Image] = dspy.InputField(
         desc="SHAP summary and dependence plots of the training data (may be empty)"
     )
-    budget: str = dspy.InputField(desc="JSON: step, time and PySR-search limits")
+    budget: str = dspy.InputField(desc="JSON: step, time and PySR/SINDy-search limits")
     initial_searches: str = dspy.InputField(
-        desc="JSON snapshot of PySR searches started before you (live status is in STATE lines)"
+        desc="JSON snapshot of searches started before you (live status is in STATE lines)"
     )
 
     report_json: str = dspy.OutputField(desc="Final report JSON as specified")

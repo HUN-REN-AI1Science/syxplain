@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Tag } from 'primereact/tag';
 import HelpButton from '@components/HelpButton';
 import {
+  asArray,
   asText,
   basisOf,
   fmtCeiling,
@@ -16,6 +17,7 @@ import {
   rejectedFormModelId,
   rejectedFormText,
 } from '@utils/discovery';
+import { DynamicsSection } from './DynamicsSection';
 import { KnownLawsSection } from './KnownLawsSection';
 import { Leaderboard, MAX_ROWS } from './Leaderboard';
 import { LiteratureSection } from './LiteratureSection';
@@ -30,8 +32,6 @@ const NOTE_META: Record<NotebookEntry['kind'], { title: string; icon: string }> 
   data_issue: { title: 'Data issues', icon: 'pi pi-exclamation-triangle text-amber-500' },
   hypothesis: { title: 'Open hypotheses', icon: 'pi pi-question-circle text-brand-500' },
 };
-
-const asArray = <T,>(x: T[] | null | undefined): T[] => (Array.isArray(x) ? x : []);
 
 const Stat: React.FC<{ label: string; value: string; hint?: string }> = ({
   label,
@@ -438,10 +438,18 @@ export const DiscoveryReportPanel: React.FC<DiscoveryReportPanelProps> = ({ repo
         <LiteratureSection literature={report.literature} renderModelId={renderModelId} />
       )}
 
+      {report.dynamics && (
+        <DynamicsSection
+          dynamics={report.dynamics}
+          targetColumn={report.target?.column ?? ''}
+          renderModelId={renderModelId}
+        />
+      )}
+
       {searches.length > 0 && (
         <details className="group">
           <summary className="text-sm font-semibold text-secondary cursor-pointer select-none">
-            Symbolic regression searches ({searches.length})
+            Symbolic searches ({searches.length})
           </summary>
           <ul className="mt-2 space-y-2">
             {searches.map((s) => (
@@ -466,8 +474,16 @@ export const DiscoveryReportPanel: React.FC<DiscoveryReportPanelProps> = ({ repo
                     <Tag value="not reviewed" severity="warning" className="text-xs" />
                   )}
                   <span className="text-xs text-muted">
-                    {asArray(s.features).join(', ')} · operators{' '}
-                    {[...asArray(s.binary_operators), ...asArray(s.unary_operators)].join(' ')}
+                    {s.engine === 'sindy'
+                      ? `SINDy rate law · ${asArray(s.features).join(', ')} · degree ${s.degree ?? '?'}${
+                          asArray(s.extra_functions).length
+                            ? ` + ${asArray(s.extra_functions).join(', ')}`
+                            : ''
+                        }`
+                      : `${asArray(s.features).join(', ')} · operators ${[
+                          ...asArray(s.binary_operators),
+                          ...asArray(s.unary_operators),
+                        ].join(' ')}`}
                     {s.target_transform ? ` · ${s.target_transform}(target)` : ''}
                     {typeof s.best_cv_r2 === 'number'
                       ? ` · best CV R² ${s.best_cv_r2.toFixed(3)}`

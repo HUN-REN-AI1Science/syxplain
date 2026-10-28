@@ -576,6 +576,7 @@ class AnalysisOrchestrator:
         budget = DiscoveryBudget(
             max_iters=limits["max_iters"],
             max_pysr_runs=limits["max_pysr_runs"],
+            max_sindy_runs=limits["max_sindy_runs"],
             max_concurrent_pysr=limits["max_concurrent_pysr"],
             wall_clock_s=limits["wall_clock_s"],
             pysr_timeout_s=limits["pysr_timeout_s"],
@@ -634,6 +635,7 @@ class AnalysisOrchestrator:
         from backend.services.discovery.reconcile import reconcile
         from backend.services.discovery.relate import screen_named_laws
         from backend.services.discovery.report import build_results
+        from backend.services.discovery.sindy import LocalSindyLauncher
 
         settings = get_discovery_settings()
         budget = self._discovery_budget()
@@ -651,11 +653,12 @@ class AnalysisOrchestrator:
             context.target_column,
             context.predictor_columns,
             budget,
-            launcher,
+            None,
             on_event,
             descriptions=descriptions,
             sparse_column_threshold=settings.sparse_column_threshold,
             max_categorical_levels=settings.max_categorical_levels,
+            launchers={"pysr": launcher, "sindy": LocalSindyLauncher()},
         )
 
         try:
@@ -791,11 +794,9 @@ class AnalysisOrchestrator:
             self._raise_if_cancelled(context, session)
 
             await progress.update_progress_async("final_scoring", status="Scoring models")
-            completed = [s for s in session.searches.values() if s.status == "completed"]
-            if not completed:
-                errors = "; ".join(
-                    f"{s.search_id}: {s.error or s.status}" for s in session.searches.values()
-                )
+            pysr = [s for s in session.searches.values() if s.engine == "pysr"]
+            if not any(s.status == "completed" for s in pysr):
+                errors = "; ".join(f"{s.search_id}: {s.error or s.status}" for s in pysr)
                 if not any(not m.error for m in session.snapshot()):
                     raise OrchestratorError(f"PySR task failed: {errors}")
                 session.note(

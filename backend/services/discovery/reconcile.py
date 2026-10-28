@@ -16,12 +16,14 @@ import re
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from backend.services.discovery.session import MODEL_ID_RE, DiscoverySession
+from backend.services.discovery.session import MODEL_ID_PREFIXES, MODEL_ID_RE, DiscoverySession
 
 logger = logging.getLogger(__name__)
 
 R2_TOLERANCE = 0.02
-_CLAIM_RE = re.compile(r"\b([CMSL]\d+)\b[^.;\n]{0,60}?\bR(?:2|²)\b\D{0,12}?(-?\d*\.\d+)")
+_CLAIM_RE = re.compile(
+    rf"\b([{MODEL_ID_PREFIXES}]\d+)\b[^.;\n]{{0,60}}?\bR(?:2|²)\b\D{{0,12}}?(-?\d*\.\d+)"
+)
 
 ReviewFn = Callable[[dict[str, Any], list[str]], Awaitable[dict[str, Any]]]
 
@@ -54,9 +56,9 @@ def check_claims(session: DiscoverySession, report: dict[str, Any]) -> list[dict
             if m is None or (mid, value) in seen:
                 continue
             seen.add((mid, value))
-            actual = [
-                v for v in (m.cv_r2, (m.holdout or {}).get("r2"), m.train_r2) if v is not None
-            ]
+            # Rate laws are also quoted by their simulation R2.
+            scores = (m.cv_r2, (m.holdout or {}).get("r2"), m.train_r2, m.simulation.get("r2"))
+            actual = [v for v in scores if v is not None]
             if actual and min(abs(float(value) - a) for a in actual) > R2_TOLERANCE:
                 failed.append(
                     {

@@ -220,14 +220,19 @@ export interface NotebookEntry {
 
 export interface DiscoverySearch {
   search_id: string;
+  /** Absent on runs from before SINDy (always PySR) */
+  engine?: 'pysr' | 'sindy';
   status: 'submitting' | 'queued' | 'completed' | 'failed' | 'cancelled';
   features: string[];
-  unary_operators: string[] | null;
-  binary_operators: string[] | null;
-  maxsize: number | null;
-  niterations: number | null;
-  target_transform: string | null;
-  guesses: string[];
+  unary_operators?: string[] | null;
+  binary_operators?: string[] | null;
+  maxsize?: number | null;
+  niterations?: number | null;
+  target_transform?: string | null;
+  guesses?: string[];
+  /** SINDy library: polynomial degree and extra functions */
+  degree?: number;
+  extra_functions?: string[];
   rationale: string;
   elapsed_s: number;
   error?: string;
@@ -408,6 +413,57 @@ export interface DiscoveryReport {
     laws: LiteratureLaw[];
   };
   activity?: AgentEvent[];
+  /** Rate-law results; null unless the agent confirmed a time structure */
+  dynamics?: DynamicsReport | null;
+}
+
+export interface TrajectoryTrace {
+  trajectory: string;
+  t: number[];
+  measured: number[];
+  /** Null when the integrated law diverged on this trajectory */
+  simulated: number[] | null;
+}
+
+/** A rate law d(target)/dt = equation, found by fit_ode or SINDy */
+export interface RateLawEntry {
+  model_id: string;
+  label: string;
+  /** Search id for SINDy laws, null for the agent's own */
+  source: string | null;
+  equation: string;
+  /** Cross-validated R² on the derivative (not comparable with static R²) */
+  dydt_cv_r2: number | null;
+  simulation_train_r2: number | null;
+  simulation_diverged: number | null;
+  holdout_r2: number | null;
+  verdict: ModelVerdict;
+  reasons: string[];
+  is_headline: boolean;
+  agent_recommended: boolean;
+  agent_why: string | null;
+  traces: TrajectoryTrace[] | null;
+  traces_basis: 'holdout' | 'train';
+}
+
+export interface DynamicsReport {
+  state: string;
+  rate: string;
+  inputs: string[];
+  split: {
+    time_column: string;
+    group_column: string | null;
+    regime: 'trajectories' | 'final_segment';
+    trajectories: number;
+    train_rows: number;
+    holdout_trajectories: number;
+    holdout_points: number;
+    scored_on: string;
+    cv: string;
+  };
+  dydt_noise_ceiling_r2: number | null;
+  n_models: number;
+  equations: RateLawEntry[];
 }
 
 // ============================================================================

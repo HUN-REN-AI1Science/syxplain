@@ -12,6 +12,9 @@ Protocol (deterministic, no LLM):
 4. One-standard-error rule: every model whose CV RMSE is within one SE of the best is
    statistically tied with it. The agent's first recommendation wins if it is in that
    tie set; otherwise the simplest tied model does.
+5. Rate laws (d target/dt) are scored on the derivative, so they get their own headline
+   (``select_dynamic``) by the same protocol, after a simulation guard: a law that
+   diverges, or does not reproduce the training trajectories when integrated, is vetoed.
 """
 
 from collections.abc import Callable
@@ -25,10 +28,16 @@ from backend.services.discovery.fitting import ModelResult
 STRICT_BAD_VERDICTS = ("poor", "failed", "no_signal")
 
 
-def guard(m: ModelResult, strict: bool = True) -> str | None:
-    """Why ``m`` cannot be recommended, or None."""
+def guard(
+    m: ModelResult,
+    strict: bool = True,
+    extra: Callable[[ModelResult], str | None] | None = None,
+) -> str | None:
+    """Why ``m`` cannot be recommended, or None. ``extra`` is a problem-specific veto."""
     if m.error:
         return f"fit failed: {m.error}"
+    if extra is not None and (why := extra(m)):
+        return why
     if m.cv_r2 is None or m.cv_rmse is None or not np.isfinite(m.cv_rmse):
         return "no cross-validated score"
     if m.cv_r2 <= 0:
@@ -68,35 +77,43 @@ def _simplicity(m: ModelResult) -> tuple:
     return (m.complexity, m.n_params, m.cv_rmse)
 
 
-def usable(models: list[ModelResult]) -> list[ModelResult]:
+def usable(
+    models: list[ModelResult], extra: Callable[[ModelResult], str | None] | None = None
+) -> list[ModelResult]:
     """Models that pass the relaxed guard (usable and better than the mean)."""
-    return [m for m in models if guard(m, strict=False) is None]
+    return [m for m in models if guard(m, strict=False, extra=extra) is None]
 
 
 def select(
     models: list[ModelResult],
     recommended_ids: list[str],
     reference: Callable[[ModelResult], bool] | None = None,
+    extra_guard: Callable[[ModelResult], str | None] | None = None,
 ) -> Selection:
     """
     The headline among the candidates; models matching ``reference`` (known laws) are
     for comparison and become the headline only when no candidate is usable.
+    ``extra_guard`` vetoes models on a problem-specific test (rate-law simulation).
     """
     if reference is not None:
-        selection = select([m for m in models if not reference(m)], recommended_ids)
+        selection = select(
+            [m for m in models if not reference(m)], recommended_ids, extra_guard=extra_guard
+        )
         if selection.headline is None:
-            selection = select(models, recommended_ids)
+            selection = select(models, recommended_ids, extra_guard=extra_guard)
             selection.headline_is_reference = selection.headline is not None
         return selection
     by_id = {m.model_id: m for m in models}
-    strict_pool = [m for m in models if guard(m, strict=True) is None]
+    strict_pool = [m for m in models if guard(m, strict=True, extra=extra_guard) is None]
     strict = bool(strict_pool)
-    pool = strict_pool or usable(models)
+    pool = strict_pool or usable(models, extra_guard)
     rejected: list[dict[str, str]] = []
     if not pool:
         for mid in recommended_ids:
             m = by_id.get(mid)
-            rejected.append({"model_id": mid, "reason": guard(m) if m else "unknown model"})
+            rejected.append(
+                {"model_id": mid, "reason": guard(m, extra=extra_guard) if m else "unknown model"}
+            )
         return Selection(None, "no_eligible_model", [], rejected)
 
     best = min(pool, key=lambda m: m.cv_rmse)
@@ -109,7 +126,7 @@ def select(
         if m is None:
             rejected.append({"model_id": mid, "reason": "unknown model"})
             continue
-        why = guard(m, strict=strict)
+        why = guard(m, strict=strict, extra=extra_guard)
         if why:
             rejected.append({"model_id": mid, "reason": why})
         elif m.cv_rmse > threshold:
@@ -134,3 +151,23 @@ def select(
         if m not in shortlist and len(shortlist) < 3:
             shortlist.append(m)
     return Selection(headline, reason, shortlist, rejected, threshold)
+
+
+SIMULATION_MIN_R2 = 0.0
+
+
+def simulation_guard(m: ModelResult) -> str | None:
+    """Why a rate law cannot be recommended on its training-trajectory simulation, or None."""
+    sim = m.simulation
+    if not sim:
+        return "not simulated"
+    if sim.get("n_diverged"):
+        return f"simulation diverges on {sim['n_diverged']} of {sim['n_episodes']} trajectories"
+    if sim.get("r2") is None or sim["r2"] <= SIMULATION_MIN_R2:
+        return "the integrated law does not reproduce the trajectories"
+    return None
+
+
+def select_dynamic(models: list[ModelResult], recommended_ids: list[str]) -> Selection:
+    """The headline rate law: the usual protocol with the simulation guard."""
+    return select(models, recommended_ids, extra_guard=simulation_guard)

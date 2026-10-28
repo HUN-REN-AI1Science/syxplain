@@ -21,6 +21,7 @@ from backend.services.discovery.session import (
     ALLOWED_BINARY,
     ALLOWED_UNARY,
     NOTE_KINDS,
+    SINDY_FUNCTIONS,
     BudgetExhausted,
     DiscoverySession,
 )
@@ -33,6 +34,8 @@ TargetTransform = Literal["none", "log", "log1p", "sqrt"]
 UnaryOp = Literal[ALLOWED_UNARY]
 BinaryOp = Literal[ALLOWED_BINARY]
 NoteKind = Literal[NOTE_KINDS]
+SindyFunction = Literal[SINDY_FUNCTIONS]
+Problem = Literal["static", "dynamic"]
 
 
 class NoteEntry(BaseModel):
@@ -57,6 +60,9 @@ def build_tools(
 ) -> list[Callable[..., Awaitable[str]]]:
     """
     Create the tool functions bound to ``session``.
+
+    Rate-law tools (set_dynamics, fit_ode, start_sindy_search) work once the agent
+    confirms that the rows are measurements over time.
 
     Exploration is blind to existing knowledge: there is no tool for the classic
     catalog or the literature, so the agent derives its forms from the data. Known
@@ -158,18 +164,22 @@ def build_tools(
             d["reasons"] = m.reasons
             if m.target_transform:
                 d["transformed_space_expression"] = m.fitted_core
+            if m.problem == "dynamic":
+                d["rate"] = f"{session.dynamics.rate} = {m.fitted_expression}"
             return d
 
         return await guarded("inspect_model", run)
 
-    async def leaderboard(top: int = 10) -> str:
-        """All fitted models (your formulas and PySR equations) ranked by cross-validated R2,
-        with the standard error used to decide ties."""
+    async def leaderboard(top: int = 10, problem: Problem = "static") -> str:
+        """Fitted models ranked by cross-validated R2, with the standard error used to decide
+        ties. problem='static': your formulas and PySR equations for the target. problem='dynamic':
+        rate laws (fit_ode and SINDy), ranked by CV R2 on the derivative, with simulation R2."""
 
         async def run():
+            ceiling = session._space(problem)[1].ceiling_r2
             return {
-                "noise_ceiling_r2": session.ceiling_r2 and round(session.ceiling_r2, 4),
-                "models": session.leaderboard(top=min(max(top, 1), 30)),
+                "noise_ceiling_r2": ceiling and round(ceiling, 4),
+                "models": session.leaderboard(top=min(max(top, 1), 30), problem=problem),
             }
 
         return await guarded("leaderboard", run)
@@ -229,7 +239,7 @@ def build_tools(
         return await guarded("start_pysr_search", run)
 
     async def search_status() -> str:
-        """Status of all PySR searches (queued / ingesting / completed / failed / cancelled; an upper
+        """Status of all searches, PySR and SINDy (queued / ingesting / completed / failed / cancelled; an upper
         bound on when each will be done) and the remaining budget."""
 
         async def run():
@@ -243,7 +253,7 @@ def build_tools(
     async def wait_for_searches(
         search_ids: list[str] | None = None, max_wait_minutes: float | None = None
     ) -> str:
-        """Block until ANY of the given PySR searches (default: all running) finishes, or
+        """Block until ANY of the given searches (default: all running) finishes, or
         max_wait_minutes passes (default: as long as the budget allows). Use it only when you have
         nothing useful left to fit. Returns the finished searches; then read them with search_results."""
 
@@ -260,7 +270,7 @@ def build_tools(
         return await guarded("wait_for_searches", run)
 
     async def cancel_search(search_id: str) -> str:
-        """Cancel a running PySR search (frees a slot for a better-targeted one)."""
+        """Cancel a running search (frees a slot for a better-targeted one)."""
 
         async def run():
             record = await session.cancel_search(search_id)
@@ -269,9 +279,10 @@ def build_tools(
         return await guarded("cancel_search", run)
 
     async def search_results(search_id: str, top: int = 8) -> str:
-        """Equations found by a completed PySR search, re-scored like your formulas (constants
+        """Equations found by a completed search, re-scored like your formulas (constants
         refit in cross-validation): Pareto front of complexity vs error with CV R2, verdicts and
-        reasons. Reading a search marks it as reviewed."""
+        reasons (for SINDy: rate laws, CV R2 on the derivative, simulation R2 where simulated).
+        Reading a search marks it as reviewed."""
 
         async def run():
             record = session._get_search(search_id)
@@ -286,6 +297,100 @@ def build_tools(
             }
 
         return await guarded("search_results", run)
+
+    # -------------------------------------------------------------- dynamics
+
+    async def describe_time_structure() -> str:
+        """Whether the rows are measurements over time: the detected time column, trajectory
+        column (sample, jar, plot...), number of trajectories, points per trajectory, how smoothly
+        the target changes along time (evidence) and alternative candidates. Detection is a
+        proposal; confirm it with set_dynamics."""
+
+        async def run():
+            ts = session.time_structure
+            return {
+                "detected": ts.to_dict() if ts and ts.time_column else None,
+                "confirmed": session.dynamics.summary() if session.dynamics else None,
+                "note": "A smooth curve along a column that is not time-like is just a static "
+                "shape; treat the data as dynamics only when the column really is time.",
+            }
+
+        return await guarded("describe_time_structure", run)
+
+    async def set_dynamics(time_column: str, group_column: str | None = None) -> str:
+        """Confirm that the rows are measurements over time and set up rate-law discovery:
+        d(target)/dt is estimated per trajectory by local smoothing, and the other continuous
+        features become inputs of the rate law. group_column separates trajectories (null for
+        a single series). Columns may be original names or aliases. Required before fit_ode and
+        start_sindy_search; calling it again replaces the setup."""
+
+        async def run():
+            dyn = await asyncio.to_thread(session.set_dynamics, time_column, group_column)
+            await session.emit(
+                "tool",
+                f"Dynamics: {dyn.n_trajectories} trajectories along {dyn.structure.time_column}",
+            )
+            return dyn.summary()
+
+        return await guarded("set_dynamics", run)
+
+    async def fit_ode(
+        expression: str, label: str = "", initial_params: dict[str, float] | None = None
+    ) -> str:
+        """Fit your own rate law: expression is the right-hand side of d(target)/dt, using the
+        target alias as the state and the input aliases from set_dynamics; other identifiers are
+        free parameters (max 12). Example: 'k*(a - y)' or 'r*y*(1 - y/K)'. Returns CV R2 on the
+        derivative, the simulation R2 (the law integrated from each training trajectory's start
+        and compared with the measured target) and the diagnosed reasons."""
+
+        async def run():
+            m = await asyncio.to_thread(
+                session.fit_custom, expression, initial_params, None, label, problem="dynamic"
+            )
+            if m.error:
+                await session.emit("fit", f"Rate law {label or expression[:60]} failed: {m.error}")
+            else:
+                cv = f"{m.cv_r2:.3f}" if m.cv_r2 is not None else "n/a"
+                await session.emit(
+                    "fit",
+                    f"Fitted rate law {label or ''} d/dt = {m.fitted_expression[:80]} "
+                    f"({m.model_id}, dydt CV R2 {cv}, simulation R2 {m.simulation.get('r2')})",
+                    model_id=m.model_id,
+                )
+            return m.brief() | {"parameters": list(m.params)}
+
+        return await guarded("fit_ode", run)
+
+    async def start_sindy_search(
+        features: list[str],
+        degree: int = 2,
+        extra_functions: list[SindyFunction] | None = None,
+        include_state: bool = True,
+        rationale: str = "",
+    ) -> str:
+        """Launch a SINDy search (sparse regression over a library of candidate terms) for the
+        rate law d(target)/dt. Fast (seconds), non-blocking: results arrive as a search event and
+        are read with search_results, like PySR searches. features: inputs from set_dynamics to
+        include (the state is included unless include_state is false; at most 6 variables).
+        degree 1-3: polynomial terms and products up to that order. extra_functions adds
+        exp(x), log(x) or 1/x of each variable. Returns a sparsity front from the simplest law to
+        the fullest, each re-scored on the derivative and the best ones simulated."""
+
+        async def run():
+            record = await session.start_sindy_search(
+                features=features,
+                degree=degree,
+                extra_functions=list(extra_functions or []),
+                include_state=include_state,
+                rationale=rationale,
+            )
+            return {
+                "search_id": record.search_id,
+                "config": record.summary(session.models),
+                "budget": session.budget_status(),
+            }
+
+        return await guarded("start_sindy_search", run)
 
     # -------------------------------------------------------------- notebook
 
@@ -323,6 +428,10 @@ def build_tools(
         wait_for_searches,
         cancel_search,
         search_results,
+        describe_time_structure,
+        set_dynamics,
+        fit_ode,
+        start_sindy_search,
         note,
     ]
 

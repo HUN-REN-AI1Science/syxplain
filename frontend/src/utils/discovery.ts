@@ -92,8 +92,11 @@ export const scatterBasisLabel = (data: ScatterData | undefined): string => {
   return '';
 };
 
-/** Model ids such as C12, M3, S40, L1 */
-export const MODEL_ID_PATTERN = /\b([CMSL]\d+)\b/;
+/** The value if it is an array, otherwise [] (stored reports may lack fields) */
+export const asArray = <T>(x: T[] | null | undefined): T[] => (Array.isArray(x) ? x : []);
+
+/** Model ids such as C12, M3, S40, L1, D7 (rate laws) */
+export const MODEL_ID_PATTERN = /\b([CMSLD]\d+)\b/;
 
 /** Splits text into plain parts (even indices) and model-id tokens (odd indices) */
 export const splitModelIds = (text: string): string[] =>

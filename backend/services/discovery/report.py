@@ -17,7 +17,7 @@ from typing import Any
 from backend.services.discovery.coherence import coherence_report
 from backend.services.discovery.fitting import ModelResult
 from backend.services.discovery.relate import KNOWN_KINDS, is_known, relations
-from backend.services.discovery.selection import Selection, select, usable
+from backend.services.discovery.selection import Selection, select, select_dynamic, usable
 from backend.services.discovery.session import MODEL_ID_RE, DiscoverySession
 
 logger = logging.getLogger(__name__)
@@ -27,6 +27,8 @@ MAX_SYMBOLIC = 8
 MAX_LEADERBOARD = 25
 MAX_RELATIONS = 3  # known laws stored per discovered equation
 MAX_HEADLINE_RELATIONS = 8
+MAX_DYNAMIC = 6  # rate-law cards
+MAX_TRACED = 3  # rate laws whose simulated trajectories are stored
 
 # Fields the backend owns on every equation card (overwrite whatever the LLM wrote).
 EQUATION_FIELDS = (
@@ -180,7 +182,11 @@ def build_results(
         for r in report.get("recommended_models", [])
         if r.get("model_id")
     }
-    recommended = list(agent_why)
+    # By the registry, not the ranking: a failed or superseded rate law is still a rate law.
+    dynamic_ids = {
+        mid for mid in agent_why if getattr(session.models.get(mid), "problem", "") == "dynamic"
+    }
+    recommended = [mid for mid in agent_why if mid not in dynamic_ids]
     ranked = session.ranked_models()
     selection = select(ranked, recommended, reference=is_known)
 
@@ -189,7 +195,9 @@ def build_results(
     scatter_data = {e["equation"]: e["scatter_data"] for e in equations if e["scatter_data"]}
     best_equation = next((e for e in equations if e["is_headline"]), None)
 
-    failed = [m for m in session.snapshot() if m.error and m.kind != "symbolic"]
+    failed = [
+        m for m in session.snapshot() if m.error and m.kind != "symbolic" and m.problem == "static"
+    ]
     profile = session._profile or {}
     shap_agreement = session.shap_agreement(selection.headline)
     discovery = {
@@ -236,6 +244,13 @@ def build_results(
     if session.known_laws is not None:
         discovery["literature"] = session.known_laws
     try:
+        discovery["dynamics"] = build_dynamics(
+            session, [mid for mid in agent_why if mid in dynamic_ids], agent_why
+        )
+    except Exception as e:  # rate laws are an addition; never sink the static results
+        logger.warning(f"Dynamics results failed: {e}", exc_info=True)
+        discovery["dynamics"] = None
+    try:
         related = relations(session, selection, ranked)
     except Exception as e:  # a display-only comparison must never sink the results
         logger.warning(f"Relating to known laws failed: {e}")
@@ -269,6 +284,68 @@ def build_results(
             "discovery": discovery,
         }
     )
+
+
+def _dynamic_entry(
+    session: DiscoverySession,
+    m: ModelResult,
+    selection: Selection,
+    agent_why: dict[str, str],
+    traces: bool,
+) -> dict[str, Any]:
+    """A rate-law card; integrating it on the holdout sets ``m.holdout`` (once, here)."""
+    held = bool(session.dynamics.holdout_episodes)
+    sim = (
+        session.simulate_model(m, holdout=held, traces=traces)
+        if (held or traces) and m.parsed is not None
+        else None
+    )
+    if held and sim:
+        m.holdout = {k: v for k, v in sim.items() if k != "traces"}
+    return {
+        "model_id": m.model_id,
+        "label": m.label,
+        "source": m.source,
+        "equation": m.fitted_expression,
+        "dydt_cv_r2": m.cv_r2,
+        "simulation_train_r2": m.simulation.get("r2"),
+        "simulation_diverged": m.simulation.get("n_diverged"),
+        "holdout_r2": m.holdout["r2"] if m.holdout else None,
+        "verdict": m.verdict,
+        "reasons": m.reasons[:4],
+        "is_headline": selection.headline is m,
+        "agent_recommended": m.model_id in agent_why,
+        "agent_why": agent_why.get(m.model_id),
+        "traces": (sim or {}).get("traces"),
+        "traces_basis": "holdout" if held else "train",
+    }
+
+
+def build_dynamics(
+    session: DiscoverySession, recommended_ids: list[str], agent_why: dict[str, str]
+) -> dict[str, Any] | None:
+    """Rate-law results: the confirmed structure, the headline law and simulated traces."""
+    dyn = session.dynamics
+    if dyn is None:
+        return None
+    ranked = session.ranked_models("dynamic")
+    selection = select_dynamic(ranked, recommended_ids)
+    pool = usable(ranked)
+    chosen: dict[str, ModelResult] = {m.model_id: m for m in selection.shortlist}
+    for m in [*(m for m in pool if m.model_id in recommended_ids), *session.pareto(pool)]:
+        if len(chosen) >= MAX_DYNAMIC:
+            break
+        chosen.setdefault(m.model_id, m)
+    cards = [
+        _dynamic_entry(session, m, selection, agent_why, traces=i < MAX_TRACED)
+        for i, m in enumerate(chosen.values())
+    ]
+    return {
+        **dyn.summary(),
+        "selection": selection.to_dict(),
+        "n_models": len(ranked),
+        "equations": cards,
+    }
 
 
 def json_safe(value: Any) -> Any:
@@ -316,6 +393,23 @@ def explanation_data_spec(results: dict[str, Any]) -> dict[str, Any]:
     ][:8]
     literature = discovery.get("literature") or {}
     related = discovery.get("relations") or {}
+    dynamics = discovery.get("dynamics")
+    rate_keys = (
+        "model_id",
+        "source",
+        "dydt_cv_r2",
+        "simulation_train_r2",
+        "holdout_r2",
+        "verdict",
+        "reasons",
+        "agent_recommended",
+    )
+
+    def rate_law(e: dict[str, Any]) -> dict[str, Any]:
+        return {"equation": f"{dynamics['rate']} = {e['equation']}"} | {
+            k: e.get(k) for k in rate_keys
+        }
+
     relation_keys = (
         "law_id",
         "kind",
@@ -388,6 +482,17 @@ def explanation_data_spec(results: dict[str, Any]) -> dict[str, Any]:
             "open_questions": agent.get("open_questions", []),
             "agent_stale": agent.get("stale", False),
             "late_searches": agent.get("late_searches", []),
+            "dynamics": (
+                {
+                    "split": dynamics["split"],
+                    "headline": next(
+                        (rate_law(e) for e in dynamics["equations"] if e["is_headline"]), None
+                    ),
+                    "rate_laws": [rate_law(e) for e in dynamics["equations"]],
+                }
+                if dynamics
+                else None
+            ),
             "literature_matches": [
                 {k: law.get(k) for k in ("equation", "model_id", "cv_r2", "citations")}
                 for law in literature.get("laws", [])
