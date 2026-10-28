@@ -157,7 +157,12 @@ def test_discovery_with_agent(orchestrator, monkeypatch):
     assert set(backend.inputs) == {"pysr_1", "pysr_2"}
     assert backend.inputs["pysr_1"]["config"]["unary_operators"] == ["exp"]  # unknown op dropped
     assert backend.inputs["pysr_2"]["guesses"] == ["5*dose/(2 + dose)"]
-    assert progress.steps[-3:] == ["discovery_agent", "discovery_wrapup", "final_scoring"]
+    assert progress.steps[-4:] == [
+        "compute_submission",
+        "discovery_agent",
+        "discovery_wrapup",
+        "final_scoring",
+    ]
     d = results["discovery"]
     assert d["agent"]["summary"] == "MM fits" and d["agent"]["error"] is None
     assert d["agent"]["stale"] is False and set(d["agent"]["reviewed_searches"]) == {

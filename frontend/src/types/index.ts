@@ -390,8 +390,10 @@ export interface ProgressPhase {
   name: string;
   label: string;
   description?: string;
-  progress_end: number;
-  increment_rate: number;
+  /** Progress (%) when this phase begins; the bar moves towards the next phase's start */
+  progress_start: number;
+  /** Typical duration in seconds (measured on prod runs) */
+  expected_s: number;
 }
 
 // ============================================================================

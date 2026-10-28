@@ -125,7 +125,14 @@ const ResultsView: React.FC<ResultsViewProps> = ({
   }, [isCompleted, runId]);
 
   // Custom hook for smooth progress interpolation and step description
-  const { displayProgress, currentStepDescription, isInQueuePhase } = useProgressInterpolation({
+  const {
+    displayProgress,
+    currentStepDescription,
+    currentStepLabel,
+    stepElapsedS,
+    stepExpectedS,
+    isInQueuePhase,
+  } = useProgressInterpolation({
     phases: progressPhases,
     backendProgress,
     status,
@@ -345,6 +352,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({
                     : currentStepDescription
               }
               isInQueuePhase={isStarting || isConnecting || isInQueuePhase}
+              stepTiming={
+                isStarting || isConnecting
+                  ? undefined
+                  : { label: currentStepLabel, elapsedS: stepElapsedS, expectedS: stepExpectedS }
+              }
               isJobSubmitted={
                 status === 'running' && !isStarting && !isConnecting && !isInQueuePhase
               }

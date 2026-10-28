@@ -19,7 +19,22 @@ interface AnalysisProgressViewProps {
   isJobSubmitted?: boolean;
   /** Live discovery-agent activity */
   activity?: AgentEvent[];
+  /** Time spent in the current step, against how long it usually takes */
+  stepTiming?: { label: string; elapsedS: number; expectedS: number | null };
 }
+
+/** Steps shorter than this are not worth a timing line */
+const MIN_TIMED_STEP_S = 15;
+
+const formatDuration = (seconds: number): string => {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+};
+
+const formatTypical = (seconds: number): string =>
+  seconds < 60 ? `~${Math.round(seconds)}s` : `~${Math.round(seconds / 60)} min`;
 
 export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
   displayProgress,
@@ -27,7 +42,13 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
   isInQueuePhase = false,
   isJobSubmitted = false,
   activity = [],
+  stepTiming,
 }) => {
+  const showTiming =
+    !isInQueuePhase &&
+    stepTiming &&
+    ((stepTiming.expectedS ?? 0) >= MIN_TIMED_STEP_S || stepTiming.elapsedS >= MIN_TIMED_STEP_S);
+
   return (
     <div className="text-center py-20">
       {/* Hero: percentage number */}
@@ -61,7 +82,7 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
       </div>
 
       {/* Step Description with crossfade */}
-      <div className="h-8 mb-4" aria-live="polite">
+      <div className="h-8 mb-1" aria-live="polite">
         <p
           key={stepDescription}
           className="text-base font-medium text-muted step-description-animate"
@@ -69,6 +90,18 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
           {stepDescription}
         </p>
       </div>
+
+      {/* How long this step has run, against its typical duration */}
+      <p className="h-5 mb-4 text-xs text-muted tabular-nums">
+        {showTiming && (
+          <>
+            {stepTiming.label} · {formatDuration(stepTiming.elapsedS)} in this step
+            {stepTiming.expectedS !== null && stepTiming.expectedS >= MIN_TIMED_STEP_S && (
+              <> · usually {formatTypical(stepTiming.expectedS)}</>
+            )}
+          </>
+        )}
+      </p>
 
       <hr className="max-w-md mx-auto border-[var(--color-border)] mb-6" />
 

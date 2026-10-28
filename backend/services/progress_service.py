@@ -69,54 +69,38 @@ def _broadcast_progress_sync(
 # Progress Configuration
 # ============================================================================
 
-_progress_cache: dict[str, int] | None = None
+_phases_cache: list[dict[str, Any]] | None = None
 
 
-def _load_progress_weights() -> dict[str, int]:
-    """Load progress phase weights from YAML configuration."""
-    config_paths = [
-        Path(__file__).parent.parent / "progress_config.yaml",
-        Path("backend/progress_config.yaml"),
-    ]
-
-    for config_path in config_paths:
-        if config_path.exists():
-            try:
-                with open(config_path) as f:
-                    config = yaml.safe_load(f)
-                    phases = config.get("phases", [])
-                    return {p["name"]: p["progress_end"] for p in phases}
-            except Exception as e:
-                logger.warning(f"Failed to load progress_config.yaml: {e}")
-
-    logger.warning("No progress_config.yaml found, using empty weights")
-    return {}
+def get_progress_phases() -> list[dict[str, Any]]:
+    """Progress phases from progress_config.yaml (cached; also sent to the frontend)."""
+    global _phases_cache
+    if _phases_cache is None:
+        _phases_cache = []
+        config_paths = [
+            Path(__file__).parent.parent / "progress_config.yaml",
+            Path("backend/progress_config.yaml"),
+        ]
+        for config_path in config_paths:
+            if config_path.exists():
+                try:
+                    with open(config_path) as f:
+                        _phases_cache = yaml.safe_load(f).get("phases", [])
+                    break
+                except Exception as e:
+                    logger.warning(f"Failed to load progress_config.yaml: {e}")
+        else:
+            logger.warning("No progress_config.yaml found, using empty weights")
+    return _phases_cache
 
 
 def get_progress_weights() -> dict[str, int]:
-    """Get cached progress weights."""
-    global _progress_cache
-    if _progress_cache is None:
-        _progress_cache = _load_progress_weights()
-    return _progress_cache
+    """Progress percentage at which each phase begins."""
+    return {p["name"]: p["progress_start"] for p in get_progress_phases()}
 
 
-def get_progress_phases():
-    """Get progress phases for API response."""
-    config_paths = [
-        Path(__file__).parent.parent / "progress_config.yaml",
-        Path("backend/progress_config.yaml"),
-    ]
-
-    for config_path in config_paths:
-        if config_path.exists():
-            try:
-                with open(config_path) as f:
-                    config = yaml.safe_load(f)
-                    return config.get("phases", [])
-            except Exception:
-                pass
-    return []
+def get_phase(name: str) -> dict[str, Any] | None:
+    return next((p for p in get_progress_phases() if p["name"] == name), None)
 
 
 # ============================================================================

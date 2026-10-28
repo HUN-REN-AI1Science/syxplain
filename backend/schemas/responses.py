@@ -195,7 +195,9 @@ class ProgressPhase(BaseModel):
 
     name: str
     label: str
-    progress_end: int
+    description: str | None = None
+    progress_start: int
+    expected_s: float
 
 
 class ProgressConfigResponse(BaseModel):

@@ -9,6 +9,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import math
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -44,7 +45,12 @@ from backend.services.discovery.session import (
     DiscoveryBudget,
     DiscoverySession,
 )
-from backend.services.progress_service import ProgressTracker, _broadcast_progress_sync
+from backend.services.progress_service import (
+    ProgressTracker,
+    _broadcast_progress_sync,
+    get_phase,
+    get_progress_weights,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -690,6 +696,10 @@ class AnalysisOrchestrator:
                     }
                 )
 
+            await progress.update_progress_async(
+                "discovery_agent", status="Profiling data and starting the AI scientist"
+            )
+
             # PROFILE (separate process; not charged to the agent's budget)
             await session.ensure_profile()
             session.reset_clock()
@@ -714,7 +724,7 @@ class AnalysisOrchestrator:
             # SETTLE
             pending = [s.search_id for s in session.searches.values() if not s.done]
             await progress.update_progress_async(
-                "discovery_agent",
+                "discovery_wrapup",
                 status=f"Waiting for {', '.join(pending)}" if pending else "Collecting results",
             )
             await session.ensure_result(
@@ -757,7 +767,7 @@ class AnalysisOrchestrator:
                     review = self._review_fn(context, session, lm, settings.review_steps)
                 agent_report = await reconcile(session, agent_report, review)
 
-            await progress.update_progress_async("discovery_wrapup", status="Scoring models")
+            await progress.update_progress_async("final_scoring", status="Scoring models")
             completed = [s for s in session.searches.values() if s.status == "completed"]
             if not completed:
                 errors = "; ".join(
@@ -776,9 +786,6 @@ class AnalysisOrchestrator:
             results = await asyncio.to_thread(build_results, session, agent_report, agent_error)
             results["warnings"] = warnings
             context.shap_plots = session.shap_plots
-            await progress.update_progress_async(
-                "final_scoring", status="Models scored and selected"
-            )
             logger.info(
                 f"Discovery finished for run {context.run_id}: {len(session.models)} models, "
                 f"{len(session.searches)} searches, {len(results['equations'])} equations reported, "
@@ -919,8 +926,18 @@ class AnalysisOrchestrator:
         progress: ProgressTracker,
         agent_task: asyncio.Task,
     ) -> None:
-        """Advance the progress bar with the agent's time budget and watch for cancellation."""
-        start, end = 10, 71
+        """
+        Advance the progress bar through the agent phase and watch for cancellation.
+
+        The wall-clock budget is a ceiling, far above a typical run, so the bar follows
+        whichever is further along: the agent's steps against its step budget, or elapsed
+        time on the same saturating curve the frontend uses (~86% of the span at the
+        phase's expected duration).
+        """
+        weights = get_progress_weights()
+        start = weights.get("discovery_agent", 7)
+        end = weights.get("discovery_wrapup", 85) - 1
+        expected_s = float((get_phase("discovery_agent") or {}).get("expected_s", 600))
         try:
             while not agent_task.done():
                 await asyncio.sleep(10)
@@ -930,7 +947,11 @@ class AnalysisOrchestrator:
                         session.cancelled = True
                         agent_task.cancel()
                         return
-                    frac = min(1.0, session.elapsed_s / max(session.budget.wall_clock_s, 1.0))
+                    frac = max(
+                        session.steps_used / max(session.budget.max_iters, 1),
+                        1 - math.exp(-2 * session.elapsed_s / expected_s),
+                    )
+                    frac = min(1.0, frac)
                     await progress.set_progress_async(int(start + frac * (end - start)))
                 except asyncio.CancelledError:
                     raise

@@ -1,109 +1,85 @@
 # Progress Configuration
 # This file defines the pipeline stages and their progress percentages.
-# Both backend (logger.py) and frontend (via API) use this config.
+# Both backend (progress_service.py) and frontend (via API) use this config.
 
 # Each phase has:
-#   - name: Internal identifier used in log_step calls
+#   - name: Internal identifier used in update_progress calls
 #   - label: Human-readable label for UI
 #   - description: User-friendly explanation of what's happening
-#   - progress_end: The progress percentage when this phase completes
-#   - increment_rate: How fast the frontend fake-increments during this phase (% per 500ms)
+#   - progress_start: The progress percentage when this phase begins; the bar moves towards
+#     the next phase's start while the phase runs
+#   - expected_s: Typical duration in seconds. The frontend advances the bar along
+#     1 - exp(-2t / expected_s): ~86% of the phase's span at expected_s, never past its end.
+#
+# Spans follow measured step times (prod run 5db8668d, 2026-10-28, ~12 min in total:
+# setup ~3s, AI configuration ~20s, agent with two cluster searches ~10.5 min,
+# scoring and literature instant, explanation ~80s).
 
 phases:
-  # Init group (0-4%, all instant)
   - name: initialization
     label: "Initializing"
     description: "Setting up your analysis environment..."
-    progress_end: 2
-    increment_rate: 0.5
+    progress_start: 0
+    expected_s: 1
 
   - name: data_summary
     label: "Analyzing Data"
     description: "Analyzing your dataset structure and patterns..."
-    progress_end: 3
-    increment_rate: 0.5
+    progress_start: 1
+    expected_s: 1
 
   - name: visualization
     label: "Generating Charts"
     description: "Creating data visualizations..."
-    progress_end: 4
-    increment_rate: 0.5
+    progress_start: 2
+    expected_s: 3
 
-  # LLM config for the baseline PySR search (4-9%, ~13s — first noticeable wait)
   - name: pysr_config_generation
     label: "AI Configuration"
     description: "AI is analyzing your data to find the best approach..."
-    progress_end: 9
-    increment_rate: 0.25
+    progress_start: 3
+    expected_s: 20
 
-  # Baseline search submission (9-10%, instant)
   - name: compute_submission
     label: "Submitting Jobs"
     description: "Submitting a first symbolic regression search to the computing cluster..."
-    progress_end: 10
-    increment_rate: 0.5
+    progress_start: 6
+    expected_s: 2
 
-  # Agentic discovery (10-72%). The orchestrator advances the bar with the agent's
-  # time budget; the agent's steps stream to the UI as activity events.
+  # The bulk of the run. The orchestrator advances the bar from the agent's steps and
+  # elapsed time; the agent's steps stream to the UI as activity events.
   - name: discovery_agent
     label: "AI Scientist at Work"
     description: "An AI agent is profiling your data, fitting classic scientific laws and steering symbolic regression on the cluster..."
-    progress_end: 72
-    increment_rate: 0.02
+    progress_start: 7
+    expected_s: 600
 
   - name: discovery_wrapup
     label: "Collecting Results"
     description: "Waiting for the last symbolic regression searches to finish..."
-    progress_end: 74
-    increment_rate: 0.02
+    progress_start: 85
+    expected_s: 30
 
   - name: final_scoring
     label: "Scoring Models"
     description: "Scoring every model on held-out data it has never seen..."
-    progress_end: 75
-    increment_rate: 0.25
+    progress_start: 87
+    expected_s: 5
 
-  # Literature (75-82%): fitted published laws feed the explanation
   - name: literature
     label: "Literature"
     description: "Comparing your equations with published laws..."
-    progress_end: 82
-    increment_rate: 0.25
+    progress_start: 88
+    expected_s: 5
 
-  # LLM explanation (82-99%, ~20s)
   - name: llm_explanation
     label: "Explaining Results"
     description: "AI is interpreting your equations and generating insights..."
-    progress_end: 90
-    increment_rate: 0.25
+    progress_start: 89
+    expected_s: 80
 
-  - name: phase_explanation
-    label: "Generating Explanation"
-    description: "AI is preparing to explain your equations..."
-    progress_end: 85
-    increment_rate: 0.25
-
-  - name: equations_selected
-    label: "Equations Selected"
-    description: "Best equations identified, generating explanations..."
-    progress_end: 87
-    increment_rate: 0.25
-
-  - name: llm_explanation_request
-    label: "Explaining Results"
-    description: "AI is interpreting your equations and generating insights..."
-    progress_end: 92
-    increment_rate: 0.25
-
-  - name: llm_explanation_complete
-    label: "Finalizing"
-    description: "Preparing your final results..."
-    progress_end: 95
-    increment_rate: 0.25
-
-  # Finalization (95-99%)
   - name: finalization
     label: "Finalizing"
     description: "Preparing your final results..."
-    progress_end: 99
-    increment_rate: 0.25
+    progress_start: 98
+    expected_s: 2

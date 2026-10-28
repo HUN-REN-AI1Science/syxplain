@@ -24,13 +24,34 @@ export interface UseProgressInterpolationResult {
   currentStepDescription: string;
   /** Current step label (shorter) */
   currentStepLabel: string;
+  /** Seconds spent in the current step (since this page saw it begin) */
+  stepElapsedS: number;
+  /** Typical duration of the current step in seconds, when known */
+  stepExpectedS: number | null;
   /** Whether the analysis is in the early HPC queue phase */
   isInQueuePhase: boolean;
 }
 
+/** Share of a phase's span reached after `elapsed` seconds: ~86% at `expected`, never 100% */
+const phaseFraction = (elapsedS: number, expectedS: number): number =>
+  1 - Math.exp((-2 * elapsedS) / Math.max(expectedS, 1));
+
+/** Index of the running phase: the last one whose start the backend has reached */
+const phaseIndexAt = (phases: ProgressPhase[], progress: number): number => {
+  let idx = -1;
+  phases.forEach((p, i) => {
+    if (progress >= p.progress_start) idx = i;
+  });
+  return idx;
+};
+
 /**
- * Hook for smoothly interpolating progress values
- * Creates a better UX by slowly incrementing progress between backend updates
+ * Hook for smoothly interpolating progress values.
+ *
+ * Each phase starts at its `progress_start` (set by the backend when the phase begins) and
+ * the bar advances towards the next phase's start along the phase's typical duration, so the
+ * bar's share of each step matches how long that step usually takes. Backend progress inside
+ * a phase (the agent phase reports its own) is never undercut.
  *
  * @example
  * const { displayProgress, currentStepDescription } = useProgressInterpolation({
@@ -45,18 +66,20 @@ export function useProgressInterpolation(
   const { phases = [], backendProgress, status, updateInterval = 500 } = options;
 
   const [displayProgress, setDisplayProgress] = useState(0);
-  const phasesRef = useRef(phases);
-  const lastBackendUpdateRef = useRef<number>(Date.now());
+  const [stepElapsedS, setStepElapsedS] = useState(0);
+  const phaseIndex = useMemo(
+    () => phaseIndexAt(phases, backendProgress),
+    [phases, backendProgress]
+  );
+  const phaseStartedAtRef = useRef<number>(Date.now());
 
-  // Update phases ref
+  // A new phase restarts the step clock
   useEffect(() => {
-    phasesRef.current = phases;
-  }, [phases]);
+    phaseStartedAtRef.current = Date.now();
+    setStepElapsedS(0);
+  }, [phaseIndex]);
 
-  // Track when backendProgress last changed
-  useEffect(() => {
-    lastBackendUpdateRef.current = Date.now();
-  }, [backendProgress]);
+  const currentPhase = phaseIndex >= 0 ? phases[phaseIndex] : null;
 
   // Compute current step description based on backend progress
   const { currentStepDescription, currentStepLabel } = useMemo(() => {
@@ -73,109 +96,65 @@ export function useProgressInterpolation(
           status === 'timeout' ? 'Timeout' : status === 'cancelled' ? 'Cancelled' : 'Failed',
       };
     }
-    if (phases.length === 0) {
+    if (!currentPhase) {
       return {
         currentStepDescription: 'Processing...',
         currentStepLabel: 'Processing',
       };
     }
-
-    // Find the current phase based on backend progress
-    // The current phase is the one whose progress_end we haven't reached yet
-    let currentPhase: ProgressPhase | null = null;
-
-    for (let i = 0; i < phases.length; i++) {
-      if (backendProgress < phases[i].progress_end) {
-        currentPhase = phases[i];
-        break;
-      }
-      // If we've passed this phase's progress_end, continue to next
-      currentPhase = phases[i];
-    }
-
-    if (currentPhase) {
-      return {
-        currentStepDescription: currentPhase.description || currentPhase.label,
-        currentStepLabel: currentPhase.label,
-      };
-    }
-
     return {
-      currentStepDescription: 'Finalizing...',
-      currentStepLabel: 'Finalizing',
+      currentStepDescription: currentPhase.description || currentPhase.label,
+      currentStepLabel: currentPhase.label,
     };
-  }, [backendProgress, phases, status]);
+  }, [currentPhase, status]);
 
   useEffect(() => {
-    // If completed, show 100%
     if (status === 'completed') {
       setDisplayProgress(100);
       return;
     }
-
-    // If failed, timeout, or cancelled, show current backend progress
     if (status === 'failed' || status === 'timeout' || status === 'cancelled') {
       setDisplayProgress(backendProgress);
       return;
     }
 
-    const getCurrentPhaseInfo = (backendProg: number) => {
-      if (phasesRef.current.length === 0) {
-        // Fallback defaults if config not loaded
-        return { maxProgress: Math.min(backendProg + 5, 98), incrementRate: 0.2 };
+    const target = (): number => {
+      if (!currentPhase) {
+        // Phases not loaded (e.g. page opened mid-run): creep a little past the backend
+        return Math.min(backendProgress + 5, 98);
       }
-
-      // Find the phase that just ended (backend progress >= progress_end)
-      let currentPhase: ProgressPhase | null = null;
-      let nextPhase: ProgressPhase | null = null;
-
-      for (let i = 0; i < phasesRef.current.length; i++) {
-        if (backendProg >= phasesRef.current[i].progress_end) {
-          currentPhase = phasesRef.current[i];
-          nextPhase = phasesRef.current[i + 1] || null;
-        }
-      }
-
-      // Max progress is the next phase's progress_end - 1, or 98 if at the end
-      const maxProgress = nextPhase ? nextPhase.progress_end - 1 : 98;
-      const incrementRate = currentPhase?.increment_rate || 0.2;
-
-      return { maxProgress, incrementRate };
+      const next = phases[phaseIndex + 1];
+      const end = (next ? next.progress_start : 99) - 0.5;
+      const elapsedS = (Date.now() - phaseStartedAtRef.current) / 1000;
+      const start = currentPhase.progress_start;
+      const timed = start + (end - start) * phaseFraction(elapsedS, currentPhase.expected_s);
+      return Math.min(Math.max(timed, backendProgress), end);
     };
 
     const intervalId = setInterval(() => {
+      setStepElapsedS(Math.floor((Date.now() - phaseStartedAtRef.current) / 1000));
       setDisplayProgress((current) => {
-        const { maxProgress, incrementRate } = getCurrentPhaseInfo(backendProgress);
-
-        // If backend jumped ahead significantly, catch up faster
-        if (backendProgress > current + 5) {
-          return Math.min(current + 2, backendProgress);
-        }
-
-        // If we've reached the max for current phase, creep slowly after a delay
-        if (current >= maxProgress) {
-          const timeSinceUpdate = Date.now() - lastBackendUpdateRef.current;
-          if (timeSinceUpdate < 10_000) {
-            return current; // Normal: hold at max for first 10s
-          }
-          // Slow creep: 0.02% per 500ms (~2.4%/min), capped at maxProgress + 5
-          const creepCeiling = Math.min(maxProgress + 5, 98);
-          if (current >= creepCeiling) return current;
-          return Math.min(current + 0.02, creepCeiling);
-        }
-
-        // Normal slow increment towards max
-        return Math.min(current + incrementRate, maxProgress);
+        const goal = target();
+        if (goal <= current) return current;
+        // Ease towards the goal, so backend jumps animate instead of snapping
+        return goal - current < 0.05 ? goal : current + (goal - current) * 0.25;
       });
     }, updateInterval);
 
     return () => clearInterval(intervalId);
-  }, [backendProgress, status, updateInterval]);
+  }, [backendProgress, status, updateInterval, phases, phaseIndex, currentPhase]);
 
   // Queue phase: only while backend hasn't started processing yet
   const isInQueuePhase = useMemo(() => {
     return status === 'pending';
   }, [status]);
 
-  return { displayProgress, currentStepDescription, currentStepLabel, isInQueuePhase };
+  return {
+    displayProgress,
+    currentStepDescription,
+    currentStepLabel,
+    stepElapsedS,
+    stepExpectedS: currentPhase?.expected_s ?? null,
+    isInQueuePhase,
+  };
 }
