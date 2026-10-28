@@ -103,10 +103,13 @@ class SlurmBackend:
         # Use Singularity container if configured
         if slurm_settings.container_path:
             escaped_container = shell_escape(slurm_settings.container_path)
+            # --pwd: start outside the shared storage dir, so a stray slurm_worker/ copy
+            # there can never shadow the image's code (python -m imports from the CWD first).
             worker_command = f"""# Run worker in Singularity container
 singularity run \\
     --writable-tmpfs \\
     --bind /storage:/storage \\
+    --pwd /tmp \\
     --cleanenv \\
     --env CALLBACK_URL="$CALLBACK_URL" \\
     --env CALLBACK_TOKEN="$CALLBACK_TOKEN" \\

@@ -280,7 +280,7 @@ def get_logger(name: str) -> logging.Logger:
 
 class EndpointFilter(logging.Filter):
     """
-    Filter to reduce noise from frequently-called endpoints.
+    Filter to reduce noise from frequently-called endpoints and mask tokens in URLs.
 
     Filters out health checks and public endpoints to keep output clean.
     """
@@ -291,7 +291,17 @@ class EndpointFilter(logging.Filter):
         "GET /api/public/",
     ]
 
+    # SSE clients pass their JWT as ?token= (EventSource cannot send headers)
+    TOKEN_PARAM = re.compile(r"([?&](?:access_)?token=)[^&\s]+")
+
     def filter(self, record: logging.LogRecord) -> bool:
+        # uvicorn access records: (client, method, path, http_version, status)
+        if isinstance(record.args, tuple) and len(record.args) >= 3:
+            path = record.args[2]
+            if isinstance(path, str) and "token=" in path:
+                args = list(record.args)
+                args[2] = self.TOKEN_PARAM.sub(r"\1***", path)
+                record.args = tuple(args)
         message = record.getMessage()
         return not any(pattern in message for pattern in self.NOISY_PATTERNS)
 
