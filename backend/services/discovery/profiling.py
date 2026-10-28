@@ -224,7 +224,7 @@ def shap_analysis(
 
 
 def _shape_kind(label: str) -> str:
-    """'saturating increasing — try ...' -> 'saturating increasing'."""
+    """'peaked (optimum inside the range)' -> 'peaked'."""
     return label.split(" — ")[0].split(" (")[0]
 
 
@@ -517,7 +517,8 @@ def profile_shape(
     Binned mean of the target along one feature and a coarse shape label.
 
     Labels: increasing/decreasing (linear, saturating, accelerating),
-    peaked, valley, sigmoidal, flat — a hint for which families to try.
+    peaked, valley, sigmoidal, flat. Labels describe the curve and name no model family,
+    so the agent derives its forms from the data rather than from a catalog.
 
     With ``ref_sd`` (used for SHAP dependence, where ``y`` is an effect rather than
     the noisy target) the curve is flat when its span is below 5% of ``ref_sd`` and
@@ -583,9 +584,9 @@ def _classify(mids: np.ndarray, means: np.ndarray, se: float) -> str:
     interior = range(1, k - 1)
     margin = max(0.2 * span, 3 * se)
     if i_max in interior and means[0] < means[i_max] - margin and means[-1] < means[i_max] - margin:
-        return "peaked (optimum inside the range) — try gaussian_peak or quadratic"
+        return "peaked (optimum inside the range)"
     if i_min in interior and means[0] > means[i_min] + margin and means[-1] > means[i_min] + margin:
-        return "valley (minimum inside the range) — try quadratic"
+        return "valley (minimum inside the range)"
     rho = stats.spearmanr(mids, means).statistic
     direction = "increasing" if rho > 0 else "decreasing"
     if abs(rho) < 0.6:
@@ -604,11 +605,11 @@ def _classify(mids: np.ndarray, means: np.ndarray, se: float) -> str:
         d[-third:].mean(),
     )
     if middle > 1.5 * max(first, last, 1e-12) and first < 0.5 * middle and last < 0.5 * middle:
-        return f"sigmoidal {direction} — try logistic or gompertz"
+        return f"sigmoidal {direction}"
     if last < 0.4 * first:
-        return f"saturating {direction} — try mitscherlich, michaelis_menten, power, logarithmic, linear_plateau"
+        return f"saturating {direction}"
     if first < 0.4 * last:
-        return f"accelerating {direction} — try exponential, power, quadratic"
+        return f"accelerating {direction}"
     return f"roughly linear {direction}"
 
 

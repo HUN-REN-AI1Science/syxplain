@@ -7,6 +7,7 @@ import pandas as pd
 
 from backend.services.discovery.coherence import coherence_report
 from backend.services.discovery.profiling import profile_shape
+from backend.services.discovery.relate import relations
 from backend.services.discovery.report import json_safe
 from backend.services.discovery.selection import Selection
 from backend.services.discovery.session import DiscoverySession
@@ -15,10 +16,12 @@ from backend.tests.test_discovery_shap import _interaction_session
 
 def _report(s: DiscoverySession, headline, agent=None):
     s.final_scoring()
-    ranked = s.ranked_models()
     threshold = headline.cv_rmse + headline.cv_se
-    selection = Selection(headline, "test", tie_threshold=threshold)
-    return coherence_report(s, selection, ranked, s.shap_agreement(headline), agent or {})
+    selection = Selection(headline, "test", [headline], tie_threshold=threshold)
+    related = relations(s, selection, s.ranked_models())
+    return coherence_report(
+        s, selection, s.shap_agreement(headline), agent or {}, related[headline.model_id]
+    )
 
 
 def _checks(report) -> dict[str, str]:
@@ -53,18 +56,34 @@ def test_missing_and_reversed_effects():
     assert _checks(_report(s, flipped))["shap"] == "fail"
 
 
-def test_published_laws():
+def _literature_check(s: DiscoverySession, headline) -> dict:
+    return next(c for c in _report(s, headline)["checks"] if c["key"] == "literature")
+
+
+def test_published_law_rediscovered():
     s = _interaction_session()
     good = s.fit_custom("k*x1*x2 + c*exp(x3)", label="right form")
-    tied = s.fit_custom("a*x1*x2 + b*exp(x3) + m", label="Published law 1", kind="literature")
-    worse = s.fit_custom("k*x1 + m", label="Published law 2", kind="literature")
+    law = s.fit_custom("a*x1*x2 + b*exp(x3) + m", label="Published law 1", kind="literature")
+    lit = _literature_check(s, good)
+    assert lit["status"] == "pass" and lit["value"] == law.model_id
+    assert "rediscovered" in lit["detail"]
 
-    s.known_laws = {"status": "ok", "laws": [{"model_id": tied.model_id}]}
-    lit = next(c for c in _report(s, good)["checks"] if c["key"] == "literature")
-    assert lit["status"] == "pass" and lit["value"] == tied.model_id
 
-    s.known_laws = {"status": "ok", "laws": [{"model_id": worse.model_id}]}
-    assert _checks(_report(s, good))["literature"] == "warn"
+def test_published_law_covering_part_of_the_headline():
+    s = _interaction_session()
+    good = s.fit_custom("k*x1*x2 + c*exp(x3)", label="right form")
+    law = s.fit_custom("k*x1 + m", label="Published law 1", kind="literature")
+    lit = _literature_check(s, good)
+    assert lit["status"] == "pass" and lit["value"] == law.model_id
+    assert lit["detail"].startswith("extends")
+
+
+def test_better_published_law_warns():
+    s = _interaction_session()
+    weak = s.fit_custom("k*x1 + m", label="line in x1")
+    law = s.fit_custom("a*x1*x2 + b*exp(x3) + m", label="Published law 1", kind="literature")
+    lit = _literature_check(s, weak)
+    assert lit["status"] == "warn" and lit["value"] == law.model_id
 
 
 def test_no_signal_fails_and_shap_is_na():
@@ -81,7 +100,7 @@ def test_no_signal_fails_and_shap_is_na():
 
 def test_no_headline_gives_no_report():
     s = _interaction_session()
-    assert coherence_report(s, Selection(None, "no_eligible_model"), [], [], {}) is None
+    assert coherence_report(s, Selection(None, "no_eligible_model"), [], {}, []) is None
 
 
 def test_linear_effect_on_skewed_data_reads_linear():

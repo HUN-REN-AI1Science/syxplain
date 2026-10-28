@@ -16,7 +16,8 @@ from typing import Any
 
 from backend.services.discovery.coherence import coherence_report
 from backend.services.discovery.fitting import ModelResult
-from backend.services.discovery.selection import Selection, guard, select
+from backend.services.discovery.relate import KNOWN_KINDS, is_known, relations
+from backend.services.discovery.selection import Selection, select, usable
 from backend.services.discovery.session import MODEL_ID_RE, DiscoverySession
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,8 @@ logger = logging.getLogger(__name__)
 MAX_UI_EQUATIONS = 12
 MAX_SYMBOLIC = 8
 MAX_LEADERBOARD = 25
+MAX_RELATIONS = 3  # known laws stored per discovered equation
+MAX_HEADLINE_RELATIONS = 8
 
 # Fields the backend owns on every equation card (overwrite whatever the LLM wrote).
 EQUATION_FIELDS = (
@@ -135,27 +138,30 @@ def _leaderboard_entry(
 
 
 def select_equations(
-    session: DiscoverySession, selection: Selection, recommended_ids: list[str]
+    session: DiscoverySession,
+    selection: Selection,
+    recommended_ids: list[str],
+    ranked: list[ModelResult],
 ) -> list[ModelResult]:
     """
     Cards for the results page: the shortlist (headline first), the symbolic Pareto
-    front, agent picks and the best classic and literature laws — only models that pass
-    the relaxed guard (usable and better than the mean).
+    front, agent picks and, as references, the best classic and literature laws — only
+    models that pass the relaxed guard (usable and better than the mean).
     """
-    usable = [m for m in session.ranked_models() if guard(m, strict=False) is None]
+    pool = usable(ranked)
     chosen: dict[str, ModelResult] = {m.model_id: m for m in selection.shortlist}
-    symbolic = session.pareto([m for m in usable if m.kind == "symbolic"])
+    symbolic = session.pareto([m for m in pool if m.kind == "symbolic"])
     if len(symbolic) > MAX_SYMBOLIC:
         # keep the simplest and the most accurate ends of the front
         symbolic = symbolic[: MAX_SYMBOLIC // 2] + symbolic[-(MAX_SYMBOLIC - MAX_SYMBOLIC // 2) :]
     for m in symbolic:
         chosen.setdefault(m.model_id, m)
-    by_id = {m.model_id: m for m in usable}
+    by_id = {m.model_id: m for m in pool}
     for mid in recommended_ids:
         if mid in by_id:
             chosen.setdefault(mid, by_id[mid])
     for kind, n in (("classic", 2), ("custom", 1), ("literature", 2)):
-        for m in [m for m in usable if m.kind == kind][:n]:
+        for m in [m for m in pool if m.kind == kind][:n]:
             chosen.setdefault(m.model_id, m)
     picked = list(chosen.values())[:MAX_UI_EQUATIONS]
     return sorted(picked, key=lambda m: (m.complexity, m.cv_rmse or 0.0))
@@ -176,9 +182,9 @@ def build_results(
     }
     recommended = list(agent_why)
     ranked = session.ranked_models()
-    selection = select(ranked, recommended)
+    selection = select(ranked, recommended, reference=is_known)
 
-    models = select_equations(session, selection, recommended)
+    models = select_equations(session, selection, recommended, ranked)
     equations = [_equation_entry(session, m, selection, agent_why) for m in models]
     scatter_data = {e["equation"]: e["scatter_data"] for e in equations if e["scatter_data"]}
     best_equation = next((e for e in equations if e["is_headline"]), None)
@@ -230,8 +236,27 @@ def build_results(
     if session.known_laws is not None:
         discovery["literature"] = session.known_laws
     try:
+        related = relations(session, selection, ranked)
+    except Exception as e:  # a display-only comparison must never sink the results
+        logger.warning(f"Relating to known laws failed: {e}")
+        related = None
+    h = selection.headline
+    headline_relations = related.get(h.model_id, []) if related and h else []
+    known_pool = [m for m in usable(ranked) if is_known(m)]
+    discovery["relations"] = (
+        {
+            "n_known_laws": {
+                kind: sum(1 for m in known_pool if m.kind == kind) for kind in KNOWN_KINDS
+            },
+            "headline": headline_relations[:MAX_HEADLINE_RELATIONS],
+            "by_model": {mid: rels[:MAX_RELATIONS] for mid, rels in related.items()},
+        }
+        if related is not None
+        else None
+    )
+    try:
         discovery["coherence"] = coherence_report(
-            session, selection, ranked, shap_agreement, report
+            session, selection, shap_agreement, report, headline_relations
         )
     except Exception as e:  # a display-only check must never sink the results
         logger.warning(f"Coherence report failed: {e}")
@@ -287,9 +312,21 @@ def explanation_data_spec(results: dict[str, Any]) -> dict[str, Any]:
             "reasons": e["reasons"][:4],
         }
         for e in discovery["leaderboard"]
-        if e["kind"] != "symbolic"
+        if e["kind"] == "classic"
     ][:8]
     literature = discovery.get("literature") or {}
+    related = discovery.get("relations") or {}
+    relation_keys = (
+        "law_id",
+        "kind",
+        "label",
+        "equation",
+        "relation",
+        "comparison",
+        "agreement_r2",
+        "shared_features",
+        "cv_r2",
+    )
     return {
         "equations": [
             {
@@ -328,6 +365,18 @@ def explanation_data_spec(results: dict[str, Any]) -> dict[str, Any]:
             "headline_vs_shap": discovery.get("shap_agreement", []),
             "coherence": discovery.get("coherence"),
             "classic_baselines": classic,
+            "relations_to_known_laws": {
+                "headline": [
+                    {k: r.get(k) for k in relation_keys} for r in related.get("headline", [])[:5]
+                ],
+                "others": {
+                    mid: [
+                        {k: r.get(k) for k in ("law_id", "relation", "agreement_r2")} for r in rels
+                    ]
+                    for mid, rels in (related.get("by_model") or {}).items()
+                    if mid != headline_id
+                },
+            },
             "notebook": [
                 {k: n.get(k) for k in ("kind", "text", "evidence", "model_ids")}
                 for n in discovery["notebook"]

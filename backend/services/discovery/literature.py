@@ -4,9 +4,10 @@ Literature scout: published laws, found by web search and fitted to the data.
 The scout runs once, in the background, from the start of the run (it is slow: a
 web-searching research model). Its laws are parsed, their variables mapped onto
 the data's aliases, and every law that predicts the target is fitted like any
-other model (ids L<n>, published constants as starting values). The agent sees the
-outcome as an inbox event and through ``literature_status``; the explanation step
-gets the citations. Nothing here ever calls the research model twice.
+other model (ids L<n>, published constants as starting values). The agent never sees
+them: they are fitted after exploration and compared with what it discovered
+(``relate.py``); the explanation step gets the citations. Nothing here ever calls the
+research model twice.
 """
 
 import asyncio
@@ -24,6 +25,8 @@ from backend.services.discovery.expression import (
 from backend.services.discovery.session import DiscoverySession
 
 logger = logging.getLogger(__name__)
+
+MAX_LAWS = 12
 
 GREEK = {
     "alpha",
@@ -166,12 +169,18 @@ def fit_law(session: DiscoverySession, law: dict[str, Any], index: int) -> dict[
 async def run_literature(
     session: DiscoverySession, lookup: Callable[[], Awaitable[dict[str, Any]]]
 ) -> None:
-    """Background task: research, fit, announce. Never raises."""
+    """
+    Background task: research and collect, without fitting. Never raises.
+
+    Exploration is blind to known laws, so nothing reaches the agent: the laws are
+    fitted after exploration by ``fit_literature_laws`` (the RELATE step).
+    """
     session.known_laws = {"status": "pending", "laws": []}
     try:
         result = await lookup()
         equations = (result or {}).get("equations") or []
-        if not equations:
+        raw = [law for law in equations[:MAX_LAWS] if isinstance(law, dict)]
+        if not raw:
             session.known_laws = {
                 "status": "empty",
                 "laws": [],
@@ -179,17 +188,11 @@ async def run_literature(
             }
             await session.emit("literature", "Literature search found no published laws")
             return
-        laws = []
-        for i, law in enumerate(equations[:12], start=1):
-            if isinstance(law, dict):
-                laws.append(await asyncio.to_thread(fit_law, session, law, i))
-        session.known_laws = {"status": "ok", "laws": laws}
-        fitted = [law for law in laws if law["model_id"] and law["cv_r2"] is not None]
-        best = max(fitted, key=lambda law: law["cv_r2"], default=None)
+        session.literature_raw = raw  # known_laws stays pending until RELATE fits them
         await session.emit(
             "literature",
-            f"Literature: {len(laws)} published laws, {len(fitted)} fitted to the data"
-            + (f"; best {best['model_id']} CV R2 {best['cv_r2']:.3f}" if best else ""),
+            f"Literature: {len(raw)} published laws found; they are compared with the "
+            "discovered equations at the end",
         )
     except asyncio.CancelledError:
         session.known_laws = {"status": "failed", "laws": [], "error": "cancelled"}
@@ -200,15 +203,28 @@ async def run_literature(
         await session.emit("literature", f"Literature search failed: {str(e)[:150]}")
 
 
-def literature_summary(session: DiscoverySession) -> dict[str, Any]:
-    laws = session.known_laws or {"status": "not_started", "laws": []}
-    return {
-        "status": laws.get("status"),
-        "laws": [
-            {k: law.get(k) for k in ("equation", "model_id", "cv_r2", "unmapped", "fit_error")}
-            for law in laws.get("laws", [])
-        ],
-    }
+def fit_literature_laws(session: DiscoverySession) -> list[dict[str, Any]]:
+    """Fit the collected published laws to the data (RELATE step); returns the fitted ones."""
+    if session.literature_raw is None:
+        return []
+    laws = []
+    for i, law in enumerate(session.literature_raw, start=1):
+        try:
+            laws.append(fit_law(session, law, i))
+        except Exception as e:  # one malformed published law must not sink the run
+            logger.warning(f"Fitting published law {i} failed: {e}")
+            laws.append(
+                {
+                    "equation": str(law.get("equation") or "").strip(),
+                    "citations": [],
+                    "model_id": None,
+                    "cv_r2": None,
+                    "unmapped": [],
+                    "fit_error": f"fit failed: {str(e)[:150]}",
+                }
+            )
+    session.known_laws = {"status": "ok", "laws": laws}
+    return [law for law in laws if law["model_id"] and law["cv_r2"] is not None]
 
 
 def literature_context(known_laws: dict[str, Any] | None) -> dict[str, Any] | None:

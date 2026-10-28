@@ -7,11 +7,14 @@ Protocol (deterministic, no LLM):
 2. Guards veto models that should not be recommended: undefined/failed fits, CV R2
    <= 0, near-singular fits, verdicts 'poor'/'failed'/'no_signal'. If no model passes,
    the guards relax to "usable and better than the mean" and the headline is marked weak.
-3. One-standard-error rule: every model whose CV RMSE is within one SE of the best is
+3. Reference models (known laws fitted after the blind exploration) are only compared
+   with, unless no discovered model is usable.
+4. One-standard-error rule: every model whose CV RMSE is within one SE of the best is
    statistically tied with it. The agent's first recommendation wins if it is in that
    tie set; otherwise the simplest tied model does.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -47,14 +50,8 @@ class Selection:
     shortlist: list[ModelResult] = field(default_factory=list)
     agent_pick_rejected: list[dict[str, str]] = field(default_factory=list)
     tie_threshold: float | None = None
-
-    def is_tied(self, m: ModelResult) -> bool:
-        """Within one SE of the best (any model, whether or not it passed the guards)."""
-        return (
-            self.tie_threshold is not None
-            and m.cv_rmse is not None
-            and m.cv_rmse <= self.tie_threshold
-        )
+    # True when no candidate was usable and the headline fell back to a reference model
+    headline_is_reference: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -63,6 +60,7 @@ class Selection:
             "shortlist": [m.model_id for m in self.shortlist],
             "agent_pick_rejected": self.agent_pick_rejected,
             "tie_threshold_rmse": self.tie_threshold,
+            "headline_is_reference": self.headline_is_reference,
         }
 
 
@@ -70,11 +68,30 @@ def _simplicity(m: ModelResult) -> tuple:
     return (m.complexity, m.n_params, m.cv_rmse)
 
 
-def select(models: list[ModelResult], recommended_ids: list[str]) -> Selection:
+def usable(models: list[ModelResult]) -> list[ModelResult]:
+    """Models that pass the relaxed guard (usable and better than the mean)."""
+    return [m for m in models if guard(m, strict=False) is None]
+
+
+def select(
+    models: list[ModelResult],
+    recommended_ids: list[str],
+    reference: Callable[[ModelResult], bool] | None = None,
+) -> Selection:
+    """
+    The headline among the candidates; models matching ``reference`` (known laws) are
+    for comparison and become the headline only when no candidate is usable.
+    """
+    if reference is not None:
+        selection = select([m for m in models if not reference(m)], recommended_ids)
+        if selection.headline is None:
+            selection = select(models, recommended_ids)
+            selection.headline_is_reference = selection.headline is not None
+        return selection
     by_id = {m.model_id: m for m in models}
     strict_pool = [m for m in models if guard(m, strict=True) is None]
     strict = bool(strict_pool)
-    pool = strict_pool or [m for m in models if guard(m, strict=False) is None]
+    pool = strict_pool or usable(models)
     rejected: list[dict[str, str]] = []
     if not pool:
         for mid in recommended_ids:

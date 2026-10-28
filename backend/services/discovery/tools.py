@@ -17,7 +17,6 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from backend.services.discovery.expression import ALLOWED_FUNCTIONS, ExpressionError
-from backend.services.discovery.families import FAMILIES
 from backend.services.discovery.session import (
     ALLOWED_BINARY,
     ALLOWED_UNARY,
@@ -34,7 +33,6 @@ TargetTransform = Literal["none", "log", "log1p", "sqrt"]
 UnaryOp = Literal[ALLOWED_UNARY]
 BinaryOp = Literal[ALLOWED_BINARY]
 NoteKind = Literal[NOTE_KINDS]
-FamilyName = Literal[tuple(FAMILIES)]
 
 
 class NoteEntry(BaseModel):
@@ -56,9 +54,14 @@ def _transform(value: str | None) -> str | None:
 
 def build_tools(
     session: DiscoverySession,
-    literature_enabled: bool = False,
 ) -> list[Callable[..., Awaitable[str]]]:
-    """Create the tool functions bound to ``session``."""
+    """
+    Create the tool functions bound to ``session``.
+
+    Exploration is blind to existing knowledge: there is no tool for the classic
+    catalog or the literature, so the agent derives its forms from the data. Known
+    laws are fitted and compared afterwards (``relate.py``).
+    """
 
     async def guarded(name: str, fn: Callable[[], Awaitable[Any]]) -> str:
         try:
@@ -89,8 +92,8 @@ def build_tools(
         """Shape of the target along one feature (alias): binned target means (marginal shape)
         and, when available, the SHAP partial effect (shape with the other features accounted
         for — prefer it when features are correlated). Labels such as 'saturating increasing',
-        'peaked', 'sigmoidal' or 'roughly linear' come with suggested families. For categorical
-        codes it returns the mean of the target per level."""
+        'peaked', 'sigmoidal' or 'roughly linear' describe the curve, not a model to use. For
+        categorical codes it returns the mean of the target per level."""
 
         async def run():
             out = await asyncio.to_thread(session.shape, feature)
@@ -101,58 +104,6 @@ def build_tools(
         return await guarded("profile_shape", run)
 
     # --------------------------------------------------------------- fitting
-
-    async def list_families() -> str:
-        """Catalog of classic named function families (formula, typical scientific use, requirements)."""
-
-        async def run():
-            return [f.summary() for f in FAMILIES.values()]
-
-        return await guarded("list_families", run)
-
-    async def fit_families(
-        families: list[FamilyName],
-        features: list[str],
-        target_transform: TargetTransform = "none",
-    ) -> str:
-        """Fit several classic families to the same feature(s) and rank them by cross-validated R2.
-        Univariate families need exactly one feature; multivariate ones (multiple_linear, cobb_douglas,
-        mitscherlich_baule, linear_interactions, additive_saturating) take several. Categorical codes
-        are not allowed here (use fit_formula with level(x, k)). target_transform fits the model to the
-        transformed target and scores it on the original scale. Each result has a verdict (good /
-        adequate / poor / no_signal / failed) and the diagnosed reasons it falls short."""
-
-        async def run():
-            transform = _transform(target_transform)
-            results = []
-            for fam in families[:12]:
-                try:
-                    m = await asyncio.to_thread(session.fit_family, fam, features, transform)
-                    results.append(m)
-                except ValueError as e:
-                    results.append({"name": fam, "error": str(e)})
-            fitted = [r for r in results if not isinstance(r, dict)]
-            fitted.sort(key=lambda m: -(m.cv_r2 if m.cv_r2 is not None else -1e9))
-            if fitted and not fitted[0].error and fitted[0].cv_r2 is not None:
-                best = fitted[0]
-                await session.emit(
-                    "fit",
-                    f"Fitted {len(fitted)} families on {', '.join(features)}; best {best.label} "
-                    f"({best.model_id}, CV R2 {best.cv_r2:.3f})",
-                    model_id=best.model_id,
-                )
-            briefs = []
-            for m in fitted:
-                b = m.brief()
-                if "reasons" in b:
-                    b["reasons"] = b["reasons"][:3]
-                briefs.append(b)
-            return {
-                "noise_ceiling_r2": session.ceiling_r2 and round(session.ceiling_r2, 4),
-                "results": briefs + [r for r in results if isinstance(r, dict)],
-            }
-
-        return await guarded("fit_families", run)
 
     async def fit_formula(
         expression: str,
@@ -167,8 +118,9 @@ def build_tools(
         only appear as level(x, k) indicators.
         With target_transform, the expression models the TRANSFORMED target (e.g. 'log' means
         log(y) = expression) and predictions are back-transformed, so do not wrap it in exp().
-        Example: 'a*P/(b + P) * exp(c*pH)'. Give initial_params for nonlinear parameters when you
-        can (default 1.0). Returns the same metrics and diagnosed reasons as fit_families."""
+        Example: 'a + b*x1^c * exp(d*x2)'. Give initial_params for nonlinear parameters when you
+        can (default 1.0). Returns cross-validated R2 with its standard error, a verdict (good /
+        adequate / poor / no_signal / failed) and the diagnosed reasons the form falls short."""
 
         async def run():
             m = await asyncio.to_thread(
@@ -211,7 +163,7 @@ def build_tools(
         return await guarded("inspect_model", run)
 
     async def leaderboard(top: int = 10) -> str:
-        """All fitted models (classic, custom, literature and PySR) ranked by cross-validated R2,
+        """All fitted models (your formulas and PySR equations) ranked by cross-validated R2,
         with the standard error used to decide ties."""
 
         async def run():
@@ -236,7 +188,7 @@ def build_tools(
         rationale: str = "",
     ) -> str:
         """Launch a PySR symbolic-regression search on the HPC cluster (non-blocking; queue + run
-        take minutes). Returns a search_id. Keep fitting classic models meanwhile.
+        take minutes). Returns a search_id. Keep fitting your own formulas meanwhile.
         maxsize 7-40 (complexity cap). niterations 50-5000 or null for auto.
         Seeds: guess_model_ids takes ids of your best fits (resolved in the right target space);
         guesses takes up to 5 closed formulas with numeric constants. Without seeds, the strongest
@@ -317,7 +269,7 @@ def build_tools(
         return await guarded("cancel_search", run)
 
     async def search_results(search_id: str, top: int = 8) -> str:
-        """Equations found by a completed PySR search, re-scored like the classic models (constants
+        """Equations found by a completed PySR search, re-scored like your formulas (constants
         refit in cross-validation): Pareto front of complexity vs error with CV R2, verdicts and
         reasons. Reading a search marks it as reviewed."""
 
@@ -363,8 +315,6 @@ def build_tools(
     tools = [
         describe_data,
         profile_shape,
-        list_families,
-        fit_families,
         fit_formula,
         inspect_model,
         leaderboard,
@@ -375,36 +325,5 @@ def build_tools(
         search_results,
         note,
     ]
-
-    if literature_enabled:
-
-        async def literature_status() -> str:
-            """Published laws found by the literature scout (runs in the background from the start
-            of the run). Laws whose variables map onto the data were already fitted (model ids
-            L<n>); compare them with your models. Returns status 'pending' while still searching."""
-
-            async def run():
-                from backend.services.discovery.literature import literature_summary
-
-                return literature_summary(session)
-
-            return await guarded("literature_status", run)
-
-        async def await_literature(max_minutes: float = 10.0) -> str:
-            """Wait (up to max_minutes) for the background literature search to finish, then
-            return its laws. Only use when you have nothing else to do."""
-
-            async def run():
-                from backend.services.discovery.literature import literature_summary
-
-                task = session.literature_task
-                if task is not None and not task.done():
-                    cap = max(1.0, min(max_minutes * 60, session.remaining_s - 180))
-                    await asyncio.wait([asyncio.shield(task)], timeout=cap)
-                return literature_summary(session)
-
-            return await guarded("await_literature", run)
-
-        tools += [literature_status, await_literature]
 
     return tools

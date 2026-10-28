@@ -59,7 +59,8 @@ TARGET_TRANSFORMS = ("none", "log", "log1p", "sqrt")
 MAX_PYSR_ROWS = 10000
 MAX_FRONT = 40  # equations ingested per search (30 most accurate + 10 simplest)
 MIN_HOLDOUT_ROWS = 40  # below this, every metric is out-of-fold CV
-INBOX_KINDS = ("search_completed", "search_failed", "search_cancelled", "literature", "data_issue")
+# Literature events are not here: exploration is blind to known laws (see relate.py).
+INBOX_KINDS = ("search_completed", "search_failed", "search_cancelled", "data_issue")
 CATEGORICAL_WORDS = re.compile(
     r"\b(code|coded|class|classes|type|category|categorical|group|id)\b", re.I
 )
@@ -206,6 +207,8 @@ class DiscoverySession:
         self.searches: dict[str, SearchRecord] = {}
         self._cancelled_jobs: set[str] = set()
         self.known_laws: dict[str, Any] | None = None
+        # Published laws collected by the scout, fitted only after exploration (relate.py)
+        self.literature_raw: list[dict[str, Any]] | None = None
         self.literature_task: asyncio.Task | None = None
         self.agent_finished_at: float | None = None
         self.cancelled = False
@@ -401,7 +404,7 @@ class DiscoverySession:
                 logger.debug(f"Discovery event callback failed: {e}")
 
     def take_inbox(self) -> list[dict[str, Any]]:
-        """Events the agent has not seen yet (search results, literature, data issues)."""
+        """Events the agent has not seen yet (search results, data issues)."""
         new = [e for e in self.events[self._inbox_cursor :] if e["kind"] in INBOX_KINDS]
         self._inbox_cursor = len(self.events)
         return new
@@ -755,7 +758,7 @@ class DiscoverySession:
         if len(expr.parameters) > 12:
             raise ExpressionError("At most 12 free parameters are allowed")
         self._check_categorical_use(expr)
-        prefix = {"custom": "M", "literature": "L"}[kind]
+        prefix = {"custom": "M", "literature": "L", "classic": "C"}[kind]
         result = ModelResult(
             model_id=self._new_id(prefix),
             kind=kind,
@@ -821,13 +824,17 @@ class DiscoverySession:
     ) -> ModelResult:
         return self._register(self.score_symbolic(equation, source, target_transform))
 
-    def auto_screen(self, n_univariate: int = 3, n_multivariate: int = 4) -> int:
+    def auto_screen(
+        self, n_univariate: int = 3, n_multivariate: int = 4, priority: list[str] | None = None
+    ) -> int:
         """
         Deterministic screen of the classic catalog (no LLM): every univariate family on
         the most important continuous features, multivariate families on the top ones.
-        Used when the agent is disabled or failed, so classic baselines always exist.
+        ``priority`` features (those the discovered equations use) come first. Runs after
+        exploration, so the named laws are references the discoveries are compared with.
         """
-        ranked = [f["alias"] for f in self.profile()["features"] if f["kind"] == "continuous"]
+        profiled = [f["alias"] for f in self.profile()["features"] if f["kind"] == "continuous"]
+        ranked = list(dict.fromkeys([f for f in priority or [] if f in profiled] + profiled))
         fitted = 0
         for feature in ranked[:n_univariate]:
             for fam in (f for f in FAMILIES.values() if f.n_inputs == 1):
@@ -845,6 +852,7 @@ class DiscoverySession:
                 except ValueError:
                     continue
         # One step per category level: the classic baseline for an integer-coded category.
+        # Kind "classic": it is a reference fitted after exploration, not an agent discovery.
         for feature in self.categorical_features[:n_univariate]:
             levels = self.levels[feature]
             prefix = next(
@@ -861,7 +869,9 @@ class DiscoverySession:
                 f"{prefix}{i}*level({feature}, {lv:g})" for i, lv in enumerate(levels[1:], 1)
             ]
             try:
-                self.fit_custom(" + ".join(terms), label=f"Level means of {feature}")
+                self.fit_custom(
+                    " + ".join(terms), label=f"Level means of {feature}", kind="classic"
+                )
                 fitted += 1
             except ValueError:
                 continue
@@ -1054,7 +1064,7 @@ class DiscoverySession:
         if enforce_budget:
             if len(self.searches) >= self.budget.max_pysr_runs:
                 raise BudgetExhausted(
-                    f"PySR search budget used ({self.budget.max_pysr_runs}); refine with classic fits or finish"
+                    f"PySR search budget used ({self.budget.max_pysr_runs}); refine with fit_formula or finish"
                 )
             running = sum(1 for s in self.searches.values() if not s.done)
             if running >= self.budget.max_concurrent_pysr:

@@ -109,7 +109,7 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
       <AgentActivityFeed
         events={activity}
         title={isInQueuePhase ? 'Waiting for resources...' : 'AI is analyzing your data'}
-        intro="An AI agent tests classic scientific laws against your data, works out why they fall short, and steers symbolic regression towards better equations."
+        intro="An AI agent designs equations from your data alone and steers symbolic regression towards better ones, then compares what it found with known scientific laws."
       />
 
       {isJobSubmitted && (

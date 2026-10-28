@@ -12,6 +12,8 @@ import {
   domainChecksOf,
   fmtCeiling,
   headlineReasonText,
+  KNOWN_LAW_COMPARISON_TEXT,
+  KNOWN_LAW_RELATION_LABEL,
   metricLabel,
   metricValue,
   rejectedFormText,
@@ -870,6 +872,23 @@ function renderDiscovery(ctx: PdfContext, report: DiscoveryReport): void {
     ctx.y += 3;
     renderSubheading(ctx, 'Open questions');
     questions.forEach((text) => addText(ctx, `- ${text}`, 9, false, [40, 40, 40]));
+  }
+
+  const relations = list(report.relations?.headline);
+  if (relations.length > 0) {
+    ctx.y += 3;
+    renderSubheading(ctx, 'Relation to known laws (fitted after the discovery)');
+    relations.forEach((r) => {
+      addText(
+        ctx,
+        `- ${asText(r.label)} (${r.law_id}): ${KNOWN_LAW_RELATION_LABEL[r.relation] ?? r.relation}; ` +
+          `${KNOWN_LAW_COMPARISON_TEXT[r.comparison] ?? ''} (CV R² ${r2(r.cv_r2)}), ` +
+          `predictions agree R² ${r2(r.agreement_r2)}`,
+        9,
+        false,
+        [40, 40, 40]
+      );
+    });
   }
 
   const laws = list(report.literature?.laws);

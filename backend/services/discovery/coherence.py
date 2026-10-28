@@ -3,7 +3,8 @@ Coherence of the headline equation: do the independent lines of evidence agree o
 
 Each check compares the headline with one source (the noise ceiling, the holdout,
 SHAP, published laws, named laws, its own parameters, the agent) and gets a status
-decided by fixed thresholds here, never by an LLM. ``effect_directions`` describes
+decided by fixed thresholds here, never by an LLM. The known-law checks read the
+relations computed after the blind exploration (``relate.py``). ``effect_directions`` describes
 how the equation moves with each of its features; the explanation LLM judges those
 against domain knowledge.
 """
@@ -14,7 +15,8 @@ import numpy as np
 
 from backend.services.discovery.fitting import ModelResult
 from backend.services.discovery.profiling import _shape_kind, profile_shape
-from backend.services.discovery.selection import Selection, guard
+from backend.services.discovery.relate import is_known
+from backend.services.discovery.selection import Selection
 from backend.services.discovery.session import DiscoverySession
 
 CEILING_PASS = 0.9  # headline CV R2 / noise ceiling
@@ -39,11 +41,6 @@ LABELS = {
 
 def _check(key: str, status: str, detail: str, value: Any = None) -> dict[str, Any]:
     return {"key": key, "label": LABELS[key], "status": status, "value": value, "detail": detail}
-
-
-def _best_usable(models: list[ModelResult]) -> ModelResult | None:
-    usable = [m for m in models if guard(m, strict=False) is None]
-    return min(usable, key=lambda m: m.cv_rmse, default=None)
 
 
 def _fit_vs_ceiling(session: DiscoverySession, h: ModelResult) -> dict[str, Any]:
@@ -101,69 +98,93 @@ def _shap(agreement: list[dict[str, Any]]) -> dict[str, Any]:
     return _check("shap", status, detail, round(agree_share / total_share, 3))
 
 
-def _literature(session: DiscoverySession, h: ModelResult, selection: Selection) -> dict[str, Any]:
-    known = session.known_laws or {}
-    ids = [law.get("model_id") for law in known.get("laws", []) if law.get("model_id")]
-    if known.get("status") != "ok" or not ids:
-        return _check("literature", "na", "no published law was found or fitted")
-    if h.kind == "literature":
-        return _check("literature", "pass", f"the headline is a published law ({h.label})")
-    laws = [session.models[i] for i in ids if i in session.models]
-    best = _best_usable(laws)
-    if best is None:
-        return _check(
-            "literature",
+# Known-law checks: check key -> (relation kind, noun, detail when there is none)
+KNOWN_LAW_CHECKS = {
+    "literature": ("literature", "published law", "no published law was found or fitted"),
+    "named_laws": ("classic", "named law", "no named law fits better than the mean"),
+}
+
+
+def _known_law_verdict(
+    h: ModelResult, rels: list[dict[str, Any]], noun: str
+) -> tuple[str, dict[str, Any], str]:
+    """(status, law, detail) for the headline against one kind of known law."""
+
+    def vs(r: dict[str, Any]) -> str:
+        return f"CV R2 {r['cv_r2']:.3f} vs {h.cv_r2:.3f}"
+
+    def name(r: dict[str, Any]) -> str:
+        return f"{noun} {r['law_id']} ({r['label']})"
+
+    better = [r for r in rels if r["comparison"] == "better"]
+    if better:
+        r = max(better, key=lambda r: r["cv_r2"])
+        return (
             "warn",
-            f"none of the {len(laws)} published laws fits these data better than the mean",
+            r,
+            f"the {name(r)} fits better than the discovered headline beyond noise ({vs(r)})",
         )
-    if selection.is_tied(best):
-        shared = sorted(set(best.features) & set(h.features))
-        return _check(
-            "literature",
-            "pass",
-            f"published law {best.model_id} ({best.label}) fits as well "
-            f"(CV R2 {best.cv_r2:.3f} vs {h.cv_r2:.3f}); shared variables: "
-            + (", ".join(shared) or "none"),
-            best.model_id,
+    r = rels[0]  # closest relation first
+    if r["relation"] == "equivalent":
+        detail = (
+            f"rediscovered: the headline is the {name(r)} in another form "
+            f"(their predictions agree, R2 {r['agreement_r2']:.3f})"
         )
-    return _check(
-        "literature",
-        "warn",
-        f"the headline beats the best published law {best.model_id} (CV R2 {best.cv_r2:.3f} "
-        f"vs {h.cv_r2:.3f}): a new relationship that needs checking",
-        best.model_id,
+        return "pass", r, detail
+    if r["relation"] == "similar":
+        detail = f"the headline behaves like the {name(r)}: predictions agree with R2 {r['agreement_r2']:.3f}, {vs(r)}"
+        return "pass", r, detail
+    if r["relation"] == "partial":
+        extra = ", ".join(sorted(set(h.features) - set(r["features"])))
+        shared = ", ".join(r["shared_features"])
+        return "pass", r, f"extends the {name(r)}: same shape along {shared}, plus {extra}"
+    tied = sorted(
+        (r for r in rels if r["comparison"] == "tied"),
+        key=lambda r: r["complexity"] > h.complexity,
     )
+    if tied and tied[0]["complexity"] <= h.complexity:
+        r = tied[0]
+        detail = (
+            f"the simpler {name(r)} is statistically tied but predicts differently ({vs(r)}): "
+            "the data cannot tell them apart"
+        )
+        return "warn", r, detail
+    if tied:
+        return (
+            "pass",
+            tied[0],
+            f"fits as well as the {name(tied[0])} with a different form ({vs(tied[0])})",
+        )
+    r = max(rels, key=lambda r: r["cv_r2"])
+    detail = (
+        f"a new relationship: it beats all {len(rels)} {noun}s beyond noise and matches none "
+        f"(best {r['law_id']}, {vs(r)})"
+    )
+    return "pass", r, detail
 
 
-def _named_laws(h: ModelResult, ranked: list[ModelResult], selection: Selection) -> dict[str, Any]:
-    if h.kind == "classic":
-        return _check("named_laws", "pass", f"the headline is a named law ({h.label})")
-    best = _best_usable([m for m in ranked if m.kind == "classic"])
-    if best is None:
-        return _check("named_laws", "na", "no named law fits better than the mean")
-    if selection.is_tied(best):
-        if best.complexity <= h.complexity:
-            return _check(
-                "named_laws",
-                "warn",
-                f"the simpler named law {best.model_id} ({best.label}) is statistically tied "
-                f"(CV R2 {best.cv_r2:.3f} vs {h.cv_r2:.3f})",
-                best.model_id,
-            )
-        return _check(
-            "named_laws",
-            "pass",
-            f"the named law {best.model_id} ({best.label}) fits as well "
-            f"(CV R2 {best.cv_r2:.3f} vs {h.cv_r2:.3f}) but is more complex",
-            best.model_id,
-        )
-    return _check(
-        "named_laws",
-        "pass",
-        f"improves on the best named law {best.model_id} ({best.label}) beyond noise "
-        f"(CV R2 {best.cv_r2:.3f} → {h.cv_r2:.3f})",
-        best.model_id,
-    )
+def _known_laws(h: ModelResult, rels: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    The headline against the published and the named laws, from ``relate.relations``. Known
+    laws are fitted after the blind exploration, so a match is a rediscovery, not a start.
+    """
+    checks = []
+    for key, (kind, noun, none_detail) in KNOWN_LAW_CHECKS.items():
+        if is_known(h):
+            # Only the headline's own kind is worth a caution; the other has nothing to add.
+            if h.kind == kind:
+                detail = f"no discovered equation was usable; the headline is the {noun} {h.label}"
+                checks.append(_check(key, "warn", detail))
+            else:
+                checks.append(_check(key, "na", "the headline is a known law"))
+            continue
+        of_kind = [r for r in rels if r["kind"] == kind]
+        if not of_kind:
+            checks.append(_check(key, "na", none_detail))
+            continue
+        status, r, detail = _known_law_verdict(h, of_kind, noun)
+        checks.append(_check(key, status, detail, r["law_id"]))
+    return checks
 
 
 def _parameters(h: ModelResult) -> dict[str, Any]:
@@ -260,11 +281,14 @@ def effect_directions(session: DiscoverySession, h: ModelResult) -> list[dict[st
 def coherence_report(
     session: DiscoverySession,
     selection: Selection,
-    ranked: list[ModelResult],
     shap_agreement: list[dict[str, Any]],
     agent: dict[str, Any],
+    headline_relations: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
-    """All coherence checks of the headline, the worst one as the overall status."""
+    """
+    All coherence checks of the headline, the worst one as the overall status.
+    ``headline_relations`` are the headline's relations to every known law (``relate.py``).
+    """
     h = selection.headline
     if h is None:
         return None
@@ -272,8 +296,7 @@ def coherence_report(
         _fit_vs_ceiling(session, h),
         _generalization(session, h),
         _shap(shap_agreement),
-        _literature(session, h, selection),
-        _named_laws(h, ranked, selection),
+        *_known_laws(h, headline_relations),
         _parameters(h),
         _agent(h, agent),
     ]

@@ -45,9 +45,13 @@ def _run(session, answers, max_iters=10, lm=None):
 
 
 FIT_P = {
-    "next_thought": "Screen saturating forms on P first.",
-    "next_tool_name": "fit_families",
-    "next_tool_args": {"families": ["mitscherlich"], "features": ["P_added"]},
+    "next_thought": "The P effect levels off: try an exponential approach to a plateau.",
+    "next_tool_name": "fit_formula",
+    "next_tool_args": {
+        "expression": "a*(1 - exp(-c*P_added))",
+        "initial_params": {"a": 70, "c": 0.03},
+        "label": "Saturating in P",
+    },
 }
 FINISH = {"next_thought": "Done.", "next_tool_name": "finish", "next_tool_args": {}}
 
@@ -74,8 +78,8 @@ def test_full_loop_with_formula_notes_and_report():
                     "entries": [
                         {
                             "kind": "rejected_form",
-                            "text": "Mitscherlich on P misses pH",
-                            "model_ids": ["C1"],
+                            "text": "Saturating in P alone misses pH",
+                            "model_ids": ["M1"],
                         },
                         {"kind": "insight", "text": "pH scales the maximum", "model_ids": ["M2"]},
                     ]
@@ -89,7 +93,7 @@ def test_full_loop_with_formula_notes_and_report():
     )
     assert report["source"] == "agent" and report["ended"] == "finish" and report["steps"] == 4
     assert [r["model_id"] for r in report["recommended_models"]] == ["M2"]
-    assert s.models["M2"].cv_r2 > 0.95 and s.models["C1"].verdict == "poor"
+    assert s.models["M2"].cv_r2 > 0.95 and s.models["M1"].verdict == "poor"
     assert [n["kind"] for n in s.notebook] == ["rejected_form", "insight"]
     assert s.steps_used == 4
 
@@ -104,7 +108,7 @@ def test_invalid_step_becomes_corrective_observation():
             bad,
             {"next_thought": "list", "next_tool_name": "leaderboard", "next_tool_args": {}},
             FINISH,
-            _report(recommended_models=[{"model_id": "C1", "why": "x"}]),
+            _report(recommended_models=[{"model_id": "M1", "why": "x"}]),
         ],
     )
     assert report["source"] == "agent" and report["ended"] == "finish"
@@ -135,9 +139,9 @@ def test_transient_lm_error_is_retried(monkeypatch):
 
     s = _session()
     report = _run(
-        s, [], lm=FlakyLM([FIT_P, FINISH, _report(recommended_models=[{"model_id": "C1"}])])
+        s, [], lm=FlakyLM([FIT_P, FINISH, _report(recommended_models=[{"model_id": "M1"}])])
     )
-    assert report["ended"] == "finish" and "C1" in s.models
+    assert report["ended"] == "finish" and "M1" in s.models
 
 
 def test_finish_is_refused_while_results_are_unread():
@@ -161,7 +165,7 @@ def test_finish_is_refused_while_results_are_unread():
                     "next_tool_args": {"search_id": "pysr_1"},
                 },
                 FINISH,
-                _report(recommended_models=[{"model_id": "C1"}]),
+                _report(recommended_models=[{"model_id": "M1"}]),
             ]
         )
         agent = BudgetedReAct(
@@ -192,9 +196,9 @@ def test_trajectory_compaction_keeps_recent_steps_verbatim():
     traj = {}
     for i in range(20):
         traj[f"thought_{i}"] = "thinking " * 40
-        traj[f"tool_name_{i}"] = "fit_families"
-        traj[f"tool_args_{i}"] = {"families": ["linear"], "features": ["pH"]}
-        # realistic size: a fit_families reply with several briefs (~2k chars)
+        traj[f"tool_name_{i}"] = "fit_formula"
+        traj[f"tool_args_{i}"] = {"expression": "a + b*pH"}
+        # realistic size: a fit reply with several briefs (~2k chars)
         traj[f"observation_{i}"] = json.dumps(
             {
                 "results": [
@@ -237,7 +241,7 @@ def test_parse_report_coerces_shapes():
 def test_tools_schema_uses_enums():
     s = _session()
     tools = {t.__name__: dspy.Tool(t) for t in build_tools(s)}
-    assert tools["fit_families"].args["target_transform"]["enum"] == [
+    assert tools["fit_formula"].args["target_transform"]["enum"] == [
         "none",
         "log",
         "log1p",
@@ -245,3 +249,13 @@ def test_tools_schema_uses_enums():
     ]
     assert "enum" in tools["start_pysr_search"].args["unary_operators"]["items"]
     assert "guess_model_ids" in tools["start_pysr_search"].args
+
+
+def test_exploration_is_blind_to_known_laws():
+    """No catalog or literature tool, and shape labels name no model family."""
+    s = _session()
+    names = {t.__name__ for t in build_tools(s)}
+    assert not names & {"list_families", "fit_families", "literature_status", "await_literature"}
+    assert {"fit_formula", "start_pysr_search", "profile_shape"} <= names
+    shape = s.shape("P_added")
+    assert "try" not in shape["shape"] and "mitscherlich" not in json.dumps(shape).lower()

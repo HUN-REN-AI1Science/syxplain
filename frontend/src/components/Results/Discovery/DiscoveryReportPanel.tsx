@@ -1,7 +1,7 @@
 /**
  * DiscoveryReportPanel Component
- * Shows how the discovery agent reached the equations: classic-law baselines scored on
- * held-out (or, for small data, cross-validated) predictions, the diagnosed reasons each form
+ * Shows how the discovery agent reached the equations: models scored on held-out (or, for
+ * small data, cross-validated) predictions, how the result relates to known laws, the diagnosed reasons each form
  * falls short, the agent's lab notebook and the symbolic regression searches it ran.
  */
 
@@ -16,6 +16,7 @@ import {
   rejectedFormModelId,
   rejectedFormText,
 } from '@utils/discovery';
+import { KnownLawsSection } from './KnownLawsSection';
 import { Leaderboard, MAX_ROWS } from './Leaderboard';
 import { LiteratureSection } from './LiteratureSection';
 import { ModelIdText } from './ModelIdText';
@@ -423,6 +424,14 @@ export const DiscoveryReportPanel: React.FC<DiscoveryReportPanelProps> = ({ repo
             ))}
           </ul>
         </div>
+      )}
+
+      {report.relations && (
+        <KnownLawsSection
+          relations={report.relations}
+          renderModelId={renderModelId}
+          headlineIsReference={report.selection?.headline_is_reference === true}
+        />
       )}
 
       {report.literature && (

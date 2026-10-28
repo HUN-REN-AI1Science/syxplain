@@ -76,17 +76,20 @@ class ExplainPySrEquations(dspy.Signature):
     3. **Plausibility**: Evaluate if the relationships (positive/negative correlations, functional forms) make sense given the problem description.
 
     ### DISCOVERY CONTEXT
-    The equations were found by a discovery agent that fitted classic named laws, its own formulas, published laws and symbolic-regression (PySR) equations, all scored identically. All numbers come from the backend: never invent or recompute metrics.
-    - origin is "symbolic" (PySR), "classic: <family>" (a named law such as Mitscherlich or Langmuir with fitted constants), "custom: <label>" (a formula the agent designed) or "literature: <label>" (a published law fitted to these data).
+    The equations were discovered from the data alone: the agent designed its own formulas and steered symbolic-regression (PySR) searches without seeing any named or published law. Only afterwards were known laws (the classic named-law catalog and the published laws) fitted to the same data as references; they are scored identically. All numbers come from the backend: never invent or recompute metrics.
+    - origin is "symbolic" (PySR), "custom: <label>" (a formula the agent designed), "classic: <family>" (a reference named law such as Mitscherlich or Langmuir with fitted constants) or "literature: <label>" (a reference published law fitted to these data).
     - Metrics: if DATA_SPEC.split.metric_basis is "holdout", loss is the mean squared error and holdout_r2 the R2 on DATA_SPEC.split.holdout rows no model was trained on. If it is "cv", the dataset was too small for a holdout: loss and cv_r2 are out-of-fold cross-validated, and you must say "cross-validated", never "held-out". cv_r2 is always the cross-validated R2 used to compare models; differences smaller than about 0.01-0.02 are ties.
     - verdict / reasons are the backend's diagnosis of each model (e.g. "matches the noise ceiling", "missing variable pH", "parameters not distinguishable from zero"). Reuse them; do not contradict them.
     - variable_aliases maps the variable names used in equations to the original column names in PROJECT_SPEC.features; variable_kinds marks integer-coded categorical variables (level(x, k) is 1 where x equals category k).
     - discovery.noise_ceiling_r2 estimates the best achievable R2; models close to it leave only noise. If discovery.has_signal is false there is no detectable relationship: say so plainly and do not over-interpret any equation.
     - discovery.shap gives random-forest SHAP importance, interacting pairs and each feature's partial-effect shape (only when reliable). Use it to support key/secondary drivers and to explain interaction terms. SHAP_PLOTS show the same effects as pictures (summary and dependence plots, effect in target units); describe what they show where it supports the explanation.
     - discovery.headline_vs_shap checks the headline equation against SHAP feature by feature: "agrees" means the equation moves with that feature as the data does; "ignored", "disagrees" or "opposite" means it misses an effect the data shows. Mention every miss as a limitation.
-    - discovery.classic_baselines lists named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
+    - discovery.classic_baselines lists the reference named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
-    Use this context: contrast symbolic equations with the classic baselines (what does a symbolic equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
+    Use this context: contrast the discovered equations with the reference laws (what does a discovered equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
+
+    ### RELATION TO KNOWN LAWS
+    discovery.relations_to_known_laws says, from the backend, how the discovered equations relate to the known laws fitted after the discovery. headline lists the closest laws for the headline equation; others gives the closest laws for the other discovered equations by model_id. relation is "equivalent" (the same variables and practically identical predictions: the law in another algebraic form), "similar" (predictions agree closely), "partial" (the law covers some of the variables with the same shape; the discovered equation adds the others) or "different"; comparison says whether the law fits "better", "tied" or "worse" than the discovered equation beyond noise; agreement_r2 is the R2 between their predictions. These labels are final: never contradict them. In the overview of each discovered equation that has an equivalent, similar or partial relation, say in words how it relates to that law: the same law rewritten (show how its constants map onto the law's parameters when the forms make that clear), a generalisation with an extra factor or variable, or a different mechanism with similar predictions. Name the law. When nothing relates, say that the equation is a new relationship for these data, not a known law. Never imply the agent started from a known law.
 
     ### COHERENCE
     discovery.coherence checks whether the independent lines of evidence agree on the headline equation: checks[] holds the backend's verdicts (pass / warn / fail / na) against the noise ceiling, the holdout, SHAP, published laws, named laws, its parameters and the agent. They are final: never contradict or re-score them. discovery.coherence.effect_directions gives the shape of the headline's effect for each variable over the observed range (with the predictions at both ends). Add what the backend cannot judge:
@@ -95,7 +98,7 @@ class ExplainPySrEquations(dspy.Signature):
     If discovery.coherence is null, return "coherence": null.
 
     ### RECOMMENDATION RULE
-    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied). Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
+    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied); if selection.headline_is_reference is true, no discovered equation was usable and the headline is a reference law. Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
 
     ### TEXT FORMATTING (CRITICAL)
     - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", "rationale" or "coherence" fields.
@@ -107,6 +110,7 @@ class ExplainPySrEquations(dspy.Signature):
     When selecting the recommended equation:
     - Consider statistical metrics (loss, complexity).
     - **CRITICAL**: Prioritize equations that are scientifically plausible and interpretable. The best equation should make sense for the given domain.
+    - The reference laws (origin "classic: ..." or "literature: ...") are for comparison: recommend one only if no discovered equation is scientifically plausible.
     - In the "rationale", explicitly mention why this equation is the best balance of accuracy, simplicity, and scientific validity.
 
     ### OUTPUT FORMAT
@@ -319,17 +323,20 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
        - If you find NO link to the literature, explicitly state "No direct match in provided literature" in the overview, but this should be rare.
 
     ### DISCOVERY CONTEXT
-    The equations were found by a discovery agent that fitted classic named laws, its own formulas, published laws and symbolic-regression (PySR) equations, all scored identically. All numbers come from the backend: never invent or recompute metrics.
-    - origin is "symbolic" (PySR), "classic: <family>" (a named law such as Mitscherlich or Langmuir with fitted constants), "custom: <label>" (a formula the agent designed) or "literature: <label>" (a published law fitted to these data).
+    The equations were discovered from the data alone: the agent designed its own formulas and steered symbolic-regression (PySR) searches without seeing any named or published law. Only afterwards were known laws (the classic named-law catalog and the published laws) fitted to the same data as references; they are scored identically. All numbers come from the backend: never invent or recompute metrics.
+    - origin is "symbolic" (PySR), "custom: <label>" (a formula the agent designed), "classic: <family>" (a reference named law such as Mitscherlich or Langmuir with fitted constants) or "literature: <label>" (a reference published law fitted to these data).
     - Metrics: if DATA_SPEC.split.metric_basis is "holdout", loss is the mean squared error and holdout_r2 the R2 on DATA_SPEC.split.holdout rows no model was trained on. If it is "cv", the dataset was too small for a holdout: loss and cv_r2 are out-of-fold cross-validated, and you must say "cross-validated", never "held-out". cv_r2 is always the cross-validated R2 used to compare models; differences smaller than about 0.01-0.02 are ties.
     - verdict / reasons are the backend's diagnosis of each model (e.g. "matches the noise ceiling", "missing variable pH", "parameters not distinguishable from zero"). Reuse them; do not contradict them.
     - variable_aliases maps the variable names used in equations to the original column names in PROJECT_SPEC.features; variable_kinds marks integer-coded categorical variables (level(x, k) is 1 where x equals category k).
     - discovery.noise_ceiling_r2 estimates the best achievable R2; models close to it leave only noise. If discovery.has_signal is false there is no detectable relationship: say so plainly and do not over-interpret any equation.
     - discovery.shap gives random-forest SHAP importance, interacting pairs and each feature's partial-effect shape (only when reliable). Use it to support key/secondary drivers and to explain interaction terms. SHAP_PLOTS show the same effects as pictures (summary and dependence plots, effect in target units); describe what they show where it supports the explanation.
     - discovery.headline_vs_shap checks the headline equation against SHAP feature by feature: "agrees" means the equation moves with that feature as the data does; "ignored", "disagrees" or "opposite" means it misses an effect the data shows. Mention every miss as a limitation.
-    - discovery.classic_baselines lists named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
+    - discovery.classic_baselines lists the reference named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
-    Use this context: contrast symbolic equations with the classic baselines (what does a symbolic equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
+    Use this context: contrast the discovered equations with the reference laws (what does a discovered equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
+
+    ### RELATION TO KNOWN LAWS
+    discovery.relations_to_known_laws says, from the backend, how the discovered equations relate to the known laws fitted after the discovery. headline lists the closest laws for the headline equation; others gives the closest laws for the other discovered equations by model_id. relation is "equivalent" (the same variables and practically identical predictions: the law in another algebraic form), "similar" (predictions agree closely), "partial" (the law covers some of the variables with the same shape; the discovered equation adds the others) or "different"; comparison says whether the law fits "better", "tied" or "worse" than the discovered equation beyond noise; agreement_r2 is the R2 between their predictions. These labels are final: never contradict them. In the overview of each discovered equation that has an equivalent, similar or partial relation, say in words how it relates to that law: the same law rewritten (show how its constants map onto the law's parameters when the forms make that clear), a generalisation with an extra factor or variable, or a different mechanism with similar predictions. Name the law. When nothing relates, say that the equation is a new relationship for these data, not a known law. Never imply the agent started from a known law.
 
     ### COHERENCE
     discovery.coherence checks whether the independent lines of evidence agree on the headline equation: checks[] holds the backend's verdicts (pass / warn / fail / na) against the noise ceiling, the holdout, SHAP, published laws, named laws, its parameters and the agent. They are final: never contradict or re-score them. discovery.coherence.effect_directions gives the shape of the headline's effect for each variable over the observed range (with the predictions at both ends). Add what the backend cannot judge:
@@ -338,7 +345,7 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
     If discovery.coherence is null, return "coherence": null.
 
     ### RECOMMENDATION RULE
-    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied). Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
+    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied); if selection.headline_is_reference is true, no discovered equation was usable and the headline is a reference law. Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
 
     ### TEXT FORMATTING (CRITICAL)
     - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", "rationale" or "coherence" fields.
@@ -349,8 +356,9 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
     ### RECOMMENDATION CRITERIA
     When selecting the recommended equation:
     - Consider statistical metrics (loss, complexity).
-    - **CRITICAL**: Prioritize equations that are compatible with the "literature_equations". The best equation should align with established scientific knowledge found in the literature search.
-    - In the "rationale", explicitly mention if and how the recommended equation aligns with the literature equations.
+    - Compatibility with the "literature_equations" is supporting evidence, not a requirement: a discovered equation that departs from published laws is not wrong for that reason, but say what is new and whether the evidence supports it.
+    - In the "rationale", explicitly mention if and how the recommended equation relates to the literature equations (use discovery.relations_to_known_laws).
+    - The reference laws (origin "classic: ..." or "literature: ...") are for comparison: recommend one only if no discovered equation is scientifically plausible.
 
     ### OUTPUT FORMAT
     Return STRICT JSON only — no markdown, no code fences, no commentary. Output must parse with json.loads().
@@ -415,10 +423,15 @@ class EquationDiscoveryAgent(dspy.Signature):
     You work like a careful empiricist: form hypotheses from the data and the domain, test
     them with tools, explain every failure, and spend expensive compute where it pays.
 
-    Tools let you profile the data, fit classic named laws (Mitscherlich, Michaelis-Menten/
-    Langmuir, Freundlich/power, logistic, linear-plateau, Gaussian peak, Mitscherlich-Baule, ...),
-    fit your own formulas, launch and steer PySR symbolic-regression searches on an HPC cluster,
-    and write to a shared lab notebook that the explanation agent and the final report read.
+    Tools let you profile the data, fit your own formulas, launch and steer PySR
+    symbolic-regression searches on an HPC cluster, and write to a shared lab notebook that the
+    explanation agent and the final report read.
+
+    You work from the data alone. Do not start from named or textbook laws: derive every form
+    from the shapes, interactions and residual diagnoses you observe, and let PySR search the
+    space beyond what you can guess. Known laws (classic named families and published laws from
+    the literature) are fitted and compared with your results after you finish, so an equation
+    that turns out to match a known law still counts as a discovery from the data.
     Every observation ends with a STATE line (step, minutes left, each search's status, top
     models) and [event] lines when something happened (e.g. "pysr_1 completed"). Read it.
 
@@ -429,22 +442,25 @@ class EquationDiscoveryAgent(dspy.Signature):
        interacting pairs (candidates for products/ratios or multiplicative laws). SHAP_PLOTS
        (when present) show the same effects as pictures: a summary and one dependence plot per
        top feature, effect in target units, coloured by its interaction partner. Read curvature,
-       plateaus, thresholds, outliers and spread off the plots before choosing families; the
+       plateaus, thresholds, outliers and spread off the plots before choosing forms; the
        shape labels are coarse hints, and the plot wins where they disagree. A colour gradient
        across a dependence plot means an interaction worth a product or ratio term. If
        has_signal is false, there is no detectable relationship: confirm with one or two simple
        fits, record a data_issue note and finish — do not hunt for equations in noise.
-    2. For the important continuous features, screen matching classic families with fit_families
-       (use profile_shape when a shape is unclear). Prefer laws with a mechanistic meaning in the
-       domain of PROJECT_DESCRIPTION.
+    2. For the important continuous features, translate the observed shapes into candidate forms
+       with fit_formula (use profile_shape when a shape is unclear): start with the simplest form
+       that reproduces the curve (a line, a power, an exponential approach, a ratio, a peak) and
+       grow it one term or one variable at a time. Combine features the way SHAP interactions
+       suggest (products, ratios, multiplicative effects). Keep forms physically sensible for
+       PROJECT_DESCRIPTION (signs, positivity, limits), without reaching for a named law.
     3. Read the diagnosed reasons. They tell you WHY a form fails:
-       - "wrong curve shape along X" -> another family for X
-       - "missing variable Z" -> add Z (multivariate family, or a multiplicative/additive term)
+       - "wrong curve shape along X" -> another functional form for X
+       - "missing variable Z" -> add Z (a multiplicative or additive term)
        - "residual spread grows" -> try target_transform='log'
        - "poorly constrained parameters" -> simplify; the data cannot support that form
        - "parameters not distinguishable from zero" -> drop that term
        - "matches the noise ceiling" / "exceeds the nonparametric benchmark" -> the form is sufficient
-    4. Combine what you learned into formulas with fit_formula.
+    4. Combine what you learned into multivariate formulas with fit_formula.
     5. By about step 4-6, launch ONE targeted PySR search (start_pysr_search): restrict features to
        those that matter, choose operators matching the shapes you found, seed it with your best
        models via guess_model_ids, and say why in rationale. The baseline search (INITIAL_SEARCHES)
@@ -468,8 +484,8 @@ class EquationDiscoveryAgent(dspy.Signature):
     Return STRICT JSON only (double quotes, no markdown):
     {
         "summary": "3-6 sentences: what governs the target, which model(s) you recommend and why, what remains unexplained",
-        "recommended_models": [{"model_id": "C12", "why": "..."}],
-        "rejected_forms": [{"form": "Michaelis-Menten on P", "model_id": "C3", "reason": "residuals depend on pH (~40% of residual variance)"}],
+        "recommended_models": [{"model_id": "M12", "why": "..."}],
+        "rejected_forms": [{"form": "saturating ratio a*P/(b + P)", "model_id": "M3", "reason": "residuals depend on pH (~40% of residual variance)"}],
         "insights": ["..."],
         "open_questions": ["..."]
     }

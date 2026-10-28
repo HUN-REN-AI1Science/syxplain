@@ -32,23 +32,6 @@ class Family:
     max_inputs: int = 6
     lower_bounds: dict[str, float] = field(default_factory=dict)
 
-    def summary(self) -> dict:
-        return {
-            "name": self.name,
-            "label": self.label,
-            "formula": self.formula,
-            "inputs": "1 feature" if self.n_inputs == 1 else f"2-{self.max_inputs} features",
-            "typical_use": self.domain,
-            "requires": [
-                r
-                for r, flag in (
-                    ("x > 0", self.requires_positive_x),
-                    ("y > 0", self.requires_positive_y),
-                )
-                if flag
-            ],
-        }
-
 
 # ---------------------------------------------------------------------------
 # Initial-guess helpers

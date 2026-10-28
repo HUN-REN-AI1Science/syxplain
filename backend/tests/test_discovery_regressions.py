@@ -185,7 +185,11 @@ def test_all_categorical_run_skips_pysr_and_keeps_classic_models(monkeypatch):
     d = results["discovery"]
     assert d["searches"] == []
     assert any(n["kind"] == "data_issue" and "categorical" in n["text"] for n in d["notebook"])
-    assert results["warnings"][-1]["stage"] == "symbolic_regression"
+    stages = [w["stage"] for w in results["warnings"]]
+    assert "symbolic_regression" in stages
+    # The level-means baseline is a reference fitted after exploration, not a discovery.
+    assert "selection" in stages
+    assert d["selection"]["headline_is_reference"] is True
 
 
 def test_one_analysis_mode_and_who_gets_the_literature_search(monkeypatch):

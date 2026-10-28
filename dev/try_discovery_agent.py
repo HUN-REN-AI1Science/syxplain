@@ -69,6 +69,7 @@ async def main(args: argparse.Namespace) -> None:
     from backend.core.config import get_discovery_settings
     from backend.infrastructure.llm.client import create_dspy_model
     from backend.services.discovery.agent import run_discovery_agent
+    from backend.services.discovery.relate import screen_named_laws
     from backend.services.discovery.report import build_results
     from backend.services.discovery.session import DiscoveryBudget, DiscoverySession
     from backend.services.discovery.tools import build_tools
@@ -115,6 +116,7 @@ async def main(args: argparse.Namespace) -> None:
         session, build_tools(session), lm, project, max_iters=args.max_iters
     )
     await session.ensure_result(grace_s=args.pysr_delay * 3, max_wait_s=args.pysr_delay * 6)
+    print(f"Named laws fitted after exploration: {screen_named_laws(session)}")
     results = build_results(session, report, None)
 
     print("\n=== Agent report ===")
@@ -126,6 +128,9 @@ async def main(args: argparse.Namespace) -> None:
             f"{e['verdict']:9s} {e['equation'][:80]}"
         )
     print(f"\nNotebook entries: {len(session.notebook)}; elapsed {time.time() - t0:.0f}s")
+    print("\n=== Relation to known laws (headline) ===")
+    for r in (results["discovery"].get("relations") or {}).get("headline", []):
+        print(f"{r['law_id']:5s} {r['relation']:10s} {r['comparison']:6s} {r['label']}")
     print("\n=== Coherence ===")
     print(json.dumps(results["discovery"].get("coherence"), indent=2))
     if args.explain:

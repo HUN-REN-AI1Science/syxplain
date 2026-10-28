@@ -616,15 +616,23 @@ class AnalysisOrchestrator:
 
         LAUNCH: the baseline PySR search and the literature scout start
         first so the Slurm queue and the research model overlap with profiling and the
-        agent. PROFILE runs in a separate process. EXPLORE is the agent's budget. SETTLE
-        waits for searches, RECONCILE makes the agent's report consistent with what
-        finished, and SELECT/PERSIST build the brief. Whatever happens to the agent, the
-        run ends with the baseline equations plus classic baselines; on any failure or
-        cancellation every launched search is cancelled.
+        agent. PROFILE runs in a separate process. EXPLORE is the agent's budget; it is
+        blind to known laws, so its equations come from the data alone. SETTLE waits for
+        searches, RECONCILE makes the agent's report consistent with what finished, RELATE
+        fits the classic catalog and the published laws and compares them with the
+        discoveries, and SELECT/PERSIST build the brief (the headline is a discovered
+        equation). Whatever happens to the agent, the run ends with the baseline equations
+        plus the known laws; on any failure or cancellation every launched search is
+        cancelled.
         """
         from backend.api.sse.connection_manager import get_connection_manager
-        from backend.services.discovery.literature import literature_features, run_literature
+        from backend.services.discovery.literature import (
+            fit_literature_laws,
+            literature_features,
+            run_literature,
+        )
         from backend.services.discovery.reconcile import reconcile
+        from backend.services.discovery.relate import screen_named_laws
         from backend.services.discovery.report import build_results
 
         settings = get_discovery_settings()
@@ -716,11 +724,6 @@ class AnalysisOrchestrator:
                     warnings.append({"stage": "agent", "message": agent_error})
             self._raise_if_cancelled(context, session)
 
-            # Classic baselines must exist even when the agent was off or failed early.
-            if sum(1 for m in session.snapshot() if m.kind != "symbolic" and not m.error) < 3:
-                await session.emit("agent", "Screening the classic function catalog")
-                await asyncio.to_thread(session.auto_screen)
-
             # SETTLE
             pending = [s.search_id for s in session.searches.values() if not s.done]
             await progress.update_progress_async(
@@ -732,29 +735,6 @@ class AnalysisOrchestrator:
                 max_wait_s=settings.first_result_timeout_s,
             )
             self._raise_if_cancelled(context, session)
-            if session.literature_task is not None:
-                with contextlib.suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(
-                        asyncio.shield(session.literature_task), timeout=LITERATURE_TIMEOUT_S
-                    )
-                if not session.literature_task.done():
-                    session.literature_task.cancel()
-                    warnings.append(
-                        {
-                            "stage": "literature",
-                            "message": "Literature search did not finish in time",
-                        }
-                    )
-                laws = session.known_laws or {}
-                if laws.get("status") in ("empty", "failed"):
-                    warnings.append(
-                        {
-                            "stage": "literature",
-                            "message": "No published laws were found for these variables"
-                            if laws.get("status") == "empty"
-                            else f"Literature search failed: {laws.get('error')}",
-                        }
-                    )
 
             # RECONCILE
             if agent_report is not None:
@@ -767,6 +747,49 @@ class AnalysisOrchestrator:
                     review = self._review_fn(context, session, lm, settings.review_steps)
                 agent_report = await reconcile(session, agent_report, review)
 
+            # RELATE: known laws are fitted only now, as references for the discoveries
+            await progress.update_progress_async(
+                "relate_known_laws", status="Comparing the discoveries with known laws"
+            )
+            # The named-law screen does not need the literature: it overlaps the wait for it.
+            screen = asyncio.create_task(asyncio.to_thread(screen_named_laws, session))
+            n_literature = 0
+            try:
+                if session.literature_task is not None:
+                    with contextlib.suppress(asyncio.TimeoutError):
+                        await asyncio.wait_for(
+                            asyncio.shield(session.literature_task), timeout=LITERATURE_TIMEOUT_S
+                        )
+                    if not session.literature_task.done():
+                        session.literature_task.cancel()
+                        warnings.append(
+                            {
+                                "stage": "literature",
+                                "message": "Literature search did not finish in time",
+                            }
+                        )
+                    laws = session.known_laws or {}
+                    if laws.get("status") in ("empty", "failed"):
+                        warnings.append(
+                            {
+                                "stage": "literature",
+                                "message": "No published laws were found for these variables"
+                                if laws.get("status") == "empty"
+                                else f"Literature search failed: {laws.get('error')}",
+                            }
+                        )
+                    n_literature = len(await asyncio.to_thread(fit_literature_laws, session))
+            except BaseException:
+                screen.cancel()  # do not leave the screen task unretrieved
+                raise
+            n_classic = await screen
+            await session.emit(
+                "agent",
+                f"Fitted {n_classic} named and {n_literature} published laws to compare with the "
+                "discovered equations",
+            )
+            self._raise_if_cancelled(context, session)
+
             await progress.update_progress_async("final_scoring", status="Scoring models")
             completed = [s for s in session.searches.values() if s.status == "completed"]
             if not completed:
@@ -777,13 +800,21 @@ class AnalysisOrchestrator:
                     raise OrchestratorError(f"PySR task failed: {errors}")
                 session.note(
                     "data_issue",
-                    f"All symbolic regression searches failed ({errors}); results contain classic "
-                    "models only",
+                    f"All symbolic regression searches failed ({errors}); results contain the "
+                    "agent's own formulas and the known laws only",
                 )
                 warnings.append({"stage": "symbolic_regression", "message": errors[:500]})
 
             # SELECT + PERSIST
             results = await asyncio.to_thread(build_results, session, agent_report, agent_error)
+            if results["discovery"]["selection"]["headline_is_reference"]:
+                warnings.append(
+                    {
+                        "stage": "selection",
+                        "message": "No discovered equation was usable, so the recommended "
+                        "equation is a known law",
+                    }
+                )
             results["warnings"] = warnings
             context.shap_plots = session.shap_plots
             logger.info(
@@ -835,7 +866,7 @@ class AnalysisOrchestrator:
 
         try:
             lm = self._discovery_lm(context, model_name)
-            tools = build_tools(session, literature_enabled=self._wants_literature(context))
+            tools = build_tools(session)
         except Exception as e:
             report, error = await failed(e)
             return report, error, None

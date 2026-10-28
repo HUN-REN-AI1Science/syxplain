@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from backend.services.discovery.expression import ExpressionError
-from backend.services.discovery.literature import fit_law, run_literature
+from backend.services.discovery.literature import fit_law, fit_literature_laws, run_literature
 from backend.services.discovery.reconcile import check_claims, reconcile
 from backend.services.discovery.report import build_results, explanation_data_spec, json_safe
 from backend.services.discovery.selection import select
@@ -434,12 +434,17 @@ def test_literature_laws_are_mapped_and_fitted_once():
         return s
 
     s = asyncio.run(scenario())
+    # Collected only: the agent's exploration is blind to them (no models, no inbox event)
+    assert s.known_laws["status"] == "pending" and len(s.literature_raw) == 3 and len(calls) == 1
+    assert not any(m.kind == "literature" for m in s.models.values())
+    assert any(e["kind"] == "literature" for e in s.events) and s.take_inbox() == []
+
+    fitted = fit_literature_laws(s)
     laws = s.known_laws["laws"]
-    assert s.known_laws["status"] == "ok" and len(calls) == 1
+    assert s.known_laws["status"] == "ok" and len(fitted) == 1
     assert laws[0]["model_id"].startswith("L") and laws[0]["cv_r2"] is not None
     assert laws[1]["unmapped"] == ["Zn"] and laws[1]["model_id"] is None
     assert "not the target" in laws[2]["fit_error"]
-    assert any(e["kind"] == "literature" for e in s.events)
 
 
 def test_fit_law_uses_published_constants():

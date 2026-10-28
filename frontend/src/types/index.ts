@@ -317,6 +317,8 @@ export interface DiscoverySelection {
   headline_reason: string;
   shortlist: string[];
   agent_pick_rejected: { model_id: string; reason: string }[];
+  /** No discovered equation was usable, so the headline is a known (reference) law */
+  headline_is_reference?: boolean;
 }
 
 export interface RejectedForm {
@@ -352,6 +354,30 @@ export interface DiscoveryAgentReport {
   reviewed_searches?: string[];
 }
 
+/** How a discovered equation relates to a known law fitted after the blind exploration */
+export interface KnownLawRelation {
+  law_id: string;
+  kind: 'classic' | 'literature';
+  label: string;
+  equation: string;
+  features: string[];
+  shared_features: string[];
+  complexity: number;
+  cv_r2: number | null;
+  /** The law's accuracy against the discovered equation (one-standard-error rule) */
+  comparison: 'better' | 'tied' | 'worse';
+  /** R² between the two models' predictions */
+  agreement_r2: number | null;
+  /** For 'partial': R² of shape along the law's variables */
+  shape_r2?: number | null;
+  relation: 'equivalent' | 'similar' | 'partial' | 'different';
+}
+
+export interface KnownLawRelations {
+  n_known_laws: { classic: number; literature: number };
+  headline: KnownLawRelation[];
+}
+
 export interface DiscoveryReport {
   target: { alias: string; column: string };
   /** Expression variable name -> original column name */
@@ -375,6 +401,8 @@ export interface DiscoveryReport {
   searches: DiscoverySearch[];
   budget: Record<string, number>;
   agent: DiscoveryAgentReport;
+  /** Absent on runs from before the blind exploration */
+  relations?: KnownLawRelations | null;
   literature?: {
     status: 'ok' | 'empty' | 'failed' | 'pending';
     laws: LiteratureLaw[];

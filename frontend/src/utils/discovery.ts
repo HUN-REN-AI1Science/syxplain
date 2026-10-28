@@ -5,6 +5,7 @@
 import type {
   CoherenceStatus,
   DomainCoherence,
+  KnownLawRelation,
   MetricBasis,
   RejectedForm,
   ScatterData,
@@ -124,6 +125,21 @@ export const COHERENCE_LABEL: Record<CoherenceStatus, string> = {
   warn: 'caution',
   fail: 'conflict',
   na: 'not available',
+};
+
+/** How a discovered equation relates to a known law (results page and PDF) */
+export const KNOWN_LAW_RELATION_LABEL: Record<KnownLawRelation['relation'], string> = {
+  equivalent: 'same law, other form',
+  similar: 'similar predictions',
+  partial: 'covers part of it',
+  different: 'different',
+};
+
+/** The known law's accuracy against the discovered equation */
+export const KNOWN_LAW_COMPARISON_TEXT: Record<KnownLawRelation['comparison'], string> = {
+  better: 'fits better',
+  tied: 'fits as well',
+  worse: 'fits worse',
 };
 
 /** Overall coherence verdict */

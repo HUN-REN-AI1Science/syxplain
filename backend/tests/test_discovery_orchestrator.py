@@ -120,10 +120,10 @@ def test_discovery_with_agent(orchestrator, monkeypatch):
     lm = DummyLM(
         [
             _step(
-                "Saturating; try MM.",
-                "fit_families",
-                families=["michaelis_menten", "linear"],
-                features=["dose"],
+                "Saturating; approach to a plateau.",
+                "fit_formula",
+                expression="a*dose/(b + dose)",
+                initial_params={"a": 5, "b": 2},
             ),
             _step(
                 "Target PySR on dose.",
@@ -140,7 +140,10 @@ def test_discovery_with_agent(orchestrator, monkeypatch):
             {
                 "reasoning": "r",
                 "report_json": json.dumps(
-                    {"summary": "MM fits", "recommended_models": [{"model_id": "C3", "why": "law"}]}
+                    {
+                        "summary": "MM fits",
+                        "recommended_models": [{"model_id": "M1", "why": "fits"}],
+                    }
                 ),
             },
         ]
@@ -157,10 +160,11 @@ def test_discovery_with_agent(orchestrator, monkeypatch):
     assert set(backend.inputs) == {"pysr_1", "pysr_2"}
     assert backend.inputs["pysr_1"]["config"]["unary_operators"] == ["exp"]  # unknown op dropped
     assert backend.inputs["pysr_2"]["guesses"] == ["5*dose/(2 + dose)"]
-    assert progress.steps[-4:] == [
+    assert progress.steps[-5:] == [
         "compute_submission",
         "discovery_agent",
         "discovery_wrapup",
+        "relate_known_laws",
         "final_scoring",
     ]
     d = results["discovery"]
@@ -173,6 +177,12 @@ def test_discovery_with_agent(orchestrator, monkeypatch):
     assert d["aliases"]["dose"] == "dose [mg]"
     assert d["selection"]["headline_model_id"] is not None
     assert results["best_equation"]["is_headline"]
+    # Known laws are fitted after exploration, as references: never the headline
+    kinds = {e["model_id"]: e["kind"] for e in d["leaderboard"]}
+    assert "classic" in kinds.values()
+    assert kinds[d["selection"]["headline_model_id"]] in ("custom", "symbolic")
+    assert d["relations"]["headline"] and not d["selection"]["headline_is_reference"]
+    assert d["selection"]["headline_model_id"] in d["relations"]["by_model"]
     assert results["warnings"] == []
     json.dumps(results, allow_nan=False)
 
@@ -187,7 +197,8 @@ def test_agent_crash_falls_back(orchestrator, monkeypatch):
     assert "model not found" in d["agent"]["error"]
     assert d["agent"]["source"] == "auto_fallback"
     assert [s["search_id"] for s in d["searches"]] == ["pysr_1"]
-    assert any(e["kind"] == "classic" for e in d["leaderboard"])  # auto-screen ran
+    assert any(e["kind"] == "classic" for e in d["leaderboard"])  # known laws fitted
+    assert results["best_equation"]["origin"] == "symbolic"  # the baseline search
     assert results["equations"] and results["best_equation"]
     assert results["warnings"][0]["stage"] == "agent"
 
