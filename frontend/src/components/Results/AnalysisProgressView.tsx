@@ -72,15 +72,12 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
 
       <hr className="max-w-md mx-auto border-[var(--color-border)] mb-6" />
 
-      <h3 className="font-heading text-xl font-semibold text-primary mt-4 mb-2">
-        {isInQueuePhase ? 'Waiting for resources...' : 'AI is analyzing your data'}
-      </h3>
-      <p className="text-secondary max-w-md mx-auto mb-4">
-        An AI agent tests classic scientific laws against your data, works out why they fall short,
-        and steers symbolic regression towards better equations.
-      </p>
-
-      <AgentActivityFeed events={activity} />
+      {/* The agent's history fills the explanation's place in a fixed-height scrolling feed */}
+      <AgentActivityFeed
+        events={activity}
+        title={isInQueuePhase ? 'Waiting for resources...' : 'AI is analyzing your data'}
+        intro="An AI agent tests classic scientific laws against your data, works out why they fall short, and steers symbolic regression towards better equations."
+      />
 
       {isJobSubmitted && (
         <div className="max-w-md mx-auto bg-surface-alt rounded-lg px-4 py-3 text-sm text-secondary">

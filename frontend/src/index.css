@@ -282,6 +282,37 @@
   animation: stepDescriptionEnter var(--duration-slow) var(--ease-spring) forwards;
 }
 
+/* Agent activity feed: new rows slide in at the bottom of the scrolling log */
+@keyframes agentFeedRowEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+    background-color: color-mix(in srgb, var(--color-brand-500) 12%, transparent);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.agent-feed-row-enter {
+  animation: agentFeedRowEnter 1.2s var(--ease-spring) both;
+}
+
+.agent-feed-scroll {
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-feed-row-enter {
+    animation: none;
+  }
+}
+
 /* ==========================================================================
    HPC Queue Phase Animations
    ========================================================================== */
