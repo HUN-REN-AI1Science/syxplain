@@ -13,6 +13,15 @@ export function formatFileSize(bytes: number): string {
 }
 
 /**
+ * Format seconds as a clock reading, e.g. 402 -> "6:42"
+ */
+export function formatClock(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+/**
  * Escape special characters for AsciiMath rendering
  * Wraps all multi-character variable names in quotes to prevent AsciiMath
  * from parsing parts of identifiers as reserved symbols (gt, lt, log, sin, etc.)

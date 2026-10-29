@@ -59,13 +59,11 @@ export class ProgressSSE {
       this.handleMessage(event.data);
     });
 
-    es.addEventListener('progress_update', (event: MessageEvent) => {
-      this.handleMessage(event.data);
-    });
-
-    es.addEventListener('agent_event', (event: MessageEvent) => {
-      this.handleMessage(event.data);
-    });
+    for (const name of ['progress_update', 'agent_event', 'search_progress']) {
+      es.addEventListener(name, (event: MessageEvent) => {
+        this.handleMessage(event.data);
+      });
+    }
 
     es.addEventListener('error', (event: MessageEvent) => {
       try {

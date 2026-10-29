@@ -139,6 +139,7 @@ async def sse_progress(
                 "results": {k: v for k, v in (run_data["results"] or {}).items() if k != "tasks"}
                 or None,
                 "recent_events": manager.recent_events(run_id),
+                "search_progress": manager.search_progress(run_id),
             }
             yield {
                 "event": "initial_state",
@@ -162,12 +163,7 @@ async def sse_progress(
                 if message is None:
                     return
 
-                yield {
-                    "event": "agent_event"
-                    if message.get("type") == "agent_event"
-                    else "progress_update",
-                    "data": json.dumps(message),
-                }
+                yield {"event": message["type"], "data": json.dumps(message)}
 
                 # Stop after terminal status
                 if message.get("status") in TERMINAL_STATUSES:

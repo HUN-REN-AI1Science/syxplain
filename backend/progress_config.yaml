@@ -5,6 +5,7 @@
 # Each phase has:
 #   - name: Internal identifier used in update_progress calls
 #   - label: Human-readable label for UI
+#   - group: Step of the progress page's step tracker; consecutive phases of a group are one step
 #   - description: User-friendly explanation of what's happening
 #   - progress_start: The progress percentage when this phase begins; the bar moves towards
 #     the next phase's start while the phase runs
@@ -18,30 +19,35 @@
 phases:
   - name: initialization
     label: "Initializing"
+    group: "Setup"
     description: "Setting up your analysis environment..."
     progress_start: 0
     expected_s: 1
 
   - name: data_summary
     label: "Analyzing Data"
+    group: "Setup"
     description: "Analyzing your dataset structure and patterns..."
     progress_start: 1
     expected_s: 1
 
   - name: visualization
     label: "Generating Charts"
+    group: "Setup"
     description: "Creating data visualizations..."
     progress_start: 2
     expected_s: 3
 
   - name: pysr_config_generation
     label: "AI Configuration"
+    group: "AI configuration"
     description: "AI is analyzing your data to find the best approach..."
     progress_start: 3
     expected_s: 20
 
   - name: compute_submission
     label: "Submitting Jobs"
+    group: "AI configuration"
     description: "Submitting a first symbolic regression search to the computing cluster..."
     progress_start: 6
     expected_s: 2
@@ -50,12 +56,14 @@ phases:
   # elapsed time; the agent's steps stream to the UI as activity events.
   - name: discovery_agent
     label: "AI Scientist at Work"
+    group: "AI scientist at work"
     description: "An AI agent is profiling your data, designing equations from it and steering symbolic regression on the cluster..."
     progress_start: 7
     expected_s: 600
 
   - name: discovery_wrapup
     label: "Collecting Results"
+    group: "Collecting results"
     description: "Waiting for the last symbolic regression searches to finish..."
     progress_start: 85
     expected_s: 30
@@ -63,30 +71,35 @@ phases:
   # Known laws are fitted only after the blind exploration, as references.
   - name: relate_known_laws
     label: "Comparing with Known Laws"
+    group: "Known laws and scoring"
     description: "Fitting named and published laws and comparing them with the discovered equations..."
     progress_start: 86
     expected_s: 20
 
   - name: final_scoring
     label: "Scoring Models"
+    group: "Known laws and scoring"
     description: "Scoring every model on held-out data it has never seen..."
     progress_start: 87
     expected_s: 5
 
   - name: literature
     label: "Literature"
+    group: "Known laws and scoring"
     description: "Comparing your equations with published laws..."
     progress_start: 88
     expected_s: 5
 
   - name: llm_explanation
     label: "Explaining Results"
+    group: "Explanation"
     description: "AI is interpreting your equations and generating insights..."
     progress_start: 89
     expected_s: 80
 
   - name: finalization
     label: "Finalizing"
+    group: "Explanation"
     description: "Preparing your final results..."
     progress_start: 98
     expected_s: 2

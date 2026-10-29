@@ -17,6 +17,8 @@ export interface InitialStateMessage {
   results: EquationResults | null;
   /** Recent discovery-agent activity, replayed for clients that join mid-run */
   recent_events?: AgentEventMessage[];
+  /** Latest progress (%) of each cluster search */
+  search_progress?: Record<string, number>;
 }
 
 export interface AgentEventMessage {
@@ -37,7 +39,20 @@ export interface ProgressUpdateMessage {
   timestamp: string;
 }
 
-export type ServerMessage = InitialStateMessage | ProgressUpdateMessage | AgentEventMessage;
+/** How far one cluster search has got: its current state, not a step of the run's history */
+export interface SearchProgressMessage {
+  type: 'search_progress';
+  run_id: string;
+  search_id: string;
+  progress: number;
+  timestamp: string;
+}
+
+export type ServerMessage =
+  | InitialStateMessage
+  | ProgressUpdateMessage
+  | AgentEventMessage
+  | SearchProgressMessage;
 
 // ============================================================================
 // Connection State
@@ -98,4 +113,6 @@ export interface UseRunProgressReturn {
   isReady: boolean;
   /** Live discovery-agent activity (most recent last) */
   activity: AgentEvent[];
+  /** Latest progress (%) of each cluster search */
+  searchProgress: Record<string, number>;
 }

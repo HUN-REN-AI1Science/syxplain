@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ProgressSSE } from '@services/sseService';
+import { appendActivity } from '@components/Results/Discovery/agentState';
 import type { AgentEvent, EquationResults, RunStatus } from '@/types';
 import type {
   ConnectionState,
@@ -15,7 +16,8 @@ import type {
 } from '@/types/sse';
 
 const TERMINAL_STATUSES: RunStatus[] = ['completed', 'failed', 'timeout', 'cancelled'];
-const MAX_ACTIVITY = 60;
+/** Past this, the oldest narration makes room (fits and search events are always kept) */
+const MAX_ACTIVITY = 300;
 
 export function useRunProgress(options: UseRunProgressOptions): UseRunProgressReturn {
   const { runId, onComplete, onError, enabled = true } = options;
@@ -28,6 +30,7 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
   const [isReady, setIsReady] = useState(false);
   const [activity, setActivity] = useState<AgentEvent[]>([]);
+  const [searchProgress, setSearchProgress] = useState<Record<string, number>>({});
 
   // Refs
   const sseRef = useRef<ProgressSSE | null>(null);
@@ -65,11 +68,24 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
   const handleMessage = useCallback(
     (message: ServerMessage) => {
       if (message.type === 'agent_event') {
-        setActivity((prev) => [...prev, message.event].slice(-MAX_ACTIVITY));
+        setActivity((prev) => appendActivity(prev, [message.event], MAX_ACTIVITY));
         return;
       }
-      if (message.type === 'initial_state' && message.recent_events?.length) {
-        setActivity(message.recent_events.map((m) => m.event).slice(-MAX_ACTIVITY));
+      if (message.type === 'search_progress') {
+        setSearchProgress((prev) => ({ ...prev, [message.search_id]: message.progress }));
+        return;
+      }
+      if (message.type === 'initial_state') {
+        if (message.recent_events?.length) {
+          setActivity(
+            appendActivity(
+              [],
+              message.recent_events.map((m) => m.event),
+              MAX_ACTIVITY
+            )
+          );
+        }
+        if (message.search_progress) setSearchProgress(message.search_progress);
       }
       if (message.type === 'initial_state' || message.type === 'progress_update') {
         setProgress(message.progress);
@@ -99,6 +115,9 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
     if (!enabled || !runId) return;
 
     isTerminalRef.current = false;
+    // A new run starts with an empty live view, not the previous run's agent activity
+    setActivity([]);
+    setSearchProgress({});
 
     const sse = new ProgressSSE(runId, {
       onMessage: handleMessage,
@@ -132,6 +151,7 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
     connectionState,
     isReady,
     activity,
+    searchProgress,
   };
 }
 

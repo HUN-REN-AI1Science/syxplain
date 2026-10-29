@@ -113,6 +113,16 @@ class ModelResult:
         """Rows where the model is undefined, in CV and on the holdout."""
         return self.n_undefined + ((self.holdout or {}).get("n_undefined") or 0)
 
+    def event_fields(self) -> dict[str, Any]:
+        """Fields of an activity event about this model, so the UI can rank models live."""
+        return {
+            "model_id": self.model_id,
+            "label": self.label,
+            "expression": self.fitted_expression,
+            "cv_r2": _r(self.cv_r2),
+            "problem": self.problem,
+        }
+
     def brief(self) -> dict[str, Any]:
         """Compact view for the agent's context window."""
         out: dict[str, Any] = {

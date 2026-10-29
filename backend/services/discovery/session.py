@@ -1377,6 +1377,8 @@ class DiscoverySession:
             f"Started {search_id} on {', '.join(record.features)}"
             + (f" — {record.rationale}" if record.rationale else ""),
             search_id=search_id,
+            features=record.features,
+            rationale=record.rationale,
         )
         return record
 
@@ -1444,6 +1446,8 @@ class DiscoverySession:
                     else " (none could be scored)"
                 ),
                 search_id=record.search_id,
+                n_equations=n,
+                **(self.models[summary["best_model_id"]].event_fields() if n else {}),
             )
         except asyncio.CancelledError:
             # _cancel_job is idempotent, so a job cancel_search() already sent is not repeated.
@@ -1455,6 +1459,11 @@ class DiscoverySession:
             logger.warning(f"Search {record.search_id} crashed: {e}", exc_info=True)
             record.status = "failed"
             record.error = str(e)
+            await self.emit(
+                "search_failed",
+                f"{record.search_id} failed: {record.error[:200]}",
+                search_id=record.search_id,
+            )
         finally:
             record.finished_at = time.monotonic()
 

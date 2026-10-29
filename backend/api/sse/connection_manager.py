@@ -8,7 +8,7 @@ to all connected clients watching a specific run.
 import asyncio
 import contextlib
 import logging
-from collections import OrderedDict, defaultdict, deque
+from collections import OrderedDict, defaultdict
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -16,8 +16,28 @@ logger = logging.getLogger(__name__)
 TERMINAL_STATUSES = ("completed", "failed", "timeout", "cancelled")
 MAX_QUEUE_SIZE = 256
 MAX_SSE_CONNECTIONS_PER_USER = 5
-MAX_RECENT_EVENTS = 50
+MAX_RECENT_EVENTS = 300
 MAX_REPLAY_RUNS = 200
+# Events a rejoining client rebuilds its leaderboard and search panels from. The agent's
+# budget bounds how many a run has, so they are never evicted: only the narration around
+# them (thoughts, notes, tool steps) makes room once a run has MAX_RECENT_EVENTS events.
+RESULT_KINDS = frozenset(
+    {"fit", "search_started", "search_completed", "search_failed", "search_cancelled"}
+)
+
+
+def _trim_replay(recent: list[dict[str, Any]]) -> None:
+    """Drop the oldest narration events until the log fits MAX_RECENT_EVENTS again."""
+    excess = len(recent) - MAX_RECENT_EVENTS
+    if excess <= 0:
+        return
+    kept = []
+    for message in recent:
+        if excess > 0 and message["event"].get("kind") not in RESULT_KINDS:
+            excess -= 1
+        else:
+            kept.append(message)
+    recent[:] = kept
 
 
 class SSEConnectionManager:
@@ -36,6 +56,7 @@ class SSEConnectionManager:
             cls._instance._queues = defaultdict(set)
             cls._instance._user_queues = defaultdict(set)
             cls._instance._recent_events = OrderedDict()
+            cls._instance._search_progress = OrderedDict()
         return cls._instance
 
     @property
@@ -133,7 +154,7 @@ class SSEConnectionManager:
             results: Optional results data
         """
         if status in TERMINAL_STATUSES:
-            self._recent_events.pop(run_id, None)
+            self._forget_replay(run_id)
         queues = self._queues.get(run_id, set())
         if not queues:
             return
@@ -170,7 +191,7 @@ class SSEConnectionManager:
 
         # On terminal status, push None sentinel so generators stop
         if status in TERMINAL_STATUSES:
-            self._recent_events.pop(run_id, None)
+            self._forget_replay(run_id)
             for queue in list(self._queues.get(run_id, set())):
                 with contextlib.suppress(asyncio.QueueFull):
                     queue.put_nowait(None)
@@ -179,8 +200,8 @@ class SSEConnectionManager:
         """
         Broadcast an activity event (e.g. a discovery-agent step) to clients watching a run.
 
-        The last few events are kept per run so a client that connects mid-run can
-        replay them (see ``recent_events``).
+        Events are kept per run so a client that connects mid-run can replay them (see
+        ``recent_events``); past MAX_RECENT_EVENTS the oldest narration makes room.
         """
         message = {
             "type": "agent_event",
@@ -188,19 +209,52 @@ class SSEConnectionManager:
             "event": event,
             "timestamp": _get_timestamp(),
         }
-        recent = self._recent_events.setdefault(run_id, deque(maxlen=MAX_RECENT_EVENTS))
+        recent = self._recent_events.setdefault(run_id, [])
         self._recent_events.move_to_end(run_id)
         recent.append(message)
+        _trim_replay(recent)
         while len(self._recent_events) > MAX_REPLAY_RUNS:
             self._recent_events.popitem(last=False)
+        self._send(run_id, message)
 
+    async def broadcast_search_progress(self, run_id: str, search_id: str, progress: float) -> None:
+        """
+        Broadcast how far one cluster search has got. Progress is the search's current state,
+        not a step of the run's history: only the latest value per search is kept for replay
+        (see ``search_progress``).
+        """
+        latest = self._search_progress.setdefault(run_id, {})
+        self._search_progress.move_to_end(run_id)
+        latest[search_id] = progress
+        while len(self._search_progress) > MAX_REPLAY_RUNS:
+            self._search_progress.popitem(last=False)
+        self._send(
+            run_id,
+            {
+                "type": "search_progress",
+                "run_id": run_id,
+                "search_id": search_id,
+                "progress": progress,
+                "timestamp": _get_timestamp(),
+            },
+        )
+
+    def _send(self, run_id: str, message: dict[str, Any]) -> None:
         for queue in list(self._queues.get(run_id, set())):
             with contextlib.suppress(asyncio.QueueFull):
                 queue.put_nowait(message)
 
+    def _forget_replay(self, run_id: str) -> None:
+        self._recent_events.pop(run_id, None)
+        self._search_progress.pop(run_id, None)
+
     def recent_events(self, run_id: str) -> list[dict[str, Any]]:
         """Recent activity events of a run (oldest first)."""
         return list(self._recent_events.get(run_id, ()))
+
+    def search_progress(self, run_id: str) -> dict[str, float]:
+        """Latest progress (%) of each cluster search of a run."""
+        return dict(self._search_progress.get(run_id, {}))
 
     def get_connection_count(self, run_id: str) -> int:
         """Get the number of active connections for a run."""

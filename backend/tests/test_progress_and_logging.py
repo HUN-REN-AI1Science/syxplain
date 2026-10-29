@@ -12,6 +12,10 @@ def test_phases_start_in_order_and_have_durations():
     assert starts == sorted(starts) and len(set(starts)) == len(starts)
     assert starts[0] == 0 and starts[-1] < 100
     assert all(p["expected_s"] > 0 for p in phases)
+    # Each step of the progress page's tracker is a run of consecutive phases
+    groups = [p["group"] for p in phases]
+    steps = [g for i, g in enumerate(groups) if i == 0 or g != groups[i - 1]]
+    assert all(groups) and len(steps) == len(set(steps))
     # The agent phase is the bulk of a run, so it gets the bulk of the bar
     agent, wrapup = get_phase("discovery_agent"), get_phase("discovery_wrapup")
     assert wrapup["progress_start"] - agent["progress_start"] >= 70

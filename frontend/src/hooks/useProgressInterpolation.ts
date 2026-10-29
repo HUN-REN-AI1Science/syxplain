@@ -22,14 +22,14 @@ export interface UseProgressInterpolationResult {
   displayProgress: number;
   /** Current step description based on backend progress */
   currentStepDescription: string;
-  /** Current step label (shorter) */
-  currentStepLabel: string;
   /** Seconds spent in the current step (since this page saw it begin) */
   stepElapsedS: number;
   /** Typical duration of the current step in seconds, when known */
   stepExpectedS: number | null;
   /** Whether the analysis is in the early HPC queue phase */
   isInQueuePhase: boolean;
+  /** Index of the running phase in `phases` (-1 before the first) */
+  phaseIndex: number;
 }
 
 /** Share of a phase's span reached after `elapsed` seconds: ~86% at `expected`, never 100% */
@@ -82,30 +82,13 @@ export function useProgressInterpolation(
   const currentPhase = phaseIndex >= 0 ? phases[phaseIndex] : null;
 
   // Compute current step description based on backend progress
-  const { currentStepDescription, currentStepLabel } = useMemo(() => {
-    if (status === 'completed') {
-      return {
-        currentStepDescription: 'Analysis complete!',
-        currentStepLabel: 'Complete',
-      };
-    }
+  const currentStepDescription = useMemo(() => {
+    if (status === 'completed') return 'Analysis complete!';
     if (status === 'failed' || status === 'timeout' || status === 'cancelled') {
-      return {
-        currentStepDescription: status === 'cancelled' ? 'Analysis cancelled' : 'Analysis stopped',
-        currentStepLabel:
-          status === 'timeout' ? 'Timeout' : status === 'cancelled' ? 'Cancelled' : 'Failed',
-      };
+      return status === 'cancelled' ? 'Analysis cancelled' : 'Analysis stopped';
     }
-    if (!currentPhase) {
-      return {
-        currentStepDescription: 'Processing...',
-        currentStepLabel: 'Processing',
-      };
-    }
-    return {
-      currentStepDescription: currentPhase.description || currentPhase.label,
-      currentStepLabel: currentPhase.label,
-    };
+    if (!currentPhase) return 'Processing...';
+    return currentPhase.description || currentPhase.label;
   }, [currentPhase, status]);
 
   useEffect(() => {
@@ -152,9 +135,9 @@ export function useProgressInterpolation(
   return {
     displayProgress,
     currentStepDescription,
-    currentStepLabel,
     stepElapsedS,
     stepExpectedS: currentPhase?.expected_s ?? null,
     isInQueuePhase,
+    phaseIndex,
   };
 }

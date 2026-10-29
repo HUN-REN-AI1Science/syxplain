@@ -237,7 +237,12 @@ def test_search_lifecycle_full_front_and_report():
     _sid, payload = launcher.submitted[0]
     assert payload["predictor_columns"] == ["P_added", "pH"]
     assert len(payload["data"]["data"]) == len(s.train)  # holdout never sent to PySR
-    assert any(e["kind"] == "search_completed" for e in events)
+    started = next(e for e in events if e["kind"] == "search_started")
+    assert started["features"] == ["P_added", "pH"] and started["rationale"] == "test"
+    done = next(e for e in events if e["kind"] == "search_completed")
+    best = s.models[done["model_id"]]  # the event carries the best model for the live UI
+    assert done["n_equations"] >= 36 and done["cv_r2"] == round(best.cv_r2, 4)
+    assert done["expression"] == best.fitted_expression and done["problem"] == "static"
     first = s.state_line(1, 10)
     assert rec.unread and "UNREAD" in first and "[event] pysr_1 completed" in first
     assert "[event]" not in s.state_line(2, 10)  # the inbox is consumed once

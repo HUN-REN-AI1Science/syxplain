@@ -83,6 +83,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
     error,
     isReady: initialFetchDone,
     activity,
+    searchProgress,
   } = useRunProgress({
     runId,
     onComplete: handleComplete,
@@ -128,10 +129,10 @@ const ResultsView: React.FC<ResultsViewProps> = ({
   const {
     displayProgress,
     currentStepDescription,
-    currentStepLabel,
     stepElapsedS,
     stepExpectedS,
     isInQueuePhase,
+    phaseIndex,
   } = useProgressInterpolation({
     phases: progressPhases,
     backendProgress,
@@ -240,6 +241,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({
 
   // Initial connection state - show progress bar immediately while connecting
   const isConnecting = !initialFetchDone && !fromHistory && !!runId;
+  /** No run state yet: still starting or connecting */
+  const preRun = isStarting || isConnecting;
 
   // True while we've reached 'completed' but are still fetching final results from API
   const isLoadingResults = isCompleted && !result;
@@ -343,7 +346,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
         {(isStarting || isProcessing || isConnecting) && !isTerminalError && (
           <>
             <AnalysisProgressView
-              displayProgress={isStarting || isConnecting ? 0 : displayProgress}
+              displayProgress={preRun ? 0 : displayProgress}
               stepDescription={
                 isStarting
                   ? 'Starting analysis...'
@@ -351,18 +354,15 @@ const ResultsView: React.FC<ResultsViewProps> = ({
                     ? 'Connecting to analysis server...'
                     : currentStepDescription
               }
-              isInQueuePhase={isStarting || isConnecting || isInQueuePhase}
-              stepTiming={
-                isStarting || isConnecting
-                  ? undefined
-                  : { label: currentStepLabel, elapsedS: stepElapsedS, expectedS: stepExpectedS }
-              }
-              isJobSubmitted={
-                status === 'running' && !isStarting && !isConnecting && !isInQueuePhase
-              }
+              isInQueuePhase={preRun || isInQueuePhase}
+              stepTiming={preRun ? undefined : { elapsedS: stepElapsedS, expectedS: stepExpectedS }}
+              isJobSubmitted={status === 'running' && !preRun && !isInQueuePhase}
               activity={activity}
+              searchProgress={searchProgress}
+              phases={progressPhases}
+              phaseIndex={preRun ? -1 : phaseIndex}
             />
-            {status === 'running' && !isStarting && !isConnecting && (
+            {status === 'running' && !preRun && (
               <div className="flex justify-center mt-4">
                 <Button
                   label={cancelling ? 'Cancelling...' : 'Stop Analysis'}

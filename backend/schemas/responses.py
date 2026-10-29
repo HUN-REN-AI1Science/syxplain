@@ -195,6 +195,7 @@ class ProgressPhase(BaseModel):
 
     name: str
     label: str
+    group: str | None = None
     description: str | None = None
     progress_start: int
     expected_s: float

@@ -139,7 +139,7 @@ def build_tools(
                 await session.emit(
                     "fit",
                     f"Fitted {label or 'formula'} {m.fitted_expression[:80]} ({m.model_id}, CV R2 {cv})",
-                    model_id=m.model_id,
+                    **m.event_fields(),
                 )
             return m.brief() | {"parameters": list(m.params)}
 
@@ -355,7 +355,7 @@ def build_tools(
                     "fit",
                     f"Fitted rate law {label or ''} d/dt = {m.fitted_expression[:80]} "
                     f"({m.model_id}, dydt CV R2 {cv}, simulation R2 {m.simulation.get('r2')})",
-                    model_id=m.model_id,
+                    **m.event_fields(),
                 )
             return m.brief() | {"parameters": list(m.params)}
 

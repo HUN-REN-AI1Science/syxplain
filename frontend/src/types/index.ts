@@ -255,6 +255,17 @@ export interface AgentEvent {
   search_id?: string;
   model_id?: string;
   progress?: number;
+  /** Scored model on fit and search_completed events (the search's best) */
+  label?: string;
+  expression?: string;
+  cv_r2?: number | null;
+  /** Rate laws are scored on the derivative, so they never share a ranking with static models */
+  problem?: 'static' | 'dynamic';
+  /** search_completed: equations scored from the search's front */
+  n_equations?: number;
+  /** search_started */
+  features?: string[];
+  rationale?: string;
 }
 
 /** Random-forest SHAP summary computed during data profiling */
@@ -473,6 +484,8 @@ export interface DynamicsReport {
 export interface ProgressPhase {
   name: string;
   label: string;
+  /** Step of the progress page's tracker; consecutive phases of a group are one step */
+  group?: string;
   description?: string;
   /** Progress (%) when this phase begins; the bar moves towards the next phase's start */
   progress_start: number;

@@ -158,18 +158,12 @@ async def receive_progress(
                 )
 
             if progress.task_key:
-                # Keyed (agent-launched) task: stream to the activity feed only
-                manager = get_connection_manager()
-                await manager.broadcast_event(
-                    run_id=run_id,
-                    event={
-                        "kind": "search_progress",
-                        "text": f"{progress.task_key}: {progress.status or progress.step_name} "
-                        f"({progress.progress}%)",
-                        "search_id": progress.task_key,
-                        "progress": progress.progress,
-                    },
-                )
+                # Keyed (agent-launched) task: update that search's progress only. A ping that
+                # arrives after the run ended would only re-create replay state nobody reads.
+                if not RunStatus.is_terminal(run.status):
+                    await get_connection_manager().broadcast_search_progress(
+                        run_id, progress.task_key, progress.progress
+                    )
                 return {"status": "ok", "progress": run.progress}
 
             # Scale worker progress into allocated range
@@ -257,15 +251,15 @@ async def receive_error(
                 # The orchestrator decides whether the run as a whole has failed.
                 _store_task_result(run, error.task_key, {"status": "error", "error": error.error})
                 db.commit()
-                manager = get_connection_manager()
-                await manager.broadcast_event(
-                    run_id=run_id,
-                    event={
-                        "kind": "search_failed",
-                        "text": f"{error.task_key} failed on the cluster: {error.error[:200]}",
-                        "search_id": error.task_key,
-                    },
-                )
+                if not RunStatus.is_terminal(run.status):
+                    await get_connection_manager().broadcast_event(
+                        run_id=run_id,
+                        event={
+                            "kind": "search_failed",
+                            "text": f"{error.task_key} failed on the cluster: {error.error[:200]}",
+                            "search_id": error.task_key,
+                        },
+                    )
                 return {"status": "ok", "run_status": run.status}
 
             run.status = RunStatus.FAILED
