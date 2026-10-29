@@ -246,3 +246,17 @@ def test_tools_return_errors_as_text_and_results_include_dynamics():
     assert all(not e["model_id"].startswith("D") for e in results["equations"])
     spec = explanation_data_spec(results)
     assert spec["discovery"]["dynamics"]["headline"]["equation"].startswith("d")
+
+
+def test_vetoed_rate_laws_are_still_reported():
+    s = _session(_kinetics(), "P_sorbed")
+    s.set_dynamics("time_d", "jar")
+    m = s.fit_custom("k*temperature", label="no saturation", problem="dynamic")
+    assert m.cv_r2 <= 0
+    s.profile()
+    dynamics = build_results(s, {"summary": "x"}, None)["discovery"]["dynamics"]
+    assert dynamics["selection"]["headline_model_id"] is None
+    [card] = dynamics["equations"]
+    assert card["model_id"] == m.model_id and not card["is_headline"]
+    assert card["not_recommended"]
+    assert card["traces"]

@@ -450,6 +450,8 @@ export interface RateLawEntry {
   holdout_r2: number | null;
   verdict: ModelVerdict;
   reasons: string[];
+  /** Why the law cannot be recommended (failed guard), null when it passes; absent on older runs */
+  not_recommended?: string | null;
   is_headline: boolean;
   agent_recommended: boolean;
   agent_why: string | null;

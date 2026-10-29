@@ -294,7 +294,8 @@ def _dynamic_entry(
     traces: bool,
 ) -> dict[str, Any]:
     """A rate-law card; integrating it on the holdout sets ``m.holdout`` (once, here)."""
-    held = bool(session.dynamics.holdout_episodes)
+    # A law that diverged on the training trajectories is not integrated again on the holdout.
+    held = bool(session.dynamics.holdout_episodes) and not m.simulation.get("n_diverged")
     sim = (
         session.simulate_model(m, holdout=held, traces=traces)
         if (held or traces) and m.parsed is not None
@@ -313,12 +314,18 @@ def _dynamic_entry(
         "holdout_r2": m.holdout["r2"] if m.holdout else None,
         "verdict": m.verdict,
         "reasons": m.reasons[:4],
+        "not_recommended": selection.vetoes.get(m.model_id),
         "is_headline": selection.headline is m,
         "agent_recommended": m.model_id in agent_why,
         "agent_why": agent_why.get(m.model_id),
         "traces": (sim or {}).get("traces"),
         "traces_basis": "holdout" if held else "train",
     }
+
+
+def _simulation_r2(m: ModelResult) -> float:
+    r2 = m.simulation.get("r2")
+    return -math.inf if r2 is None else r2
 
 
 def build_dynamics(
@@ -330,9 +337,18 @@ def build_dynamics(
         return None
     ranked = session.ranked_models("dynamic")
     selection = select_dynamic(ranked, recommended_ids)
-    pool = usable(ranked)
+    pool = [m for m in ranked if m.model_id not in selection.vetoes]
     chosen: dict[str, ModelResult] = {m.model_id: m for m in selection.shortlist}
-    for m in [*(m for m in pool if m.model_id in recommended_ids), *session.pareto(pool)]:
+    # Vetoed laws still get cards (with the reason), best simulation first, so a run
+    # whose rate laws all failed shows what was tried and how far off it was.
+    vetoed = sorted(
+        (m for m in ranked if m.model_id in selection.vetoes), key=_simulation_r2, reverse=True
+    )
+    for m in [
+        *(m for m in pool if m.model_id in recommended_ids),
+        *session.pareto(pool),
+        *vetoed,
+    ]:
         if len(chosen) >= MAX_DYNAMIC:
             break
         chosen.setdefault(m.model_id, m)
@@ -402,6 +418,7 @@ def explanation_data_spec(results: dict[str, Any]) -> dict[str, Any]:
         "holdout_r2",
         "verdict",
         "reasons",
+        "not_recommended",
         "agent_recommended",
     )
 

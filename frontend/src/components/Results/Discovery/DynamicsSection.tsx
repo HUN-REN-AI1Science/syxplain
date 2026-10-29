@@ -104,6 +104,9 @@ const RateLawCard: React.FC<{
         : ''}
       {law.simulation_diverged ? ` · diverges on ${law.simulation_diverged} trajectories` : ''}
     </p>
+    {law.not_recommended && (
+      <p className="text-xs text-muted mt-1">Not recommended: {law.not_recommended}</p>
+    )}
     {law.agent_why && <p className="text-secondary mt-1">{asText(law.agent_why)}</p>}
   </li>
 );
@@ -155,12 +158,12 @@ export const DynamicsSection: React.FC<DynamicsSectionProps> = ({
           : ''}
       </p>
       {laws.length === 0 ? (
-        <p className="text-sm text-muted">No rate law reproduced the trajectories.</p>
+        <p className="text-sm text-muted">No rate law was fitted.</p>
       ) : (
         <>
           {!headline && (
             <p className="text-sm text-muted mb-2">
-              No rate law passed the simulation check, so none is recommended.
+              No rate law passed the checks, so none is recommended.
             </p>
           )}
           <ul className="space-y-2">

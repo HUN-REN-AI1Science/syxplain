@@ -61,6 +61,8 @@ class Selection:
     tie_threshold: float | None = None
     # True when no candidate was usable and the headline fell back to a reference model
     headline_is_reference: bool = False
+    # model_id -> why it is not usable (relaxed guard); not stored, the report shows it per card
+    vetoes: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -104,9 +106,10 @@ def select(
             selection.headline_is_reference = selection.headline is not None
         return selection
     by_id = {m.model_id: m for m in models}
+    vetoes = {m.model_id: why for m in models if (why := guard(m, strict=False, extra=extra_guard))}
     strict_pool = [m for m in models if guard(m, strict=True, extra=extra_guard) is None]
     strict = bool(strict_pool)
-    pool = strict_pool or usable(models, extra_guard)
+    pool = strict_pool or [m for m in models if m.model_id not in vetoes]
     rejected: list[dict[str, str]] = []
     if not pool:
         for mid in recommended_ids:
@@ -114,7 +117,7 @@ def select(
             rejected.append(
                 {"model_id": mid, "reason": guard(m, extra=extra_guard) if m else "unknown model"}
             )
-        return Selection(None, "no_eligible_model", [], rejected)
+        return Selection(None, "no_eligible_model", [], rejected, vetoes=vetoes)
 
     best = min(pool, key=lambda m: m.cv_rmse)
     threshold = best.cv_rmse + (best.cv_se or 0.0)
@@ -150,7 +153,7 @@ def select(
     for m in [best, *sorted(tied, key=_simplicity)]:
         if m not in shortlist and len(shortlist) < 3:
             shortlist.append(m)
-    return Selection(headline, reason, shortlist, rejected, threshold)
+    return Selection(headline, reason, shortlist, rejected, threshold, vetoes=vetoes)
 
 
 SIMULATION_MIN_R2 = 0.0
