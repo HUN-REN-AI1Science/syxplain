@@ -24,13 +24,37 @@ const KIND_TAG: Record<ModelKind, { label: string; className: string }> = {
 
 const VERDICT_TAG: Record<
   ModelVerdict,
-  { label: string; severity: 'success' | 'info' | 'warning' | 'danger' | 'secondary' }
+  {
+    label: string;
+    hint: string;
+    severity: 'success' | 'info' | 'warning' | 'danger' | 'secondary';
+  }
 > = {
-  good: { label: 'At noise level', severity: 'success' },
-  adequate: { label: 'Adequate', severity: 'info' },
-  poor: { label: 'Falls short', severity: 'warning' },
-  failed: { label: 'Failed', severity: 'danger' },
-  no_signal: { label: 'No signal', severity: 'secondary' },
+  good: {
+    label: 'Best possible',
+    hint: 'As accurate as this data allows: what it does not explain looks like measurement noise.',
+    severity: 'success',
+  },
+  adequate: {
+    label: 'Nearly best',
+    hint: 'Close to the best accuracy this data allows, but some pattern is left unexplained or some terms are uncertain.',
+    severity: 'info',
+  },
+  poor: {
+    label: 'Misses a pattern',
+    hint: 'Clearly below the best accuracy this data allows: part of the relationship is not captured.',
+    severity: 'warning',
+  },
+  failed: {
+    label: 'Fit failed',
+    hint: 'The equation could not be fitted to the data.',
+    severity: 'danger',
+  },
+  no_signal: {
+    label: 'Nothing to predict',
+    hint: 'Even a flexible model cannot predict the target from these variables.',
+    severity: 'secondary',
+  },
 };
 
 /** Horizontal R² bar with a marker at the noise ceiling (the marker is clamped to the bar) */
@@ -127,11 +151,13 @@ const LeaderboardRow: React.FC<RowProps> = ({
           {entry.complexity}
         </td>
         <td className="px-3 py-2">
-          <Tag
-            value={verdict.label}
-            severity={verdict.severity}
-            className="text-xs whitespace-nowrap"
-          />
+          <span title={verdict.hint}>
+            <Tag
+              value={verdict.label}
+              severity={verdict.severity}
+              className="text-xs whitespace-nowrap"
+            />
+          </span>
         </td>
         <td className="px-2 py-2 text-muted">
           <i className={`pi ${open ? 'pi-chevron-up' : 'pi-chevron-down'}`} aria-hidden="true"></i>
@@ -221,7 +247,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                 <th className="px-3 py-2 text-right hidden md:table-cell normal-case">CV R²</th>
               )}
               <th className="px-3 py-2 text-center hidden sm:table-cell">Complexity</th>
-              <th className="px-3 py-2">Verdict</th>
+              <th className="px-3 py-2">Fit quality</th>
               <th className="px-2 py-2">
                 <span className="sr-only">Details</span>
               </th>

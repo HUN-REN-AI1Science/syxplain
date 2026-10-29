@@ -215,6 +215,15 @@ export const DiscoveryReportPanel: React.FC<DiscoveryReportPanelProps> = ({ repo
               </p>
             </>
           )}
+          <h4>Fit quality</h4>
+          <p>
+            Each model is compared with the noise ceiling: <strong>Best possible</strong> means it
+            is as accurate as this data allows; <strong>Nearly best</strong> means it is close but
+            leaves some pattern unexplained or has uncertain terms;{' '}
+            <strong>Misses a pattern</strong> means part of the relationship is not captured;{' '}
+            <strong>Nothing to predict</strong> means even a flexible model finds no relationship.
+            Open a row to see the reasons.
+          </p>
         </HelpButton>
       </div>
 
