@@ -23,7 +23,7 @@ from typing import Any
 import numpy as np
 from scipy import stats
 
-from backend.services.discovery.fitting import binned_dependence, r2_score
+from backend.services.discovery.fitting import binned_dependence, r2_score, time_blocks
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +53,17 @@ def _forests(seed: int):
 
 
 def noise_ceiling(
-    X: np.ndarray, y: np.ndarray, seed: int = 0, repeats: int = CEILING_REPEATS
+    X: np.ndarray,
+    y: np.ndarray,
+    seed: int = 0,
+    repeats: int = CEILING_REPEATS,
+    folds: list[np.ndarray] | None = None,
 ) -> tuple[float, float, list[float], np.ndarray, np.ndarray]:
     """
     Nonparametric benchmark: out-of-fold R2 of the better of a random forest and
-    extra-trees, over ``repeats`` reshuffled 5-fold splits.
+    extra-trees, over ``repeats`` reshuffled 5-fold splits, or once over the given
+    ``folds`` (fixed folds, e.g. contiguous time blocks of a series, give the same
+    split in every repeat).
 
     Returns:
         (mean R2, sd over repeats, per-repeat R2, permutation-importance mean, sd)
@@ -66,14 +72,16 @@ def noise_ceiling(
     """
     n, p = X.shape
     k = 5 if n >= 25 else 3
+    if folds is not None:
+        repeats = 1
     runs = []
     perm_drops = np.zeros((5, p))
     for r in range(repeats):
         rng = np.random.default_rng(seed + r)
-        folds = _kfold(n, k, rng)
+        repeat_folds = folds if folds is not None else _kfold(n, k, rng)
         oofs = [np.zeros(n), np.zeros(n)]
         fold_models = []
-        for test_idx in folds:
+        for test_idx in repeat_folds:
             train_mask = np.ones(n, dtype=bool)
             train_mask[test_idx] = False
             models = _forests(seed + r)
@@ -374,20 +382,27 @@ def compute_profile(
     categorical: list[bool],
     seed: int = 0,
     labels: list[str] | None = None,
+    series: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """
     Everything CPU-heavy about the training data, as plain arrays/dicts (picklable).
-    ``labels`` are the axis names of the SHAP plots (default: ``names``).
+    ``labels`` are the axis names of the SHAP plots (default: ``names``). ``series``
+    (each row's trajectory, rows in time order) makes the benchmark's CV folds contiguous
+    time blocks, like the fits' (random folds would let the forests interpolate).
     """
     from sklearn.feature_selection import mutual_info_regression
 
     rng = np.random.default_rng(seed)
     if len(y) > MAX_CEILING_ROWS:
         sub = rng.choice(len(y), size=MAX_CEILING_ROWS, replace=False)
+        if series is not None:  # thinned, but kept in time order
+            sub = np.sort(sub)
+            series = series[sub]
         Xc, yc = X[sub], y[sub]
     else:
         Xc, yc = X, y
-    ceiling, ceiling_sd, runs, imp_mean, imp_sd = noise_ceiling(Xc, yc, seed=seed)
+    folds = None if series is None else time_blocks(series, 5 if len(yc) >= 25 else 3)
+    ceiling, ceiling_sd, runs, imp_mean, imp_sd = noise_ceiling(Xc, yc, seed=seed, folds=folds)
     mi = mutual_info_regression(Xc, yc, random_state=seed) if X.shape[1] else np.array([])
 
     shap_summary: dict[str, Any]

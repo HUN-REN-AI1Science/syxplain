@@ -282,6 +282,8 @@ class PySRTask(Task):
             timeout_in_seconds=config_dict.get("timeout_in_seconds", 3600),
             parsimony=config_dict.get("parsimony", 0.0032),
             turbo=config_dict.get("turbo", True),
+            template=config_dict.get("template"),
+            template_expressions=list(config_dict.get("template_expressions") or []),
         )
 
     def _execute(self, input_data: dict[str, Any]) -> TaskResult:
@@ -331,6 +333,17 @@ class PySRTask(Task):
 
         extra_kwargs: dict[str, Any] = {}
         guesses = [g for g in input_data.get("guesses") or [] if isinstance(g, str) and g.strip()]
+        if config.template:
+            from pysr import TemplateExpressionSpec
+
+            # Equations come back as "f = <expr of #1, #2>; g = ..."; the backend composes
+            # them with the template
+            extra_kwargs["expression_spec"] = TemplateExpressionSpec(
+                config.template,
+                expressions=config.template_expressions,
+                variable_names=list(X.columns),
+            )
+            logger.info(f"Template search: {config.template}")
         if guesses:
             if _supports_guesses():
                 extra_kwargs["guesses"] = guesses

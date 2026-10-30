@@ -205,6 +205,7 @@ def build_results(
         "aliases": {a: c for a, c in session.column_of.items() if a != session.target_alias},
         "variable_kinds": session.kinds,
         "split": session.split_info(),
+        "series": session.series,
         "noise_ceiling_r2": session.ceiling_r2,
         "noise_ceiling_sd": session.fit_data.ceiling_sd,
         "has_signal": session.fit_data.has_signal,
@@ -462,6 +463,13 @@ def explanation_data_spec(results: dict[str, Any]) -> dict[str, Any]:
             for i, e in enumerate(equations)
         ],
         "split": discovery["split"],
+        "series": discovery.get("series")
+        and {
+            "lag_features": discovery["series"]["lag_features"],
+            "residual_autocorrelation": discovery["series"]["screening"][
+                "residual_autocorrelation"
+            ],
+        },
         "variable_aliases": discovery["aliases"]
         | {discovery["target"]["alias"]: discovery["target"]["column"]},
         "variable_kinds": discovery.get("variable_kinds", {}),

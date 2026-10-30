@@ -87,6 +87,8 @@ class ExplainPySrEquations(dspy.Signature):
     - discovery.classic_baselines lists the reference named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
     - discovery.dynamics (when not null): the rows are measurements over time and the agent also looked for a rate law d(target)/dt = f(target, inputs) (the agent's own via fit_ode, or SINDy when source is a sindy_ search). headline is the recommended rate law; dydt_cv_r2 is its cross-validated R2 on the estimated derivative and is NOT comparable with the cv_r2 of the static equations; simulation_train_r2 and holdout_r2 come from integrating the law from each trajectory's start (holdout = whole held-out trajectories or the final part of each series). Explain the rate law as kinetics (what drives the rate, what the plateau or growth limit is) and relate it to the static equations: a static equation that saturates over time is often the integrated form of the rate law. Do not list rate laws among the numbered equations.
+    - series (when not null): the rows are a long series in time. Its lag_features are derived columns (X_l2 = X two time steps earlier, X_m3 = mean of X over the previous three steps, a lag of the target = its own persistence); their descriptions are in series.lag_features. When an equation uses them, explain them as delayed or legacy effects of earlier conditions, and a target lag as persistence rather than a cause. DATA_SPEC.split.order is then "chronological": the holdout is the final part of the series, so holdout_r2 measures prediction forward in time.
+    - Extrapolation: where DATA_SPEC.split.holdout_extrapolates lists features, the held-out rows lie partly outside their training range: a lower holdout_r2 there reflects extrapolation, say so instead of calling the model poor.
     Use this context: contrast the discovered equations with the reference laws (what does a discovered equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
 
     ### RELATION TO KNOWN LAWS
@@ -335,6 +337,8 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
     - discovery.classic_baselines lists the reference named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
     - discovery.dynamics (when not null): the rows are measurements over time and the agent also looked for a rate law d(target)/dt = f(target, inputs) (the agent's own via fit_ode, or SINDy when source is a sindy_ search). headline is the recommended rate law; dydt_cv_r2 is its cross-validated R2 on the estimated derivative and is NOT comparable with the cv_r2 of the static equations; simulation_train_r2 and holdout_r2 come from integrating the law from each trajectory's start (holdout = whole held-out trajectories or the final part of each series). Explain the rate law as kinetics (what drives the rate, what the plateau or growth limit is) and relate it to the static equations: a static equation that saturates over time is often the integrated form of the rate law. Do not list rate laws among the numbered equations.
+    - series (when not null): the rows are a long series in time. Its lag_features are derived columns (X_l2 = X two time steps earlier, X_m3 = mean of X over the previous three steps, a lag of the target = its own persistence); their descriptions are in series.lag_features. When an equation uses them, explain them as delayed or legacy effects of earlier conditions, and a target lag as persistence rather than a cause. DATA_SPEC.split.order is then "chronological": the holdout is the final part of the series, so holdout_r2 measures prediction forward in time.
+    - Extrapolation: where DATA_SPEC.split.holdout_extrapolates lists features, the held-out rows lie partly outside their training range: a lower holdout_r2 there reflects extrapolation, say so instead of calling the model poor.
     Use this context: contrast the discovered equations with the reference laws (what does a discovered equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
 
     ### RELATION TO KNOWN LAWS
@@ -463,23 +467,46 @@ class EquationDiscoveryAgent(dspy.Signature):
        - "residual spread grows" -> try target_transform='log'
        - "poorly constrained parameters" -> simplify; the data cannot support that form
        - "parameters not distinguishable from zero" -> drop that term
+       - "residuals are correlated in time" -> a memory effect is missing: add the lagged
+         features (step 5) or the target's own lag
        - "matches the noise ceiling" / "exceeds the nonparametric benchmark" -> the form is sufficient
     4. Combine what you learned into multivariate formulas with fit_formula.
     5. Time structure. If DATA_OVERVIEW.time_structure is present (confidence strong or weak),
-       the rows may be repeated measurements over time (trajectories of samples, jars, plots).
-       Check it with describe_time_structure. If the time column really is time, confirm it
-       with set_dynamics and look for the rate law that generates the curves: start with
-       fit_ode (e.g. first-order approach k*(a - y), growth r*y*(1 - y/K), decay -k*y, and
-       inputs that scale the rate), and launch start_sindy_search (it is fast; vary degree,
-       features and extra_functions between searches). Judge rate laws by simulation_r2 (the
-       law integrated from each trajectory's start): a law that fits the derivative but
-       diverges or drifts when simulated is wrong. Rate-law scores are on the derivative and
-       are NOT comparable with static R2 (leaderboard(problem='dynamic') ranks them). Keep the
-       static analysis too; recommend the best static model AND, if one is sound, the best
-       rate law. Without a time structure, skip this step entirely.
+       the rows are measurements over time. Check it with describe_time_structure. Its regime
+       decides what time means here:
+       a) regime "series" (a long, regularly sampled series, e.g. years): the data already holds
+          the lagged features that passed a screening, and models are scored forward in time
+          (CV over contiguous time blocks, the final part of the series held out). X_l2 is X two
+          steps earlier, X_m3 the mean of X over the previous three steps (antecedent conditions),
+          TARGET_l1 the target's own previous value. describe_time_structure lists every
+          candidate lag with its gain (the share of the remaining CV error it removes) and the
+          residual autocorrelation with and without them. Test the memory explicitly: fit your
+          best current-value model, then add the lags as terms (e.g. + b*PDSI_l1, or a legacy
+          factor) and keep them only where CV R2 and the diagnoses improve. A templated PySR
+          search separates current drivers from memory, e.g. template "f(CO2, Tm) + g(NAO_l2,
+          SMI_m3)". A lag of the target is persistence, not an explanation: use it only when
+          the drivers and their lags leave the residuals correlated in time, and say so.
+       b) Rate laws d(target)/dt = f(target, inputs) suit a STATE that accumulates or decays
+          (biomass, a concentration, a pool, a cumulative amount): the change follows from the
+          current level. A flux, rate or per-period total (annual GPP, yield, respiration rate,
+          precipitation) is not such a state: its change from one step to the next is weather,
+          not dynamics, so skip rate laws for it. For a state, confirm the time column with
+          set_dynamics and look for the rate law that generates the curves: start with fit_ode
+          (e.g. first-order approach k*(a - y), growth r*y*(1 - y/K), decay -k*y, and inputs
+          that scale the rate), and launch start_sindy_search (it is fast; vary degree,
+          features and extra_functions between searches). Judge rate laws by simulation_r2 (the
+          law integrated from each trajectory's start): a law that fits the derivative but
+          diverges or drifts when simulated is wrong. Rate-law scores are on the derivative and
+          are NOT comparable with static R2 (leaderboard(problem='dynamic') ranks them). Keep
+          the static analysis too; recommend the best static model AND, if one is sound, the
+          best rate law.
+       Without a time structure, skip this step entirely.
     6. By about step 4-6, launch ONE targeted PySR search (start_pysr_search): restrict features to
        those that matter, choose operators matching the shapes you found, seed it with your best
-       models via guess_model_ids, and say why in rationale. The baseline search (INITIAL_SEARCHES)
+       models via guess_model_ids, and say why in rationale. When your fits suggest a structure
+       (separate additive parts, a product of limiting factors, current drivers plus memory),
+       pass it as template instead of seeds, so PySR searches each part within that structure.
+       The baseline search (INITIAL_SEARCHES)
        counts toward the search budget. Keep fitting while searches run; when [event] says a search
        completed, read it with search_results and compare it with your models. Use
        wait_for_searches only when you have nothing useful left to fit.

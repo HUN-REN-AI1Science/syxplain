@@ -34,6 +34,37 @@ def target_space(y: np.ndarray, transform: str | None) -> np.ndarray:
         return TRANSFORMS[transform][0](y)
 
 
+# Residuals this autocorrelated along time (and significant) mean a missing memory effect
+AUTOCORR_FLAG = 0.3
+
+
+def lag1_autocorrelation(resid: np.ndarray, keys: np.ndarray) -> tuple[float | None, int]:
+    """
+    Pooled lag-1 autocorrelation of residuals over consecutive rows of the same
+    trajectory (rows sorted by trajectory, then time), and the number of pairs.
+    """
+    same = keys[1:] == keys[:-1]
+    a, b = resid[1:][same], resid[:-1][same]
+    if len(a) < 10:
+        return None, len(a)
+    mean = float(np.mean(resid))
+    den = float(np.sum((resid - mean) ** 2)) / len(resid)
+    if den == 0:
+        return None, len(a)
+    return float(np.mean((a - mean) * (b - mean)) / den), len(a)
+
+
+def time_blocks(keys: np.ndarray, n_folds: int) -> list[np.ndarray]:
+    """CV folds of contiguous time blocks: fold j is the j-th block of every trajectory
+    (rows sorted by trajectory, then time; ``keys`` gives each row's trajectory)."""
+    chunks: list[list[np.ndarray]] = [[] for _ in range(n_folds)]
+    for rows in np.split(np.arange(len(keys)), np.flatnonzero(np.diff(keys)) + 1):
+        for j, block in enumerate(np.array_split(rows, n_folds)):
+            chunks[j].append(block)
+    folds = [np.concatenate(c) for c in chunks if c]
+    return [f for f in folds if len(f)]
+
+
 # A model whose CV R2 is within this distance of the noise ceiling "matches" it
 # (widened by twice the ceiling's own uncertainty when that is known).
 CEILING_TOL = 0.02
@@ -50,6 +81,8 @@ class FitData:
     folds: list[np.ndarray]  # test indices of each CV fold
     ceiling_r2: float | None = None  # raw (unclipped) nonparametric benchmark
     ceiling_sd: float | None = None
+    # Rows of a series: the trajectory of each row, rows in time order within each
+    series: np.ndarray | None = None
 
     @property
     def n(self) -> int:
@@ -510,6 +543,23 @@ def _diagnose(
                 f"residual spread {trend} with the predicted value (rho={rho_h:+.2f}){hint}"
             )
 
+    # 3b. Memory: residuals that follow each other in time (rows of a series).
+    autocorr = None
+    if data.series is not None:
+        autocorr, n_pairs = lag1_autocorrelation(resid, data.series)
+        diag["residual_autocorrelation"] = _r(autocorr, 3)
+        # z = r * sqrt(pairs) > 2.58: significant at the 1% level
+        if (
+            autocorr is not None
+            and autocorr >= AUTOCORR_FLAG
+            and autocorr * np.sqrt(n_pairs) > 2.58
+        ):
+            reasons.append(
+                f"residuals are correlated in time (lag-1 autocorrelation {autocorr:.2f}): a memory "
+                "effect is missing, e.g. earlier conditions (lagged features) or the target's "
+                "persistence"
+            )
+
     # 4. Parameter identifiability: a parameter whose SE exceeds its value is either
     # simply not different from zero (term can be dropped) or unidentified (traded off
     # against another parameter).
@@ -577,7 +627,11 @@ def _diagnose(
                     f"leaves explainable variance: CV R2 {cv:.3f} vs noise ceiling ~{ceiling:.3f}"
                 )
 
-    strong_structure = any(v >= 0.1 for _, v in shape_flags) or any(s >= 0.1 for _, s, _ in missing)
+    strong_structure = (
+        any(v >= 0.1 for _, v in shape_flags)
+        or any(s >= 0.1 for _, s, _ in missing)
+        or (autocorr is not None and autocorr >= 0.5)
+    )
     sound_fit = not ill_conditioned and not unidentified
     if cv is None:
         result.verdict = "poor"

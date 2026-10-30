@@ -45,6 +45,10 @@ class PySRConfig:
     timeout_in_seconds: int = 3600
     parsimony: float = 0.0032
     turbo: bool = True
+    # PySR template combining named subexpressions, e.g. "f(a, b) + g(c)" (None = plain
+    # search), and the subexpression names it calls (the backend validated both)
+    template: str | None = None
+    template_expressions: list[str] = field(default_factory=list)
     max_scatter_points: int = 500
     scatter_seed: int = 42
 

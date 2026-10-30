@@ -12,7 +12,7 @@ Package Structure:
     - io: File I/O operations
 """
 
-__version__ = "3.0.0"  # 3.x: keyed tasks (--task-key), guesses, target transforms
+__version__ = "3.1.0"  # 3.x: keyed tasks (--task-key), guesses, target transforms; 3.1: templates
 
 from slurm_worker.tasks import TaskRegistry
 

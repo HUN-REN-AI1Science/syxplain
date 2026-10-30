@@ -196,6 +196,7 @@ def build_tools(
         guesses: list[str] | None = None,
         guess_model_ids: list[str] | None = None,
         rationale: str = "",
+        template: str | None = None,
     ) -> str:
         """Launch a PySR symbolic-regression search on the HPC cluster (non-blocking; queue + run
         take minutes). Returns a search_id. Keep fitting your own formulas meanwhile.
@@ -205,7 +206,12 @@ def build_tools(
         SHAP interaction among the features seeds the search (a*b, a/b). A seed using an operator you
         did not enable is rejected (the reply lists rejected seeds and why). Restrict features to
         the ones your diagnostics say matter, pick operators matching the shapes you found, and
-        explain the purpose in rationale."""
+        explain the purpose in rationale.
+        template fixes the structure and lets PySR search each part: subexpressions called on
+        features and combined with + - * / and numbers, e.g. "f(CO2, Tm) + g(PDSI_l1, NAO_l2)"
+        (current drivers plus a separate memory term) or "f(T) * g(W)" (multiplicative
+        limitation). Every feature must go to some subexpression; seeds are dropped. Its
+        equations come back as one formula and are scored like any other."""
 
         async def run():
             record = await session.start_search(
@@ -218,6 +224,7 @@ def build_tools(
                 guesses=guesses or [],
                 guess_model_ids=guess_model_ids or [],
                 rationale=rationale,
+                template=template,
             )
             out = {
                 "search_id": record.search_id,
@@ -303,13 +310,16 @@ def build_tools(
     async def describe_time_structure() -> str:
         """Whether the rows are measurements over time: the detected time column, trajectory
         column (sample, jar, plot...), number of trajectories, points per trajectory, how smoothly
-        the target changes along time (evidence) and alternative candidates. Detection is a
-        proposal; confirm it with set_dynamics."""
+        the target changes along time (evidence) and alternative candidates. For a long series
+        (regime "series") also the lagged features added to the data, the screening of every
+        candidate lag (gain = drop of the CV error) and the residual autocorrelation with and
+        without them. Detection is a proposal; confirm rate-law discovery with set_dynamics."""
 
         async def run():
             ts = session.time_structure
             return {
                 "detected": ts.to_dict() if ts and ts.time_column else None,
+                "series": session.series,
                 "confirmed": session.dynamics.summary() if session.dynamics else None,
                 "note": "A smooth curve along a column that is not time-like is just a static "
                 "shape; treat the data as dynamics only when the column really is time.",

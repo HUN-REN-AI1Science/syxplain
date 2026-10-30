@@ -1,0 +1,40 @@
+# Syxplain Worker: code-only update
+#
+# Replaces /app/slurm_worker in an already built worker image and keeps its Python,
+# Julia and precompiled PySR stack, so a worker code change builds in seconds instead
+# of a full rebuild (syxplain-worker.def). Use the full build when a dependency changes.
+#
+# Build (in this directory, on the login node):
+#   singularity build --fakeroot --build-arg base=/path/to/syxplain-worker.sif \
+#       syxplain-worker-<version>.sif syxplain-worker-code.def
+
+Bootstrap: localimage
+From: {{ base }}
+
+%arguments
+    base=syxplain-worker.sif
+
+%labels
+    Version 3.1.0
+
+%setup
+    # Drop the old code first, so modules removed since then do not linger
+    rm -rf "${SINGULARITY_ROOTFS}/app/slurm_worker"
+    mkdir -p "${SINGULARITY_ROOTFS}/app/slurm_worker"
+
+%files
+    __init__.py /app/slurm_worker/__init__.py
+    __main__.py /app/slurm_worker/__main__.py
+    cli.py /app/slurm_worker/cli.py
+    config.py /app/slurm_worker/config.py
+    logging_config.py /app/slurm_worker/logging_config.py
+    io/ /app/slurm_worker/io
+    reporting/ /app/slurm_worker/reporting
+    tasks/ /app/slurm_worker/tasks
+
+%post
+    find /app/slurm_worker -name __pycache__ -prune -exec rm -rf {} +
+    chmod -R a+rX /app
+
+%test
+    python -c "import sys; sys.path.insert(0, '/app'); from slurm_worker import __version__; print(f'Version: {__version__}')"

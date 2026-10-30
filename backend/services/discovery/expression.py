@@ -365,3 +365,110 @@ def make_alias(
         alias = f"{base}_{i}"
         i += 1
     return alias
+
+
+# ---------------------------------------------------------------------------
+# PySR templates
+# ---------------------------------------------------------------------------
+
+# A subexpression call with plain variable arguments, e.g. f(CO2, Tm)
+_TEMPLATE_CALL = re.compile(r"\b([A-Za-z_]\w*)\s*\(\s*([^()]*?)\s*\)")
+_TEMPLATE_PART = re.compile(r"^\s*([A-Za-z_]\w*)\s*=\s*(.+?)\s*$")
+_ARGUMENT = re.compile(r"#(\d+)")
+
+
+def _check_template_structure(template: str) -> None:
+    """The combine is Julia code: only calls on plain names, + - * /, signs and numbers
+    (no ** or //, which Julia rejects, no juxtaposition, no bare variables)."""
+    glue = (
+        "Outside the subexpression calls a template may only use + - * /, parentheses and "
+        f"numbers (got {template!r})"
+    )
+    try:
+        tree = ast.parse(template, mode="eval")
+    except SyntaxError:
+        raise ExpressionError(glue) from None
+    in_calls: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if (
+                not isinstance(node.func, ast.Name)
+                or node.keywords
+                or not all(isinstance(a, ast.Name) for a in node.args)
+            ):
+                raise ExpressionError(f"A subexpression takes plain features: {template!r}")
+            in_calls |= {id(node.func), *(id(a) for a in node.args)}
+        elif isinstance(node, ast.BinOp):
+            if not isinstance(node.op, ast.Add | ast.Sub | ast.Mult | ast.Div):
+                raise ExpressionError(glue)
+        elif isinstance(node, ast.UnaryOp):
+            if not isinstance(node.op, ast.USub | ast.UAdd):
+                raise ExpressionError(glue)
+        elif isinstance(node, ast.Constant):
+            if isinstance(node.value, bool) or not isinstance(node.value, int | float):
+                raise ExpressionError(glue)
+        elif isinstance(node, ast.Name):
+            if id(node) not in in_calls:
+                raise ExpressionError(glue)
+        elif not isinstance(node, ast.Expression | ast.operator | ast.unaryop | ast.expr_context):
+            raise ExpressionError(glue)
+
+
+def parse_template(template: str, features: list[str]) -> list[tuple[str, list[str]]]:
+    """
+    Validate a PySR template such as "f(CO2, Tm) + g(PDSI_l1)": subexpression calls on
+    features, combined with + - * / and numeric constants. Returns the calls in order.
+    """
+    calls = [
+        (m.group(1), [a.strip() for a in m.group(2).split(",") if a.strip()])
+        for m in _TEMPLATE_CALL.finditer(template)
+    ]
+    if not calls:
+        raise ExpressionError(f"Template {template!r} calls no subexpression, e.g. f(a, b) + g(c)")
+    _check_template_structure(template)
+    arity: dict[str, int] = {}
+    for name, args in calls:
+        if name in features or name in _FUNCTIONS or name in BASE_RESERVED:
+            raise ExpressionError(
+                f"'{name}' cannot name a subexpression: use a free name such as f, g, h"
+            )
+        if not args:
+            raise ExpressionError(f"{name}() takes no features; pass at least one")
+        unknown = [a for a in args if a not in features]
+        if unknown:
+            raise ExpressionError(f"{name}({', '.join(args)}) uses {unknown}, not search features")
+        if arity.setdefault(name, len(args)) != len(args):
+            raise ExpressionError(f"{name} is called with different numbers of arguments")
+    unused = [f for f in features if not any(f in args for _, args in calls)]
+    if unused:
+        raise ExpressionError(f"Features {unused} are passed to no subexpression")
+    return calls
+
+
+def compose_template(template: str, equation: str) -> str:
+    """
+    One closed formula from a template search's equation, "f = #1 * #2; g = cos(#1)":
+    each call in the template becomes its part with #k replaced by the k-th argument.
+    """
+    parts: dict[str, str] = {}
+    for piece in equation.split(";"):
+        m = _TEMPLATE_PART.match(piece)
+        if not m:
+            raise ExpressionError(f"Not a template equation: {equation!r}")
+        parts[m.group(1)] = m.group(2)
+
+    def call(m: re.Match) -> str:
+        name = m.group(1)
+        args = [a.strip() for a in m.group(2).split(",")]
+        if name not in parts:
+            raise ExpressionError(f"Template equation {equation!r} lacks part {name}")
+
+        def arg(a: re.Match) -> str:
+            k = int(a.group(1))
+            if not 1 <= k <= len(args):
+                raise ExpressionError(f"{name} has no argument #{k}")
+            return args[k - 1]
+
+        return f"({_ARGUMENT.sub(arg, parts[name])})"
+
+    return _TEMPLATE_CALL.sub(call, template)

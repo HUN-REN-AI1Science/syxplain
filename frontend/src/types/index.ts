@@ -230,6 +230,8 @@ export interface DiscoverySearch {
   niterations?: number | null;
   target_transform?: string | null;
   guesses?: string[];
+  /** PySR template, e.g. "f(CO2, Tm) + g(NAO_l2)" */
+  template?: string;
   /** SINDy library: polynomial degree and extra functions */
   degree?: number;
   extra_functions?: string[];
@@ -325,6 +327,10 @@ export interface DiscoverySplit {
   dropped_incomplete?: number;
   missing_by_column?: Record<string, number>;
   excluded_columns?: { column: string; reason: string }[];
+  /** "chronological" for a long series (absent on older runs) */
+  order?: 'chronological' | 'random';
+  /** Feature -> share of held-out rows outside its training range (only large shares) */
+  holdout_extrapolates?: Record<string, number>;
 }
 
 export interface DiscoverySelection {
@@ -426,6 +432,35 @@ export interface DiscoveryReport {
   activity?: AgentEvent[];
   /** Rate-law results; null unless the agent confirmed a time structure */
   dynamics?: DynamicsReport | null;
+  /** Long series: lagged features and their screening; null otherwise */
+  series?: SeriesReport | null;
+}
+
+/** A lagged copy of a predictor or of the target, added as a feature */
+export interface LagFeature {
+  feature: string;
+  column: string;
+  source: string;
+  kind: 'lag' | 'mean';
+  steps: number;
+  description: string;
+}
+
+export interface SeriesReport {
+  time_column: string;
+  group_column: string | null;
+  n_series: number;
+  time_step: number;
+  lag_features: LagFeature[];
+  rows_without_history: number;
+  screening: {
+    method: string;
+    candidates: { feature: string; selected: boolean; gain: number | null; note?: string }[];
+    residual_autocorrelation: {
+      current_drivers_only: number | null;
+      with_selected_lags: number | null;
+    };
+  };
 }
 
 export interface TrajectoryTrace {

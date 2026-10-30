@@ -16,7 +16,7 @@ import re
 import threading
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
 import numpy as np
@@ -26,11 +26,13 @@ from scipy import stats
 from backend.services.discovery.expression import (
     ExpressionError,
     alias_base,
+    compose_template,
     make_alias,
     names_outside_call,
     operators_used,
     parameterize_constants,
     parse_expression,
+    parse_template,
 )
 from backend.services.discovery.families import FAMILIES
 from backend.services.discovery.fitting import (
@@ -41,6 +43,7 @@ from backend.services.discovery.fitting import (
     predict,
     score_holdout,
     target_space,
+    time_blocks,
 )
 from backend.services.discovery.profiling import (
     NEGLIGIBLE_SHARE,
@@ -49,6 +52,16 @@ from backend.services.discovery.profiling import (
     compute_profile_async,
     describe_features,
     profile_shape,
+)
+from backend.services.discovery.series import (
+    LAG_STEPS,
+    LONG_SERIES_POINTS,
+    MEAN_WINDOWS,
+    LagCandidate,
+    SeriesGrid,
+    final_segment,
+    is_series,
+    screen_lags,
 )
 from backend.services.discovery.temporal import (
     DynamicsData,
@@ -67,6 +80,7 @@ TARGET_TRANSFORMS = ("none", "log", "log1p", "sqrt")
 MAX_PYSR_ROWS = 10000
 MAX_FRONT = 40  # equations ingested per search (30 most accurate + 10 simplest)
 MIN_HOLDOUT_ROWS = 40  # below this, every metric is out-of-fold CV
+EXTRAPOLATION_SHARE = 0.25  # held-out rows beyond a feature's training range worth flagging
 # Literature events are not here: exploration is blind to known laws (see relate.py).
 INBOX_KINDS = ("search_completed", "search_failed", "search_cancelled", "data_issue")
 CATEGORICAL_WORDS = re.compile(
@@ -164,6 +178,7 @@ class SearchRecord:
                 "binary_operators": self.config.get("binary_operators"),
                 "maxsize": self.config.get("maxsize"),
                 "niterations": self.config.get("niterations"),
+                **({"template": self.config["template"]} if self.config.get("template") else {}),
                 "target_transform": self.target_transform,
                 "guesses": self.guesses,
                 "rejected_guesses": self.rejected_guesses,
@@ -279,7 +294,6 @@ class DiscoverySession:
             else:
                 break
         frame = frame[[target_column, *kept]].dropna()
-        self.dropped_incomplete = self.n_uploaded - len(frame)
         if len(frame) < 10:
             raise ValueError(f"Only {len(frame)} complete rows — not enough data for discovery")
 
@@ -317,30 +331,6 @@ class DiscoverySession:
             else:
                 self.kinds[alias] = "continuous"
 
-        # --- split ------------------------------------------------------------
-        self.n_rows = len(frame)
-        rng = np.random.default_rng(seed)
-        order = rng.permutation(len(frame))
-        n_holdout = round(holdout_fraction * len(frame)) if len(frame) >= MIN_HOLDOUT_ROWS else 0
-        self.holdout = frame.iloc[order[:n_holdout]].reset_index(drop=True)
-        self.train = frame.iloc[order[n_holdout:]].reset_index(drop=True)
-        fit_frame = (
-            self.train.sample(n=max_fit_rows, random_state=seed)
-            if len(self.train) > max_fit_rows
-            else self.train
-        )
-        y = fit_frame[self.target_alias].to_numpy(dtype=float)
-        n_folds = 5 if len(y) >= 25 else 3
-        folds = np.array_split(rng.permutation(len(y)), n_folds)
-        self.fit_data = FitData(
-            X={f: fit_frame[f].to_numpy(dtype=float) for f in self.features},
-            y=y,
-            folds=folds,
-        )
-
-        for col in self.excluded_columns:
-            self.note("data_issue", f"Column '{col['column']}' excluded: {col['reason']}")
-
         # --- time structure (all uploaded columns: time is often not a predictor) ---
         self.raw_data = data
         self.dynamics: DynamicsData | None = None
@@ -351,6 +341,142 @@ class DiscoverySession:
         except Exception as e:  # a proposal only; never block the static analysis
             logger.warning(f"Time-structure detection failed: {e}", exc_info=True)
             self.time_structure = None
+
+        # --- a long series: lagged features, rows in time order -----------------
+        self.descriptions = dict(descriptions)
+        self.series: dict[str, Any] | None = None
+        keys = held = None
+        if is_series(self.time_structure) and data.index.is_unique:
+            try:
+                frame, keys, held = self._build_series(frame, data, holdout_fraction)
+            except Exception as e:  # never block the row-wise analysis
+                logger.warning(f"Series features failed: {e}", exc_info=True)
+
+        # --- split ------------------------------------------------------------
+        self.n_rows = len(frame)
+        # Rows without a time value or a lag's history are missing values too
+        self.dropped_incomplete = self.n_uploaded - self.n_rows
+        rng = np.random.default_rng(seed)
+        if keys is None:
+            order = rng.permutation(len(frame))
+            n_holdout = (
+                round(holdout_fraction * len(frame)) if len(frame) >= MIN_HOLDOUT_ROWS else 0
+            )
+            held_rows, train_rows = order[:n_holdout], order[n_holdout:]
+        else:  # the final part of each series: prediction forward in time
+            held_rows, train_rows = np.flatnonzero(held), np.flatnonzero(~held)
+        self.holdout = frame.iloc[held_rows].reset_index(drop=True)
+        self.train = frame.iloc[train_rows].reset_index(drop=True)
+        fit_frame, fit_keys = self.train, None if keys is None else keys[train_rows]
+        if len(self.train) > max_fit_rows:
+            if fit_keys is None:
+                fit_frame = self.train.sample(n=max_fit_rows, random_state=seed)
+            else:  # thinned, but kept in time order
+                rows = np.sort(rng.choice(len(self.train), max_fit_rows, replace=False))
+                fit_frame, fit_keys = self.train.iloc[rows], fit_keys[rows]
+        y = fit_frame[self.target_alias].to_numpy(dtype=float)
+        n_folds = 5 if len(y) >= 25 else 3
+        folds = (
+            time_blocks(fit_keys, n_folds)
+            if fit_keys is not None
+            else np.array_split(rng.permutation(len(y)), n_folds)
+        )
+        self.fit_data = FitData(
+            X={f: fit_frame[f].to_numpy(dtype=float) for f in self.features},
+            y=y,
+            folds=folds,
+            series=fit_keys,
+        )
+
+        for col in self.excluded_columns:
+            self.note("data_issue", f"Column '{col['column']}' excluded: {col['reason']}")
+
+    def _build_series(
+        self, frame: pd.DataFrame, data: pd.DataFrame, holdout_fraction: float
+    ) -> tuple[pd.DataFrame, np.ndarray, np.ndarray]:
+        """
+        Sort the rows by trajectory and time, screen lagged copies of the predictors and
+        of the target on the training part, and add the selected ones as features (the
+        session is changed only at the end, once everything has been computed).
+        Returns the frame, each row's trajectory code and the holdout mask.
+        """
+        ts = self.time_structure
+        grid = SeriesGrid.build(data, ts)
+        pos = data.index.get_indexer(frame.index)
+        keys, steps = grid.key[pos], grid.step[pos]
+        ok = keys >= 0
+        rows = np.flatnonzero(ok)[np.lexsort((steps[ok], keys[ok]))]
+        frame, keys, pos = frame.iloc[rows], keys[rows], pos[rows]
+        held = (
+            final_segment(keys, holdout_fraction)
+            if len(frame) >= MIN_HOLDOUT_ROWS
+            else np.zeros(len(keys), dtype=bool)
+        )
+
+        sources = [
+            a
+            for a in self.continuous_features
+            if self.column_of[a] not in (ts.time_column, ts.group_column)
+        ]
+        windows = MEAN_WINDOWS if ts.points_min >= LONG_SERIES_POINTS else MEAN_WINDOWS[:1]
+        taken = set(self.features) | {self.target_alias}
+        candidates: list[LagCandidate] = []
+        for source in [*sources, self.target_alias]:
+            raw = pd.to_numeric(data[self.column_of[source]], errors="coerce").to_numpy(float)
+            raw[~np.isfinite(raw)] = np.nan  # like the cleaned frame: inf is missing
+            specs = [("lag", k) for k in LAG_STEPS] + [("mean", w) for w in windows]
+            for kind, n_steps in specs:
+                alias = make_alias(f"{source}_{kind[0]}{n_steps}", taken, RESERVED_ALIASES)
+                taken.add(alias)
+                values = grid.lagged(raw, n_steps, mean=kind == "mean")[pos]
+                candidates.append(
+                    LagCandidate(alias, source, kind, n_steps, values, source == self.target_alias)
+                )
+
+        # Screen on the training part only
+        train = ~held
+        current = {a: frame[a].to_numpy(dtype=float)[train] for a in [*sources, self.target_alias]}
+        selected, record = screen_lags(
+            drivers=[frame[a].to_numpy(dtype=float)[train] for a in self.continuous_features],
+            y=current[self.target_alias],
+            keys=keys[train],
+            candidates=[replace(c, values=c.values[train]) for c in candidates],
+            current=current,
+        )
+        chosen = {c.alias for c in selected}
+        selected = [c for c in candidates if c.alias in chosen]  # full-length values
+        frame = frame.assign(**{c.alias: c.values for c in selected})
+        complete = frame.notna().all(axis=1).to_numpy()
+
+        lags = []
+        for c in selected:
+            column, text = c.describe(self.column_of[c.source], ts.time_column, grid.step_size)
+            description = self.descriptions.get(self.column_of[c.source])
+            self.descriptions[column] = text + (f" ({description})" if description else "")
+            self.alias_of[column] = c.alias
+            self.column_of[c.alias] = column
+            self.kinds[c.alias] = "continuous"
+            self.features.append(c.alias)
+            lags.append(
+                {
+                    "feature": c.alias,
+                    "column": column,
+                    "source": c.source,
+                    "kind": c.kind,
+                    "steps": c.steps,
+                    "description": self.descriptions[column],
+                }
+            )
+        self.series = {
+            "time_column": ts.time_column,
+            "group_column": ts.group_column,
+            "n_series": len(np.unique(keys)),
+            "time_step": grid.step_size,
+            "lag_features": lags,
+            "rows_without_history": int((~complete).sum()),
+            "screening": record,
+        }
+        return frame[complete], keys[complete], held[complete]
 
     # ------------------------------------------------------------------
     # Data contract
@@ -372,16 +498,27 @@ class DiscoverySession:
     def continuous_features(self) -> list[str]:
         return [f for f in self.features if self.kinds.get(f) != "categorical"]
 
+    @property
+    def lag_features(self) -> list[str]:
+        return [d["feature"] for d in self.series["lag_features"]] if self.series else []
+
     def split_info(self) -> dict[str, Any]:
-        return {
+        chronological = self.series is not None
+        held = (
+            f"the final {len(self.holdout)} rows in time (the last part of each series)"
+            if chronological
+            else f"{len(self.holdout)} held-out rows"
+        )
+        out = {
             "complete_rows": self.n_rows,
             "train": len(self.train),
             "holdout": len(self.holdout),
             "has_holdout": self.has_holdout,
             "regime": "holdout" if self.has_holdout else "cv_only",
             "metric_basis": self.metric_basis,
+            "order": "chronological" if chronological else "random",
             "scored_on": (
-                f"{len(self.holdout)} held-out rows"
+                held
                 if self.has_holdout
                 else f"out-of-fold cross-validation ({len(self.fit_data.folds)} folds; "
                 f"fewer than {MIN_HOLDOUT_ROWS} rows, no holdout)"
@@ -391,6 +528,23 @@ class DiscoverySession:
             "missing_by_column": self.missing_by_column,
             "excluded_columns": self.excluded_columns,
         }
+        beyond = self.holdout_extrapolation()
+        if beyond:
+            out["holdout_extrapolates"] = beyond
+        return out
+
+    def holdout_extrapolation(self) -> dict[str, float]:
+        """Share of held-out rows outside the training range, per continuous feature (only
+        those with at least EXTRAPOLATION_SHARE): there the holdout tests extrapolation."""
+        if not self.has_holdout:
+            return {}
+        out = {}
+        for f in self.continuous_features:
+            x, h = self.train[f].to_numpy(dtype=float), self.holdout[f].to_numpy(dtype=float)
+            share = float(np.mean((h < x.min()) | (h > x.max())))
+            if share >= EXTRAPOLATION_SHARE:
+                out[f] = round(share, 2)
+        return out
 
     def variables_for(self, aliases: list[str]) -> dict[str, str]:
         """alias -> original column for the given aliases plus the target."""
@@ -507,8 +661,8 @@ class DiscoverySession:
 
     def _profile_inputs(
         self,
-    ) -> tuple[np.ndarray, np.ndarray, list[str], list[bool], int, list[str]]:
-        """compute_profile's arguments: X, y, names, categorical, seed, plot labels."""
+    ) -> tuple[np.ndarray, np.ndarray, list[str], list[bool], int, list[str], np.ndarray | None]:
+        """compute_profile's arguments: X, y, names, categorical, seed, plot labels, series."""
         X = np.column_stack([self.fit_data.X[f] for f in self.features])
         cat = [self.kinds.get(f) == "categorical" for f in self.features]
         # 'P' or 'P (P_added mg/kg)': the agent's alias plus the column it stands for
@@ -516,7 +670,7 @@ class DiscoverySession:
             f if self.column_of.get(f, f) == f else f"{f} ({self.column_of[f]})"
             for f in self.features
         ]
-        return X, self.fit_data.y, list(self.features), cat, self.seed, labels
+        return X, self.fit_data.y, list(self.features), cat, self.seed, labels, self.fit_data.series
 
     async def ensure_profile(self, timeout_s: float = 240) -> dict[str, Any]:
         """Compute the profile in the profiling process (keeps the event loop free)."""
@@ -618,6 +772,7 @@ class DiscoverySession:
     def overview(self, max_features: int = 12) -> dict[str, Any]:
         """Compact profile for the agent's prompt (about 2k characters)."""
         p = self.profile() if self._profile is None else self._profile
+        max_features += len(self.lag_features)  # lags must not push current drivers out
         shap = p.get("shap") or {}
         partial = shap.get("partial_effects") or {}
         feats = []
@@ -656,15 +811,20 @@ class DiscoverySession:
         ts = self.time_structure
         if ts is None or ts.time_column is None or ts.confidence == "none":
             return None
-        return {
+        out = {
             "time_column": ts.time_column,
             "group_column": ts.group_column,
             "confidence": ts.confidence,
             "n_trajectories": ts.n_trajectories,
             "points_min": ts.points_min,
             "smoothness_along_time": ts.evidence.get("smoothness_along_time"),
+            "regime": "series" if self.series else "trajectories",
             "confirmed": self.dynamics is not None,
         }
+        if self.series:
+            out["lag_features"] = self.lag_features
+            out["residual_autocorrelation"] = self.series["screening"]["residual_autocorrelation"]
+        return out
 
     @property
     def ceiling_r2(self) -> float | None:
@@ -814,8 +974,8 @@ class DiscoverySession:
                 continue
             if name in self.features:  # a feature that is not a variable of this problem
                 raise ExpressionError(
-                    f"'{name}' is not a variable here (time, trajectory and categorical columns "
-                    f"are not inputs of a rate law); variables: {variables}"
+                    f"'{name}' is not a variable here (time, trajectory, categorical and derived "
+                    f"columns such as lags are not inputs of a rate law); variables: {variables}"
                 )
             match = lowered.get(name.lower()) or columns.get(name)
             if match is None and len(name) > 2:
@@ -1027,8 +1187,8 @@ class DiscoverySession:
             return None
         if name in self.raw_data.columns:
             return str(name)
-        if name in self.column_of:
-            return self.column_of[name]
+        if name in self.column_of and self.column_of[name] in self.raw_data.columns:
+            return self.column_of[name]  # not derived columns such as lags
         close = difflib.get_close_matches(str(name), [str(c) for c in self.raw_data.columns], n=1)
         hint = f" (did you mean '{close[0]}'?)" if close else ""
         raise ValueError(f"Unknown column {name!r}{hint}")
@@ -1048,10 +1208,12 @@ class DiscoverySession:
             structure = detected
         else:
             structure = TimeStructure(time_column=tcol, group_column=gcol, confidence="agent")
+        # Uploaded columns only (not derived ones such as lags): a rate law's inputs are
+        # interpolated along time from the raw data
         inputs = {
             a: self.column_of[a]
             for a in self.continuous_features
-            if self.column_of[a] not in (tcol, gcol)
+            if self.column_of[a] not in (tcol, gcol) and self.column_of[a] in self.raw_data
         }
         previous = self.dynamics
         self.dynamics = build_dynamics(
@@ -1246,6 +1408,7 @@ class DiscoverySession:
         guess_model_ids: list[str] | None = None,
         rationale: str = "",
         enforce_budget: bool = True,
+        template: str | None = None,
     ) -> SearchRecord:
         if self.launchers.get("pysr") is None:
             raise RuntimeError("No PySR launcher configured")
@@ -1266,9 +1429,20 @@ class DiscoverySession:
         config = self._validate_search(
             features, unary_operators, binary_operators, maxsize, niterations
         )
-
         candidates = [g for g in (guesses or []) if g and str(g).strip()]
         rejected: list[dict[str, str]] = []
+        template = (template or "").strip()
+        if template:
+            calls = parse_template(template, list(features))
+            config["template"] = template
+            config["template_expressions"] = list(dict.fromkeys(name for name, _ in calls))
+            # PySR warm-starts a template only from its parts, not from a closed formula
+            rejected += [
+                {"guess": g, "reason": "a templated search takes no closed-formula seeds"}
+                for g in [*candidates, *(guess_model_ids or [])]
+            ]
+            candidates, guess_model_ids = [], []
+
         for mid in guess_model_ids or []:
             m = self.models.get(mid)
             if m is None or m.error:
@@ -1284,7 +1458,7 @@ class DiscoverySession:
             else:
                 candidates.append(m.fitted_core)
         shap_seeds: list[str] = []
-        if not candidates and not rejected:
+        if not candidates and not rejected and "template" not in config:
             shap_seeds = self.shap_seed_guesses(
                 features, transform, config["unary_operators"], config["binary_operators"]
             )
@@ -1431,6 +1605,17 @@ class DiscoverySession:
             scored = await asyncio.to_thread(self._score_front, record, equations)
             if record.status == "cancelled":
                 return
+            if (
+                record.config.get("template")
+                and equations
+                and not any("=" in str(e.get("equation") or "") for e in equations)
+            ):
+                # A worker older than 3.1 ignores the template and returns plain formulas
+                self.note(
+                    "data_issue",
+                    f"{record.search_id} ignored its template (the Slurm worker image predates "
+                    "templated searches); rebuild and redeploy syxplain-worker.sif.",
+                )
             for model in scored:  # single writer: registration happens on the loop
                 self._register(model)
                 record.model_ids.append(model.model_id)
@@ -1478,9 +1663,12 @@ class DiscoverySession:
             keep = {id(e) for e in by_loss + by_size}
             equations = [e for e in equations if id(e) in keep]
         scored = []
+        template = record.config.get("template")
         for eq in equations:
             text = eq.get("equation") or ""
             try:
+                if template:
+                    text = compose_template(template, text)
                 model = self.score_symbolic(
                     text, record.search_id, record.target_transform, problem=problem
                 )
@@ -1489,6 +1677,8 @@ class DiscoverySession:
                 continue
             model.diagnostics[f"{record.engine}_loss"] = eq.get("loss")
             model.diagnostics[f"{record.engine}_complexity"] = eq.get("complexity")
+            if template:
+                model.diagnostics["template_parts"] = eq.get("equation")
             model.diagnostics["structure_selected_in_sample"] = True
             scored.append(model)
         if problem == "dynamic":

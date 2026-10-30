@@ -22,6 +22,7 @@ import { KnownLawsSection } from './KnownLawsSection';
 import { Leaderboard, MAX_ROWS } from './Leaderboard';
 import { LiteratureSection } from './LiteratureSection';
 import { ModelIdText } from './ModelIdText';
+import { SeriesSection } from './SeriesSection';
 import { ShapSection } from './ShapSection';
 import type { DiscoveryReport, NotebookEntry } from '@/types';
 
@@ -159,6 +160,7 @@ export const DiscoveryReportPanel: React.FC<DiscoveryReportPanelProps> = ({ repo
   const lateSearches = asArray(agent.late_searches);
   const pickRejected = asArray(report.selection?.agent_pick_rejected);
   const excluded = asArray(split.excluded_columns);
+  const beyond = Object.entries(split.holdout_extrapolates ?? {});
   const renamed = Object.entries(report.aliases ?? {}).filter(([alias, col]) => alias !== col);
   const completedSearches = searches.filter((s) => s.status === 'completed').length;
   const nModels = report.n_models_total ?? leaderboard.length;
@@ -293,7 +295,7 @@ export const DiscoveryReportPanel: React.FC<DiscoveryReportPanelProps> = ({ repo
         )}
       </div>
 
-      {(typeof split.uploaded === 'number' || excluded.length > 0) && (
+      {(typeof split.uploaded === 'number' || excluded.length > 0 || beyond.length > 0) && (
         <div className="text-sm text-secondary space-y-1">
           {typeof split.uploaded === 'number' && (
             <p>
@@ -303,6 +305,13 @@ export const DiscoveryReportPanel: React.FC<DiscoveryReportPanelProps> = ({ repo
                 ? ` (${split.dropped_incomplete} dropped for missing values)`
                 : ''}
               .
+            </p>
+          )}
+          {beyond.length > 0 && (
+            <p className="text-xs text-muted">
+              The held-out rows lie outside the training range of{' '}
+              {beyond.map(([f, share]) => `${f} (${Math.round(share * 100)}% of them)`).join(', ')}:
+              held-out scores there test extrapolation.
             </p>
           )}
           {excluded.length > 0 && (
@@ -447,6 +456,10 @@ export const DiscoveryReportPanel: React.FC<DiscoveryReportPanelProps> = ({ repo
         <LiteratureSection literature={report.literature} renderModelId={renderModelId} />
       )}
 
+      {report.series && (
+        <SeriesSection series={report.series} targetColumn={report.target?.column ?? ''} />
+      )}
+
       {report.dynamics && (
         <DynamicsSection
           dynamics={report.dynamics}
@@ -489,7 +502,7 @@ export const DiscoveryReportPanel: React.FC<DiscoveryReportPanelProps> = ({ repo
                             ? ` + ${asArray(s.extra_functions).join(', ')}`
                             : ''
                         }`
-                      : `${asArray(s.features).join(', ')} · operators ${[
+                      : `${s.template ? `template ${s.template}` : asArray(s.features).join(', ')} · operators ${[
                           ...asArray(s.binary_operators),
                           ...asArray(s.unary_operators),
                         ].join(' ')}`}

@@ -593,14 +593,13 @@ class AnalysisOrchestrator:
     ) -> dict[str, Any]:
         """Project description for the agent, with features keyed by their expression alias."""
         desc = context.problem_description
-        features = desc.get("features", {}) or {}
         return {
             "project_description": desc.get("project_description", ""),
             "target": {"alias": session.target_alias, "column": context.target_column},
             "features": {
                 alias: {
                     "column": session.column_of[alias],
-                    "description": features.get(session.column_of[alias], ""),
+                    "description": session.descriptions.get(session.column_of[alias], ""),
                     "kind": session.kinds.get(alias, "continuous"),
                 }
                 for alias in session.features
