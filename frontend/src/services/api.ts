@@ -14,6 +14,7 @@ import type {
   EquationResults,
   UserPermissions,
   UserApiKeys,
+  SuggestionPayload,
   ApiKey,
   CreateApiKeyResponse,
   DashboardStats,
@@ -262,7 +263,7 @@ export const apiKeysService = {
 export const permissionsService = {
   getMyPermissions: () => api.get<UserPermissions>('/permissions/me'),
 
-  validateKeys: (data: { gemini_api_key?: string; openai_api_key?: string }) =>
+  validateKeys: (data: Partial<UserApiKeys>) =>
     api.post<{ valid: boolean }>('/validate-keys', data),
 };
 
@@ -277,16 +278,8 @@ export interface SuggestDescriptionsResponse {
 }
 
 export const suggestionsService = {
-  suggestDescriptions: (
-    data: {
-      project_description: string;
-      target_variable?: string;
-      columns: string[];
-      gemini_api_key?: string;
-      gemini_model?: string;
-    },
-    signal?: AbortSignal
-  ) => api.post<SuggestDescriptionsResponse>('/suggest-descriptions', data, { signal }),
+  suggestDescriptions: (data: SuggestionPayload, signal?: AbortSignal) =>
+    api.post<SuggestDescriptionsResponse>('/suggest-descriptions', data, { signal }),
 };
 
 // ============================================================================

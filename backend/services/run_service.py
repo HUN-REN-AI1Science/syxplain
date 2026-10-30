@@ -28,6 +28,8 @@ from backend.repositories.run_repository import (
 )
 from backend.services.file_service import FileService, get_file_service
 from backend.utils import parse_uuid
+from backend.utils.url_safety import UnsafeUrlError, ensure_public_http_url
+from backend.utils.user_llm import UserLLM
 
 logger = logging.getLogger(__name__)
 
@@ -168,11 +170,11 @@ class RunService:
         features: dict[str, str],
         user_id: str,
         has_hunren_access: bool = True,
-        user_api_key: str | None = None,
-        user_openai_key: str | None = None,
+        user_llm: UserLLM | None = None,
     ) -> None:
         """
-        Validate a run request before starting.
+        Validate a run request before starting. Blocking (file parsing, DNS): call it
+        from a worker thread in async code.
 
         Args:
             csv_filename: Name of the uploaded file
@@ -180,8 +182,7 @@ class RunService:
             features: Dictionary of feature columns
             user_id: User UUID as string
             has_hunren_access: Whether user has HUN-REN key permission
-            user_api_key: User-provided Gemini API key (if any)
-            user_openai_key: User-provided OpenAI API key for the literature search (optional)
+            user_llm: The user's own LLM settings (users without HUN-REN access)
 
         Raises:
             EntityNotFoundError: If file not found
@@ -196,12 +197,19 @@ class RunService:
                     "OPENAI_API_KEY not set on server", config_key="OPENAI_API_KEY"
                 )
         else:
-            # User must provide their Gemini API key
-            if not user_api_key:
+            # User must provide their own API key (Gemini or an OpenAI-compatible endpoint)
+            if not user_llm or not user_llm.api_key:
                 raise ValidationError(
-                    "API key required. Please provide your Google Gemini API key.",
+                    "API key required. Please provide your Google Gemini or "
+                    "OpenAI-compatible API key.",
                     field="user_api_keys",
                 )
+            # The backend will call the user's endpoint: never a private or local address
+            if user_llm.api_base:
+                try:
+                    ensure_public_http_url(user_llm.api_base)
+                except UnsafeUrlError as e:
+                    raise ValidationError(str(e), field="user_api_keys")
 
         # Verify file exists and belongs to user
         db_file = self.file_repo.get_latest_by_filename(csv_filename, parse_uuid(user_id))

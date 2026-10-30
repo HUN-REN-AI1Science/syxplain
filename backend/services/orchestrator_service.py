@@ -51,6 +51,7 @@ from backend.services.progress_service import (
     get_phase,
     get_progress_weights,
 )
+from backend.utils.user_llm import UserLLM
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +67,11 @@ _DSPY_ERROR_MESSAGES = {
 }
 
 
-def _format_user_facing_error(exc: BaseException) -> str:
-    """Convert an exception into a user-friendly error message."""
+def _format_user_facing_error(exc: BaseException, user_llm: UserLLM | None = None) -> str:
+    """
+    Convert an exception into a user-friendly error message. A raw provider message can
+    echo the user's endpoint or key, so those are redacted (the message is stored).
+    """
     for cls in type(exc).__mro__:  # DSPy >= 3.4 wraps provider errors in its own types
         if cls.__name__ in _DSPY_ERROR_MESSAGES:
             return _DSPY_ERROR_MESSAGES[cls.__name__]
@@ -109,7 +113,8 @@ def _format_user_facing_error(exc: BaseException) -> str:
             )
     except ImportError:
         pass
-    return str(exc) or type(exc).__name__
+    message = str(exc) or type(exc).__name__
+    return user_llm.redact(message) if user_llm else message
 
 
 @dataclass
@@ -132,10 +137,8 @@ class AnalysisContext:
     target_column: str
     predictor_columns: list[str]
     progress: ProgressTracker | None = None
-    # User-provided API keys (not stored, only in memory)
-    user_api_key: str | None = None
-    user_model: str | None = None
-    user_openai_key: str | None = None
+    # The user's own LLM settings (never stored, only in memory); empty = server keys
+    user_llm: UserLLM = field(default_factory=UserLLM)
     # SHAP plots of the training data: [{"name", "kind", "feature", "title", "b64"}]
     shap_plots: list[dict[str, Any]] = field(default_factory=list)
 
@@ -391,7 +394,7 @@ class AnalysisOrchestrator:
                 raise
             except Exception as e:
                 logger.error(f"Analysis failed for run {run_id}: {e}", exc_info=True)
-                error_msg = _format_user_facing_error(e)
+                error_msg = _format_user_facing_error(e, context.user_llm)
                 self._update_run_status(run_id, RunStatus.FAILED, error=error_msg)
                 raise OrchestratorError(f"Analysis failed: {error_msg}") from e
             finally:
@@ -499,8 +502,7 @@ class AnalysisOrchestrator:
                 project_description=json.dumps(context.problem_description),
                 dataset_statistics=dataset_stats_for_llm,
                 visualizations_b64=visualizations_b64 or [],
-                user_api_key=context.user_api_key,
-                user_model=context.user_model,
+                user_llm=context.user_llm,
             )
             config = json.loads(config_json)
             validated = self._validate_pysr_config(config)
@@ -508,7 +510,7 @@ class AnalysisOrchestrator:
             return validated
         except Exception as e:
             # User-provided keys: always fail so the user sees a clear error
-            if context.user_api_key:
+            if context.user_llm.api_key:
                 raise
             logger.warning(f"LLM config generation failed, using defaults: {e}")
             # Server keys: return default config (niterations=None lets worker auto-estimate)
@@ -696,14 +698,18 @@ class AnalysisOrchestrator:
                 )
                 session.literature_task = asyncio.create_task(
                     run_literature(
-                        session, self._literature_lookup(context.user_openai_key, features_for_lit)
+                        session,
+                        self._literature_lookup(context.user_llm.openai_key, features_for_lit),
                     )
                 )
-            elif context.user_api_key:
+            elif context.user_llm.api_key:
                 warnings.append(
                     {
                         "stage": "literature",
-                        "message": "No literature search: it needs an OpenAI API key",
+                        "message": (
+                            "No literature search: it runs on OpenAI's web search and "
+                            "needs an OpenAI API key"
+                        ),
                     }
                 )
 
@@ -856,7 +862,7 @@ class AnalysisOrchestrator:
         from backend.services.discovery.tools import build_tools
 
         async def failed(e: BaseException, message: str | None = None):
-            error = message or _format_user_facing_error(e)
+            error = message or _format_user_facing_error(e, context.user_llm)
             logger.error(f"Discovery agent failed for run {context.run_id}: {e!r}")
             await session.emit(
                 "agent", f"Agent stopped with an error; continuing with fallback ({error[:120]})"
@@ -932,14 +938,13 @@ class AnalysisOrchestrator:
 
         return create_dspy_model(
             model_name=model_name or None,
-            user_api_key=context.user_api_key,
-            user_model=context.user_model,
+            user_llm=context.user_llm,
             num_retries=6,
             cache_key=f"syxplain-agent-{context.run_id}",
         )
 
     def _wants_literature(self, context: AnalysisContext) -> bool:
-        return literature_available(context.user_api_key, context.user_openai_key)
+        return literature_available(context.user_llm)
 
     def _literature_lookup(self, user_openai_key: str | None, features: dict[str, str]):
         """One call to the literature search (features keyed by alias, with the target)."""
@@ -1015,7 +1020,7 @@ class AnalysisOrchestrator:
         except (asyncio.CancelledError, AnalysisCancelledError):
             raise
         except Exception as e:
-            message = _format_user_facing_error(e)
+            message = _format_user_facing_error(e, context.user_llm)
             logger.error(f"Explanation failed for run {context.run_id}: {e!r}")
             warnings.append({"stage": "explanation", "message": message})
             return {"error": message, "equations": discovery_results.get("equations", [])}
@@ -1037,8 +1042,7 @@ class AnalysisOrchestrator:
             project_spec_json=json.dumps(context.problem_description),
             data_spec_json=json.dumps(data_spec),
             literature_context=literature_context,
-            user_api_key=context.user_api_key,
-            user_model=context.user_model,
+            user_llm=context.user_llm,
             shap_plots=png_images([p["b64"] for p in context.shap_plots]),
         )
 
@@ -1286,9 +1290,7 @@ async def run_orchestrated_analysis(
     problem_desc: dict[str, Any],
     data: pd.DataFrame,
     user_id: str,
-    user_api_key: str | None = None,
-    user_model: str | None = None,
-    user_openai_key: str | None = None,
+    user_llm: UserLLM | None = None,
 ) -> dict[str, Any]:
     """
     Convenience function to run analysis with orchestrator.
@@ -1298,9 +1300,7 @@ async def run_orchestrated_analysis(
         problem_desc: Problem description dictionary
         data: Input DataFrame
         user_id: Owner user ID
-        user_api_key: Optional user-provided Gemini API key
-        user_model: Optional user-specified Gemini model
-        user_openai_key: Optional user-provided OpenAI API key for the literature search
+        user_llm: The user's own LLM settings (None = server keys)
 
     Returns:
         Analysis results
@@ -1322,9 +1322,7 @@ async def run_orchestrated_analysis(
         data=data,
         target_column=target_column,
         predictor_columns=numeric_predictors,
-        user_api_key=user_api_key,
-        user_model=user_model,
-        user_openai_key=user_openai_key,
+        user_llm=user_llm or UserLLM(),
     )
 
     orchestrator = AnalysisOrchestrator()

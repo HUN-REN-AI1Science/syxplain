@@ -2,7 +2,7 @@
  * SSE Types for Real-time Progress Updates
  */
 
-import type { AgentEvent, EquationResults, RunStatus } from './index';
+import type { AgentEvent, EquationResults, ProgressPhase, RunStatus } from './index';
 
 // ============================================================================
 // Server -> Client Messages
@@ -19,6 +19,8 @@ export interface InitialStateMessage {
   recent_events?: AgentEventMessage[];
   /** Latest progress (%) of each cluster search */
   search_progress?: Record<string, number>;
+  /** Progress phases, for clients that join without the run response (reload, history) */
+  progress_phases?: ProgressPhase[];
 }
 
 export interface AgentEventMessage {
@@ -115,4 +117,6 @@ export interface UseRunProgressReturn {
   activity: AgentEvent[];
   /** Latest progress (%) of each cluster search */
   searchProgress: Record<string, number>;
+  /** Progress phases sent by the server on connect (empty until then) */
+  phases: ProgressPhase[];
 }

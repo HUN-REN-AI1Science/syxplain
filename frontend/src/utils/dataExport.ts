@@ -5,6 +5,7 @@
 
 import * as XLSX from 'xlsx';
 import type { Equation } from '@/types';
+import { downloadBlob } from '@utils/download';
 
 interface ExportRow {
   equation_id: number;
@@ -93,18 +94,4 @@ export function exportToExcel(equations: Equation[], runId: string): void {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
   downloadBlob(blob, `analysis_data_${runId.slice(0, 8)}.xlsx`);
-}
-
-/**
- * Helper function to trigger file download
- */
-function downloadBlob(blob: Blob, filename: string): void {
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', filename);
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(url);
 }

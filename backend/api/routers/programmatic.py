@@ -5,6 +5,7 @@ Streamlined API designed for script, notebook, and CI/CD pipeline usage.
 Provides combined upload+analyze, status polling, and artifact download.
 """
 
+import asyncio
 import json
 import logging
 
@@ -78,9 +79,13 @@ cancelling the run.
 | `project_description` | string | Yes | Description of the project and analysis goals |
 | `target_variable` | string | Yes | Name of the target column to predict |
 | `features` | object | Yes | Mapping of feature column names to descriptions (e.g. `{"pH": "Soil pH"}`) |
-| `gemini_api_key` | string | No | Google Gemini API key (required without HUN-REN access) |
-| `gemini_model` | string | No | Gemini model identifier (default: `"gemini-3.1-pro-preview"`) |
-| `openai_api_key` | string | No | OpenAI API key for the literature search (without HUN-REN access; omitted = no literature step) |
+| `provider` | string | No | `"gemini"` (default) or `"openai_compatible"` (any OpenAI-compatible endpoint: OpenAI, OpenRouter, vLLM, LiteLLM, ...) |
+| `api_key` | string | No | API key for the provider (required without HUN-REN access) |
+| `model` | string | No | Model name. Gemini: default `"gemini-3.1-pro-preview"`; OpenAI-compatible: required |
+| `api_base` | string | No | OpenAI-compatible base URL (default: `"https://api.openai.com/v1"`); must be publicly reachable |
+| `gemini_api_key` | string | No | Legacy alias of `api_key` for the Gemini provider |
+| `gemini_model` | string | No | Legacy alias of `model` for the Gemini provider |
+| `openai_api_key` | string | No | OpenAI API key for the literature search (without HUN-REN access; omitted = no literature step, unless `api_key` is an OpenAI key on the default OpenAI endpoint) |
 
 **Example `params` value:**
 
@@ -90,6 +95,20 @@ cancelling the run.
   "target_variable": "P_availability",
   "features": {"pH": "Soil pH (H2O)", "organic_C": "Organic carbon (%)"},
   "gemini_api_key": "AIza..."
+}
+```
+
+With an OpenAI-compatible endpoint instead of Gemini:
+
+```json
+{
+  "project_description": "Predict soil phosphorus availability",
+  "target_variable": "P_availability",
+  "features": {"pH": "Soil pH (H2O)", "organic_C": "Organic carbon (%)"},
+  "provider": "openai_compatible",
+  "api_key": "sk-or-...",
+  "api_base": "https://openrouter.ai/api/v1",
+  "model": "openai/gpt-5"
 }
 ```
 """,
@@ -149,18 +168,18 @@ async def analyze(
     # Validate columns exist in the file
     try:
         has_hunren_access = current_user.has_hunren_access
-        user_api_key = analyze_params.gemini_api_key
-        user_model = analyze_params.gemini_model
-        user_openai_key = analyze_params.openai_api_key
+        # The user's own LLM settings; HUN-REN members always run on the server keys
+        user_llm = None if has_hunren_access else analyze_params.to_user_llm()
 
-        run_service.validate_run_request(
+        # Blocking (file parsing, DNS): off the event loop
+        await asyncio.to_thread(
+            run_service.validate_run_request,
             csv_filename=csv_filename,
             target_variable=analyze_params.target_variable,
             features=analyze_params.features,
             user_id=current_user.user_id,
             has_hunren_access=has_hunren_access,
-            user_api_key=user_api_key,
-            user_openai_key=user_openai_key,
+            user_llm=user_llm,
         )
     except EntityNotFoundError as e:
         return _api_error(404, "not_found", e.message, e.details)
@@ -180,9 +199,7 @@ async def analyze(
         problem_desc=problem_desc,
         csv_filename=csv_filename,
         user_id=current_user.user_id,
-        user_api_key=user_api_key if not has_hunren_access else None,
-        user_model=user_model if not has_hunren_access else None,
-        user_openai_key=user_openai_key if not has_hunren_access else None,
+        user_llm=user_llm,
     )
 
     logger.info(f"api/analyze: Run {run_id} started for user {current_user.user_id}")
@@ -440,8 +457,9 @@ def download_artifact(
     description="""
 Returns the available models that can be used in analysis requests.
 
-Lists the Gemini models for the main LLM pipeline with your own key; pass one as
-`gemini_model`.
+Lists the Gemini models for the main LLM pipeline with your own Gemini key; pass one as
+`model` (or the legacy `gemini_model`). With `provider: "openai_compatible"`, `model` is
+any model your endpoint serves.
 """,
     responses={
         200: {"description": "Lists of available model identifiers", "model": ModelsResponse},

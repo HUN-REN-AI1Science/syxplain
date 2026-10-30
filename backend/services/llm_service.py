@@ -10,6 +10,7 @@ Orchestrates LLM interactions for the application, including:
 import asyncio
 import json
 import logging
+from dataclasses import replace
 from typing import Any
 
 import dspy
@@ -26,6 +27,7 @@ from backend.infrastructure.llm.signatures import (
 )
 from backend.infrastructure.monitoring.llm_costs import record_web_searches
 from backend.utils.json_utils import clean_and_fix_json_string
+from backend.utils.user_llm import UserLLM
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +36,7 @@ def generate_pysr_config(
     project_description: str,
     dataset_statistics: str,
     visualizations_b64: list[str],
-    user_api_key: str | None = None,
-    user_model: str | None = None,
+    user_llm: UserLLM | None = None,
 ) -> str:
     """
     Generates PySR configuration JSON using LLM.
@@ -44,13 +45,12 @@ def generate_pysr_config(
         project_description: Description of the project
         dataset_statistics: Statistics of the dataset
         visualizations_b64: List of base64 encoded images
-        user_api_key: Optional user-provided API key
-        user_model: Optional user-specified model
+        user_llm: The user's own LLM settings (None = server keys)
 
     Returns:
         JSON string containing PySR configuration
     """
-    lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
+    lm = create_dspy_model(user_llm=user_llm)
     visual_inputs = png_images(visualizations_b64)
 
     predictor = dspy.Predict(PySrConfigGenerator)
@@ -87,32 +87,29 @@ def guess_column_descriptions_batch(
     project_description: str,
     target_variable: str,
     columns: list[str],
-    user_api_key: str | None = None,
-    user_model: str | None = None,
+    user_llm: UserLLM | None = None,
 ) -> dict[str, str]:
     """
     Guesses short descriptions for one batch of column names.
 
-    Server keys use the small model from SMALL_MODEL_NAME; user keys use the
-    model the user selected (falling back to SMALL_USER_MODEL_NAME).
+    Server keys use the small model from SMALL_MODEL_NAME; Gemini user keys use the
+    model the user selected (falling back to SMALL_USER_MODEL_NAME). On a user's
+    OpenAI-compatible endpoint no small model is known, so their chosen model is used.
 
     Args:
         project_description: Description of the project/problem
         target_variable: Target variable name (may be empty)
         columns: Column names in this batch
-        user_api_key: Optional user-provided API key
-        user_model: Optional user-selected model (used with user_api_key)
+        user_llm: The user's own LLM settings (None = server keys)
 
     Returns:
         Dict mapping requested column names to non-empty descriptions
         (columns the model omitted or left empty are absent).
     """
     settings = get_settings().llm
-    if user_api_key:
-        lm = create_dspy_model(
-            user_api_key=user_api_key,
-            user_model=user_model or settings.small_user_model_name,
-        )
+    if user_llm and user_llm.api_key:
+        small = replace(user_llm, model=user_llm.small_model(settings.small_user_model_name))
+        lm = create_dspy_model(user_llm=small)
     else:
         lm = create_dspy_model(model_name=settings.small_model_name)
 
@@ -144,8 +141,7 @@ async def suggest_column_descriptions(
     project_description: str,
     target_variable: str,
     columns: list[str],
-    user_api_key: str | None = None,
-    user_model: str | None = None,
+    user_llm: UserLLM | None = None,
 ) -> tuple[dict[str, str], list[str]]:
     """
     Guesses descriptions for all columns, batching calls to the small model.
@@ -166,8 +162,7 @@ async def suggest_column_descriptions(
             project_description,
             target_variable,
             batch,
-            user_api_key,
-            user_model,
+            user_llm,
         )
 
     async def run_pass(cols: list[str]) -> None:
@@ -239,8 +234,7 @@ def generate_equation_explanation(
     project_spec_json: str,
     data_spec_json: str,
     literature_context: dict[str, Any] | None = None,
-    user_api_key: str | None = None,
-    user_model: str | None = None,
+    user_llm: UserLLM | None = None,
     shap_plots: list[dspy.Image] | None = None,
 ) -> dict[str, Any]:
     """
@@ -250,8 +244,7 @@ def generate_equation_explanation(
         project_spec_json: JSON string of project specification
         data_spec_json: JSON string of equations data
         literature_context: Optional dict of fitted published laws
-        user_api_key: Optional user-provided API key
-        user_model: Optional user-specified model
+        user_llm: The user's own LLM settings (None = server keys)
         shap_plots: Optional SHAP plot images
 
     Returns:
@@ -262,7 +255,7 @@ def generate_equation_explanation(
     # The explanation step never searches the web — it only integrates citations already
     # produced by the literature search — so the plain chat model is used with no web
     # search tool.
-    lm = create_dspy_model(user_api_key=user_api_key, user_model=user_model)
+    lm = create_dspy_model(user_llm=user_llm)
 
     # With published laws, the project spec is enriched with them.
     if has_literature:

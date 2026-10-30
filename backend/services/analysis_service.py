@@ -15,6 +15,7 @@ from backend.infrastructure.database.models import File as DbFile
 from backend.infrastructure.database.models import Run
 from backend.services.file_service import get_file_service
 from backend.services.orchestrator_service import AnalysisCancelledError
+from backend.utils.user_llm import UserLLM
 
 logger = logging.getLogger(__name__)
 
@@ -118,9 +119,7 @@ async def _run_analysis(
     run_id: str,
     problem_desc: dict[str, Any],
     csv_filename: str,
-    user_api_key: str | None = None,
-    user_model: str | None = None,
-    user_openai_key: str | None = None,
+    user_llm: UserLLM | None = None,
 ) -> None:
     """
     Async function that runs the orchestrated analysis.
@@ -169,9 +168,7 @@ async def _run_analysis(
             problem_desc=problem_desc,
             data=data,
             user_id=user_id,
-            user_api_key=user_api_key,
-            user_model=user_model,
-            user_openai_key=user_openai_key,
+            user_llm=user_llm,
         )
 
         logger.info(f"Run {run_id} completed successfully")
@@ -193,9 +190,7 @@ def start_analysis_run(
     problem_desc: dict[str, Any],
     csv_filename: str,
     user_id: str,
-    user_api_key: str | None = None,
-    user_model: str | None = None,
-    user_openai_key: str | None = None,
+    user_llm: UserLLM | None = None,
 ) -> str:
     """
     Create a run record and start background processing.
@@ -204,14 +199,13 @@ def start_analysis_run(
         problem_desc: Problem description dictionary
         csv_filename: Name of the file to analyze
         user_id: Owner's UUID as string
-        user_api_key: Optional user-provided Gemini API key (not stored, only in memory)
-        user_model: Optional user-specified Gemini model
-        user_openai_key: Optional user-provided OpenAI API key for the literature search
+        user_llm: The user's own LLM settings (None = server keys; never stored, only
+            in memory)
 
     Returns:
         The run UUID as string
     """
-    # Create Run record in DB (user_api_key is NOT stored)
+    # Create Run record in DB (user keys and base URL are NOT stored)
     with get_db_session() as db:
         run = Run(
             problem_description=problem_desc,
@@ -226,7 +220,7 @@ def start_analysis_run(
         run_id = str(run.id)
 
     logger.info(
-        f"Starting background task for Run ID: {run_id} (using_user_key={user_api_key is not None})"
+        f"Starting background task for Run ID: {run_id} (using_user_key={user_llm is not None})"
     )
 
     # Start async background task (user keys passed in memory only)
@@ -235,9 +229,7 @@ def start_analysis_run(
             run_id,
             problem_desc,
             csv_filename,
-            user_api_key=user_api_key,
-            user_model=user_model,
-            user_openai_key=user_openai_key,
+            user_llm=user_llm,
         )
     )
     _running_tasks[run_id] = task

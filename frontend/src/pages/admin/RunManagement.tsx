@@ -22,12 +22,46 @@ interface RunManagementProps {
   toast: RefObject<Toast | null>;
 }
 
+/** A JSON value shown pretty-printed, with a copy button in its corner */
+const CopyableJson: React.FC<{
+  value: unknown;
+  onCopy: (text: string) => void;
+  className?: string;
+}> = ({ value, onCopy, className }) => {
+  const text = JSON.stringify(value, null, 2);
+  return (
+    <div className="relative">
+      <pre className={`bg-surface-alt p-3 pr-12 rounded text-sm ${className ?? ''}`}>{text}</pre>
+      <Button
+        icon="pi pi-copy"
+        rounded
+        text
+        size="small"
+        onClick={() => onCopy(text)}
+        className="!absolute top-1 right-1"
+        aria-label="Copy JSON"
+        tooltip="Copy"
+        tooltipOptions={{ position: 'left' }}
+      />
+    </div>
+  );
+};
+
 const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
   const [runs, setRuns] = useState<AdminRunSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalRecords, setTotalRecords] = useState(0);
   const [selectedRun, setSelectedRun] = useState<AdminRunDetail | null>(null);
   const [detailDialogVisible, setDetailDialogVisible] = useState(false);
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.current?.show({ severity: 'success', summary: 'Copied', life: 2000 });
+    } catch (e) {
+      console.error('Failed to copy:', e);
+    }
+  };
 
   // Pagination and sorting
   const [page, setPage] = useState(1);
@@ -411,17 +445,17 @@ const RunManagement: React.FC<RunManagementProps> = ({ toast }) => {
 
             <div>
               <label className="text-sm text-secondary">Problem Description</label>
-              <pre className="bg-surface-alt p-3 rounded text-sm overflow-auto max-h-48">
-                {JSON.stringify(selectedRun.problem_description, null, 2)}
-              </pre>
+              <CopyableJson
+                value={selectedRun.problem_description}
+                onCopy={copyToClipboard}
+                className="overflow-auto max-h-48"
+              />
             </div>
 
             {selectedRun.slurm_job_ids && (
               <div>
                 <label className="text-sm text-secondary">Slurm Job IDs</label>
-                <pre className="bg-surface-alt p-3 rounded text-sm">
-                  {JSON.stringify(selectedRun.slurm_job_ids, null, 2)}
-                </pre>
+                <CopyableJson value={selectedRun.slurm_job_ids} onCopy={copyToClipboard} />
               </div>
             )}
           </div>

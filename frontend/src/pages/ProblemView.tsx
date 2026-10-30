@@ -9,6 +9,8 @@ import { Toast } from 'primereact/toast';
 import { configService, permissionsService } from '@services/api';
 import { useAuth } from '@contexts/AuthContext';
 import { useDescriptionSuggestions } from '@hooks/useDescriptionSuggestions';
+import { downloadJson } from '@utils/download';
+import type { LlmProvider, UserApiKeys, UserLlmFields } from '@/types';
 import {
   ExcludedColumnsWarning,
   ProjectDetailsSection,
@@ -17,6 +19,7 @@ import {
   JsonConfigUpload,
   RunAnalysisActions,
   ApiKeyInputSection,
+  type CompatEndpoint,
 } from '@components/Problem';
 
 interface ProblemViewProps {
@@ -44,14 +47,34 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   // Columns the user manually removed from the analysis (issue #49)
   const [removedColumns, setRemovedColumns] = useState<string[]>([]);
 
-  // Gemini API key state (for users without HUN-REN access)
+  // Main LLM state (for users without HUN-REN access): Gemini or an OpenAI-compatible
+  // endpoint. Each provider keeps its own key so switching never sends one to the other.
+  const [llmProvider, setLlmProvider] = useState<LlmProvider>('gemini');
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('');
   const [geminiModels, setGeminiModels] = useState<string[]>([]);
-  const [geminiKeyError, setGeminiKeyError] = useState<string | null>(null);
-  const [geminiValidationStatus, setGeminiValidationStatus] = useState<
+  const [compat, setCompat] = useState<CompatEndpoint>({ apiKey: '', apiBase: '', model: '' });
+  const [llmKeyError, setLlmKeyError] = useState<string | null>(null);
+  const [llmValidationStatus, setLlmValidationStatus] = useState<
     'idle' | 'validating' | 'valid' | 'invalid'
   >('idle');
+
+  // The main LLM fields as the backend expects them
+  const llmFields: UserLlmFields =
+    llmProvider === 'gemini'
+      ? { provider: 'gemini', api_key: geminiApiKey.trim(), model: geminiModel || undefined }
+      : {
+          provider: 'openai_compatible',
+          api_key: compat.apiKey.trim(),
+          model: compat.model.trim() || undefined,
+          api_base: compat.apiBase.trim() || undefined,
+        };
+
+  // Any edit to the main LLM settings invalidates the last validation result
+  const resetLlmValidation = () => {
+    setLlmKeyError(null);
+    setLlmValidationStatus('idle');
+  };
 
   // A column can be a feature when it's neither the target nor auto-excluded.
   // `target` is a param so the JSON import path can test against its own target.
@@ -80,7 +103,9 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   };
 
   // Automatic column description suggestions (issue #45)
-  const canSuggest = hasHunrenAccess || geminiApiKey.trim().length > 0;
+  const canSuggest =
+    hasHunrenAccess ||
+    (llmFields.api_key.length > 0 && (llmProvider === 'gemini' || Boolean(llmFields.model)));
   const lastSuggestedForRef = useRef('');
 
   const applySuggestions = (descriptions: Record<string, string>) => {
@@ -114,7 +139,11 @@ const ProblemView: React.FC<ProblemViewProps> = ({
 
     if (mode !== 'form') return;
     if (!canSuggest) {
-      explain('Enter your Gemini API key first to enable suggestions.');
+      explain(
+        llmProvider === 'gemini'
+          ? 'Enter your Gemini API key first to enable suggestions.'
+          : 'Enter your API key and model first to enable suggestions.'
+      );
       return;
     }
     if (projectDescription.trim().length < 20) {
@@ -134,8 +163,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       project_description: projectDescription,
       target_variable: targetVariable || undefined,
       columns: emptyColumns,
-      gemini_api_key: !hasHunrenAccess ? geminiApiKey : undefined,
-      gemini_model: !hasHunrenAccess ? geminiModel || undefined : undefined,
+      ...(!hasHunrenAccess ? llmFields : {}),
     });
   };
 
@@ -234,49 +262,62 @@ const ProblemView: React.FC<ProblemViewProps> = ({
 
   const handleExportJson = () => {
     const payload = validateAndGetPayload();
-    if (!payload) return;
-
-    // Export
-    const jsonString = JSON.stringify(payload, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'problem_config.json';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    if (payload) downloadJson(payload, 'problem_config.json');
   };
 
-  // Validate Gemini API key with backend (format check)
-  const validateGeminiKey = async (): Promise<boolean> => {
-    if (hasHunrenAccess) return true;
+  // Error text from a failed request: a string detail, or the first message of a 422 list
+  const errorDetail = (error: unknown, fallback: string): string => {
+    const err = error as { response?: { data?: { detail?: unknown } } };
+    const detail = err.response?.data?.detail;
+    if (typeof detail === 'string' && detail) return detail;
+    if (Array.isArray(detail) && detail.length > 0) {
+      const msg = (detail[0] as { msg?: unknown }).msg;
+      if (typeof msg === 'string') return msg.replace(/^Value error, /, '');
+    }
+    return fallback;
+  };
 
-    if (!geminiApiKey.trim()) {
-      setGeminiKeyError('Gemini API key is required');
+  // Validate the main LLM with the backend: Gemini by key format; an OpenAI-compatible
+  // endpoint with one tiny live request (key, base URL and model)
+  const validateLlmKey = async (): Promise<boolean> => {
+    // Any edit resets the status, so 'valid' means unchanged since the last (paid) check
+    if (hasHunrenAccess || llmValidationStatus === 'valid') return true;
+
+    if (!llmFields.api_key) {
+      setLlmKeyError(
+        llmProvider === 'gemini' ? 'Gemini API key is required' : 'API key is required'
+      );
+      return false;
+    }
+    if (llmProvider === 'openai_compatible' && !llmFields.model) {
+      setLlmKeyError('Model is required for an OpenAI-compatible endpoint');
       return false;
     }
 
-    setGeminiValidationStatus('validating');
-    setGeminiKeyError(null);
+    setLlmValidationStatus('validating');
+    setLlmKeyError(null);
 
     try {
-      await permissionsService.validateKeys({ gemini_api_key: geminiApiKey });
-      setGeminiValidationStatus('valid');
+      await permissionsService.validateKeys(llmFields);
+      setLlmValidationStatus('valid');
       return true;
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { detail?: string } } };
-      const errorMessage = err.response?.data?.detail || 'Gemini API key validation failed';
-      setGeminiKeyError(errorMessage);
-      setGeminiValidationStatus('invalid');
+      setLlmKeyError(
+        errorDetail(
+          error,
+          llmProvider === 'gemini'
+            ? 'Gemini API key validation failed'
+            : 'Endpoint validation failed. Please check the key, base URL and model.'
+        )
+      );
+      setLlmValidationStatus('invalid');
       return false;
     }
   };
 
   // Validate the optional OpenAI API key with backend (format + live check)
   const validateOpenaiKey = async (): Promise<boolean> => {
-    if (!openaiApiKey.trim()) return true;
+    if (!openaiApiKey.trim() || openaiValidationStatus === 'valid') return true;
 
     setOpenaiValidationStatus('validating');
     setOpenaiKeyError(null);
@@ -286,9 +327,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       setOpenaiValidationStatus('valid');
       return true;
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { detail?: string } } };
-      const errorMessage = err.response?.data?.detail || 'OpenAI API key validation failed';
-      setOpenaiKeyError(errorMessage);
+      setOpenaiKeyError(errorDetail(error, 'OpenAI API key validation failed'));
       setOpenaiValidationStatus('invalid');
       return false;
     }
@@ -298,18 +337,18 @@ const ProblemView: React.FC<ProblemViewProps> = ({
     // Validate API keys for users without HUN-REN access
     if (!hasHunrenAccess) {
       // Independent checks; the OpenAI key is optional and validated only when provided
-      const [isGeminiValid, isOpenaiValid] = await Promise.all([
-        validateGeminiKey(),
+      const [isLlmValid, isOpenaiValid] = await Promise.all([
+        validateLlmKey(),
         validateOpenaiKey(),
       ]);
-      if (!isGeminiValid || !isOpenaiValid) return;
+      if (!isLlmValid || !isOpenaiValid) return;
     }
 
-    // Build user_api_keys payload
-    const userApiKeys = !hasHunrenAccess
+    // Build user_api_keys payload (the backend reuses an OpenAI main key on OpenAI's own
+    // endpoint for the literature search when no separate key is given)
+    const userApiKeys: UserApiKeys | undefined = !hasHunrenAccess
       ? {
-          gemini_api_key: geminiApiKey,
-          gemini_model: geminiModel,
+          ...llmFields,
           ...(openaiApiKey.trim() ? { openai_api_key: openaiApiKey.trim() } : {}),
         }
       : undefined;
@@ -475,7 +514,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
 
   const isSubmitDisabled =
     (mode === 'form' && Boolean(targetVariable && nanCounts && nanCounts[targetVariable] > 0)) ||
-    geminiValidationStatus === 'validating' ||
+    llmValidationStatus === 'validating' ||
     openaiValidationStatus === 'validating';
 
   return (
@@ -542,17 +581,26 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       {!hasHunrenAccess && (
         <div className="mt-6">
           <ApiKeyInputSection
+            provider={llmProvider}
+            onProviderChange={(value) => {
+              setLlmProvider(value);
+              resetLlmValidation();
+            }}
             geminiApiKey={geminiApiKey}
             geminiModel={geminiModel}
             geminiModels={geminiModels}
             onGeminiApiKeyChange={(value) => {
               setGeminiApiKey(value);
-              setGeminiKeyError(null);
-              setGeminiValidationStatus('idle');
+              resetLlmValidation();
             }}
             onGeminiModelChange={setGeminiModel}
-            geminiError={geminiKeyError}
-            geminiValidationStatus={geminiValidationStatus}
+            compat={compat}
+            onCompatChange={(patch) => {
+              setCompat((current) => ({ ...current, ...patch }));
+              resetLlmValidation();
+            }}
+            llmError={llmKeyError}
+            llmValidationStatus={llmValidationStatus}
             openaiApiKey={openaiApiKey}
             onOpenaiApiKeyChange={(value) => {
               setOpenaiApiKey(value);

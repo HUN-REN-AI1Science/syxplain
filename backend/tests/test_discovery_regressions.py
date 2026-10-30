@@ -17,6 +17,7 @@ from backend.services.discovery.report import merge_explanations
 from backend.services.discovery.session import DiscoverySession
 from backend.services.discovery.tools import build_tools
 from backend.tests.test_discovery_session import FakeLauncher, _session
+from backend.utils.user_llm import UserLLM
 
 
 def _categorical_session():
@@ -223,9 +224,11 @@ def test_one_analysis_mode_and_who_gets_the_literature_search(monkeypatch):
             "predictor_columns": [],
         }
         assert orch._wants_literature(AnalysisContext(**base))  # server keys
-        assert not orch._wants_literature(AnalysisContext(**base, user_api_key="gemini"))
+        assert not orch._wants_literature(
+            AnalysisContext(**base, user_llm=UserLLM(api_key="gemini"))
+        )
         assert orch._wants_literature(
-            AnalysisContext(**base, user_api_key="gemini", user_openai_key="openai")
+            AnalysisContext(**base, user_llm=UserLLM(api_key="gemini", openai_key="openai"))
         )
     finally:
         clear_settings_cache()

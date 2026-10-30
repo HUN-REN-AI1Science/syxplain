@@ -15,6 +15,7 @@ from backend.infrastructure.slurm import JobState, SlurmTask, TaskResult
 from backend.services import llm_service
 from backend.services.discovery.session import DiscoverySession
 from backend.services.orchestrator_service import AnalysisContext, AnalysisOrchestrator
+from backend.utils.user_llm import UserLLM
 
 STRICT = dspy.ChatAdapter(use_json_adapter_fallback=False)
 
@@ -239,7 +240,7 @@ def test_explanation_failure_still_completes(orchestrator, monkeypatch, user_key
         raise RuntimeError("explainer down")
 
     monkeypatch.setattr(llm_service, "generate_equation_explanation", explode)
-    ctx = _context(user_api_key=user_key, progress=StubProgress())
+    ctx = _context(user_llm=UserLLM(api_key=user_key), progress=StubProgress())
     results = asyncio.run(orchestrator.run_analysis(ctx))
 
     assert statuses[-1][0] == RunStatus.COMPLETED

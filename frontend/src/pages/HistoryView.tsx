@@ -8,7 +8,7 @@ import { DataTable, DataTablePageEvent, DataTableSortEvent } from 'primereact/da
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
-import { Tooltip } from 'primereact/tooltip';
+import { ProgressBar } from 'primereact/progressbar';
 import { History } from 'lucide-react';
 import { runsService } from '@services/api';
 import { HistoryFilterBar } from '@components/History';
@@ -36,6 +36,11 @@ const STATUS_CONFIG: Record<
   timeout: { severity: 'danger', label: 'Timeout' },
   cancelled: { severity: 'warning', label: 'Cancelled' },
 };
+
+/** How often the list refreshes while a run on the page is still in progress */
+const LIVE_REFRESH_MS = 5000;
+
+const isActive = (run: RunSummary) => run.status === 'running' || run.status === 'pending';
 
 const formatDuration = (startTime?: string | null, finishTime?: string | null): string => {
   if (!startTime || !finishTime) return '-';
@@ -84,30 +89,43 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Load runs data
-  const loadRuns = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await runsService.getAll({
-        page,
-        page_size: pageSize,
-        sort_field: sortField,
-        sort_order: sortOrder === 1 ? 'asc' : 'desc',
-        status: statusFilter || undefined,
-        search: debouncedSearch || undefined,
-      });
-      setRuns(response.data.items);
-      setTotalRecords(response.data.total);
-    } catch (error) {
-      console.error('Failed to load runs:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, sortField, sortOrder, statusFilter, debouncedSearch]);
+  // Load runs data (silently when refreshing the progress of active runs)
+  const loadRuns = useCallback(
+    async (silent = false) => {
+      if (!silent) setLoading(true);
+      try {
+        const response = await runsService.getAll({
+          page,
+          page_size: pageSize,
+          sort_field: sortField,
+          sort_order: sortOrder === 1 ? 'asc' : 'desc',
+          status: statusFilter || undefined,
+          search: debouncedSearch || undefined,
+        });
+        setRuns(response.data.items);
+        setTotalRecords(response.data.total);
+      } catch (error) {
+        console.error('Failed to load runs:', error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [page, pageSize, sortField, sortOrder, statusFilter, debouncedSearch]
+  );
 
   useEffect(() => {
     loadRuns();
   }, [loadRuns]);
+
+  // Keep the progress of running analyses current while the page is visible
+  const hasActiveRuns = runs.some(isActive);
+  useEffect(() => {
+    if (!hasActiveRuns) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') loadRuns(true);
+    }, LIVE_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [hasActiveRuns, loadRuns]);
 
   // Event handlers
   const onPageChange = (event: DataTablePageEvent) => {
@@ -132,22 +150,18 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
   const statusTemplate = (rowData: RunSummary) => {
     const config = STATUS_CONFIG[rowData.status] || { severity: 'info', label: rowData.status };
 
-    if (rowData.status === 'running' || rowData.status === 'pending') {
-      const tagId = `status-tag-${rowData.id.replace(/-/g, '')}`;
+    if (isActive(rowData)) {
+      const percent = Math.round(rowData.progress || 0);
       return (
-        <>
-          <Tag
-            severity={config.severity}
-            value={config.label}
-            className={tagId}
-            style={{ cursor: 'help' }}
+        <div className="flex flex-col gap-1 min-w-[7rem]">
+          <Tag severity={config.severity} value={`${config.label} · ${percent}%`} />
+          <ProgressBar
+            value={percent}
+            showValue={false}
+            style={{ height: '4px' }}
+            aria-label={`${percent}% complete`}
           />
-          <Tooltip
-            target={`.${tagId}`}
-            content={`${rowData.progress || 0}% complete`}
-            position="top"
-          />
-        </>
+        </div>
       );
     }
 
@@ -162,15 +176,26 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
     return formatDuration(rowData.start_time, rowData.finish_time);
   };
 
-  const actionTemplate = (rowData: RunSummary) => (
-    <Button
-      label="View"
-      icon="pi pi-eye"
-      size="small"
-      onClick={() => onSelectRun(rowData.id)}
-      disabled={rowData.status !== 'completed'}
-    />
-  );
+  const actionTemplate = (rowData: RunSummary) =>
+    isActive(rowData) ? (
+      <Button
+        label="Live"
+        icon="pi pi-chart-line"
+        size="small"
+        severity="info"
+        onClick={() => onSelectRun(rowData.id)}
+        tooltip="Rejoin the live progress page"
+        tooltipOptions={{ position: 'top' }}
+      />
+    ) : (
+      <Button
+        label="View"
+        icon="pi pi-eye"
+        size="small"
+        onClick={() => onSelectRun(rowData.id)}
+        disabled={rowData.status !== 'completed'}
+      />
+    );
 
   return (
     <div className="p-4 sm:p-6">
@@ -185,7 +210,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
                 <strong>Completed</strong> - Analysis finished successfully, results available
               </li>
               <li>
-                <strong>Running</strong> - Analysis in progress (hover for % complete)
+                <strong>Running</strong> - Analysis in progress, with its % complete
               </li>
               <li>
                 <strong>Pending</strong> - Waiting to start processing
@@ -200,8 +225,9 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
 
             <h4>Navigating Your History</h4>
             <p>
-              Click <strong>View</strong> on any completed run to see results. Use filters to find
-              specific runs by status or analysis type.
+              Click <strong>View</strong> on any completed run to see results, or{' '}
+              <strong>Live</strong> on a running one to return to its progress page. Use filters to
+              find specific runs by status or analysis type.
             </p>
           </HelpButton>
         </div>
@@ -218,7 +244,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectRun }) => {
           setPage(1);
         }}
         onClearFilters={clearFilters}
-        onRefresh={loadRuns}
+        onRefresh={() => loadRuns()}
         hasActiveFilters={hasActiveFilters}
       />
 

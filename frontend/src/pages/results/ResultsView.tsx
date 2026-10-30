@@ -24,7 +24,7 @@ import type { ResultsStatus } from '@components/Results';
 import { runsService } from '@services/api';
 import { useProgressInterpolation } from '@hooks/useProgressInterpolation';
 import { useRunProgress } from '@hooks/useRunProgress';
-import type { ProgressPhase, EquationResults } from '@/types';
+import type { EquationResults } from '@/types';
 
 // ============================================================================
 // Types
@@ -33,21 +33,15 @@ import type { ProgressPhase, EquationResults } from '@/types';
 interface ResultsViewProps {
   runId: string | null;
   fromHistory?: boolean;
-  initialProgressPhases?: ProgressPhase[];
 }
 
 // ============================================================================
 // Component
 // ============================================================================
 
-const ResultsView: React.FC<ResultsViewProps> = ({
-  runId,
-  fromHistory = false,
-  initialProgressPhases = [],
-}) => {
+const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false }) => {
   // State
   const [result, setResult] = useState<EquationResults | string | null>(null);
-  const [progressPhases, setProgressPhases] = useState<ProgressPhase[]>(initialProgressPhases);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
@@ -84,6 +78,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
     isReady: initialFetchDone,
     activity,
     searchProgress,
+    phases: progressPhases,
   } = useRunProgress({
     runId,
     onComplete: handleComplete,
@@ -138,13 +133,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({
     backendProgress,
     status,
   });
-
-  // Update phases if provided after mount (e.g. from run response)
-  useEffect(() => {
-    if (initialProgressPhases.length > 0) {
-      setProgressPhases(initialProgressPhases);
-    }
-  }, [initialProgressPhases]);
 
   // Handle PDF export (lazy loads the PDF library)
   const handleExportPdf = async () => {
@@ -327,8 +315,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({
         actions={renderHeaderActions()}
       />
 
-      {/* Run Settings Panel - shown only when navigating from history */}
-      {fromHistory && runId && <RunSettingsPanel runId={runId} />}
+      {/* Run Settings Panel - from the history, and on every finished report */}
+      {(fromHistory || isCompleted) && runId && <RunSettingsPanel runId={runId} />}
 
       <div>
         {/* Error / Cancelled State - only for terminal failures, not transient messages */}

@@ -10,6 +10,7 @@ import { Tag } from 'primereact/tag';
 import { ProgressBar } from 'primereact/progressbar';
 import { runsService } from '@services/api';
 import { formatFileSize } from '@utils/formatting';
+import { downloadBlob, downloadJson } from '@utils/download';
 import { LegacyAnalysisModeCard } from './LegacyAnalysisModeCard';
 import type { RunDetails } from '@/types';
 
@@ -27,17 +28,25 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
   const handleDownloadCsv = async () => {
     try {
       const response = await runsService.downloadCsv(runId);
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', runDetails?.csv_filename || 'data.csv');
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      downloadBlob(new Blob([response.data]), runDetails?.csv_filename || 'data.csv');
     } catch (e) {
       console.error('Failed to download CSV:', e);
     }
+  };
+
+  // The problem configuration in the format the Define Problem step imports
+  const handleDownloadJson = () => {
+    const problem = runDetails?.problem_description;
+    if (!problem) return;
+    const base = (runDetails.csv_filename || 'run').replace(/\.[^.]+$/, '');
+    downloadJson(
+      {
+        project_description: problem.project_description,
+        target_variable: problem.target_variable,
+        features: problem.features,
+      },
+      `${base}_problem_config.json`
+    );
   };
 
   const handleToggle = async (e: PanelToggleEvent) => {
@@ -210,9 +219,20 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
 
             {/* Project Description */}
             <div className="bg-surface-alt rounded-xl p-5 border border-[var(--color-border)]">
-              <div className="flex items-center mb-3">
-                <i className="pi pi-pencil text-muted text-lg mr-3 flex-shrink-0"></i>
-                <h4 className="font-bold text-primary">Project Description</h4>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center">
+                  <i className="pi pi-pencil text-muted text-lg mr-3 flex-shrink-0"></i>
+                  <h4 className="font-bold text-primary">Project Description</h4>
+                </div>
+                <Button
+                  label="Download JSON"
+                  icon="pi pi-download"
+                  size="small"
+                  className="p-button-outlined flex-shrink-0 ml-4"
+                  onClick={handleDownloadJson}
+                  tooltip="Project description, target and features; import it in Define Problem"
+                  tooltipOptions={{ position: 'top' }}
+                />
               </div>
               <p className="text-primary leading-relaxed whitespace-pre-wrap">
                 {problem_description?.project_description || 'No description provided.'}

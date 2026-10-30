@@ -326,7 +326,7 @@ class SystemMonitorService:
             },
             "features": {
                 "slurm_configured": self._is_slurm_configured(),
-                "literature_search_enabled": literature_available(None, None),
+                "literature_search_enabled": literature_available(None),
                 "user_api_keys_enabled": True,
             },
             "secrets": {

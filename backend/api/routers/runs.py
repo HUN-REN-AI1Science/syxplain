@@ -4,6 +4,7 @@ Run management endpoints router.
 Provides endpoints for creating, listing, and managing analysis runs.
 """
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -102,14 +103,12 @@ async def run_analysis(
         # Check user's permission status from JWT roles
         has_hunren_access = current_user.has_hunren_access
 
-        # Extract user API keys if provided
-        user_api_key = None
-        user_model = None
-        user_openai_key = None
-        if request.user_api_keys:
-            user_api_key = request.user_api_keys.gemini_api_key
-            user_model = request.user_api_keys.gemini_model
-            user_openai_key = request.user_api_keys.openai_api_key
+        # The user's own LLM settings; HUN-REN members always run on the server keys
+        user_llm = (
+            request.user_api_keys.to_user_llm()
+            if request.user_api_keys and not has_hunren_access
+            else None
+        )
 
         # Check Slurm cluster is reachable before accepting the run
         if not await _check_slurm_reachable():
@@ -118,30 +117,26 @@ async def run_analysis(
                 detail="The computing cluster is temporarily unavailable. Please try again later.",
             )
 
-        # Validate the request with permission context
-        run_service.validate_run_request(
+        # Validate the request with permission context (blocking: file parsing, DNS)
+        await asyncio.to_thread(
+            run_service.validate_run_request,
             csv_filename=request.csv_filename,
             target_variable=request.problem_description.target_variable,
             features=request.problem_description.features,
             user_id=current_user.user_id,
             has_hunren_access=has_hunren_access,
-            user_api_key=user_api_key,
-            user_openai_key=user_openai_key,
+            user_llm=user_llm,
         )
 
-        # Start the analysis run with user keys if applicable
         run_id = start_analysis_run(
             problem_desc=request.problem_description.model_dump(),
             csv_filename=request.csv_filename,
             user_id=current_user.user_id,
-            user_api_key=user_api_key if not has_hunren_access else None,
-            user_model=user_model if not has_hunren_access else None,
-            user_openai_key=user_openai_key if not has_hunren_access else None,
+            user_llm=user_llm,
         )
 
         logger.info(
-            f"Analysis started with Run ID: {run_id} "
-            f"(using_user_key={not has_hunren_access and user_api_key is not None})"
+            f"Analysis started with Run ID: {run_id} (using_user_key={user_llm is not None})"
         )
 
         return RunResponse(

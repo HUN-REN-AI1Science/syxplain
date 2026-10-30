@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ProgressSSE } from '@services/sseService';
 import { appendActivity } from '@components/Results/Discovery/agentState';
-import type { AgentEvent, EquationResults, RunStatus } from '@/types';
+import type { AgentEvent, EquationResults, ProgressPhase, RunStatus } from '@/types';
 import type {
   ConnectionState,
   ServerMessage,
@@ -31,6 +31,7 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
   const [isReady, setIsReady] = useState(false);
   const [activity, setActivity] = useState<AgentEvent[]>([]);
   const [searchProgress, setSearchProgress] = useState<Record<string, number>>({});
+  const [phases, setPhases] = useState<ProgressPhase[]>([]);
 
   // Refs
   const sseRef = useRef<ProgressSSE | null>(null);
@@ -86,6 +87,7 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
           );
         }
         if (message.search_progress) setSearchProgress(message.search_progress);
+        if (message.progress_phases?.length) setPhases(message.progress_phases);
       }
       if (message.type === 'initial_state' || message.type === 'progress_update') {
         setProgress(message.progress);
@@ -152,6 +154,7 @@ export function useRunProgress(options: UseRunProgressOptions): UseRunProgressRe
     isReady,
     activity,
     searchProgress,
+    phases,
   };
 }
 

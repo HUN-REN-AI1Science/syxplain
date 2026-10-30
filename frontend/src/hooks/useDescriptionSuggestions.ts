@@ -8,16 +8,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { suggestionsService } from '@services/api';
+import type { SuggestionPayload } from '@/types';
 
 export type SuggestionStatus = 'idle' | 'loading' | 'partial' | 'error';
-
-export interface SuggestionPayload {
-  project_description: string;
-  target_variable?: string;
-  columns: string[];
-  gemini_api_key?: string;
-  gemini_model?: string;
-}
 
 export interface UseDescriptionSuggestionsOptions {
   onDescriptions: (descriptions: Record<string, string>) => void;

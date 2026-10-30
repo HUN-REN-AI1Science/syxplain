@@ -10,12 +10,16 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from backend.schemas.requests import UserLLMFields
 
-class AnalyzeParams(BaseModel):
+
+class AnalyzeParams(UserLLMFields):
     """
     Parameters for the combined upload+analyze endpoint.
 
-    Flat structure (no nesting) for simpler script usage.
+    Flat structure (no nesting) for simpler script usage. The LLM fields (`provider`,
+    `api_key`, `model`, `api_base` and the legacy `gemini_api_key` / `gemini_model`)
+    come from UserLLMFields.
     """
 
     project_description: str = Field(
@@ -39,17 +43,13 @@ class AnalyzeParams(BaseModel):
             "examples": [{"pH": "Soil pH (H2O)", "organic_C": "Organic carbon (%)"}]
         },
     )
-    gemini_api_key: str | None = Field(
-        default=None,
-        description="Google Gemini API key (required for users without HUN-REN access)",
-    )
-    gemini_model: str = Field(
-        default="gemini-3.1-pro-preview",
-        description="Gemini model to use for LLM operations",
-    )
     openai_api_key: str | None = Field(
         default=None,
-        description="OpenAI API key for the literature search (without one, users on their own keys get no literature step)",
+        description=(
+            "OpenAI API key for the literature search (without one, users on their own keys "
+            "get no literature step, unless their main key is an OpenAI key on the default "
+            "OpenAI endpoint)"
+        ),
     )
 
     @field_validator("features")

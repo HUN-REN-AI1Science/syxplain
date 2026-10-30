@@ -556,10 +556,28 @@ export interface UserPermissions {
   is_admin: boolean;
 }
 
-export interface UserApiKeys {
-  gemini_api_key: string;
-  gemini_model: string;
+/** Provider of the main LLM for users who bring their own key */
+export type LlmProvider = 'gemini' | 'openai_compatible';
+
+/** The main LLM settings sent with run, suggestion and key-validation requests */
+export interface UserLlmFields {
+  provider: LlmProvider;
+  api_key: string;
+  model?: string;
+  /** OpenAI-compatible only; the backend defaults it to https://api.openai.com/v1 */
+  api_base?: string;
+}
+
+export interface UserApiKeys extends UserLlmFields {
+  /** Separate OpenAI key for the literature search (optional) */
   openai_api_key?: string;
+}
+
+/** Body of a column-description suggestion request */
+export interface SuggestionPayload extends Partial<UserLlmFields> {
+  project_description: string;
+  target_variable?: string;
+  columns: string[];
 }
 
 // ============================================================================

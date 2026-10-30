@@ -7,7 +7,14 @@ for incoming request data.
 
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from backend.utils.user_llm import (
+    LLMProvider,
+    UserLLM,
+    normalize_api_base,
+    resolve_literature_key,
+)
 
 
 class SortField(str, Enum):
@@ -46,14 +53,72 @@ class ProblemDescription(BaseModel):
         return v
 
 
-class UserApiKeys(BaseModel):
+class UserLLMFields(BaseModel):
+    """
+    The main LLM of a user who brings their own key: Google Gemini or any
+    OpenAI-compatible endpoint. The keys are never stored.
+
+    `gemini_api_key` / `gemini_model` are the legacy field names (the programmatic API
+    and older clients send them); they fill `api_key` / `model`.
+    """
+
+    provider: LLMProvider = Field(
+        default="gemini", description="LLM provider: 'gemini' or 'openai_compatible'"
+    )
+    api_key: str | None = Field(default=None, description="API key for the chosen provider")
+    model: str | None = Field(
+        default=None,
+        description="Model name (a Gemini model, or any model the OpenAI-compatible endpoint serves)",
+    )
+    api_base: str | None = Field(
+        default=None,
+        description="Base URL of the OpenAI-compatible endpoint (default: https://api.openai.com/v1)",
+    )
+    gemini_api_key: str | None = Field(
+        default=None, description="Legacy alias of api_key for the Gemini provider"
+    )
+    gemini_model: str | None = Field(
+        default=None, description="Legacy alias of model for the Gemini provider"
+    )
+    openai_api_key: str | None = Field(
+        default=None,
+        description=(
+            "OpenAI API key for the literature search (optional; the main key is used "
+            "when it is an OpenAI key on the default OpenAI endpoint)"
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _normalize_llm_fields(self):
+        self.api_key = (self.api_key or self.gemini_api_key or "").strip() or None
+        self.model = (self.model or self.gemini_model or "").strip() or None
+        if self.provider == "gemini":
+            # Gemini is reached through its own SDK route; a base URL means nothing there
+            self.api_base = None
+        else:
+            self.api_base = normalize_api_base(self.api_base)
+            if self.api_key and not self.model:
+                raise ValueError("model is required for an OpenAI-compatible endpoint")
+        return self
+
+    def to_user_llm(self) -> UserLLM:
+        """The settings to pass down to the run, with the literature key resolved."""
+        return UserLLM(
+            api_key=self.api_key,
+            model=self.model,
+            api_base=self.api_base,
+            openai_key=resolve_literature_key(self.api_key, self.api_base, self.openai_api_key),
+        )
+
+
+class UserApiKeys(UserLLMFields):
     """User-provided API keys (not stored)."""
 
-    gemini_api_key: str = Field(..., min_length=1, description="Google Gemini API key for analysis")
-    gemini_model: str = Field(default="gemini-3.1-pro-preview", description="Gemini model to use")
-    openai_api_key: str | None = Field(
-        default=None, description="OpenAI API key for the literature search (optional)"
-    )
+    @model_validator(mode="after")
+    def _require_api_key(self):
+        if not self.api_key:
+            raise ValueError("api_key is required")
+        return self
 
 
 class RunRequest(BaseModel):
@@ -82,16 +147,14 @@ class RunRequest(BaseModel):
         }
 
 
-class ValidateKeysRequest(BaseModel):
-    """Request schema for API key validation."""
-
-    gemini_api_key: str | None = Field(
-        default=None, description="Google Gemini API key to validate"
-    )
-    openai_api_key: str | None = Field(default=None, description="OpenAI API key to validate")
+class ValidateKeysRequest(UserLLMFields):
+    """
+    Request schema for API key validation: the main LLM settings (Gemini or an
+    OpenAI-compatible endpoint) and/or the separate literature-search OpenAI key.
+    """
 
 
-class SuggestDescriptionsRequest(BaseModel):
+class SuggestDescriptionsRequest(UserLLMFields):
     """Request schema for automatic column description suggestions."""
 
     project_description: str = Field(
@@ -100,14 +163,6 @@ class SuggestDescriptionsRequest(BaseModel):
     target_variable: str | None = Field(default=None, description="Target variable name")
     columns: list[str] = Field(
         ..., min_length=1, max_length=200, description="Column names to describe"
-    )
-    gemini_api_key: str | None = Field(
-        default=None,
-        description="User-provided Gemini API key (required without HUN-REN access)",
-    )
-    gemini_model: str | None = Field(
-        default=None,
-        description="Gemini model to use with the user-provided key",
     )
 
 

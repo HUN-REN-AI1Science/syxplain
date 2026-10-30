@@ -21,7 +21,7 @@ import AppHeader from '@components/AppHeader';
 import AppFooter from '@components/AppFooter';
 import WorkflowSteps from '@components/WorkflowSteps';
 import FeedbackDialog from '@components/FeedbackDialog';
-import type { FeedbackContext, ProgressPhase, UserApiKeys } from '@/types';
+import type { FeedbackContext, UserApiKeys } from '@/types';
 
 const WORKFLOW_STEPS = [
   { label: 'Upload Data' },
@@ -45,21 +45,38 @@ const oidcConfig = {
   userStore: new WebStorageStateStore({ store: window.sessionStorage }),
 };
 
+/** Query parameter holding the run on the results step, so a page reload reopens it */
+const RUN_PARAM = 'run';
+
 function MainApp() {
+  const [openedRunId] = useState(() => new URLSearchParams(window.location.search).get(RUN_PARAM));
   const [view, setView] = useState<AppView>('workflow');
   const [helpAnchor, setHelpAnchor] = useState<string | undefined>(undefined);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(openedRunId ? 2 : 0);
   const [filename, setFilename] = useState<string | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
   const [excludedColumns, setExcludedColumns] = useState<string[]>([]);
   const [nanCounts, setNanCounts] = useState<Record<string, number>>({});
-  const [runId, setRunId] = useState<string | null>(null);
-  const [progressPhases, setProgressPhases] = useState<ProgressPhase[]>([]);
-  const [fromHistory, setFromHistory] = useState<boolean>(false);
+  const [runId, setRunId] = useState<string | null>(openedRunId);
+  // A reopened run may be running or finished: it loads like one picked from the history
+  const [fromHistory, setFromHistory] = useState<boolean>(!!openedRunId);
   const [feedbackVisible, setFeedbackVisible] = useState(false);
   const toast = useRef<Toast>(null);
   const nodeRef = useRef(null);
   const { signOut, user, isAdmin } = useAuth();
+
+  // Keep the run on the results step in the URL (and drop it everywhere else)
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (view === 'workflow' && activeIndex === 2 && runId) {
+      url.searchParams.set(RUN_PARAM, runId);
+    } else {
+      url.searchParams.delete(RUN_PARAM);
+    }
+    if (url.href !== window.location.href) {
+      window.history.replaceState(window.history.state, '', url);
+    }
+  }, [view, activeIndex, runId]);
 
   const handleUploadComplete = (
     fname: string,
@@ -86,9 +103,6 @@ function MainApp() {
         user_api_keys: user_api_keys as UserApiKeys | undefined,
       });
       setRunId(response.data.run_id);
-      if (response.data.progress_phases) {
-        setProgressPhases(response.data.progress_phases);
-      }
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
       const errorMessage = err.response?.data?.detail || 'Failed to start analysis';
@@ -214,11 +228,7 @@ function MainApp() {
                             />
                           )}
                           {activeIndex === 2 && (
-                            <ResultsView
-                              runId={runId}
-                              fromHistory={fromHistory}
-                              initialProgressPhases={progressPhases}
-                            />
+                            <ResultsView runId={runId} fromHistory={fromHistory} />
                           )}
                         </div>
                       </CSSTransition>

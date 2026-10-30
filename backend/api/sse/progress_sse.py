@@ -23,6 +23,7 @@ from backend.core.exceptions import ValidationError
 from backend.core.security import User, _authenticate_jwt, security
 from backend.infrastructure.database.connection import get_db_session
 from backend.infrastructure.database.models import Run
+from backend.services.progress_service import get_progress_phases
 from backend.utils import parse_uuid
 
 logger = logging.getLogger(__name__)
@@ -140,6 +141,9 @@ async def sse_progress(
                 or None,
                 "recent_events": manager.recent_events(run_id),
                 "search_progress": manager.search_progress(run_id),
+                # A client that rejoins (page reload, history) has no run response to take
+                # the phases from
+                "progress_phases": get_progress_phases(),
             }
             yield {
                 "event": "initial_state",

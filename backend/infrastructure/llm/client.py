@@ -5,43 +5,55 @@ DSPy Client Factory.
 import dspy
 
 from backend.core.config import get_settings
+from backend.utils.user_llm import UserLLM
 
 
 def create_dspy_model(
     model_name: str | None = None,
-    user_api_key: str | None = None,
-    user_model: str | None = None,
+    user_llm: UserLLM | None = None,
     cache_key: str | None = None,
     **kwargs,
 ) -> dspy.LM:
     """
     Create a standard DSPy LM client.
 
-    User-provided keys route through Gemini; server keys route through
-    the configured OpenAI-compatible proxy.
+    User-provided keys route to the user's OpenAI-compatible endpoint when it has a
+    base URL, and to Gemini otherwise; server keys route through the configured
+    OpenAI-compatible proxy.
 
     Args:
         model_name: Optional model name to override default (for server keys).
-        user_api_key: Optional user-provided Gemini API key.
+        user_llm: The user's own LLM settings; empty or None means the server keys.
         cache_key: OpenAI prompt-cache routing key for calls that share a long prefix
             (best-effort; prompts carrying images were often not served from cache).
-        user_model: Optional user-specified Gemini model (used with user_api_key).
+            Server keys only: other endpoints may reject the unknown parameter.
         **kwargs: Additional arguments for dspy.LM
 
     Returns:
         Configured dspy.LM instance.
 
     Raises:
-        ValueError: If no API key is available.
+        ValueError: If no API key is available, or no model for a user endpoint.
     """
     settings = get_settings().llm
 
-    if user_api_key:
-        # User-provided key: route through Gemini
-        effective_model = user_model or "gemini-3.1-pro-preview"
+    if user_llm and user_llm.api_key and user_llm.api_base:
+        # User-provided key on their own OpenAI-compatible endpoint
+        if not user_llm.model:
+            raise ValueError("A model is required for an OpenAI-compatible endpoint.")
+        return dspy.LM(
+            model=f"openai/{user_llm.model}",
+            api_key=user_llm.api_key,
+            api_base=user_llm.api_base,
+            **kwargs,
+        )
+
+    if user_llm and user_llm.api_key:
+        # User-provided key: route through Gemini (the first offered model by default)
+        effective_model = user_llm.model or settings.get_user_api_model_list()[0]
         return dspy.LM(
             model=f"gemini/{effective_model}",
-            api_key=user_api_key,
+            api_key=user_llm.api_key,
             **kwargs,
         )
 
@@ -70,10 +82,10 @@ _LITERATURE_MAX_TOOL_CALLS = 60
 LITERATURE_TIMEOUT_S = 900
 
 
-def literature_available(user_api_key: str | None, user_openai_key: str | None) -> bool:
+def literature_available(user_llm: UserLLM | None) -> bool:
     """Server keys always search the literature; a user's own keys need an OpenAI key."""
-    if user_api_key:
-        return bool(user_openai_key)
+    if user_llm and user_llm.api_key:
+        return bool(user_llm.openai_key)
     return bool(get_settings().llm.openai_api_key)
 
 
