@@ -452,6 +452,23 @@ def test_literature_laws_are_mapped_and_fitted_once():
     assert "not the target" in laws[2]["fit_error"]
 
 
+def test_fit_law_takes_coefficients_named_after_variables_as_parameters():
+    s = _session()
+    s.profile()
+    for i, eq in enumerate(
+        [
+            "yield = a_P_added + b_P_added * P_added",  # fuzzily close to P_added
+            "yield = Y_ref * (P_added / P_ref)^beta_P",
+            "yield = a_pH + b_pH * pH + b_trend * P_added",
+        ],
+        1,
+    ):
+        law = fit_law(s, {"equation": eq}, i)
+        assert law["model_id"] and law["fit_error"] is None and law["unmapped"] == [], eq
+    law = fit_law(s, {"equation": "yield = a_Zn + b_Zn * Zn"}, 4)
+    assert law["unmapped"] == ["Zn"]
+
+
 def test_fit_law_uses_published_constants():
     s = _session()
     s.profile()

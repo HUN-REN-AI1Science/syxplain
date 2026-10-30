@@ -54,6 +54,9 @@ _PARAM_PATTERNS = (
     re.compile(r"^[A-Za-z]+_?\d+$"),  # R0, T_0, k_1
     re.compile(r"(max|min|opt|half|sat|ref)$", re.I),  # Pmax, Topt, Kref
 )
+# A coefficient named after its variable (a_PDSI, b0_SMI, beta_CO2, b_trend): a
+# parameter, never fuzzily mapped onto that variable.
+_COEFFICIENT = re.compile(rf"^(?:[a-z]\d*|{'|'.join(GREEK)})_[A-Za-z]\w*$", re.I)
 
 
 def literature_features(
@@ -73,7 +76,11 @@ def literature_features(
 
 
 def _looks_like_parameter(name: str) -> bool:
-    return name.lower() in GREEK or any(p.search(name) for p in _PARAM_PATTERNS)
+    return (
+        name.lower() in GREEK
+        or bool(_COEFFICIENT.match(name))
+        or any(p.search(name) for p in _PARAM_PATTERNS)
+    )
 
 
 def _map_identifier(name: str, session: DiscoverySession) -> str | None:
@@ -87,7 +94,7 @@ def _map_identifier(name: str, session: DiscoverySession) -> str | None:
     columns[session.target_column] = session.target_alias
     if name in columns:
         return columns[name]
-    if len(name) > 2:
+    if len(name) > 2 and not _COEFFICIENT.match(name):
         close = difflib.get_close_matches(name, aliases, n=1, cutoff=0.85)
         if close:
             return close[0]
@@ -119,12 +126,15 @@ def fit_law(session: DiscoverySession, law: dict[str, Any], index: int) -> dict[
         return record
 
     renames: dict[str, str] = {}
+    parameters: list[str] = []
     unmapped = []
     for name in raw.parameters:
         alias = _map_identifier(name, session)
         if alias and alias != session.target_alias:
             renames[name] = alias
-        elif not _looks_like_parameter(name):
+        elif _looks_like_parameter(name):
+            parameters.append(name)
+        else:
             unmapped.append(name)
     if unmapped:
         record["unmapped"] = unmapped
@@ -133,7 +143,11 @@ def fit_law(session: DiscoverySession, law: dict[str, Any], index: int) -> dict[
     if not renames:
         # Nothing mapped: the identifiers that are not obviously parameters are the
         # law's variables, and the data does not have them.
-        unmapped = [n for n in raw.parameters if len(n) > 1 and n.lower() not in GREEK]
+        unmapped = [
+            n
+            for n in raw.parameters
+            if len(n) > 1 and n.lower() not in GREEK and not _COEFFICIENT.match(n)
+        ]
         record["unmapped"] = unmapped
         record["fit_error"] = (
             f"variables not in the data: {unmapped}"
@@ -148,11 +162,12 @@ def fit_law(session: DiscoverySession, law: dict[str, Any], index: int) -> dict[
             rf"(?<![A-Za-z_0-9]){re.escape(name)}(?![A-Za-z_0-9])", alias, expression
         )
     # Published numeric constants become parameters started at their published values.
-    template, values = parameterize_constants(expression, taken=session.features)
+    template, values = parameterize_constants(expression, taken=[*session.features, *parameters])
     try:
         model = session.fit_custom(
             template,
-            initial_params=values,
+            # declared, so a_PDSI is not taken for a typo of PDSI
+            initial_params=dict.fromkeys(parameters, 1.0) | values,
             label=f"Published law {index}",
             kind="literature",
         )
