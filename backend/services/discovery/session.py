@@ -793,7 +793,9 @@ class DiscoverySession:
             feats.append(item)
         return {
             "target": p["target"],
-            "rows": p["rows"],
+            # metric_basis is how the final report scores; the agent only ever sees CV
+            "rows": {k: v for k, v in p["rows"].items() if k != "metric_basis"},
+            "scoring": self.scoring_note(),
             "noise_ceiling_r2": p["noise_ceiling_r2"],
             "noise_ceiling_sd": p["noise_ceiling_sd"],
             "has_signal": p["has_signal"],
@@ -805,6 +807,27 @@ class DiscoverySession:
             "excluded_columns": p["excluded_columns"],
             "time_structure": self.time_structure_brief(),
         }
+
+    def scoring_note(self) -> str:
+        """How the agent's tools score models, for DATA_OVERVIEW."""
+        folds = (
+            "contiguous time blocks of the series (the end blocks extrapolate, so cv_se is "
+            "larger than with random folds)"
+            if self.series
+            else "random folds"
+        )
+        held = (
+            f"The {len(self.holdout)} held-out rows are scored once after you finish, for the "
+            "report only; you never see them."
+            if self.has_holdout
+            else "There is no holdout (too few rows)."
+        )
+        return (
+            f"Every tool reports cross-validated scores on the training rows (cv_r2, cv_rmse; "
+            f"cv_se = standard error of the per-fold RMSE), with {len(self.fit_data.folds)} "
+            f"folds of {folds}. {held} Models are tied when cv_rmse is within one cv_se of "
+            "the best."
+        )
 
     def time_structure_brief(self) -> dict[str, Any] | None:
         """Compact time-structure proposal for DATA_OVERVIEW (None without a plausible one)."""
@@ -1149,7 +1172,8 @@ class DiscoverySession:
     ) -> list[dict[str, Any]]:
         """The agent's compact ranking; rate laws keep their equation (D ids say nothing)."""
         ranked = [m for m in self.ranked_models(problem) if kind is None or m.kind == kind]
-        drop = {"cv_rmse", "aic", "reasons", "target_transform"}
+        # cv_rmse stays: ties are judged on it (cv_se is its standard error)
+        drop = {"aic", "reasons", "target_transform"}
         if problem == "static":
             drop.add("fitted")
         return [{k: v for k, v in m.brief().items() if k not in drop} for m in ranked[:top]]

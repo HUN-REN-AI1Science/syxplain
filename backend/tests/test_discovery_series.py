@@ -199,3 +199,13 @@ def test_templated_search_sends_the_template_and_scores_composed_equations():
     assert {m.expression for m in models} == {"(x * 2.0) + (z_l2 * 3.0)", "(x * 2.1) + (0.5)"}
     assert models[0].diagnostics["template_parts"] == "f = #1 * 2.0; g = #1 * 3.0"
     assert max(m.cv_r2 for m in models) > 0.9
+
+
+def test_agent_sees_cross_validated_scoring_and_the_rmse_tie_rule():
+    s = _session(_series())
+    overview = s.overview()
+    assert "metric_basis" not in overview["rows"]
+    assert "contiguous time blocks" in overview["scoring"]
+    assert "within one cv_se" in overview["scoring"]
+    s.fit_custom("a0 + a1*x")
+    assert "cv_rmse" in s.leaderboard(top=1)[0]
