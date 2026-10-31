@@ -345,6 +345,10 @@ class DiscoverySession:
         # --- a long series: lagged features, rows in time order -----------------
         self.descriptions = dict(descriptions)
         self.series: dict[str, Any] | None = None
+        # The target's previous value on each held-out row (a series only): the naive
+        # persistence forecast every model of a series must beat
+        self.holdout_previous: np.ndarray | None = None
+        self._previous_target: np.ndarray | None = None
         keys = held = None
         if is_series(self.time_structure) and data.index.is_unique:
             try:
@@ -365,6 +369,8 @@ class DiscoverySession:
             held_rows, train_rows = order[:n_holdout], order[n_holdout:]
         else:  # the final part of each series: prediction forward in time
             held_rows, train_rows = np.flatnonzero(held), np.flatnonzero(~held)
+            if self._previous_target is not None:
+                self.holdout_previous = self._previous_target[held_rows]
         self.holdout = frame.iloc[held_rows].reset_index(drop=True)
         self.train = frame.iloc[train_rows].reset_index(drop=True)
         fit_frame, fit_keys = self.train, None if keys is None else keys[train_rows]
@@ -425,10 +431,17 @@ class DiscoverySession:
             raw = pd.to_numeric(data[self.column_of[source]], errors="coerce").to_numpy(float)
             raw[~np.isfinite(raw)] = np.nan  # like the cleaned frame: inf is missing
             specs = [("lag", k) for k in LAG_STEPS] + [("mean", w) for w in windows]
+            if source == self.target_alias:
+                # The target's second lag enters as its last change (momentum)
+                specs = [("change", 1) if s == ("lag", 2) else s for s in specs]
             for kind, n_steps in specs:
-                alias = make_alias(f"{source}_{kind[0]}{n_steps}", taken, RESERVED_ALIASES)
+                prefix = {"lag": "l", "mean": "m", "change": "d"}[kind]
+                alias = make_alias(f"{source}_{prefix}{n_steps}", taken, RESERVED_ALIASES)
                 taken.add(alias)
-                values = grid.lagged(raw, n_steps, mean=kind == "mean")[pos]
+                if kind == "change":
+                    values = (grid.lagged(raw, n_steps) - grid.lagged(raw, n_steps + 1))[pos]
+                else:
+                    values = grid.lagged(raw, n_steps, mean=kind == "mean")[pos]
                 candidates.append(
                     LagCandidate(alias, source, kind, n_steps, values, source == self.target_alias)
                 )
@@ -447,6 +460,10 @@ class DiscoverySession:
         selected = [c for c in candidates if c.alias in chosen]  # full-length values
         frame = frame.assign(**{c.alias: c.values for c in selected})
         complete = frame.notna().all(axis=1).to_numpy()
+        previous = next(
+            c.values for c in candidates if c.of_target and c.kind == "lag" and c.steps == 1
+        )
+        self._previous_target = previous[complete]
 
         lags = []
         for c in selected:
@@ -545,6 +562,26 @@ class DiscoverySession:
             if share >= EXTRAPOLATION_SHARE:
                 out[f] = round(share, 2)
         return out
+
+    def persistence_comparison(self, model: ModelResult) -> dict[str, Any] | None:
+        """
+        Held-out RMSE of ``model`` and of the naive persistence forecast (each row predicted
+        by the target's previous value) on the held-out rows of a series that have one.
+        None without a series holdout or when the model is undefined on most rows.
+        """
+        if self.holdout_previous is None or model.parsed is None or model.error:
+            return None
+        rows = np.isfinite(self.holdout_previous)
+        if rows.sum() < 3:
+            return None
+        X = {f: self.holdout[f].to_numpy(dtype=float)[rows] for f in self.features}
+        y = self.holdout[self.target_alias].to_numpy(dtype=float)[rows]
+        fill = float(self.train[self.target_alias].mean())
+        scored = score_holdout(model.parsed, model.params, X, y, model.target_transform, fill)
+        if scored is None:
+            return None
+        naive = float(np.sqrt(np.mean((y - self.holdout_previous[rows]) ** 2)))
+        return {"rmse": scored["rmse"], "persistence_rmse": naive, "n": int(rows.sum())}
 
     def variables_for(self, aliases: list[str]) -> dict[str, str]:
         """alias -> original column for the given aliases plus the target."""

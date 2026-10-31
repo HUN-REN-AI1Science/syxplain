@@ -52,6 +52,27 @@ def _forests(seed: int):
     ]
 
 
+def _linear_plus_forest(
+    X_train: np.ndarray, y_train: np.ndarray, X_test: np.ndarray, seed: int
+) -> np.ndarray:
+    """
+    A (ridge) linear model on every column plus a forest on its residuals. Forests predict
+    within the range of the training targets, so across contiguous time blocks they cannot
+    follow a persistent series (y_t ~ y_t-1) into a level it has not reached yet; the
+    linear part carries that level, the forest the nonlinear rest.
+    """
+    mean, sd = X_train.mean(axis=0), X_train.std(axis=0)
+    sd = np.where(sd > 0, sd, 1.0)
+    A = np.column_stack([np.ones(len(X_train)), (X_train - mean) / sd])
+    ridge = 1e-6 * len(X_train) * np.eye(A.shape[1])
+    ridge[0, 0] = 0.0
+    beta = np.linalg.solve(A.T @ A + ridge, A.T @ y_train)
+    B = np.column_stack([np.ones(len(X_test)), (X_test - mean) / sd])
+    forest = _forests(seed)[0]
+    forest.fit(X_train, y_train - A @ beta)
+    return B @ beta + forest.predict(X_test)
+
+
 def noise_ceiling(
     X: np.ndarray,
     y: np.ndarray,
@@ -63,7 +84,8 @@ def noise_ceiling(
     Nonparametric benchmark: out-of-fold R2 of the better of a random forest and
     extra-trees, over ``repeats`` reshuffled 5-fold splits, or once over the given
     ``folds`` (fixed folds, e.g. contiguous time blocks of a series, give the same
-    split in every repeat).
+    split in every repeat). Over given folds a linear model with a forest on its
+    residuals competes too: the forests alone cannot extrapolate to a later block.
 
     Returns:
         (mean R2, sd over repeats, per-repeat R2, permutation-importance mean, sd)
@@ -80,6 +102,7 @@ def noise_ceiling(
         rng = np.random.default_rng(seed + r)
         repeat_folds = folds if folds is not None else _kfold(n, k, rng)
         oofs = [np.zeros(n), np.zeros(n)]
+        hybrid = np.zeros(n) if folds is not None and p else None
         fold_models = []
         for test_idx in repeat_folds:
             train_mask = np.ones(n, dtype=bool)
@@ -88,8 +111,12 @@ def noise_ceiling(
             for oof, model in zip(oofs, models, strict=True):
                 model.fit(X[train_mask], y[train_mask])
                 oof[test_idx] = model.predict(X[test_idx])
+            if hybrid is not None:
+                hybrid[test_idx] = _linear_plus_forest(
+                    X[train_mask], y[train_mask], X[test_idx], seed + r
+                )
             fold_models.append((test_idx, models[0]))
-        scores = [r2_score(y, oof) for oof in oofs]
+        scores = [r2_score(y, oof) for oof in [*oofs, *([hybrid] if hybrid is not None else [])]]
         runs.append(max(scores))
         if r == 0:
             # Pooled permutation importance: shuffle a column in every test fold,

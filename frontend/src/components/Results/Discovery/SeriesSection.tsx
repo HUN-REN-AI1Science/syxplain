@@ -33,8 +33,14 @@ export const SeriesSection: React.FC<SeriesSectionProps> = ({ series, targetColu
             {series.group_column ? `, one per ${series.group_column}` : ''}. {targetColumn} may
             depend on earlier conditions as well as on the current ones, so lagged copies of the
             variables were tested: X_l2 is X two steps earlier, X_m3 the mean of X over the previous
-            three steps. A lag was added as a feature only when it lowered the cross-validated
-            error, beyond what the current values explain.
+            three steps. For {targetColumn} itself, its previous value (persistence) and its last
+            change ({targetColumn} one step earlier minus the step before: a trend that carries on)
+            were tried after the other variables. A lag was added as a feature only when it lowered
+            the cross-validated error, beyond what the current values explain.
+          </p>
+          <p className="mt-2">
+            The headline is also compared with simply repeating the previous value of the target: a
+            model of a series is only useful if it beats that.
           </p>
           <p className="mt-2">
             Models are scored forward in time: cross-validation uses contiguous blocks of the series

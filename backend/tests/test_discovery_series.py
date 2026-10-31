@@ -209,3 +209,88 @@ def test_agent_sees_cross_validated_scoring_and_the_rmse_tie_rule():
     assert "within one cv_se" in overview["scoring"]
     s.fit_custom("a0 + a1*x")
     assert "cv_rmse" in s.leaderboard(top=1)[0]
+
+
+# ------------------------------------------------- memory, persistence, ceiling, literature
+
+
+def _momentum_series(n=160, seed=3):
+    """A state that keeps its recent trend: AR(2) with momentum, driven by x."""
+    rng = np.random.default_rng(seed)
+    x = rng.normal(0, 1, n)
+    y = np.zeros(n)
+    for t in range(2, n):
+        y[t] = 1.5 * y[t - 1] - 0.6 * y[t - 2] + 0.5 * x[t] + rng.normal(0, 0.2)
+    df = pd.DataFrame({"Year": np.arange(1900, 1900 + n), "x": x, "y": y})
+    return df.sample(frac=1.0, random_state=seed)
+
+
+def test_momentum_enters_as_the_targets_last_change():
+    s = _session(_momentum_series())
+    targets = {d["feature"] for d in s.series["lag_features"] if d["source"] == "y"}
+    # Persistence, then its last change; never a mean or second lag of the target next to it
+    assert targets == {"y_l1", "y_d1"}
+    change = next(d for d in s.series["lag_features"] if d["feature"] == "y_d1")
+    assert change["kind"] == "change" and "trend that carries on" in change["description"]
+    assert s.series["screening"]["residual_autocorrelation"]["with_selected_lags"] < 0.2
+    # y_d1 is y_l1 minus the value before it
+    previous = s.train["y_l1"].to_numpy()
+    assert np.allclose(s.train["y_d1"].to_numpy()[1:], previous[1:] - previous[:-1])
+
+
+def test_change_term_is_never_chosen_without_persistence():
+    s = _session(_series())  # no persistence planted
+    assert not any(d["source"] == "y" for d in s.series["lag_features"])
+
+
+def test_series_headline_is_checked_against_persistence():
+    from backend.tests.test_discovery_coherence import _checks, _report
+
+    s = _session(_momentum_series())
+    s.profile()
+    memory = s.fit_custom("a0 + a1*y_l1 + a2*y_d1 + a3*x", label="memory")
+    checks = _checks(_report(s, memory))
+    assert checks["persistence"] == "pass" and checks["generalization"] == "pass"
+    no_memory = s.fit_custom("a0 + a1*x", label="drivers only")
+    assert _checks(_report(s, no_memory))["persistence"] == "fail"
+
+
+def test_generalization_compares_errors_not_r2():
+    from types import SimpleNamespace
+
+    from backend.services.discovery.coherence import _generalization
+
+    session = SimpleNamespace(has_holdout=True, holdout=[0] * 27)
+    # The run that prompted this: a calm final stretch of the series lowers R2, not the fit
+    calm = SimpleNamespace(
+        cv_r2=0.967, cv_rmse=0.602, parsed=object(), holdout={"r2": 0.735, "rmse": 0.430}
+    )
+    check = _generalization(session, calm)
+    assert check["status"] == "pass" and check["value"] < 1
+    worse = SimpleNamespace(
+        cv_r2=0.967, cv_rmse=0.602, parsed=object(), holdout={"r2": 0.9, "rmse": 1.2}
+    )
+    assert _generalization(session, worse)["status"] == "fail"
+
+
+def test_noise_ceiling_follows_a_persistent_series_out_of_its_range():
+    s = _session(_series(memory=0.0, persistence=0.8))
+    s.profile()
+    linear = s.fit_custom("a0 + a1*x + a2*Year + a3*y_l1")
+    # Forests alone cannot reach the later blocks' levels; the benchmark must
+    assert s.ceiling_r2 >= linear.cv_r2 - 0.02
+
+
+def test_literature_sees_the_lags_and_declared_parameters():
+    from backend.services.discovery.literature import fit_law, literature_features
+
+    s = _session(_series())
+    s.profile()
+    features = literature_features(s, s.descriptions)
+    assert "z_l2" in features
+    assert "earlier" in features["z_l2"]
+    law = {"equation": "y = gain_x * x + legacy_effect * z_l2 + offset_term"}
+    assert fit_law(s, law, 1)["unmapped"]  # undeclared, descriptive names are not guessed
+    law["parameters"] = ["gain_x", "legacy_effect", "offset_term"]
+    fitted = fit_law(s, law, 2)
+    assert fitted["model_id"] and fitted["fit_error"] is None and fitted["cv_r2"] > 0.9
