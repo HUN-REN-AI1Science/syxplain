@@ -29,6 +29,11 @@ RATIO_WARN = 1.5
 # Holdout RMSE / naive persistence RMSE (a series): the headline must clearly beat
 # "the next value is the last one"
 PERSISTENCE_PASS = 0.95
+# SHAP share from which a reversed effect fails the headline. Below it the forest's effect is
+# too small to outweigh conditioning: the forest's effect of a feature is conditional on every
+# feature, the equation's on its own few, and with correlated inputs a small effect can change
+# sign between the two (a reversed minor effect warns)
+MATERIAL_SHARE = 0.05
 DIRECTION_GRID = 40
 DIRECTION_BACKGROUND = 100
 
@@ -117,16 +122,26 @@ def _shap(agreement: list[dict[str, Any]]) -> dict[str, Any]:
     if not judged:
         return _check("shap", "na", "no reliable SHAP effects to compare")
     misses = [a for a in judged if a["verdict"] != "agrees"]
-    status = (
-        "fail" if any(a["verdict"] == "opposite" for a in misses) else "warn" if misses else "pass"
-    )
+    material = [
+        a for a in misses if a["verdict"] == "opposite" and a["shap_share"] >= MATERIAL_SHARE
+    ]
+    status = "fail" if material else "warn" if misses else "pass"
     agree_share = sum(a["shap_share"] for a in judged if a["verdict"] == "agrees")
     total_share = sum(a["shap_share"] for a in judged)
-    parts = [f"{a['feature']} {a['verdict']}" for a in misses]
+    parts = [
+        f"{a['feature']} {a['verdict']} ({a['shap_share']:.0%} of the SHAP attribution)"
+        for a in misses
+    ]
     detail = (
         f"the equation follows the data's effect for {len(judged) - len(misses)} of "
-        f"{len(judged)} important features" + (f"; {', '.join(parts)}" if parts else "")
+        f"{len(judged)} important features, {agree_share / total_share:.0%} of their attribution"
+        + (f"; {', '.join(parts)}" if parts else "")
     )
+    if misses and not material:
+        detail += (
+            f"; every disagreement is a minor effect (below {MATERIAL_SHARE:.0%}), which can "
+            "change sign between the forest (conditioned on every feature) and the equation"
+        )
     return _check("shap", status, detail, round(agree_share / total_share, 3))
 
 
