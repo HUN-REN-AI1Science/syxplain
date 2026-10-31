@@ -125,16 +125,14 @@ def fit_law(session: DiscoverySession, law: dict[str, Any], index: int) -> dict[
         record["fit_error"] = f"could not parse: {e}"
         return record
 
-    # The scout lists the law's constants; a declared name never maps onto a variable
-    declared = {str(p) for p in law.get("parameters") or [] if isinstance(p, str)}
     renames: dict[str, str] = {}
     parameters: list[str] = []
     unmapped = []
     for name in raw.parameters:
-        alias = None if name in declared else _map_identifier(name, session)
+        alias = _map_identifier(name, session)
         if alias and alias != session.target_alias:
             renames[name] = alias
-        elif name in declared or _looks_like_parameter(name):
+        elif _looks_like_parameter(name):
             parameters.append(name)
         else:
             unmapped.append(name)

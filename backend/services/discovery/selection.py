@@ -11,8 +11,7 @@ Protocol (deterministic, no LLM):
    with, unless no discovered model is usable.
 4. One-standard-error rule: every model whose CV RMSE is within one SE of the best is
    statistically tied with it. The agent's first recommendation wins if it is in that
-   tie set, unless a tied model dominates it (no more complex and a lower CV error: the
-   pick then has nothing in its favour); otherwise the simplest tied model does.
+   tie set; otherwise the simplest tied model does.
 5. Rate laws (d target/dt) are scored on the derivative, so they get their own headline
    (``select_dynamic``) by the same protocol, after a simulation guard: a law that
    diverges, or does not reproduce the training trajectories when integrated, is vetoed.
@@ -141,19 +140,6 @@ def select(
                     f"than the best ({best.model_id}, {best.cv_rmse:.4g})",
                 }
             )
-        elif dominating := [
-            o for o in tied if o.complexity <= m.complexity and o.cv_rmse < m.cv_rmse
-        ]:
-            o = min(dominating, key=_simplicity)
-            rejected.append(
-                {
-                    "model_id": mid,
-                    "reason": f"dominated by {o.model_id}: no more complex ({o.complexity} vs "
-                    f"{m.complexity}) and a lower CV RMSE ({o.cv_rmse:.4g} vs {m.cv_rmse:.4g})",
-                }
-            )
-            headline, reason = o, "dominates_agent_pick"
-            break
         else:
             headline, reason = m, "agent_pick_within_1se"
             break

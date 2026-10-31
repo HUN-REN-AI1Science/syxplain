@@ -692,8 +692,7 @@ class AnalysisOrchestrator:
             if self._wants_literature(context):
                 features_for_lit = literature_features(
                     session,
-                    # The session's: the uploaded descriptions plus the selected lags
-                    session.descriptions,
+                    descriptions,
                     context.problem_description.get("project_description", ""),
                 )
                 session.literature_task = asyncio.create_task(

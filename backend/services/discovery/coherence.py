@@ -21,19 +21,8 @@ from backend.services.discovery.session import DiscoverySession
 
 CEILING_PASS = 0.9  # headline CV R2 / noise ceiling
 CEILING_WARN = 0.7
-# Holdout RMSE / CV RMSE. An error ratio, not an R2 gap: R2 depends on the spread of the
-# rows it is computed on, and the final stretch of a series often varies far less than the
-# whole (a lower R2 there with a smaller error is no failure to generalise)
-RATIO_PASS = 1.2
-RATIO_WARN = 1.5
-# Holdout RMSE / naive persistence RMSE (a series): the headline must clearly beat
-# "the next value is the last one"
-PERSISTENCE_PASS = 0.95
-# SHAP share from which a reversed effect fails the headline. Below it the forest's effect is
-# too small to outweigh conditioning: the forest's effect of a feature is conditional on every
-# feature, the equation's on its own few, and with correlated inputs a small effect can change
-# sign between the two (a reversed minor effect warns)
-MATERIAL_SHARE = 0.05
+GAP_PASS = 0.05  # CV R2 - holdout R2
+GAP_WARN = 0.15
 DIRECTION_GRID = 40
 DIRECTION_BACKGROUND = 100
 
@@ -42,7 +31,6 @@ STATUS_ORDER = {"pass": 0, "warn": 1, "fail": 2}
 LABELS = {
     "fit_vs_ceiling": "Fit vs. noise ceiling",
     "generalization": "Held-out generalization",
-    "persistence": "Beats persistence",
     "shap": "Agreement with SHAP effects",
     "literature": "Published laws",
     "named_laws": "Named laws",
@@ -81,39 +69,14 @@ def _generalization(session: DiscoverySession, h: ModelResult) -> dict[str, Any]
     if not h.holdout:
         # score_holdout gives up when the equation is undefined on most held-out rows
         return _check("generalization", "fail", "undefined on more than half of the held-out rows")
-    if not h.cv_rmse:
-        return _check("generalization", "na", "no cross-validated error to compare with")
-    ratio = h.holdout["rmse"] / h.cv_rmse
-    status = "pass" if ratio <= RATIO_PASS else "warn" if ratio <= RATIO_WARN else "fail"
+    gap = h.cv_r2 - h.holdout["r2"]
+    status = "pass" if gap <= GAP_PASS else "warn" if gap <= GAP_WARN else "fail"
     return _check(
         "generalization",
         status,
-        f"holdout RMSE {h.holdout['rmse']:.4g} vs CV RMSE {h.cv_rmse:.4g} "
-        f"({ratio:.2f}x) on {len(session.holdout)} unseen rows; "
-        f"R2 {h.holdout['r2']:.3f} vs {h.cv_r2:.3f}, which also depends on how much the "
-        "target varies in each",
-        round(ratio, 3),
-    )
-
-
-def _persistence(session: DiscoverySession, h: ModelResult) -> dict[str, Any] | None:
-    """A series only: does the headline beat repeating the target's previous value?"""
-    if session.holdout_previous is None:
-        return None
-    cmp = session.persistence_comparison(h)
-    if cmp is None or cmp["persistence_rmse"] <= 0:
-        return _check("persistence", "na", "no held-out rows with a previous value to compare")
-    ratio = cmp["rmse"] / cmp["persistence_rmse"]
-    status = "pass" if ratio <= PERSISTENCE_PASS else "warn" if ratio <= 1.0 else "fail"
-    better = (
-        f"{1 - ratio:.0%} lower error than" if ratio < 1 else f"{ratio - 1:.0%} higher error than"
-    )
-    return _check(
-        "persistence",
-        status,
-        f"holdout RMSE {cmp['rmse']:.4g} vs {cmp['persistence_rmse']:.4g} for repeating the "
-        f"previous value ({better} persistence, {cmp['n']} rows)",
-        round(ratio, 3),
+        f"holdout R2 {h.holdout['r2']:.3f} vs CV R2 {h.cv_r2:.3f} "
+        f"on {len(session.holdout)} unseen rows",
+        round(gap, 3),
     )
 
 
@@ -122,26 +85,16 @@ def _shap(agreement: list[dict[str, Any]]) -> dict[str, Any]:
     if not judged:
         return _check("shap", "na", "no reliable SHAP effects to compare")
     misses = [a for a in judged if a["verdict"] != "agrees"]
-    material = [
-        a for a in misses if a["verdict"] == "opposite" and a["shap_share"] >= MATERIAL_SHARE
-    ]
-    status = "fail" if material else "warn" if misses else "pass"
+    status = (
+        "fail" if any(a["verdict"] == "opposite" for a in misses) else "warn" if misses else "pass"
+    )
     agree_share = sum(a["shap_share"] for a in judged if a["verdict"] == "agrees")
     total_share = sum(a["shap_share"] for a in judged)
-    parts = [
-        f"{a['feature']} {a['verdict']} ({a['shap_share']:.0%} of the SHAP attribution)"
-        for a in misses
-    ]
+    parts = [f"{a['feature']} {a['verdict']}" for a in misses]
     detail = (
         f"the equation follows the data's effect for {len(judged) - len(misses)} of "
-        f"{len(judged)} important features, {agree_share / total_share:.0%} of their attribution"
-        + (f"; {', '.join(parts)}" if parts else "")
+        f"{len(judged)} important features" + (f"; {', '.join(parts)}" if parts else "")
     )
-    if misses and not material:
-        detail += (
-            f"; every disagreement is a minor effect (below {MATERIAL_SHARE:.0%}), which can "
-            "change sign between the forest (conditioned on every feature) and the equation"
-        )
     return _check("shap", status, detail, round(agree_share / total_share, 3))
 
 
@@ -342,7 +295,6 @@ def coherence_report(
     checks = [
         _fit_vs_ceiling(session, h),
         _generalization(session, h),
-        *([c] if (c := _persistence(session, h)) else []),
         _shap(shap_agreement),
         *_known_laws(h, headline_relations),
         _parameters(h),

@@ -42,8 +42,6 @@ GROUP_WORDS = {
 }  # fmt: skip
 MIN_POINTS = 4  # per trajectory
 MAX_CANDIDATES = 10
-REGULAR_TOLERANCE = 0.12  # a gap within this share of a whole number of steps (28 vs 31 days)
-REGULAR_SINGLE_STEPS = 0.8  # share of gaps that must be a single step
 MAX_WINDOW = 31  # points per local derivative fit (bounds the cost on long series)
 MAX_DYNAMIC_ROWS = 5000  # derivative rows used for fitting (like the static max_fit_rows)
 DATE_SAMPLE = 200  # values parsed to decide whether a text column holds dates
@@ -136,33 +134,6 @@ def _smoothness(y: np.ndarray, codes: np.ndarray, t: np.ndarray) -> tuple[float,
     return smooth, float((grid >= 2).mean()), len(np.unique(c))
 
 
-def _regular(times: np.ndarray) -> bool:
-    """
-    Sampled on a regular grid: the gaps are whole multiples of the usual step (a missing year
-    or month is a gap, not irregular sampling; calendar months of 28-31 days count as one
-    step) and most of them are a single step.
-    """
-    gaps = np.diff(np.sort(times))
-    if len(gaps) == 0 or np.any(gaps <= 0):
-        return False
-    steps = gaps / np.median(gaps)
-    whole = np.abs(steps - np.rint(steps)) <= REGULAR_TOLERANCE
-    return bool(np.all(whole) and np.mean(np.rint(steps) == 1) >= REGULAR_SINGLE_STEPS)
-
-
-def _chops_one_series(codes: np.ndarray, t: np.ndarray) -> bool:
-    """
-    True when a candidate trajectory column only cuts a single series into interleaved
-    pieces: every time occurs once in the whole table (no parallel trajectories), yet the
-    rows switch between its values far more often than consecutive episodes would (a
-    measured quantity with a few repeated values, e.g. a regulated outflow).
-    """
-    if pd.Series(t).duplicated().mean() > 0.05:
-        return False  # parallel trajectories share times
-    switches = int(np.sum(np.diff(codes[np.argsort(t, kind="stable")]) != 0))
-    return switches > 2 * len(np.unique(codes))
-
-
 def detect_time_structure(
     data: pd.DataFrame,
     target_column: str,
@@ -201,9 +172,7 @@ def detect_time_structure(
             integer = numeric and bool(
                 np.all(np.mod(values.dropna().to_numpy(dtype=float), 1) == 0)
             )
-            # A non-integer number is a measurement unless its own name says it is a unit
-            # (its description naming a "station" or "site" is where it was measured)
-            if not numeric or integer or bool(_words(str(col)) & GROUP_WORDS):
+            if not numeric or integer or named(str(col), GROUP_WORDS):
                 candidates[str(col)] = pd.factorize(values)[0]
     groups: list[str | None] = [
         None,
@@ -225,8 +194,6 @@ def detect_time_structure(
                 continue
             dup = float(pd.DataFrame({"c": codes[ok], "t": t[ok]}).duplicated().mean())
             if dup > 0.05:  # a time axis is (almost) unique within each trajectory
-                continue
-            if gcol and _chops_one_series(codes[ok], t[ok]):
                 continue
             smooth, shared, n_traj = _smoothness(y[ok], codes[ok], t[ok])
             if n_traj == 0:
@@ -269,7 +236,10 @@ def detect_time_structure(
     c, tt = _ordered(codes[ok], t[ok])
     segments = np.split(tt, np.flatnonzero(np.diff(c)) + 1) if len(c) else []
     counts = [len(seg) for seg in segments]
-    regular = [_regular(seg) for seg in segments]
+    regular = [
+        bool(np.diff(seg).mean() > 0 and np.diff(seg).std() / np.diff(seg).mean() < 0.1)
+        for seg in segments
+    ]
     return TimeStructure(
         time_column=tcol,
         group_column=gcol,

@@ -87,7 +87,7 @@ class ExplainPySrEquations(dspy.Signature):
     - discovery.classic_baselines lists the reference named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
     - discovery.dynamics (when not null): the rows are measurements over time and the agent also looked for a rate law d(target)/dt = f(target, inputs) (the agent's own via fit_ode, or SINDy when source is a sindy_ search). headline is the recommended rate law; dydt_cv_r2 is its cross-validated R2 on the estimated derivative and is NOT comparable with the cv_r2 of the static equations; simulation_train_r2 and holdout_r2 come from integrating the law from each trajectory's start (holdout = whole held-out trajectories or the final part of each series). Explain the rate law as kinetics (what drives the rate, what the plateau or growth limit is) and relate it to the static equations: a static equation that saturates over time is often the integrated form of the rate law. Do not list rate laws among the numbered equations.
-    - series (when not null): the rows are a long series in time. Its lag_features are derived columns (X_l2 = X two time steps earlier, X_m3 = mean of X over the previous three steps, a lag of the target = its own persistence, the target's d1 = its last change, value at t-1 minus t-2 = momentum, a recent trend that carries on); their descriptions are in series.lag_features. When an equation uses them, explain them as delayed or legacy effects of earlier conditions, and a target lag as persistence rather than a cause. DATA_SPEC.split.order is then "chronological": the holdout is the final part of the series, so holdout_r2 measures prediction forward in time.
+    - series (when not null): the rows are a long series in time. Its lag_features are derived columns (X_l2 = X two time steps earlier, X_m3 = mean of X over the previous three steps, a lag of the target = its own persistence); their descriptions are in series.lag_features. When an equation uses them, explain them as delayed or legacy effects of earlier conditions, and a target lag as persistence rather than a cause. DATA_SPEC.split.order is then "chronological": the holdout is the final part of the series, so holdout_r2 measures prediction forward in time.
     - Extrapolation: where DATA_SPEC.split.holdout_extrapolates lists features, the held-out rows lie partly outside their training range: a lower holdout_r2 there reflects extrapolation, say so instead of calling the model poor.
     Use this context: contrast the discovered equations with the reference laws (what does a discovered equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
 
@@ -95,13 +95,13 @@ class ExplainPySrEquations(dspy.Signature):
     discovery.relations_to_known_laws says, from the backend, how the discovered equations relate to the known laws fitted after the discovery. headline lists the closest laws for the headline equation; others gives the closest laws for the other discovered equations by model_id. relation is "equivalent" (the same variables and practically identical predictions: the law in another algebraic form), "similar" (predictions agree closely), "partial" (the law covers some of the variables with the same shape; the discovered equation adds the others) or "different"; comparison says whether the law fits "better", "tied" or "worse" than the discovered equation beyond noise; agreement_r2 is the R2 between their predictions. These labels are final: never contradict them. In the overview of each discovered equation that has an equivalent, similar or partial relation, say in words how it relates to that law: the same law rewritten (show how its constants map onto the law's parameters when the forms make that clear), a generalisation with an extra factor or variable, or a different mechanism with similar predictions. Name the law. When nothing relates, say that the equation is a new relationship for these data, not a known law. Never imply the agent started from a known law.
 
     ### COHERENCE
-    discovery.coherence checks whether the independent lines of evidence agree on the headline equation: checks[] holds the backend's verdicts (pass / warn / fail / na) against the noise ceiling, the holdout (judged by the error ratio, since R2 also depends on how much the target varies in the scored rows), for a series the naive persistence forecast (repeating the previous value), SHAP, published laws, named laws, its parameters and the agent. They are final: never contradict or re-score them. discovery.coherence.effect_directions gives the shape of the headline's effect for each variable over the observed range (with the predictions at both ends). Add what the backend cannot judge:
+    discovery.coherence checks whether the independent lines of evidence agree on the headline equation: checks[] holds the backend's verdicts (pass / warn / fail / na) against the noise ceiling, the holdout, SHAP, published laws, named laws, its parameters and the agent. They are final: never contradict or re-score them. discovery.coherence.effect_directions gives the shape of the headline's effect for each variable over the observed range (with the predictions at both ends). Add what the backend cannot judge:
     - coherence.domain_checks: for each variable in effect_directions, and for the headline's limiting behaviour (as variables approach zero or grow, saturation, staying within physically possible values), say whether it is consistent with domain knowledge, PROJECT_SPEC. status is "consistent", "questionable" or "inconsistent"; aspect names the variable or behaviour in a few words.
     - coherence.assessment: one paragraph on whether the evidence agrees on the headline and which link is weakest, reusing the failed or warned checks.
     If discovery.coherence is null, return "coherence": null.
 
     ### RECOMMENDATION RULE
-    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied unless a tied equation is no more complex with a lower error); if selection.headline_is_reference is true, no discovered equation was usable and the headline is a reference law. Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
+    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied); if selection.headline_is_reference is true, no discovered equation was usable and the headline is a reference law. Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
 
     ### TEXT FORMATTING (CRITICAL)
     - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", "rationale" or "coherence" fields.
@@ -184,22 +184,19 @@ class LiteratureLaws(dspy.Signature):
        - Write a Pythonic equation using the keys from the feature list exactly as variable names.
        - If one feature is marked TARGET, write every equation that involves it SOLVED FOR THE TARGET, with the target alone on the left side (e.g. "y = a*x + b", never "x = (y - b)/a"). Rearrange published forms algebraically when needed, and keep the original's constants.
        - Find as many distinct relationships as the literature supports (aim for 3-8), including ones that use only a subset of the variables.
-       - You may introduce constants or parameters (e.g. kappa, g, cp, alpha, Pmax, A, B, specific_yield). List every identifier that is not a feature key in "parameters": they are fitted to the data, started from the published value when the equation writes a number instead.
-       - Write the form the data can identify: merge constants that only ever appear together (a product such as specific_yield * aquifer_area_m2, a ratio, or a fixed factor such as days in a month or a unit conversion) into one parameter, so that no two parameters can trade off against each other. Every number in the equation is refitted, starting from its published value.
-       - Use only the given keys for earlier conditions: a key ending in _l1 or _l2 is a variable one or two time steps earlier, _m3 or _m5 its mean over the previous steps, _d1 its last change. Never write convolutions, sums over the history or other array operations: they cannot be fitted.
+       - You may introduce constants or parameters (e.g. kappa, g, cp, alpha, Pmax, A, B).
        - Provide citation links (DOI, journal URLs, textbook links) supporting the equation.
     4. Do not include explanations, extra text, or commentary — only the json.
 
     ### REQUIRED OUTPUT SCHEMA
     Return STRICT JSON only — no markdown, no code fences, no commentary. Output must parse with json.loads().
     **USE DOUBLE QUOTES for all keys and strings.**
-    Each equation must contain a pythonic equation, its "parameters" (identifiers that are not feature keys; [] when there are none) and citation link(s).
+    Each equation must contain only a pythonic equation and citation link(s).
 
     {
         "equations": [
             {
                 "equation": "ustar = (mflux / rho)**0.5",
-                "parameters": [],
                 "citations": ["https://doi.org/10.1007/978-94-007-2351-1_4"]
             }
         ]
@@ -217,12 +214,10 @@ class LiteratureLaws(dspy.Signature):
         "equations": [
             {
                 "equation": "ustar = (mflux / rho)**0.5",
-                "parameters": [],
                 "citations": ["https://doi.org/10.1007/978-94-007-2351-1_4"]
             },
             {
                 "equation": "PAR = 0.45 * GR",
-                "parameters": [],
                 "citations": ["https://doi.org/10.1016/j.agrformet.2004.03.009"]
             }
         ]
@@ -240,12 +235,10 @@ class LiteratureLaws(dspy.Signature):
         "equations": [
             {
                 "equation": "CO2_flux = -(alpha * PAR * Pmax) / (alpha * PAR + Pmax) + R",
-                "parameters": ["alpha", "Pmax", "R"],
                 "citations": ["https://doi.org/10.1111/j.1365-2486.2004.00891.x"]
             },
             {
                 "equation": "respiration = R0 * exp(E0 * (1/T0 - 1/Tair))",
-                "parameters": ["R0", "E0", "T0"],
                 "citations": ["https://doi.org/10.1029/1999GB900014"]
             }
         ]
@@ -261,7 +254,7 @@ class LiteratureLaws(dspy.Signature):
     )
 
     equations: str = dspy.OutputField(
-        desc="JSON object with equations array containing equation, parameters, citations"
+        desc="JSON object with equations array containing equation, citations"
     )
 
 
@@ -344,7 +337,7 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
     - discovery.classic_baselines lists the reference named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
     - discovery.dynamics (when not null): the rows are measurements over time and the agent also looked for a rate law d(target)/dt = f(target, inputs) (the agent's own via fit_ode, or SINDy when source is a sindy_ search). headline is the recommended rate law; dydt_cv_r2 is its cross-validated R2 on the estimated derivative and is NOT comparable with the cv_r2 of the static equations; simulation_train_r2 and holdout_r2 come from integrating the law from each trajectory's start (holdout = whole held-out trajectories or the final part of each series). Explain the rate law as kinetics (what drives the rate, what the plateau or growth limit is) and relate it to the static equations: a static equation that saturates over time is often the integrated form of the rate law. Do not list rate laws among the numbered equations.
-    - series (when not null): the rows are a long series in time. Its lag_features are derived columns (X_l2 = X two time steps earlier, X_m3 = mean of X over the previous three steps, a lag of the target = its own persistence, the target's d1 = its last change, value at t-1 minus t-2 = momentum, a recent trend that carries on); their descriptions are in series.lag_features. When an equation uses them, explain them as delayed or legacy effects of earlier conditions, and a target lag as persistence rather than a cause. DATA_SPEC.split.order is then "chronological": the holdout is the final part of the series, so holdout_r2 measures prediction forward in time.
+    - series (when not null): the rows are a long series in time. Its lag_features are derived columns (X_l2 = X two time steps earlier, X_m3 = mean of X over the previous three steps, a lag of the target = its own persistence); their descriptions are in series.lag_features. When an equation uses them, explain them as delayed or legacy effects of earlier conditions, and a target lag as persistence rather than a cause. DATA_SPEC.split.order is then "chronological": the holdout is the final part of the series, so holdout_r2 measures prediction forward in time.
     - Extrapolation: where DATA_SPEC.split.holdout_extrapolates lists features, the held-out rows lie partly outside their training range: a lower holdout_r2 there reflects extrapolation, say so instead of calling the model poor.
     Use this context: contrast the discovered equations with the reference laws (what does a discovered equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
 
@@ -352,13 +345,13 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
     discovery.relations_to_known_laws says, from the backend, how the discovered equations relate to the known laws fitted after the discovery. headline lists the closest laws for the headline equation; others gives the closest laws for the other discovered equations by model_id. relation is "equivalent" (the same variables and practically identical predictions: the law in another algebraic form), "similar" (predictions agree closely), "partial" (the law covers some of the variables with the same shape; the discovered equation adds the others) or "different"; comparison says whether the law fits "better", "tied" or "worse" than the discovered equation beyond noise; agreement_r2 is the R2 between their predictions. These labels are final: never contradict them. In the overview of each discovered equation that has an equivalent, similar or partial relation, say in words how it relates to that law: the same law rewritten (show how its constants map onto the law's parameters when the forms make that clear), a generalisation with an extra factor or variable, or a different mechanism with similar predictions. Name the law. When nothing relates, say that the equation is a new relationship for these data, not a known law. Never imply the agent started from a known law.
 
     ### COHERENCE
-    discovery.coherence checks whether the independent lines of evidence agree on the headline equation: checks[] holds the backend's verdicts (pass / warn / fail / na) against the noise ceiling, the holdout (judged by the error ratio, since R2 also depends on how much the target varies in the scored rows), for a series the naive persistence forecast (repeating the previous value), SHAP, published laws, named laws, its parameters and the agent. They are final: never contradict or re-score them. discovery.coherence.effect_directions gives the shape of the headline's effect for each variable over the observed range (with the predictions at both ends). Add what the backend cannot judge:
+    discovery.coherence checks whether the independent lines of evidence agree on the headline equation: checks[] holds the backend's verdicts (pass / warn / fail / na) against the noise ceiling, the holdout, SHAP, published laws, named laws, its parameters and the agent. They are final: never contradict or re-score them. discovery.coherence.effect_directions gives the shape of the headline's effect for each variable over the observed range (with the predictions at both ends). Add what the backend cannot judge:
     - coherence.domain_checks: for each variable in effect_directions, and for the headline's limiting behaviour (as variables approach zero or grow, saturation, staying within physically possible values), say whether it is consistent with domain knowledge, PROJECT_SPEC and with the literature_equations. status is "consistent", "questionable" or "inconsistent"; aspect names the variable or behaviour in a few words.
     - coherence.assessment: one paragraph on whether the evidence agrees on the headline and which link is weakest, reusing the failed or warned checks.
     If discovery.coherence is null, return "coherence": null.
 
     ### RECOMMENDATION RULE
-    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied unless a tied equation is no more complex with a lower error); if selection.headline_is_reference is true, no discovered equation was usable and the headline is a reference law. Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
+    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied); if selection.headline_is_reference is true, no discovered equation was usable and the headline is a reference law. Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
 
     ### TEXT FORMATTING (CRITICAL)
     - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", "rationale" or "coherence" fields.
@@ -485,18 +478,14 @@ class EquationDiscoveryAgent(dspy.Signature):
           the lagged features that passed a screening, and models are scored forward in time
           (CV over contiguous time blocks, the final part of the series held out). X_l2 is X two
           steps earlier, X_m3 the mean of X over the previous three steps (antecedent conditions),
-          TARGET_l1 the target's own previous value, TARGET_d1 its last change (TARGET_l1 minus
-          the value before it: momentum, a trend that carries on). Judge a series model against
-          persistence too: the report checks whether it beats repeating the previous value on
-          the holdout. describe_time_structure lists every
+          TARGET_l1 the target's own previous value. describe_time_structure lists every
           candidate lag with its gain (the share of the remaining CV error it removes) and the
           residual autocorrelation with and without them. Test the memory explicitly: fit your
           best current-value model, then add the lags as terms (e.g. + b*PDSI_l1, or a legacy
           factor) and keep them only where CV R2 and the diagnoses improve. A templated PySR
           search separates current drivers from memory, e.g. template "f(CO2, Tm) + g(NAO_l2,
           SMI_m3)". A lag of the target is persistence, not an explanation: use it only when
-          the drivers and their lags leave the residuals correlated in time, and say so. When
-          residuals stay correlated next to TARGET_l1 and TARGET_d1 is in the data, add it.
+          the drivers and their lags leave the residuals correlated in time, and say so.
        b) Rate laws d(target)/dt = f(target, inputs) suit a STATE that accumulates or decays
           (biomass, a concentration, a pool, a cumulative amount): the change follows from the
           current level. A flux, rate or per-period total (annual GPP, yield, respiration rate,
@@ -570,9 +559,8 @@ class DiscoveryReview(dspy.Signature):
     what changes with note, then finish.
 
     Rewrite the report so it covers the new results: keep what still holds, update the
-    recommendation if a new model is better or simpler at equal accuracy (ties: CV RMSE within
-    one standard error of the best; a model that is no more complex than your pick and has a
-    lower CV RMSE replaces it), and never cite a model you did not see. Same JSON schema as before:
+    recommendation if a new model is better or simpler at equal accuracy (ties: CV R2 within
+    ~0.01), and never cite a model you did not see. Same JSON schema as before:
     {"summary": "...", "recommended_models": [{"model_id": "...", "why": "..."}],
      "rejected_forms": [{"form": "...", "model_id": "...", "reason": "..."}],
      "insights": ["..."], "open_questions": ["..."]}

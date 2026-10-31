@@ -121,15 +121,3 @@ def test_shape_label_uses_slopes_on_skewed_data():
     x = rng.lognormal(0, 1, 2000)
     assert profile_shape(x, 2 * x)["shape"].startswith("roughly linear increasing")
     assert profile_shape(x, np.log(x))["shape"].startswith("saturating increasing")
-
-
-def test_only_a_material_reversed_effect_fails():
-    from backend.services.discovery.coherence import _shap
-
-    agree = {"feature": "y_l1", "shap_share": 0.88, "verdict": "agrees"}
-    # Example 5: a 2% feature reversed between the forest and a 3-variable equation
-    minor = {"feature": "River_m5", "shap_share": 0.02, "verdict": "opposite"}
-    check = _shap([agree, minor])
-    assert check["status"] == "warn" and "minor effect" in check["detail"]
-    major = {"feature": "x3", "shap_share": 0.3, "verdict": "opposite"}
-    assert _shap([agree, major])["status"] == "fail"

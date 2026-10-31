@@ -31,10 +31,7 @@ LONG_SERIES_POINTS = 50  # from here on the 5-step mean is a candidate too
 LAG_STEPS = (1, 2)
 MEAN_WINDOWS = (3, 5)
 MAX_DRIVER_LAGS = 4
-# The target's previous value (persistence) and, next to it, its last change (momentum: a
-# water table that keeps falling through the summer). The change is y_l1 - y_l2, the same
-# linear span as y_l2 but far less collinear with y_l1 and readable as a trend that carries on
-MAX_TARGET_LAGS = 2
+MAX_TARGET_LAGS = 1
 # A lag is kept when it lowers the cross-validated error by this share of what is left
 LAG_MIN_GAIN = 0.03
 # A lag whose step-to-step changes track the current value's this closely is a shifted copy
@@ -149,8 +146,8 @@ class LagCandidate:
 
     alias: str
     source: str  # alias of the column it is taken from
-    kind: str  # lag | mean | change
-    steps: int  # the lag, the window of the mean, or the step of the change (t-steps vs t-steps-1)
+    kind: str  # lag | mean
+    steps: int  # the lag, or the window of the mean
     values: np.ndarray  # one per analysed row
     of_target: bool = False
 
@@ -160,13 +157,6 @@ class LagCandidate:
         if self.kind == "lag":
             name = f"{column} at t-{self.steps}"
             text = f"{column} {self.steps} step{'s' if self.steps > 1 else ''} earlier {along}"
-        elif self.kind == "change":
-            name = f"{column} change t-{self.steps + 1}..t-{self.steps}"
-            text = (
-                f"change of {column} over the step before the previous value {along} "
-                f"(value at t-{self.steps} minus value at t-{self.steps + 1}): a recent trend "
-                "that carries on"
-            )
         else:
             name = f"{column} mean t-{self.steps}..t-1"
             text = (
@@ -225,8 +215,7 @@ def screen_lags(
     Forward selection of lagged columns on the training rows (sorted by trajectory, then
     time). Lags of the predictors go first; the target's own lags only after them, so
     persistence counts only where the drivers and their history leave memory unexplained;
-    a last round of predictor lags then completes a persistent anomaly. A change term
-    (momentum) is a candidate only next to its source's previous value.
+    a last round of predictor lags then completes a persistent anomaly.
     ``current`` maps each source alias to its current values (the collinearity check).
 
     Returns the selected candidates and the screening record for the agent and the report.
@@ -278,19 +267,6 @@ def screen_lags(
             for c in usable:
                 if c.of_target != of_target or c.alias in taken:
                     continue
-                if c.kind == "change" and not any(
-                    s.source == c.source and s.kind == "lag" and s.steps == c.steps
-                    for s in selected
-                ):
-                    continue  # momentum only refines persistence, never replaces it
-                if (
-                    c.of_target
-                    and c.kind != "change"
-                    and any(s.of_target and s.source == c.source for s in selected)
-                ):
-                    # Next to persistence, a mean or a second lag of the target only encodes
-                    # the same momentum less readably than its last change
-                    continue
                 rows = _complete(rows_now, [c.values])
                 if len(rows) < 3 * (len(cols) + 2):
                     continue
@@ -321,7 +297,7 @@ def screen_lags(
         "method": "forward selection by the drop of a linear model's CV error over contiguous "
         f"time blocks (kept when >= {LAG_MIN_GAIN:.0%} of the remaining error, for a predictor's "
         "lag beyond the curvature of its current value); predictor lags first, the target's "
-        "own lags (persistence, then its last change) only after them",
+        "own lags only after them",
         "candidates": table,
         "residual_autocorrelation": {
             "current_drivers_only": _residual_autocorrelation(y, keys, drivers, rows),
