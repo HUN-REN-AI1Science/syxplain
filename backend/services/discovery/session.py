@@ -419,10 +419,16 @@ class DiscoverySession:
             else np.zeros(len(keys), dtype=bool)
         )
 
+        def varies_within_trajectories(alias: str) -> bool:
+            # A per-trajectory constant (a site's long-term rainfall) has no earlier conditions
+            v = pd.DataFrame({"k": keys, "v": frame[alias].to_numpy(dtype=float)}).dropna()
+            return bool((v.groupby("k")["v"].nunique() > 1).any())
+
         sources = [
             a
             for a in self.continuous_features
             if self.column_of[a] not in (ts.time_column, ts.group_column)
+            and varies_within_trajectories(a)
         ]
         windows = MEAN_WINDOWS if ts.points_min >= LONG_SERIES_POINTS else MEAN_WINDOWS[:1]
         taken = set(self.features) | {self.target_alias}

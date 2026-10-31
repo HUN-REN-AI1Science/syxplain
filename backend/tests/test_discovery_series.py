@@ -294,3 +294,29 @@ def test_literature_sees_the_lags_and_declared_parameters():
     law["parameters"] = ["gain_x", "legacy_effect", "offset_term"]
     fitted = fit_law(s, law, 2)
     assert fitted["model_id"] and fitted["fit_error"] is None and fitted["cv_r2"] > 0.9
+
+
+def _panel(n_sites=12, n_years=24, seed=5):
+    """Several sites, one missing year each, a static site property and a lagged driver."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for site in range(n_sites):
+        climate = 400 + 100 * site  # long-term rainfall: constant within a site
+        z = rng.normal(0, 1, n_years)
+        for t in range(n_years):
+            if t == 10:
+                continue  # a year missing in every series
+            y = 0.15 * t + 0.001 * climate + 0.4 * (z[t - 1] if t else 0.0) + rng.normal(0, 0.1)
+            rows.append(
+                {"site": f"S{site}", "Year": 1990 + t, "climate": climate, "z": z[t], "y": y}
+            )
+    return pd.DataFrame(rows)
+
+
+def test_a_panel_with_missing_years_is_a_series_without_lags_of_static_columns():
+    s = DiscoverySession(_panel(), "y", ["climate", "z"])
+    ts = s.time_structure
+    assert ts.time_column == "Year" and ts.group_column == "site" and ts.regular
+    assert s.series is not None and "z_l1" in s.lag_features
+    screened = {d["feature"] for d in s.series["screening"]["candidates"]}
+    assert not any(f.startswith("climate_") for f in screened)  # constant within each site
