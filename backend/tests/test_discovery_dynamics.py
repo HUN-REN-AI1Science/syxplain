@@ -260,3 +260,41 @@ def test_vetoed_rate_laws_are_still_reported():
     assert card["model_id"] == m.model_id and not card["is_headline"]
     assert card["not_recommended"]
     assert card["traces"]
+
+
+def test_a_measured_column_does_not_chop_a_series_into_trajectories():
+    # Lake Bilancino: a regulated outflow with a few repeated values, described as measured
+    # "at the release station", was taken for 66 interleaved trajectories
+    rng = np.random.default_rng(0)
+    n = 400
+    outflow = rng.choice([0.31, 0.6, 1.2, 2.5], size=n)
+    level = 250 + np.cumsum(rng.normal(0, 0.05, n)) - 0.02 * np.cumsum(outflow - outflow.mean())
+    df = pd.DataFrame(
+        {
+            "Date": pd.date_range("2010-01-01", periods=n, freq="D").strftime("%Y-%m-%d"),
+            "Flow_Rate": outflow,
+            "Lake_Level": level,
+        }
+    )
+    ts = detect_time_structure(
+        df, "Lake_Level", {"Flow_Rate": "Daily outflow at the release station (m3/s)"}
+    )
+    assert ts.time_column == "Date" and ts.group_column is None and ts.regular
+
+
+def test_consecutive_episodes_still_count_as_trajectories():
+    # Batches run one after another on absolute dates: each date occurs once, but the
+    # batch column switches only between episodes
+    rows = []
+    for batch in range(4):
+        start = pd.Timestamp("2020-01-01") + pd.Timedelta(days=40 * batch)
+        for day in range(30):
+            rows.append(
+                {
+                    "batch": batch,
+                    "Date": (start + pd.Timedelta(days=day)).strftime("%Y-%m-%d"),
+                    "biomass": 10 / (1 + np.exp(-(day - 15) / 3)) + batch,
+                }
+            )
+    ts = detect_time_structure(pd.DataFrame(rows), "biomass")
+    assert ts.time_column == "Date" and ts.group_column == "batch"

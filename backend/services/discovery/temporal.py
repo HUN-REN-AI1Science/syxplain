@@ -134,6 +134,19 @@ def _smoothness(y: np.ndarray, codes: np.ndarray, t: np.ndarray) -> tuple[float,
     return smooth, float((grid >= 2).mean()), len(np.unique(c))
 
 
+def _chops_one_series(codes: np.ndarray, t: np.ndarray) -> bool:
+    """
+    True when a candidate trajectory column only cuts a single series into interleaved
+    pieces: every time occurs once in the whole table (no parallel trajectories), yet the
+    rows switch between its values far more often than consecutive episodes would (a
+    measured quantity with a few repeated values, e.g. a regulated outflow).
+    """
+    if pd.Series(t).duplicated().mean() > 0.05:
+        return False  # parallel trajectories share times
+    switches = int(np.sum(np.diff(codes[np.argsort(t, kind="stable")]) != 0))
+    return switches > 2 * len(np.unique(codes))
+
+
 def detect_time_structure(
     data: pd.DataFrame,
     target_column: str,
@@ -172,7 +185,9 @@ def detect_time_structure(
             integer = numeric and bool(
                 np.all(np.mod(values.dropna().to_numpy(dtype=float), 1) == 0)
             )
-            if not numeric or integer or named(str(col), GROUP_WORDS):
+            # A non-integer number is a measurement unless its own name says it is a unit
+            # (its description naming a "station" or "site" is where it was measured)
+            if not numeric or integer or bool(_words(str(col)) & GROUP_WORDS):
                 candidates[str(col)] = pd.factorize(values)[0]
     groups: list[str | None] = [
         None,
@@ -194,6 +209,8 @@ def detect_time_structure(
                 continue
             dup = float(pd.DataFrame({"c": codes[ok], "t": t[ok]}).duplicated().mean())
             if dup > 0.05:  # a time axis is (almost) unique within each trajectory
+                continue
+            if gcol and _chops_one_series(codes[ok], t[ok]):
                 continue
             smooth, shared, n_traj = _smoothness(y[ok], codes[ok], t[ok])
             if n_traj == 0:
