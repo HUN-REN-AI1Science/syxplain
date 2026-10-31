@@ -335,7 +335,7 @@ export interface DiscoverySplit {
 
 export interface DiscoverySelection {
   headline_model_id: string | null;
-  /** e.g. 'agent_pick_within_1se' | 'best_cv_1se' | 'no_eligible_model' */
+  /** 'agent_pick_within_1se' | 'dominates_agent_pick' | 'simplest_within_1se' | 'best_cv' (each may end in '_weak') | 'no_eligible_model' */
   headline_reason: string;
   shortlist: string[];
   agent_pick_rejected: { model_id: string; reason: string }[];

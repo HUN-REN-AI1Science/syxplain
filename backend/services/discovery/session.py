@@ -869,7 +869,9 @@ class DiscoverySession:
             f"Every tool reports cross-validated scores on the training rows (cv_r2, cv_rmse; "
             f"cv_se = standard error of the per-fold RMSE), with {len(self.fit_data.folds)} "
             f"folds of {folds}. {held} Models are tied when cv_rmse is within one cv_se of "
-            "the best."
+            "the best. Your recommendation stands among tied models unless another is no more "
+            "complex with a lower cv_rmse: then that one is recommended instead, so compare "
+            "the late searches' fronts before you finish."
         )
 
     def time_structure_brief(self) -> dict[str, Any] | None:

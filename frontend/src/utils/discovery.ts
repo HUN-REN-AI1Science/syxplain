@@ -104,11 +104,20 @@ export const splitModelIds = (text: string): string[] =>
 
 /** Human wording for the selector's headline reason */
 export const headlineReasonText = (reason: string | null | undefined): string => {
-  switch (reason) {
+  // '_weak': no model passed the strict checks, so the headline is the best usable one
+  const weak = reason?.endsWith('_weak') ?? false;
+  const base = weak ? reason!.slice(0, -'_weak'.length) : reason;
+  const caveat = weak ? ' No model passed every check; treat it with caution.' : '';
+  switch (base) {
     case 'agent_pick_within_1se':
-      return "The agent's pick, within one standard error of the best cross-validated score.";
+      return `The agent's pick, within one standard error of the best cross-validated score.${caveat}`;
+    case 'dominates_agent_pick':
+      return `No more complex than the agent's pick and with a lower cross-validated error, so it replaces that pick.${caveat}`;
+    case 'simplest_within_1se':
     case 'best_cv_1se':
-      return 'The simplest model within one standard error of the best cross-validated score.';
+      return `The simplest model within one standard error of the best cross-validated score.${caveat}`;
+    case 'best_cv':
+      return `The best cross-validated score, and no simpler model is within one standard error of it.${caveat}`;
     case 'no_eligible_model':
       return 'No model met the selection criteria; this is the best available.';
     default:

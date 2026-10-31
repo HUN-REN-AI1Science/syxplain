@@ -101,7 +101,7 @@ class ExplainPySrEquations(dspy.Signature):
     If discovery.coherence is null, return "coherence": null.
 
     ### RECOMMENDATION RULE
-    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied); if selection.headline_is_reference is true, no discovered equation was usable and the headline is a reference law. Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
+    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied unless a tied equation is no more complex with a lower error); if selection.headline_is_reference is true, no discovered equation was usable and the headline is a reference law. Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
 
     ### TEXT FORMATTING (CRITICAL)
     - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", "rationale" or "coherence" fields.
@@ -358,7 +358,7 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
     If discovery.coherence is null, return "coherence": null.
 
     ### RECOMMENDATION RULE
-    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied); if selection.headline_is_reference is true, no discovered equation was usable and the headline is a reference law. Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
+    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied unless a tied equation is no more complex with a lower error); if selection.headline_is_reference is true, no discovered equation was usable and the headline is a reference law. Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
 
     ### TEXT FORMATTING (CRITICAL)
     - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", "rationale" or "coherence" fields.
@@ -570,8 +570,9 @@ class DiscoveryReview(dspy.Signature):
     what changes with note, then finish.
 
     Rewrite the report so it covers the new results: keep what still holds, update the
-    recommendation if a new model is better or simpler at equal accuracy (ties: CV R2 within
-    ~0.01), and never cite a model you did not see. Same JSON schema as before:
+    recommendation if a new model is better or simpler at equal accuracy (ties: CV RMSE within
+    one standard error of the best; a model that is no more complex than your pick and has a
+    lower CV RMSE replaces it), and never cite a model you did not see. Same JSON schema as before:
     {"summary": "...", "recommended_models": [{"model_id": "...", "why": "..."}],
      "rejected_forms": [{"form": "...", "model_id": "...", "reason": "..."}],
      "insights": ["..."], "open_questions": ["..."]}

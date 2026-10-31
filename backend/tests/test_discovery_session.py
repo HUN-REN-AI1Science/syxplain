@@ -184,6 +184,26 @@ def test_agent_pick_is_vetoed_when_it_fails_guards():
     assert sel.agent_pick_rejected[0]["model_id"] == poor.model_id
 
 
+def test_a_dominated_agent_pick_is_replaced():
+    from backend.services.discovery.fitting import ModelResult
+
+    def model(mid, complexity, rmse):
+        return ModelResult(
+            mid, "symbolic", mid, mid, "x", ["x"], complexity=complexity, cv_r2=0.99,
+            cv_rmse=rmse, cv_se=0.008, verdict="adequate",
+        )  # fmt: skip
+
+    # Lake Bilancino: the agent kept S20 although S33, as simple, fits better
+    best = model("S25", 20, 0.0725)
+    pick, water_balance = model("S20", 11, 0.0781), model("S33", 11, 0.0766)
+    sel = select([best, pick, water_balance], ["S20"])
+    assert sel.headline is water_balance and sel.headline_reason == "dominates_agent_pick"
+    assert "dominated by S33" in sel.agent_pick_rejected[0]["reason"]
+    # A pick that is simpler than every better-scoring tied model stands
+    simple = model("S9", 7, 0.0790)
+    assert select([best, pick, water_balance, simple], ["S9"]).headline is simple
+
+
 def test_one_se_rule_avoids_noise_features():
     picks = 0
     for seed in range(30):
