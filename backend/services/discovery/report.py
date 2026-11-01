@@ -470,9 +470,9 @@ def explanation_data_spec(results: dict[str, Any]) -> dict[str, Any]:
         "series": discovery.get("series")
         and {
             "lag_features": discovery["series"]["lag_features"],
-            "residual_autocorrelation": discovery["series"]["screening"][
-                "residual_autocorrelation"
-            ],
+            "residual_autocorrelation": discovery["series"].get("residual_autocorrelation"),
+            "padded_rows": discovery["series"].get("padded_rows"),
+            "rows_without_history": discovery["series"].get("rows_without_history"),
         },
         "variable_aliases": discovery["aliases"]
         | {discovery["target"]["alias"]: discovery["target"]["column"]},

@@ -24,6 +24,8 @@ from backend.infrastructure.llm.signatures import (
     GuessColumnDescriptions,
     LiteratureLaws,
     PySrConfigGenerator,
+    SeriesFeatureProposer,
+    SeriesFeatureSelector,
 )
 from backend.infrastructure.monitoring.llm_costs import record_web_searches
 from backend.utils.json_utils import clean_and_fix_json_string
@@ -77,6 +79,39 @@ def generate_pysr_config(
     except Exception as e:
         logger.error(f"Error in generate_pysr_config: {e}")
         raise
+
+
+def propose_series_features(
+    project_description: str, series_context: str, feedback: str, lm: Any
+) -> str:
+    """Time-dependent feature specs for a long series (raw JSON text of a list)."""
+    with dspy.settings.context(lm=lm):
+        response = dspy.Predict(SeriesFeatureProposer)(
+            project_description=project_description,
+            series_context=series_context,
+            feedback=feedback,
+        )
+    return clean_and_fix_json_string(response.specs_json)
+
+
+def select_series_features(
+    project_description: str,
+    series_context: str,
+    candidates: str,
+    residual_autocorrelation: str,
+    max_selected: int,
+    lm: Any,
+) -> str:
+    """The selection among computed candidates (raw JSON text of an object)."""
+    with dspy.settings.context(lm=lm):
+        response = dspy.Predict(SeriesFeatureSelector)(
+            project_description=project_description,
+            series_context=series_context,
+            candidates=candidates,
+            residual_autocorrelation=residual_autocorrelation,
+            max_selected=max_selected,
+        )
+    return clean_and_fix_json_string(response.selection_json)
 
 
 # Small-LLM context is limited, so column suggestions are requested in chunks.

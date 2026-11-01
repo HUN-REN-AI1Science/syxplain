@@ -616,9 +616,11 @@ class AnalysisOrchestrator:
         """
         Agentic equation discovery (the run controller's EXPLORE..SELECT phases).
 
-        LAUNCH: the baseline PySR search and the literature scout start
-        first so the Slurm queue and the research model overlap with profiling and the
-        agent. PROFILE runs in a separate process. EXPLORE is the agent's budget; it is
+        FEATURES (long series only): time-dependent features are proposed, measured and
+        selected, so the baseline already searches with them. LAUNCH: the baseline PySR
+        search and the literature scout start next so the Slurm queue and the research model
+        overlap with profiling and the agent (the scout's laws are only fitted at RELATE, so
+        they never steer the discovery). PROFILE runs in a separate process. EXPLORE is the agent's budget; it is
         blind to known laws, so its equations come from the data alone. SETTLE waits for
         searches, RECONCILE makes the agent's report consistent with what finished, RELATE
         fits the classic catalog and the published laws and compares them with the
@@ -663,6 +665,15 @@ class AnalysisOrchestrator:
         )
 
         try:
+            # FEATURES (long series only): LLM-proposed time-dependent features, measured
+            # by code and selected by the LLM, become inputs before the first search
+            if session.series is not None:
+                await progress.update_progress_async(
+                    "compute_submission", status="Generating time-dependent features"
+                )
+                await self._run_feature_stage(context, session, settings.model_name)
+                self._raise_if_cancelled(context, session)
+
             # LAUNCH
             await progress.update_progress_async(
                 "compute_submission", status="Submitting baseline symbolic regression search"
@@ -908,6 +919,18 @@ class AnalysisOrchestrator:
             return report, error, lm
         finally:
             ticker.cancel()
+
+    async def _run_feature_stage(
+        self, context: AnalysisContext, session: DiscoverySession, model_name: str
+    ) -> None:
+        """Time-dependent features of a long series; a failure only leaves them out."""
+        from backend.services.discovery.feature_stage import run_series_feature_stage
+
+        await run_series_feature_stage(
+            session,
+            lambda: self._discovery_lm(context, model_name),
+            self._discovery_project(context, session),
+        )
 
     def _review_fn(self, context: AnalysisContext, session: DiscoverySession, lm, steps: int):
         """Read-only review pass over late searches (a few extra minutes of agent time)."""

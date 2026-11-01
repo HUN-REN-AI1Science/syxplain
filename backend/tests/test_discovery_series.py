@@ -1,16 +1,20 @@
-"""Long series: lagged features, the chronological split, memory diagnostics, templates."""
+"""Long series: the feature stage, the chronological split, memory diagnostics, templates."""
 
 import asyncio
+import json
 
+import dspy
 import numpy as np
 import pandas as pd
 import pytest
+from dspy.utils.dummies import DummyLM
 
 from backend.services.discovery.expression import (
     ExpressionError,
     compose_template,
     parse_template,
 )
+from backend.services.discovery.feature_stage import run_series_feature_stage
 from backend.services.discovery.fitting import lag1_autocorrelation, time_blocks
 from backend.services.discovery.series import SeriesGrid, final_segment
 from backend.services.discovery.session import DiscoverySession
@@ -62,6 +66,36 @@ def _session(df, launcher=None):
     )
 
 
+STRICT = dspy.ChatAdapter(use_json_adapter_fallback=False)
+
+LAG_SPECS = [
+    {"source": "z", "kind": "lag", "steps": 1},
+    {"source": "z", "kind": "lag", "steps": 2},
+    {"source": "x", "kind": "lag", "steps": 1},
+    {"source": "y", "kind": "lag", "steps": 1},
+    {"source": "z", "kind": "period", "period": "block", "block_steps": 3, "stat": "mean",
+     "offset": 1},
+]  # fmt: skip
+
+
+def _stage_lm(specs, selected):
+    """Scripted LLM: one proposal, then one selection."""
+    selection = {"selected": [{"feature": f, "reason": "test"} for f in selected], "rationale": "t"}
+    return DummyLM([{"specs_json": json.dumps(specs)}, {"selection_json": json.dumps(selection)}])
+
+
+def _staged(df, specs=LAG_SPECS, selected=("z_l2",), launcher=None, lm=None):
+    """A series session after the feature stage with a scripted LLM."""
+    s = _session(df, launcher)
+    with dspy.settings.context(adapter=STRICT):
+        asyncio.run(
+            run_series_feature_stage(
+                s, lambda: lm or _stage_lm(specs, selected), {"project_description": "t"}
+            )
+        )
+    return s
+
+
 def test_grid_lag_is_missing_across_a_gap():
     df = pd.DataFrame({"Year": [2000, 2001, 2002, 2004, 2005], "v": [1.0, 2.0, 3.0, 5.0, 6.0]})
     grid = SeriesGrid.build(df, TimeStructure("Year", confidence="strong"))
@@ -69,8 +103,6 @@ def test_grid_lag_is_missing_across_a_gap():
     # 2004's previous year (2003) is missing: no value, never 2002's
     assert np.isnan(lag1[0]) and lag1[1] == 1.0 and lag1[2] == 2.0
     assert np.isnan(lag1[3]) and lag1[4] == 5.0
-    mean2 = grid.lagged(df["v"].to_numpy(float), 2, mean=True)
-    assert mean2[2] == 1.5 and np.isnan(mean2[3]) and np.isnan(mean2[4])
 
 
 def test_time_blocks_and_final_segment_follow_each_trajectory():
@@ -93,29 +125,93 @@ def test_lag1_autocorrelation_stays_within_trajectories():
     assert pairs == 198
 
 
-def test_series_gets_the_planted_lag_and_a_chronological_split():
+def test_series_session_is_chronological_before_the_feature_stage():
     s = _session(_series())
-    assert s.series is not None
-    assert "z_l2" in s.lag_features
-    assert not any(f.startswith("y_") for f in s.lag_features)  # no persistence planted
-    assert all(not f.startswith("Year") for f in s.lag_features)  # time is not lagged
-    # The holdout is the end of the series, the CV folds contiguous blocks
+    assert s.series is not None and s.lag_features == []
+    assert s.series["feature_stage"]["status"] == "not_run"
+    assert s.n_rows == 200  # nothing dropped
     assert s.train["Year"].max() < s.holdout["Year"].min()
     assert np.all(np.diff(s.fit_data.X["Year"]) > 0)
     assert all(np.all(np.diff(f) == 1) for f in s.fit_data.folds)
-    info = s.split_info()
-    assert info["order"] == "chronological"
-    lag = next(d for d in s.series["lag_features"] if d["feature"] == "z_l2")
+    assert s.split_info()["order"] == "chronological"
+
+
+def test_feature_stage_adds_the_selected_lag_and_keeps_every_row():
+    s = _staged(_series())
+    assert s.lag_features == ["z_l2"]
+    assert s.series["feature_stage"]["status"] == "done"
+    assert s.n_rows == 200 and len(s.train) + len(s.holdout) == 200  # padded, not dropped
+    assert s.series["padded_rows"] == 2  # the first two years have no z two years earlier
+    assert s.series["rows_without_history"] == 0  # a predictor's lag keeps every row
+    # The holdout is still the end of the series, the CV folds contiguous blocks
+    assert s.train["Year"].max() < s.holdout["Year"].min()
+    assert "z_l2" in s.fit_data.X and "z_l2" in s.holdout
+    lag = s.series["lag_features"][0]
     assert lag["column"] == "z at t-2" and "an index" in lag["description"]
+    assert lag["reason"] == "test" and lag["padded_rows"] == 2
     assert s.descriptions["z at t-2"] == lag["description"]
-    screened = {d["feature"]: d for d in s.series["screening"]["candidates"]}
-    assert screened["z_l2"]["selected"] and screened["z_l2"]["gain"] > 0.5
+    # The evidence shows the planted lag as the strongest candidate
+    gains = {d["feature"]: d["gain"] for d in s.series["evidence"]["candidates"]}
+    assert gains["z_l2"] > 0.5 and gains["z_l2"] == max(g for g in gains.values() if g is not None)
+    # The edge-padded cells take the first available value of z
+    ordered = s._frame
+    assert ordered["z_l2"].iloc[0] == ordered["z_l2"].iloc[2] == ordered["z"].iloc[0]
+    # The residual memory goes with the planted lag
+    ac = s.series["residual_autocorrelation"]
+    assert ac["with_selected"] is not None
+
+
+def test_feature_stage_rejects_target_leakage_and_unknown_sources():
+    specs = [
+        {"source": "y", "kind": "period", "period": "block", "block_steps": 4, "stat": "mean"},
+        {"source": "Year", "kind": "lag", "steps": 1},
+        {"source": "nope", "kind": "lag", "steps": 1},
+        {"source": "z", "kind": "lag", "steps": 2},
+        {"source": "z", "kind": "lag", "steps": 50},  # far beyond the padding limit
+        {"source": "z", "kind": "wiggle"},
+    ]
+    s = _staged(_series(), specs=specs, selected=("z_l2", "made_up"))
+    reasons = " | ".join(r["reason"] for r in s.series["rejected"])
+    assert "contains the current target value" in reasons
+    assert "unknown source 'Year'" in reasons and "unknown source 'nope'" in reasons
+    assert "padded rows" in reasons and "kind" in reasons
+    assert s.lag_features == ["z_l2"]
+    assert s.series["feature_stage"]["ignored_selection"] == ["made_up"]
+
+
+def test_feature_stage_failure_keeps_the_current_features():
+    lm = DummyLM([{"specs_json": "not json at all"}] * 2)
+    s = _staged(_series(), lm=lm)
+    assert s.series["feature_stage"]["status"] == "failed"
+    assert s.lag_features == [] and s.features == ["Year", "x", "z"]
+    assert any("feature stage failed" in n["text"] for n in s.notebook)
+
+
+def test_feature_stage_asks_again_after_malformed_json():
+    selection = {"selected": [{"feature": "z_l2", "reason": "test"}], "rationale": "t"}
+    lm = DummyLM(
+        [
+            {"specs_json": "not json at all"},
+            {"specs_json": json.dumps(LAG_SPECS)},
+            {"selection_json": json.dumps(selection)},
+        ]
+    )
+    s = _staged(_series(), lm=lm)
+    assert s.series["feature_stage"]["status"] == "done"
+    assert s.lag_features == ["z_l2"]
 
 
 def test_missing_memory_is_diagnosed_and_the_lag_fixes_it():
-    s = _session(_series(memory=0.0, persistence=0.8))
-    lag = next(d for d in s.series["lag_features"] if d["source"] == "y")
-    assert "persistence" in lag["description"]
+    s = _staged(_series(memory=0.0, persistence=0.8), selected=("y_l1",))
+    lag = s.series["lag_features"][0]
+    assert lag["source"] == "y" and "persistence" in lag["description"]
+    # The first year has no previous target: back-filling would copy its own target into
+    # y_l1, so that row leaves the data instead of being padded
+    assert s.series["rows_without_history"] == 1 and s.n_rows == 199
+    assert len(s.train) + len(s.holdout) == 199 and len(s.holdout) == 40  # same holdout
+    assert s.series["padded_rows"] == 0
+    first = s.train.iloc[0]
+    assert first["y_l1"] != first["y"] and s.train["Year"].min() == 1801
     # Year takes the trend, so x keeps its own effect and the memory shows in the residuals
     without = s.fit_custom("a0 + a1*x + a2*Year")
     assert any("correlated in time" in r for r in without.reasons)
@@ -134,7 +230,8 @@ def test_unordered_data_keeps_the_random_split():
 
 
 def test_rate_law_inputs_exclude_lagged_features():
-    s = _session(_series())
+    s = _staged(_series())
+    assert s.lag_features
     dyn = s.set_dynamics("Year")
     assert "x" in dyn.inputs and not set(dyn.inputs) & set(s.lag_features)
 
@@ -177,7 +274,7 @@ def test_templated_search_sends_the_template_and_scores_composed_equations():
             {"equation": "f = #1 * 2.1; g = 0.5", "loss": 1.0, "complexity": 5},
         ]
     )
-    s = _session(_series(), launcher)
+    s = _staged(_series(), launcher=launcher)
 
     async def go():
         record = await s.start_search(

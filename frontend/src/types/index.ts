@@ -432,18 +432,36 @@ export interface DiscoveryReport {
   activity?: AgentEvent[];
   /** Rate-law results; null unless the agent confirmed a time structure */
   dynamics?: DynamicsReport | null;
-  /** Long series: lagged features and their screening; null otherwise */
+  /** Long series: the time-dependent features chosen by the feature stage; null otherwise */
   series?: SeriesReport | null;
 }
 
-/** A lagged copy of a predictor or of the target, added as a feature */
+/** A time-dependent feature (lag or period aggregate) added by the feature stage */
 export interface LagFeature {
   feature: string;
   column: string;
   source: string;
-  kind: 'lag' | 'mean';
-  steps: number;
+  /** 'mean' only on runs from before the feature stage */
+  kind: 'lag' | 'period' | 'mean';
+  steps?: number;
+  period?: string;
+  stat?: string;
+  offset?: number;
+  block_steps?: number;
   description: string;
+  /** Why the selector kept it (absent on older runs) */
+  reason?: string;
+  padded_rows?: number;
+}
+
+export interface FeatureCandidateEvidence {
+  feature: string;
+  spec: string;
+  of_target: boolean;
+  gain: number | null;
+  r_target: number | null;
+  padded_share: number | null;
+  step_change_r?: number | null;
 }
 
 export interface SeriesReport {
@@ -452,8 +470,29 @@ export interface SeriesReport {
   n_series: number;
   time_step: number;
   lag_features: LagFeature[];
-  rows_without_history: number;
-  screening: {
+  /** Rows whose derived values were filled by edge padding */
+  padded_rows?: number;
+  feature_stage?: {
+    status: 'not_run' | 'running' | 'done' | 'failed';
+    message?: string;
+    proposed?: number;
+    computed?: number;
+    selected?: number;
+    rationale?: string;
+  };
+  evidence?: {
+    method: string;
+    candidates: FeatureCandidateEvidence[];
+    residual_autocorrelation_current: number | null;
+  } | null;
+  rejected?: { spec: string; reason: string }[];
+  residual_autocorrelation?: {
+    current_drivers_only: number | null;
+    with_selected: number | null;
+  };
+  /** Runs from before the feature stage */
+  rows_without_history?: number;
+  screening?: {
     method: string;
     candidates: { feature: string; selected: boolean; gain: number | null; note?: string }[];
     residual_autocorrelation: {

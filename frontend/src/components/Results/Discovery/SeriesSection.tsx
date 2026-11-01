@@ -1,9 +1,9 @@
 /**
  * SeriesSection Component
- * Time-series results: when the rows are a long series in time, earlier conditions
- * (lagged copies of the predictors and of the target) were screened and the useful ones
- * added as features, and models were scored forward in time. Shows which lags were kept
- * and how much memory they explain.
+ * Time-series results: when the rows are a long series in time, the feature stage proposed
+ * time-dependent features (lags and period aggregates), measured them and selected the
+ * useful ones as inputs, and models were scored forward in time. Shows which features were
+ * kept, why, and how much memory they explain. Older runs show their lag screening instead.
  */
 
 import React from 'react';
@@ -17,11 +17,20 @@ interface SeriesSectionProps {
 }
 
 export const SeriesSection: React.FC<SeriesSectionProps> = ({ series, targetColumn }) => {
-  const lags = asArray(series.lag_features);
-  const gains = new Map(
-    asArray(series.screening?.candidates).map((c) => [c.feature, c.gain] as const)
-  );
-  const ac = series.screening?.residual_autocorrelation;
+  const features = asArray(series.lag_features);
+  // Runs from before the feature stage carry `screening` instead of `evidence`
+  const oldAc = series.screening?.residual_autocorrelation;
+  type Scored = { feature: string; gain: number | null };
+  const scored = asArray<Scored>(series.evidence?.candidates ?? series.screening?.candidates);
+  const gains = new Map(scored.map((c) => [c.feature, c.gain] as const));
+  const before =
+    series.residual_autocorrelation?.current_drivers_only ?? oldAc?.current_drivers_only;
+  const after = series.residual_autocorrelation?.with_selected ?? oldAc?.with_selected_lags;
+  const stage = series.feature_stage;
+  const nCandidates = asArray(series.evidence?.candidates).length;
+  const nRejected = asArray(series.rejected).length;
+  const padded = series.padded_rows ?? 0;
+
   return (
     <div>
       <h4 className="text-sm font-semibold text-secondary mb-2 flex items-center gap-2">
@@ -31,10 +40,18 @@ export const SeriesSection: React.FC<SeriesSectionProps> = ({ series, targetColu
           <p>
             Your rows form a series along {series.time_column}
             {series.group_column ? `, one per ${series.group_column}` : ''}. {targetColumn} may
-            depend on earlier conditions as well as on the current ones, so lagged copies of the
-            variables were tested: X_l2 is X two steps earlier, X_m3 the mean of X over the previous
-            three steps. A lag was added as a feature only when it lowered the cross-validated
-            error, beyond what the current values explain.
+            depend on earlier conditions as well as on the current ones. Before the first symbolic
+            regression search, an AI step proposed time-dependent features: lagged copies (X_l2 is X
+            two steps earlier) and period aggregates (X_mean_year is the mean of X over the same
+            calendar year, repeated on each of its rows; X_sum_prev_month the sum over the previous
+            month). Each was computed and measured by how much it lowers the cross-validated error
+            of a linear model, and a second AI step selected the useful ones as inputs.
+          </p>
+          <p className="mt-2">
+            Where a feature has no history yet (the first steps of a series), it takes the nearest
+            available value of that series, so the row is kept. A feature of {targetColumn}&apos;s
+            own past is the exception: a value taken from a later row would contain the row&apos;s
+            own {targetColumn}, so those first rows are left out.
           </p>
           <p className="mt-2">
             Models are scored forward in time: cross-validation uses contiguous blocks of the series
@@ -43,34 +60,44 @@ export const SeriesSection: React.FC<SeriesSectionProps> = ({ series, targetColu
           </p>
         </HelpButton>
       </h4>
-      {lags.length === 0 ? (
+      {stage?.status === 'failed' ? (
         <p className="text-sm text-muted mb-2">
-          No earlier condition improved the fit: {targetColumn} follows the current values.
+          The time-dependent feature step failed, so only the current values were used
+          {stage.message ? ` (${stage.message})` : ''}.
+        </p>
+      ) : features.length === 0 ? (
+        <p className="text-sm text-muted mb-2">
+          No earlier condition was selected: {targetColumn} is modelled from the current values.
         </p>
       ) : (
         <ul className="space-y-1 mb-2 text-sm">
-          {lags.map((lag) => {
-            const gain = gains.get(lag.feature);
+          {features.map((f) => {
+            const gain = gains.get(f.feature);
             return (
-              <li key={lag.feature} className="text-secondary">
-                <code>{lag.feature}</code>: {lag.description}
+              <li key={f.feature} className="text-secondary">
+                <code>{f.feature}</code>: {f.description}
                 {typeof gain === 'number' && (
                   <span className="text-xs text-muted">
                     {' '}
                     · removes {Math.round(gain * 100)}% of the remaining CV error
                   </span>
                 )}
+                {f.reason && <span className="block text-xs text-muted ml-4">{f.reason}</span>}
               </li>
             );
           })}
         </ul>
       )}
+      {stage?.rationale && <p className="text-xs text-muted mb-1">{stage.rationale}</p>}
       <p className="text-xs text-muted">
-        Lag-1 autocorrelation of the residuals: {fmtR2(ac?.current_drivers_only)} with the current
-        values only
-        {lags.length > 0 ? `, ${fmtR2(ac?.with_selected_lags)} with the lags` : ''} (0 = no memory
+        Lag-1 autocorrelation of the residuals: {fmtR2(before)} with the current values only
+        {features.length > 0 ? `, ${fmtR2(after)} with the selected features` : ''} (0 = no memory
         left)
-        {series.rows_without_history > 0
+        {nCandidates > 0
+          ? ` · ${nCandidates} candidates measured${nRejected ? `, ${nRejected} specs rejected` : ''}`
+          : ''}
+        {padded > 0 ? ` · ${padded} first rows filled with the nearest available value` : ''}
+        {(series.rows_without_history ?? 0) > 0
           ? ` · ${series.rows_without_history} first rows lack the history and are not used`
           : ''}
       </p>

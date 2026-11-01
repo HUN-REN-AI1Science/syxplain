@@ -11,6 +11,7 @@ around these methods; the orchestrator, reconciler and selector read from here.
 import asyncio
 import contextlib
 import difflib
+import functools
 import logging
 import re
 import threading
@@ -35,6 +36,17 @@ from backend.services.discovery.expression import (
     parse_template,
 )
 from backend.services.discovery.families import FAMILIES
+from backend.services.discovery.features import (
+    MAX_PADDED_SHARE,
+    STATS,
+    DerivedFeature,
+    FeatureSpec,
+    SeriesContext,
+    TrainView,
+    build_candidates,
+    feature_evidence,
+    selected_autocorrelation,
+)
 from backend.services.discovery.fitting import (
     TRANSFORMS,
     FitData,
@@ -53,16 +65,7 @@ from backend.services.discovery.profiling import (
     describe_features,
     profile_shape,
 )
-from backend.services.discovery.series import (
-    LAG_STEPS,
-    LONG_SERIES_POINTS,
-    MEAN_WINDOWS,
-    LagCandidate,
-    SeriesGrid,
-    final_segment,
-    is_series,
-    screen_lags,
-)
+from backend.services.discovery.series import SeriesGrid, final_segment, is_series
 from backend.services.discovery.temporal import (
     DynamicsData,
     TimeStructure,
@@ -342,19 +345,77 @@ class DiscoverySession:
             logger.warning(f"Time-structure detection failed: {e}", exc_info=True)
             self.time_structure = None
 
-        # --- a long series: lagged features, rows in time order -----------------
+        # --- a long series: rows in time order (features come from the feature stage) ---
         self.descriptions = dict(descriptions)
         self.series: dict[str, Any] | None = None
+        self._series_ctx: SeriesContext | None = None
+        self._max_fit_rows = max_fit_rows
         keys = held = None
         if is_series(self.time_structure) and data.index.is_unique:
             try:
-                frame, keys, held = self._build_series(frame, data, holdout_fraction)
+                frame, keys, held = self._order_series(frame, data, holdout_fraction)
             except Exception as e:  # never block the row-wise analysis
-                logger.warning(f"Series features failed: {e}", exc_info=True)
+                logger.warning(f"Series ordering failed: {e}", exc_info=True)
+                self.series, self._series_ctx = None, None
 
         # --- split ------------------------------------------------------------
+        self._apply_split(frame, keys, held, holdout_fraction)
+
+        for col in self.excluded_columns:
+            self.note("data_issue", f"Column '{col['column']}' excluded: {col['reason']}")
+
+    def _order_series(
+        self, frame: pd.DataFrame, data: pd.DataFrame, holdout_fraction: float
+    ) -> tuple[pd.DataFrame, np.ndarray, np.ndarray]:
+        """
+        Sort the rows by trajectory and time and mark the final part of each trajectory as
+        the holdout. Time-dependent features are added later by the feature stage
+        (``add_series_features``); padding keeps every row, so the split never changes.
+        Returns the frame, each row's trajectory code and the holdout mask.
+        """
+        ts = self.time_structure
+        grid = SeriesGrid.build(data, ts)
+        pos = data.index.get_indexer(frame.index)
+        keys, steps = grid.key[pos], grid.step[pos]
+        ok = keys >= 0
+        rows = np.flatnonzero(ok)[np.lexsort((steps[ok], keys[ok]))]
+        frame, keys, pos = frame.iloc[rows], keys[rows], pos[rows]
+        held = (
+            final_segment(keys, holdout_fraction)
+            if len(frame) >= MIN_HOLDOUT_ROWS
+            else np.zeros(len(keys), dtype=bool)
+        )
+        self._series_ctx = SeriesContext(
+            grid=grid,
+            pos=pos,
+            keys=keys,
+            held=held,
+            time_column=ts.time_column,
+            group_column=ts.group_column,
+        )
+        self.series = {
+            "time_column": ts.time_column,
+            "group_column": ts.group_column,
+            "n_series": len(np.unique(keys)),
+            "time_step": grid.step_size,
+            "lag_features": [],
+            "padded_rows": 0,
+            "feature_stage": {"status": "not_run"},
+        }
+        return frame, keys, held
+
+    def _apply_split(
+        self,
+        frame: pd.DataFrame,
+        keys: np.ndarray | None,
+        held: np.ndarray | None,
+        holdout_fraction: float,
+    ) -> None:
+        """Train/holdout split and the fitting data (re-run when series features are added)."""
+        self._frame = frame
+        max_fit_rows, seed = self._max_fit_rows, self.seed
         self.n_rows = len(frame)
-        # Rows without a time value or a lag's history are missing values too
+        # Rows without a time value are missing values too
         self.dropped_incomplete = self.n_uploaded - self.n_rows
         rng = np.random.default_rng(seed)
         if keys is None:
@@ -388,95 +449,148 @@ class DiscoverySession:
             series=fit_keys,
         )
 
-        for col in self.excluded_columns:
-            self.note("data_issue", f"Column '{col['column']}' excluded: {col['reason']}")
+    # ------------------------------------------------------------------
+    # Time-dependent features of a long series (the feature stage)
+    # ------------------------------------------------------------------
 
-    def _build_series(
-        self, frame: pd.DataFrame, data: pd.DataFrame, holdout_fraction: float
-    ) -> tuple[pd.DataFrame, np.ndarray, np.ndarray]:
-        """
-        Sort the rows by trajectory and time, screen lagged copies of the predictors and
-        of the target on the training part, and add the selected ones as features (the
-        session is changed only at the end, once everything has been computed).
-        Returns the frame, each row's trajectory code and the holdout mask.
-        """
-        ts = self.time_structure
-        grid = SeriesGrid.build(data, ts)
-        pos = data.index.get_indexer(frame.index)
-        keys, steps = grid.key[pos], grid.step[pos]
-        ok = keys >= 0
-        rows = np.flatnonzero(ok)[np.lexsort((steps[ok], keys[ok]))]
-        frame, keys, pos = frame.iloc[rows], keys[rows], pos[rows]
-        held = (
-            final_segment(keys, holdout_fraction)
-            if len(frame) >= MIN_HOLDOUT_ROWS
-            else np.zeros(len(keys), dtype=bool)
-        )
-
-        sources = [
+    def _series_sources(self) -> list[str]:
+        """Continuous uploaded features that may be lagged or aggregated."""
+        ctx = self._series_ctx
+        derived = set(self.lag_features)
+        return [
             a
             for a in self.continuous_features
-            if self.column_of[a] not in (ts.time_column, ts.group_column)
+            if a not in derived and self.column_of[a] not in (ctx.time_column, ctx.group_column)
         ]
-        windows = MEAN_WINDOWS if ts.points_min >= LONG_SERIES_POINTS else MEAN_WINDOWS[:1]
-        taken = set(self.features) | {self.target_alias}
-        candidates: list[LagCandidate] = []
-        for source in [*sources, self.target_alias]:
-            raw = pd.to_numeric(data[self.column_of[source]], errors="coerce").to_numpy(float)
-            raw[~np.isfinite(raw)] = np.nan  # like the cleaned frame: inf is missing
-            specs = [("lag", k) for k in LAG_STEPS] + [("mean", w) for w in windows]
-            for kind, n_steps in specs:
-                alias = make_alias(f"{source}_{kind[0]}{n_steps}", taken, RESERVED_ALIASES)
-                taken.add(alias)
-                values = grid.lagged(raw, n_steps, mean=kind == "mean")[pos]
-                candidates.append(
-                    LagCandidate(alias, source, kind, n_steps, values, source == self.target_alias)
-                )
 
-        # Screen on the training part only
-        train = ~held
-        current = {a: frame[a].to_numpy(dtype=float)[train] for a in [*sources, self.target_alias]}
-        selected, record = screen_lags(
-            drivers=[frame[a].to_numpy(dtype=float)[train] for a in self.continuous_features],
-            y=current[self.target_alias],
-            keys=keys[train],
-            candidates=[replace(c, values=c.values[train]) for c in candidates],
-            current=current,
+    def _raw_values(self, alias: str) -> np.ndarray:
+        """A source's values on every uploaded row (the history beyond the complete rows)."""
+        raw = pd.to_numeric(self.raw_data[self.column_of[alias]], errors="coerce")
+        values = raw.to_numpy(dtype=float)
+        values[~np.isfinite(values)] = np.nan  # like the cleaned frame: inf is missing
+        return values
+
+    def series_feature_context(self) -> dict[str, Any]:
+        """What the feature proposer is told about the series."""
+        ctx = self._series_ctx
+        if ctx is None:
+            raise ValueError("The data is not a long series")
+
+        def item(alias: str) -> dict[str, Any]:
+            column = self.column_of[alias]
+            return {
+                "alias": alias,
+                "column": column,
+                "description": self.descriptions.get(column, ""),
+            }
+
+        return {
+            "target": item(self.target_alias),
+            "sources": [item(a) for a in self._series_sources()],
+            "time_column": ctx.time_column,
+            "time_is_date": ctx.dates is not None,
+            "time_step": ctx.grid.step_size,
+            "time_step_unit": "days" if ctx.dates is not None else f"units of {ctx.time_column}",
+            "group_column": ctx.group_column,
+            "n_trajectories": ctx.n_trajectories,
+            "training_rows_shortest_trajectory": ctx.train_rows_min,
+            "max_padded_rows_per_trajectory": ctx.max_padded_rows,
+            "allowed_periods": ctx.allowed_periods,
+            "stats": list(STATS),
+        }
+
+    def evaluate_feature_specs(
+        self, specs: list[FeatureSpec]
+    ) -> tuple[list[DerivedFeature], list[dict[str, str]], dict[str, Any]]:
+        """Check, compute and measure proposed specs: candidates, rejections, evidence."""
+        ctx = self._series_ctx
+        if ctx is None:
+            raise ValueError("The data is not a long series")
+        sources = self._series_sources()
+        candidates, rejected = build_candidates(
+            specs,
+            ctx,
+            functools.cache(self._raw_values),  # several specs share a source
+            self.column_of,
+            set(sources),
+            self.target_alias,
+            set(self.features) | {self.target_alias},
+            set(RESERVED_ALIASES),
         )
-        chosen = {c.alias for c in selected}
-        selected = [c for c in candidates if c.alias in chosen]  # full-length values
-        frame = frame.assign(**{c.alias: c.values for c in selected})
-        complete = frame.notna().all(axis=1).to_numpy()
+        frame = self._frame
+        current = {a: frame[a].to_numpy(dtype=float) for a in [*sources, self.target_alias]}
+        evidence = feature_evidence(candidates, self._train_view(), current)
+        return candidates, rejected, evidence
 
-        lags = []
+    def _train_view(self) -> TrainView:
+        """The current continuous features and the target on the training rows."""
+        ctx, frame = self._series_ctx, self._frame
+        return TrainView.build(
+            [frame[a].to_numpy(dtype=float) for a in self.continuous_features],
+            frame[self.target_alias].to_numpy(dtype=float),
+            ctx.keys,
+            ~ctx.held,
+        )
+
+    def add_series_features(
+        self,
+        selected: list[DerivedFeature],
+        reasons: dict[str, str],
+        record: dict[str, Any],
+    ) -> None:
+        """
+        Add the selected derived features and re-run the split (same rows, same holdout).
+        Rows where a feature of the target's own past was back-filled carry their own target
+        value, so they leave the data; every other filled cell keeps its row.
+        """
+        ctx = self._series_ctx
+        if ctx is None:
+            raise ValueError("The data is not a long series")
+        autocorr = selected_autocorrelation(selected, self._train_view())
+        leak = np.zeros(len(self._frame), dtype=bool)
         for c in selected:
-            column, text = c.describe(self.column_of[c.source], ts.time_column, grid.step_size)
-            description = self.descriptions.get(self.column_of[c.source])
-            self.descriptions[column] = text + (f" ({description})" if description else "")
-            self.alias_of[column] = c.alias
-            self.column_of[c.alias] = column
+            leak |= c.leaks_target
+        keep = ~leak
+        frame = self._frame.assign(**{c.alias: c.values for c in selected})[keep]
+        padded = np.zeros(int(keep.sum()), dtype=bool)
+        added = []
+        for c in selected:
+            source_text = self.descriptions.get(self.column_of[c.spec.source])
+            description = c.description + (f" ({source_text})" if source_text else "")
+            self.descriptions[c.column] = description
+            self.alias_of[c.column] = c.alias
+            self.column_of[c.alias] = c.column
             self.kinds[c.alias] = "continuous"
             self.features.append(c.alias)
-            lags.append(
-                {
-                    "feature": c.alias,
-                    "column": column,
-                    "source": c.source,
-                    "kind": c.kind,
-                    "steps": c.steps,
-                    "description": self.descriptions[column],
+            padded |= c.padded[keep]
+            added.append(
+                c.record()
+                | {
+                    "description": description,
+                    "reason": reasons.get(c.alias, ""),
+                    "padded_rows": int(c.padded[keep].sum()),
                 }
             )
-        self.series = {
-            "time_column": ts.time_column,
-            "group_column": ts.group_column,
-            "n_series": len(np.unique(keys)),
-            "time_step": grid.step_size,
-            "lag_features": lags,
-            "rows_without_history": int((~complete).sum()),
-            "screening": record,
-        }
-        return frame[complete], keys[complete], held[complete]
+        self.series = (
+            self.series
+            | record
+            | {
+                "lag_features": added,
+                "padded_rows": int(padded.sum()),
+                "rows_without_history": int(leak.sum()),
+                "padding": "edge: a cell without history takes its trajectory's nearest earlier "
+                f"value, or its first available one (at most {MAX_PADDED_SHARE:.0%} of each "
+                "trajectory's training rows); where a feature of the target's own past has no "
+                "history at a trajectory's start, the row is left out instead",
+                "residual_autocorrelation": autocorr,
+            }
+        )
+        ctx = self._series_ctx = replace(
+            ctx, pos=ctx.pos[keep], keys=ctx.keys[keep], held=ctx.held[keep]
+        )
+        self._apply_split(frame, ctx.keys, ctx.held, holdout_fraction=0.0)  # split is fixed
+        self._profile = None
+        self._shap_sample = None
 
     # ------------------------------------------------------------------
     # Data contract
@@ -846,7 +960,7 @@ class DiscoverySession:
         }
         if self.series:
             out["lag_features"] = self.lag_features
-            out["residual_autocorrelation"] = self.series["screening"]["residual_autocorrelation"]
+            out["residual_autocorrelation"] = self.series.get("residual_autocorrelation")
         return out
 
     @property

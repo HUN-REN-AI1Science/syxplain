@@ -356,3 +356,82 @@ def test_no_laws_found_warns_and_explains_plainly(orchestrator, monkeypatch):
     assert results["discovery"]["literature"]["status"] == "empty"
     assert warnings[0]["stage"] == "literature"
     assert deep_contexts == [None]
+
+
+def _series_context():
+    rng = np.random.default_rng(0)
+    n = 120
+    x = np.linspace(0, 10, n) + rng.normal(0, 1, n)
+    z = rng.normal(0, 1, n)
+    y = 2 * x + np.r_[0.0, 0.0, 3 * z[:-2]] + rng.normal(0, 0.3, n)
+    df = pd.DataFrame({"Year": np.arange(1900, 1900 + n), "x": x, "z": z, "y": y})
+    return AnalysisContext(
+        run_id="run-1",
+        user_id="u",
+        problem_description={
+            "project_description": "an annual series",
+            "target_variable": "y",
+            "features": {"x": "a driver", "z": "an index"},
+        },
+        data=df,
+        target_column="y",
+        predictor_columns=["x", "z"],
+    )
+
+
+def test_series_feature_stage_runs_before_the_baseline(orchestrator, monkeypatch):
+    specs = [{"source": "z", "kind": "lag", "steps": k} for k in (1, 2)]
+    selection = {"selected": [{"feature": "z_l2", "reason": "delayed effect"}], "rationale": "r"}
+    lm = DummyLM(
+        [
+            {"specs_json": json.dumps(specs)},
+            {"selection_json": json.dumps(selection)},
+            FINISH,
+            {"reasoning": "r", "report_json": json.dumps({"summary": "s"})},
+        ]
+    )
+    monkeypatch.setattr(orchestrator, "_discovery_lm", lambda ctx, name: lm)
+
+    async def run():
+        with dspy.settings.context(adapter=STRICT):
+            return await orchestrator._run_discovery(_series_context(), PYSR_CONFIG, StubProgress())
+
+    results = asyncio.run(run())
+    baseline = orchestrator.backend.inputs["pysr_1"]
+    assert "z_l2" in baseline["predictor_columns"]
+    assert len(baseline["data"]["data"]) == 96  # every training row: padded, not dropped
+    series = results["discovery"]["series"]
+    assert series["feature_stage"]["status"] == "done"
+    assert [d["feature"] for d in series["lag_features"]] == ["z_l2"]
+    assert series["lag_features"][0]["reason"] == "delayed effect"
+    json.dumps(results, allow_nan=False)
+
+
+def test_series_feature_stage_failure_keeps_the_run_going(orchestrator, monkeypatch):
+    def broken_lm(ctx, name):
+        raise RuntimeError("model not found")
+
+    monkeypatch.setattr(orchestrator, "_discovery_lm", broken_lm)
+    results = asyncio.run(
+        orchestrator._run_discovery(_series_context(), PYSR_CONFIG, StubProgress())
+    )
+    series = results["discovery"]["series"]
+    assert series["feature_stage"]["status"] == "failed"
+    assert series["lag_features"] == []
+    assert orchestrator.backend.inputs["pysr_1"]["predictor_columns"] == ["x", "z"]
+
+
+def test_feature_stage_is_skipped_for_unordered_data(orchestrator, monkeypatch):
+    called = []
+
+    async def spy(*a, **k):
+        called.append(1)
+
+    monkeypatch.setattr(orchestrator, "_run_feature_stage", spy)
+
+    def broken_lm(ctx, name):
+        raise RuntimeError("no agent in this test")
+
+    monkeypatch.setattr(orchestrator, "_discovery_lm", broken_lm)
+    asyncio.run(orchestrator._run_discovery(_context(), PYSR_CONFIG, StubProgress()))
+    assert called == []

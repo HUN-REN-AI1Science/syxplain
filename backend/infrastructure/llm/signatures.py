@@ -50,6 +50,96 @@ class PySrConfigGenerator(dspy.Signature):
     config_json: str = dspy.OutputField(desc="JSON configuration string")
 
 
+class SeriesFeatureProposer(dspy.Signature):
+    """
+    You prepare time-dependent features for symbolic regression on a long series.
+
+    The rows are measurements along time (SERIES_CONTEXT.time_column), one series per
+    trajectory (SERIES_CONTEXT.group_column; null = a single series). The target may depend
+    on earlier conditions as well as on the current values. Propose the time-dependent
+    features worth testing. They are computed by code, measured on the training rows, and a
+    later step selects the useful ones, so propose what PROJECT_DESCRIPTION and the variable
+    descriptions make plausible (delayed responses, accumulation over a period, carry-over,
+    the target's persistence), not every possible combination.
+
+    ### FEATURE KINDS
+    - {"source": <alias>, "kind": "lag", "steps": k}: the source k time steps earlier.
+      One step is SERIES_CONTEXT.time_step (in time_step_unit).
+    - {"source": <alias>, "kind": "period", "period": p, "stat": s, "offset": o}: the
+      statistic s (one of SERIES_CONTEXT.stats) of the source over a period, repeated on every
+      row of that period. p is one of SERIES_CONTEXT.allowed_periods: a calendar period
+      (year, quarter, month, week; only for date time columns coarser than the time step),
+      "block" (consecutive blocks of block_steps steps from the start of each trajectory;
+      give "block_steps": k >= 2) or "trajectory" (the whole series of a trajectory).
+      offset 0 = the same period as the row, offset 1 = the previous period.
+    Add "rationale": one short sentence on why the feature could matter.
+
+    ### RULES (enforced by code; violating specs are rejected)
+    - source: an alias from SERIES_CONTEXT.sources, or SERIES_CONTEXT.target.alias.
+    - The target may only be used as a lag or with offset 1: a same-period aggregate of the
+      target contains the current target value. A target lag is persistence, not a driver.
+    - Every feature keeps one value per row. A row without the needed history (the first
+      steps of a trajectory, a gap, an incomplete period) is filled with the trajectory's
+      nearest earlier value, or its first available value at the start. For a feature of the
+      target, the first rows of a trajectory are left out instead (a value taken from a later
+      row would contain their own target). At most
+      SERIES_CONTEXT.max_padded_rows_per_trajectory rows of a trajectory may be filled or left
+      out, which bounds lags and previous periods.
+    - At most 40 specs. Prefer few, distinct, interpretable features.
+    FEEDBACK (when not empty) lists the rejected specs of an earlier proposal with reasons.
+
+    ### REQUIRED OUTPUT
+    specs_json: STRICT JSON list of spec objects, no markdown, no commentary.
+    """
+
+    project_description: str = dspy.InputField(desc="Project, target and variable descriptions")
+    series_context: str = dspy.InputField(desc="SERIES_CONTEXT json")
+    feedback: str = dspy.InputField(desc="Rejected specs of an earlier proposal, or empty")
+
+    specs_json: str = dspy.OutputField(desc="JSON list of feature specs")
+
+
+class SeriesFeatureSelector(dspy.Signature):
+    """
+    You select time-dependent features for symbolic regression on a long series.
+
+    CANDIDATES lists computed features (lags and period aggregates) with evidence measured
+    on the training rows (padded rows excluded):
+    - gain: the share of a linear model's cross-validated error (contiguous time blocks)
+      removed by adding this one feature to the current features. It is linear and judged
+      alone: a feature can matter nonlinearly or together with another, and a small gain
+      can be noise.
+    - r_target: correlation with the target.
+    - step_change_r (lags): how closely the lag's step-to-step changes follow the source's
+      current changes. Near 1 the lag is a shifted copy of a smooth series and carries no
+      memory beyond the current value.
+    - most_correlated: the most correlated other candidate (redundancy).
+    - padded_share: the share of training rows filled by padding.
+    - of_target: a feature of the target's own past (persistence). Select one only when
+      memory is plausible and the drivers cannot explain it; it is not an explanation.
+    RESIDUAL_AUTOCORRELATION is the lag-1 autocorrelation of a linear model's residuals on
+    the current features only: near 0 means no memory is left to explain.
+
+    Select at most MAX_SELECTED features that add information beyond the current features
+    and are plausible for PROJECT_DESCRIPTION. Avoid redundant pairs (keep the more
+    interpretable one), and select nothing when no candidate helps. The selected features
+    become ordinary inputs of every model and search of the run.
+
+    ### REQUIRED OUTPUT
+    selection_json: STRICT JSON, no markdown:
+    {"selected": [{"feature": "<alias from CANDIDATES>", "reason": "<one sentence>"}],
+     "rationale": "<two sentences at most>"}
+    """
+
+    project_description: str = dspy.InputField(desc="Project, target and variable descriptions")
+    series_context: str = dspy.InputField(desc="SERIES_CONTEXT json")
+    candidates: str = dspy.InputField(desc="CANDIDATES json with evidence")
+    residual_autocorrelation: str = dspy.InputField(desc="RESIDUAL_AUTOCORRELATION")
+    max_selected: int = dspy.InputField(desc="MAX_SELECTED")
+
+    selection_json: str = dspy.OutputField(desc="JSON selection")
+
+
 class ExplainPySrEquations(dspy.Signature):
     """
     You are an agent who explains the output of symbolic regression.
@@ -87,7 +177,7 @@ class ExplainPySrEquations(dspy.Signature):
     - discovery.classic_baselines lists the reference named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
     - discovery.dynamics (when not null): the rows are measurements over time and the agent also looked for a rate law d(target)/dt = f(target, inputs) (the agent's own via fit_ode, or SINDy when source is a sindy_ search). headline is the recommended rate law; dydt_cv_r2 is its cross-validated R2 on the estimated derivative and is NOT comparable with the cv_r2 of the static equations; simulation_train_r2 and holdout_r2 come from integrating the law from each trajectory's start (holdout = whole held-out trajectories or the final part of each series). Explain the rate law as kinetics (what drives the rate, what the plateau or growth limit is) and relate it to the static equations: a static equation that saturates over time is often the integrated form of the rate law. Do not list rate laws among the numbered equations.
-    - series (when not null): the rows are a long series in time. Its lag_features are derived columns (X_l2 = X two time steps earlier, X_m3 = mean of X over the previous three steps, a lag of the target = its own persistence); their descriptions are in series.lag_features. When an equation uses them, explain them as delayed or legacy effects of earlier conditions, and a target lag as persistence rather than a cause. DATA_SPEC.split.order is then "chronological": the holdout is the final part of the series, so holdout_r2 measures prediction forward in time.
+    - series (when not null): the rows are a long series in time. Its lag_features are derived time-dependent columns (X_l2 = X two time steps earlier; X_mean_year = the mean of X over the same calendar year, repeated on each of its rows; X_sum_prev_month = the sum of X over the previous month; a feature of the target's past = its own persistence); their descriptions are in series.lag_features. The first rows of a series without that history were filled with the nearest available value (series.padded_rows), except for features of the target's own past, where those rows were left out (series.rows_without_history). When an equation uses them, explain them as delayed or legacy effects of earlier conditions, and a target lag as persistence rather than a cause. DATA_SPEC.split.order is then "chronological": the holdout is the final part of the series, so holdout_r2 measures prediction forward in time.
     - Extrapolation: where DATA_SPEC.split.holdout_extrapolates lists features, the held-out rows lie partly outside their training range: a lower holdout_r2 there reflects extrapolation, say so instead of calling the model poor.
     Use this context: contrast the discovered equations with the reference laws (what does a discovered equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
 
@@ -337,7 +427,7 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
     - discovery.classic_baselines lists the reference named laws with their scores and the reasons they fall short; discovery.notebook, rejected_forms and insights hold the agent's findings (model_ids there refer to DATA_SPEC model_id values).
     - discovery.agent_summary is the agent's own summary. If discovery.agent_stale is true, searches finished after the agent stopped (discovery.late_searches): trust the metrics over the summary.
     - discovery.dynamics (when not null): the rows are measurements over time and the agent also looked for a rate law d(target)/dt = f(target, inputs) (the agent's own via fit_ode, or SINDy when source is a sindy_ search). headline is the recommended rate law; dydt_cv_r2 is its cross-validated R2 on the estimated derivative and is NOT comparable with the cv_r2 of the static equations; simulation_train_r2 and holdout_r2 come from integrating the law from each trajectory's start (holdout = whole held-out trajectories or the final part of each series). Explain the rate law as kinetics (what drives the rate, what the plateau or growth limit is) and relate it to the static equations: a static equation that saturates over time is often the integrated form of the rate law. Do not list rate laws among the numbered equations.
-    - series (when not null): the rows are a long series in time. Its lag_features are derived columns (X_l2 = X two time steps earlier, X_m3 = mean of X over the previous three steps, a lag of the target = its own persistence); their descriptions are in series.lag_features. When an equation uses them, explain them as delayed or legacy effects of earlier conditions, and a target lag as persistence rather than a cause. DATA_SPEC.split.order is then "chronological": the holdout is the final part of the series, so holdout_r2 measures prediction forward in time.
+    - series (when not null): the rows are a long series in time. Its lag_features are derived time-dependent columns (X_l2 = X two time steps earlier; X_mean_year = the mean of X over the same calendar year, repeated on each of its rows; X_sum_prev_month = the sum of X over the previous month; a feature of the target's past = its own persistence); their descriptions are in series.lag_features. The first rows of a series without that history were filled with the nearest available value (series.padded_rows), except for features of the target's own past, where those rows were left out (series.rows_without_history). When an equation uses them, explain them as delayed or legacy effects of earlier conditions, and a target lag as persistence rather than a cause. DATA_SPEC.split.order is then "chronological": the holdout is the final part of the series, so holdout_r2 measures prediction forward in time.
     - Extrapolation: where DATA_SPEC.split.holdout_extrapolates lists features, the held-out rows lie partly outside their training range: a lower holdout_r2 there reflects extrapolation, say so instead of calling the model poor.
     Use this context: contrast the discovered equations with the reference laws (what does a discovered equation capture that the named law misses, and is the gain larger than noise?), and reuse the stated failure reasons in the findings.
 
@@ -475,17 +565,21 @@ class EquationDiscoveryAgent(dspy.Signature):
        the rows are measurements over time. Check it with describe_time_structure. Its regime
        decides what time means here:
        a) regime "series" (a long, regularly sampled series, e.g. years): the data already holds
-          the lagged features that passed a screening, and models are scored forward in time
-          (CV over contiguous time blocks, the final part of the series held out). X_l2 is X two
-          steps earlier, X_m3 the mean of X over the previous three steps (antecedent conditions),
-          TARGET_l1 the target's own previous value. describe_time_structure lists every
-          candidate lag with its gain (the share of the remaining CV error it removes) and the
-          residual autocorrelation with and without them. Test the memory explicitly: fit your
-          best current-value model, then add the lags as terms (e.g. + b*PDSI_l1, or a legacy
-          factor) and keep them only where CV R2 and the diagnoses improve. A templated PySR
-          search separates current drivers from memory, e.g. template "f(CO2, Tm) + g(NAO_l2,
-          SMI_m3)". A lag of the target is persistence, not an explanation: use it only when
-          the drivers and their lags leave the residuals correlated in time, and say so.
+          the time-dependent features selected before you started, and models are scored
+          forward in time (CV over contiguous time blocks, the final part of the series held
+          out). X_l2 is X two steps earlier; X_mean_year the mean of X over the same calendar
+          year, repeated on each of its rows; X_sum_prev_b4 the sum of X over the previous
+          block of four steps; TARGET_l1 the target's own previous value. The first rows of a
+          series lack that history and were filled with the nearest available value.
+          describe_time_structure lists every computed candidate with its gain (the share of
+          the remaining CV error it removes), why each feature was selected and the residual
+          autocorrelation with and without them. Test the memory explicitly: fit your best
+          current-value model, then add the derived features as terms (e.g. + b*X_l1, or a
+          legacy factor) and keep them only where CV R2 and the diagnoses improve. A templated
+          PySR search separates current drivers from memory, e.g. template "f(X, Z) +
+          g(W_l2, V_mean_prev_year)". A feature of the target's past is persistence, not an
+          explanation: use it only when the drivers and their history leave the residuals
+          correlated in time, and say so.
        b) Rate laws d(target)/dt = f(target, inputs) suit a STATE that accumulates or decays
           (biomass, a concentration, a pool, a cumulative amount): the change follows from the
           current level. A flux, rate or per-period total (annual GPP, yield, respiration rate,

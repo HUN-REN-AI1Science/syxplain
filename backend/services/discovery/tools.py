@@ -311,9 +311,10 @@ def build_tools(
         """Whether the rows are measurements over time: the detected time column, trajectory
         column (sample, jar, plot...), number of trajectories, points per trajectory, how smoothly
         the target changes along time (evidence) and alternative candidates. For a long series
-        (regime "series") also the lagged features added to the data, the screening of every
-        candidate lag (gain = drop of the CV error) and the residual autocorrelation with and
-        without them. Detection is a proposal; confirm rate-law discovery with set_dynamics."""
+        (regime "series") also the time-dependent features added to the data (lags and period
+        aggregates, with the reason each was selected), the evidence of every computed
+        candidate (gain = drop of the CV error), the rejected specs and the residual
+        autocorrelation with and without the selection. Detection is a proposal; confirm rate-law discovery with set_dynamics."""
 
         async def run():
             ts = session.time_structure

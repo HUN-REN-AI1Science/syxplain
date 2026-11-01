@@ -58,6 +58,18 @@ def _as_time(series: pd.Series) -> np.ndarray | None:
     """Numeric time values (datetimes become days since the first), or None."""
     if pd.api.types.is_numeric_dtype(series):
         return series.to_numpy(dtype=float)
+    parsed = parse_dates(series)
+    return None if parsed is None else days_since_first(parsed)
+
+
+def days_since_first(dates: pd.Series) -> np.ndarray:
+    return ((dates - dates.min()).dt.total_seconds() / 86400.0).to_numpy(dtype=float)
+
+
+def parse_dates(series: pd.Series) -> pd.Series | None:
+    """The column as datetimes when it holds dates (numeric columns are not dates)."""
+    if pd.api.types.is_numeric_dtype(series):
+        return None
     if pd.api.types.is_datetime64_any_dtype(series):
         parsed = series
     else:
@@ -74,8 +86,7 @@ def _as_time(series: pd.Series) -> np.ndarray | None:
             return None
         if parsed.notna().mean() < 0.8:
             return None
-    days = (parsed - parsed.min()).dt.total_seconds() / 86400.0
-    return days.to_numpy(dtype=float)
+    return parsed
 
 
 @dataclass

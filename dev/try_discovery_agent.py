@@ -92,14 +92,6 @@ async def main(args: argparse.Namespace) -> None:
         launcher=MockLauncher(args.pysr_delay),
         on_event=show,
     )
-    if session.continuous_features:
-        await session.start_search(
-            session.continuous_features,
-            ["exp", "log", "sqrt"],
-            ["+", "-", "*", "/"],
-            rationale="Baseline: all continuous features",
-            enforce_budget=False,
-        )
     project = {
         "project_description": desc.get("project_description", ""),
         "target": {"alias": session.target_alias, "column": desc["target_variable"]},
@@ -108,6 +100,19 @@ async def main(args: argparse.Namespace) -> None:
         },
     }
     lm = create_dspy_model(model_name=get_discovery_settings().model_name or None)
+    if session.series is not None:
+        from backend.services.discovery.feature_stage import run_series_feature_stage
+
+        await run_series_feature_stage(session, lambda: lm, project)
+        print(f"Feature stage: {json.dumps(session.series.get('feature_stage'), default=str)}")
+    if session.continuous_features:
+        await session.start_search(
+            session.continuous_features,
+            ["exp", "log", "sqrt"],
+            ["+", "-", "*", "/"],
+            rationale="Baseline: all continuous features",
+            enforce_budget=False,
+        )
 
     t0 = time.time()
     await session.ensure_profile()
