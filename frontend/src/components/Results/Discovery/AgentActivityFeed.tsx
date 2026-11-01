@@ -108,15 +108,32 @@ export const AgentActivityFeed: React.FC<AgentActivityFeedProps> = React.memo(
     // The length stops changing once the buffer is full, so follow the newest event instead
     const latest = events[events.length - 1];
 
+    // Set while our own smooth scroll runs: its intermediate scroll events must not count as
+    // the user scrolling away (that would turn following off and the scroll would stall).
+    const autoScrolling = useRef(false);
+
     useLayoutEffect(() => {
       const el = scrollRef.current;
-      if (el && following) el.scrollTo({ top: 0, behavior: 'smooth' });
+      if (!el || !following) return;
+      if (el.scrollTop < 1) return;
+      autoScrolling.current = true;
+      el.scrollTo({ top: 0, behavior: 'smooth' });
     }, [latest, following, filter]);
 
     const handleScroll = () => {
       const el = scrollRef.current;
       if (!el) return;
-      setFollowing(el.scrollTop < FOLLOW_THRESHOLD);
+      const atTop = el.scrollTop < FOLLOW_THRESHOLD;
+      if (autoScrolling.current) {
+        if (el.scrollTop < 1) autoScrolling.current = false;
+        return;
+      }
+      setFollowing(atTop);
+    };
+
+    // Any input from the user ends an automatic scroll, so their own scrolling counts again
+    const userTookOver = () => {
+      autoScrolling.current = false;
     };
 
     return (
@@ -162,6 +179,10 @@ export const AgentActivityFeed: React.FC<AgentActivityFeedProps> = React.memo(
           <ul
             ref={scrollRef}
             onScroll={handleScroll}
+            onWheel={userTookOver}
+            onTouchStart={userTookOver}
+            onPointerDown={userTookOver}
+            onKeyDown={userTookOver}
             aria-live={live ? 'polite' : undefined}
             aria-label={title}
             className={`agent-feed-scroll ${fill ? 'h-full' : 'max-h-[28rem]'} overflow-y-auto bg-surface-alt rounded-lg border border-[var(--color-border)] divide-y divide-[var(--color-border)]`}
@@ -221,14 +242,18 @@ export const AgentActivityFeed: React.FC<AgentActivityFeedProps> = React.memo(
             )}
           </ul>
           {!following && (
-            <button
-              type="button"
-              onClick={() => setFollowing(true)}
-              className="absolute top-2 left-1/2 -translate-x-1/2 rounded-full bg-brand-500 text-white text-xs px-3 py-1 shadow-md flex items-center gap-1"
-            >
-              <i className="pi pi-arrow-up text-xs" aria-hidden="true"></i>
-              Latest
-            </button>
+            // Centred by a wrapper, not a translate: the global pressed-button scale replaces the
+            // button's own transform, which made it jump sideways and lose the click.
+            <div className="absolute top-2 inset-x-0 flex justify-center pointer-events-none">
+              <button
+                type="button"
+                onClick={() => setFollowing(true)}
+                className="pointer-events-auto rounded-full bg-brand-500 text-white text-xs px-3 py-1 shadow-md flex items-center gap-1 border-0 cursor-pointer"
+              >
+                <i className="pi pi-arrow-up text-xs" aria-hidden="true"></i>
+                Latest
+              </button>
+            </div>
           )}
         </div>
       </div>

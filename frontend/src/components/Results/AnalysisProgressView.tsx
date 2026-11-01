@@ -85,30 +85,34 @@ const formatDuration = (seconds: number): string =>
 const formatTypical = (seconds: number): string =>
   seconds < 60 ? `~${Math.round(seconds)}s` : `~${Math.round(seconds / 60)} min`;
 
+/**
+ * Each pill is as wide in every state (a fixed icon slot, and the label sized for its bold
+ * form), so the row never re-wraps when a step becomes the current one.
+ */
 const StepPills: React.FC<{ steps: { label: string; state: StepState }[] }> = ({ steps }) => (
-  <ol className="m-0 p-0 list-none flex flex-wrap items-center gap-x-1 gap-y-2">
+  <ol className="m-0 p-0 list-none flex flex-wrap items-center gap-x-0.5 gap-y-2">
     {steps.map((step, i) => (
-      <li key={i} className="flex items-center gap-1">
+      <li key={i} className="flex items-center gap-0.5">
         <span
           aria-current={step.state === 'active' ? 'step' : undefined}
-          className={`inline-flex items-center gap-1.5 min-h-8 px-3 rounded-full text-sm ${STEP_PILL[step.state]}`}
+          className={`inline-flex items-center gap-1.5 min-h-8 px-2.5 rounded-full text-sm ${STEP_PILL[step.state]}`}
         >
-          {step.state === 'done' && (
-            <>
-              <i className="pi pi-check text-xs" aria-hidden="true" />
-              <span className="sr-only">Done:</span>
-            </>
-          )}
-          {step.state === 'active' && (
-            <span
-              className="w-2 h-2 rounded-full bg-white queue-pulse inline-block"
-              aria-hidden="true"
-            />
-          )}
-          {step.label}
+          <span className="w-3 inline-flex justify-center shrink-0" aria-hidden="true">
+            {step.state === 'done' && <i className="pi pi-check text-xs" />}
+            {step.state === 'active' && (
+              <span className="w-2 h-2 rounded-full bg-white queue-pulse inline-block" />
+            )}
+          </span>
+          {step.state === 'done' && <span className="sr-only">Done:</span>}
+          <span className="inline-grid">
+            <span className="col-start-1 row-start-1 font-semibold invisible" aria-hidden="true">
+              {step.label}
+            </span>
+            <span className="col-start-1 row-start-1">{step.label}</span>
+          </span>
         </span>
         {i < steps.length - 1 && (
-          <i className="pi pi-angle-right text-xs text-muted" aria-hidden="true" />
+          <i className="pi pi-angle-right text-[10px] text-muted" aria-hidden="true" />
         )}
       </li>
     ))}
