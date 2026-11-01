@@ -6,6 +6,12 @@ on:
       - main
   workflow_dispatch:
 
+# One deploy at a time: two concurrent `compose up` runs race on the container names and
+# can leave the backend stopped (happened 2026-11-01)
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   FRONTEND_IMAGE_NAME: ${{ github.repository }}-frontend
