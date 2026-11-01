@@ -155,7 +155,7 @@ class ExplainPySrEquations(dspy.Signature):
     - Parse both JSONs strictly. Optional context keys may be absent; work with what is there.
     - Treat PROJECT_SPEC.features' keys as canonical feature names.
     - Do NOT guess values that are not present in JSON.
-    - When you reference fields, use dot paths like PROJECT_SPEC.target_variable.
+    - Your text is read by the user, who never sees these inputs: never write PROJECT_SPEC, DATA_SPEC, field names or dot paths (say "the tie threshold", not DATA_SPEC.selection.tie_threshold_rmse; "the published equations", not PROJECT_SPEC.literature_equations). Call a known law by its name, adding its id in parentheses ("Additive saturating (C138)"), never by the id alone. Round numbers for reading: R2 to 3-4 decimals, other values to 3-4 significant digits.
     - If DATA_SPEC.action is present, follow it.
     - Use the provided feature descriptions in explanations.
     - IMPORTANT: Explain the equations in the order of DATA_SPEC.equations, assign IDs 1, 2, 3, ... in that order (id = DATA_SPEC.equations[i].position), and ECHO each equation's model_id and its exact equation string.
@@ -401,7 +401,7 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
     - Parse both JSONs strictly. Optional context keys may be absent; work with what is there.
     - Treat PROJECT_SPEC.features' keys as canonical feature names.
     - Do NOT guess values that are not present in JSON.
-    - When you reference fields, use dot paths like PROJECT_SPEC.target_variable.
+    - Your text is read by the user, who never sees these inputs: never write PROJECT_SPEC, DATA_SPEC, field names or dot paths (say "the tie threshold", not DATA_SPEC.selection.tie_threshold_rmse; "the published equations", not PROJECT_SPEC.literature_equations). Call a known law by its name, adding its id in parentheses ("Additive saturating (C138)"), never by the id alone. Round numbers for reading: R2 to 3-4 decimals, other values to 3-4 significant digits.
     - If DATA_SPEC.action is present, follow it.
     - Use the provided feature descriptions in explanations.
     - IMPORTANT: Explain the equations in the order of DATA_SPEC.equations, assign IDs 1, 2, 3, ... in that order (id = DATA_SPEC.equations[i].position), and ECHO each equation's model_id and its exact equation string.
