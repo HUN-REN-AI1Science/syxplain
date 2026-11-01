@@ -3,7 +3,7 @@
  * Displays analysis results with SSE-based real-time progress updates
  */
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { Button } from 'primereact/button';
 import { Message } from 'primereact/message';
 import { Toast } from 'primereact/toast';
@@ -24,7 +24,14 @@ import type { ResultsStatus } from '@components/Results';
 import { runsService } from '@services/api';
 import { useProgressInterpolation } from '@hooks/useProgressInterpolation';
 import { useRunProgress } from '@hooks/useRunProgress';
-import type { EquationResults } from '@/types';
+import type { AgentEvent, EquationResults } from '@/types';
+
+type ResultsTab = 'results' | 'process';
+const PROCESS_HASH = '#process';
+
+/** The tab named in the address (#process), so the process view can be linked and revisited */
+const tabFromHash = (): ResultsTab =>
+  window.location.hash === PROCESS_HASH ? 'process' : 'results';
 
 // ============================================================================
 // Types
@@ -54,6 +61,19 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   const [cancelling, setCancelling] = useState(false);
   const [duration, setDuration] = useState<string | null>(null);
   const [targetVariable, setTargetVariable] = useState<string | null>(null);
+  const [tab, setTab] = useState<ResultsTab>(tabFromHash);
+
+  useEffect(() => {
+    const onHashChange = () => setTab(tabFromHash());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  const selectTab = (next: ResultsTab) => {
+    setTab(next);
+    const url = `${window.location.pathname}${window.location.search}${next === 'process' ? PROCESS_HASH : ''}`;
+    window.history.replaceState(null, '', url);
+  };
 
   // Refs
   const toast = useRef<Toast>(null);
@@ -235,6 +255,19 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
   // True while we've reached 'completed' but are still fetching final results from API
   const isLoadingResults = isCompleted && !result;
 
+  // The agent's stored activity: the live workspace can be replayed once the run is done
+  const storedActivity = useMemo<AgentEvent[]>(() => {
+    if (!result || typeof result !== 'object') return [];
+    return extractDiscovery(result)?.activity ?? [];
+  }, [result]);
+  const hasProcess = isCompleted && storedActivity.length > 0;
+  const showingProcess = hasProcess && tab === 'process';
+  // Each tab stays mounted once shown, so switching back keeps its state (no re-typesetting)
+  const [processSeen, setProcessSeen] = useState(false);
+  useEffect(() => {
+    if (showingProcess) setProcessSeen(true);
+  }, [showingProcess]);
+
   // Check if result is in the new EquationResults format (not legacy markdown)
   // Accounts for both direct EquationResults and backend combined format (explanations wrapper)
   const isNewFormat =
@@ -369,14 +402,61 @@ const ResultsView: React.FC<ResultsViewProps> = ({ runId, fromHistory = false })
           <LoadingSpinner message="Loading results..." className="py-20" />
         )}
 
+        {/* Results and the process that led to them (the live workspace, replayed) */}
+        {hasProcess && (
+          <div
+            role="tablist"
+            aria-label="Results view"
+            className="mt-2 mb-2 inline-flex gap-1 bg-surface-alt rounded-lg p-1"
+          >
+            {(
+              [
+                ['results', 'Results', 'pi pi-chart-bar'],
+                ['process', 'Analysis process', 'pi pi-history'],
+              ] as const
+            ).map(([id, label, icon]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                onClick={() => selectTab(id)}
+                className={`min-h-9 px-4 rounded-md text-sm border-0 cursor-pointer flex items-center gap-2 ${
+                  tab === id
+                    ? 'bg-surface text-primary font-semibold shadow-sm'
+                    : 'bg-transparent text-secondary font-medium'
+                }`}
+              >
+                <i className={`${icon} text-xs`} aria-hidden="true" />
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {(showingProcess || processSeen) && (
+          <div hidden={!showingProcess}>
+            <AnalysisProgressView
+              displayProgress={100}
+              stepDescription=""
+              activity={storedActivity}
+              phases={progressPhases}
+              finished
+              durationLabel={duration}
+            />
+          </div>
+        )}
+
         {/* Results - only show after run completes to avoid flashing legacy format during processing */}
         {result && isCompleted && (
-          <ResultContent
-            result={result}
-            resultsRef={resultsRef}
-            targetVariable={targetVariable}
-            loadPlot={runId ? loadPlot : undefined}
-          />
+          <div hidden={showingProcess}>
+            <ResultContent
+              result={result}
+              resultsRef={resultsRef}
+              targetVariable={targetVariable}
+              loadPlot={runId ? loadPlot : undefined}
+            />
+          </div>
         )}
       </div>
 

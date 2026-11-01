@@ -1076,7 +1076,11 @@ class AnalysisOrchestrator:
         warnings: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         """Compile all results into final output format (provenance joined by model_id)."""
-        from backend.services.discovery.report import json_safe, merge_explanations
+        from backend.services.discovery.report import (
+            attach_citation_titles,
+            json_safe,
+            merge_explanations,
+        )
 
         equations = discovery_results.get("equations", [])
         if "error" not in explanations:
@@ -1090,6 +1094,9 @@ class AnalysisOrchestrator:
                     f"Explanation covered {matched} of {len(equations)} equations; the rest are "
                     "shown without narration"
                 )
+            explanations = attach_citation_titles(
+                explanations, (discovery_results.get("discovery") or {}).get("literature")
+            )
         return json_safe(
             {
                 "equations": equations,

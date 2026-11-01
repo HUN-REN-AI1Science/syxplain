@@ -1,11 +1,12 @@
 /**
  * AgentActivityFeed Component
- * Live log of what the discovery agent is doing (fits, PySR searches, notes, thoughts).
- * Fixed-height and scrollable: new rows slide in at the bottom and the view follows them
- * unless the reader has scrolled up to read older ones. Tabs narrow it to one kind of step.
+ * Log of what the discovery agent did (fits, PySR searches, notes, thoughts), newest first.
+ * Scrollable: new rows slide in at the top and the view stays there unless the reader has
+ * scrolled down to read older ones. Tabs narrow it to one kind of step. With `fill` it takes
+ * the height of its container; with `live` off (a finished run) rows do not animate in.
  */
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { fmtR2 } from '@utils/discovery';
 import { formatClock } from '@utils/formatting';
 import type { AgentEvent } from '@/types';
@@ -52,7 +53,10 @@ const FILTERS: { id: FeedGroup | 'all'; label: string }[] = [
   { id: 'notes', label: 'Notes' },
 ];
 
-/** Distance from the bottom (px) within which the feed keeps following new rows */
+/** Rows rendered at first; a finished run can hold up to 2000 events */
+const PAGE_ROWS = 300;
+
+/** Distance from the top (px) within which the feed keeps following new rows */
 const FOLLOW_THRESHOLD = 40;
 
 // Row keys follow the event objects, not their position: once the activity buffer is full, every
@@ -79,38 +83,44 @@ const eventText = (event: AgentEvent): string => {
 interface AgentActivityFeedProps {
   events: AgentEvent[];
   title: string;
+  /** Take the full height of the container (the list scrolls inside it) */
+  fill?: boolean;
+  /** Animate rows as they arrive; off when replaying a finished run */
+  live?: boolean;
 }
 
 export const AgentActivityFeed: React.FC<AgentActivityFeedProps> = React.memo(
-  ({ events, title }) => {
+  ({ events, title, fill = false, live = true }) => {
     const scrollRef = useRef<HTMLUListElement>(null);
     const [following, setFollowing] = useState(true);
     const [filter, setFilter] = useState<FeedGroup | 'all'>('all');
+    const [limit, setLimit] = useState(PAGE_ROWS);
 
-    const shown =
-      filter === 'all' ? events : events.filter((event) => feedGroup(event.kind) === filter);
+    // Newest first
+    const matching = useMemo(
+      () =>
+        (filter === 'all' ? events : events.filter((event) => feedGroup(event.kind) === filter))
+          .slice()
+          .reverse(),
+      [events, filter]
+    );
+    const shown = matching.length > limit ? matching.slice(0, limit) : matching;
     // The length stops changing once the buffer is full, so follow the newest event instead
     const latest = events[events.length - 1];
 
     useLayoutEffect(() => {
       const el = scrollRef.current;
-      if (el && following) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      if (el && following) el.scrollTo({ top: 0, behavior: 'smooth' });
     }, [latest, following, filter]);
-
-    // Re-follow when the feed is first shown with existing history
-    useEffect(() => {
-      const el = scrollRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    }, []);
 
     const handleScroll = () => {
       const el = scrollRef.current;
       if (!el) return;
-      setFollowing(el.scrollHeight - el.scrollTop - el.clientHeight < FOLLOW_THRESHOLD);
+      setFollowing(el.scrollTop < FOLLOW_THRESHOLD);
     };
 
     return (
-      <div className="text-left">
+      <div className={fill ? 'text-left h-full flex flex-col' : 'text-left'}>
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <h4 className="m-0 text-sm font-semibold text-secondary flex items-center gap-2">
             <i className="pi pi-bolt text-brand-500" aria-hidden="true"></i>
@@ -119,7 +129,7 @@ export const AgentActivityFeed: React.FC<AgentActivityFeedProps> = React.memo(
           {events.length > 0 && (
             <>
               <span className="text-xs text-muted tabular-nums">
-                {filter === 'all' ? events.length : `${shown.length} of ${events.length}`} steps
+                {filter === 'all' ? events.length : `${matching.length} of ${events.length}`} steps
               </span>
               <div
                 role="group"
@@ -148,13 +158,13 @@ export const AgentActivityFeed: React.FC<AgentActivityFeedProps> = React.memo(
             </>
           )}
         </div>
-        <div className="relative">
+        <div className={fill ? 'relative flex-1 min-h-0' : 'relative'}>
           <ul
             ref={scrollRef}
             onScroll={handleScroll}
-            aria-live="polite"
+            aria-live={live ? 'polite' : undefined}
             aria-label={title}
-            className="agent-feed-scroll max-h-[28rem] overflow-y-auto bg-surface-alt rounded-lg border border-[var(--color-border)] divide-y divide-[var(--color-border)]"
+            className={`agent-feed-scroll ${fill ? 'h-full' : 'max-h-[28rem]'} overflow-y-auto bg-surface-alt rounded-lg border border-[var(--color-border)] divide-y divide-[var(--color-border)]`}
           >
             {events.length === 0 && (
               <li className="flex items-start gap-3 px-3 py-2 text-sm">
@@ -170,7 +180,7 @@ export const AgentActivityFeed: React.FC<AgentActivityFeedProps> = React.memo(
             {shown.map((event) => (
               <li
                 key={rowKey(event)}
-                className="flex items-start gap-3 px-3 py-2 text-sm agent-feed-row-enter"
+                className={`flex items-start gap-3 px-3 py-2 text-sm ${live ? 'agent-feed-row-enter' : ''}`}
               >
                 <i
                   className={`${KIND_ICONS[event.kind] ?? 'pi pi-circle'} ${KIND_COLORS[event.kind] ?? 'text-brand-500'} mt-0.5`}
@@ -198,14 +208,25 @@ export const AgentActivityFeed: React.FC<AgentActivityFeedProps> = React.memo(
                 )}
               </li>
             ))}
+            {matching.length > shown.length && (
+              <li className="px-3 py-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => setLimit(limit + PAGE_ROWS)}
+                  className="min-h-8 px-3 rounded-md text-xs border-0 cursor-pointer bg-transparent text-link font-medium"
+                >
+                  Show older steps ({matching.length - shown.length} more)
+                </button>
+              </li>
+            )}
           </ul>
           {!following && (
             <button
               type="button"
               onClick={() => setFollowing(true)}
-              className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-brand-500 text-white text-xs px-3 py-1 shadow-md flex items-center gap-1"
+              className="absolute top-2 left-1/2 -translate-x-1/2 rounded-full bg-brand-500 text-white text-xs px-3 py-1 shadow-md flex items-center gap-1"
             >
-              <i className="pi pi-arrow-down text-xs" aria-hidden="true"></i>
+              <i className="pi pi-arrow-up text-xs" aria-hidden="true"></i>
               Latest
             </button>
           )}

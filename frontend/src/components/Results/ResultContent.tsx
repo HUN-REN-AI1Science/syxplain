@@ -1,16 +1,23 @@
 /**
  * ResultContent Component
- * Unified component for rendering equation results with format detection
+ * Unified component for rendering equation results with format detection. Page order:
+ * warnings, the time-series note, the summary and the recommended equation, the time-series
+ * and rate-law sections, the other equations (compact rows), the evidence, and how the
+ * equations were found (collapsed).
  */
 
 import React from 'react';
 import EquationResultsView from './EquationResults/EquationResultsView';
 import DiscoveryReportPanel from './Discovery/DiscoveryReportPanel';
-import CoherenceSection from './Discovery/CoherenceSection';
+import { DynamicsSection } from './Discovery/DynamicsSection';
+import EvidenceSection from './Discovery/EvidenceSection';
+import { SeriesBanner } from './Discovery/SeriesBanner';
+import { SeriesSection } from './Discovery/SeriesSection';
 import LegacyResultsFallback from './LegacyResultsFallback';
 import ResultWarnings from './ResultWarnings';
 import SectionErrorBoundary from './SectionErrorBoundary';
 import { extractDiscovery, extractEquationResults, extractWarnings } from './resultUtils';
+import { hasEvidence } from '@utils/discovery';
 import type { EquationResults } from '@/types';
 
 interface ResultContentProps {
@@ -92,23 +99,59 @@ export const ResultContent: React.FC<ResultContentProps> = ({
       discovery && (equationData._explanation_error || explanationWarning)
         ? (explanationWarning?.message ?? equationData._explanation_error_message ?? '')
         : null;
+    const targetColumn = discovery?.target?.column ?? '';
+    const showEvidence = hasEvidence(discovery, equationData.coherence);
+    const afterHero = discovery && (discovery.series || discovery.dynamics) && (
+      <>
+        {discovery.series && (
+          <SectionErrorBoundary name="The time-series section">
+            <section
+              id="series-section"
+              className="rounded-xl border border-[var(--color-border)] bg-surface p-6"
+            >
+              <SeriesSection series={discovery.series} targetColumn={targetColumn} />
+            </section>
+          </SectionErrorBoundary>
+        )}
+        {discovery.dynamics && (
+          <SectionErrorBoundary name="The rate-law section">
+            <section className="rounded-xl border border-[var(--color-border)] bg-surface p-6">
+              <DynamicsSection
+                dynamics={discovery.dynamics}
+                targetColumn={targetColumn}
+                renderModelId={(id) => <span className="font-mono">{id}</span>}
+              />
+            </section>
+          </SectionErrorBoundary>
+        )}
+      </>
+    );
     return (
       <div ref={resultsRef} className="space-y-8 animate-fade-in">
         <ResultWarnings warnings={warnings} explanationError={explanationError} />
+        {discovery?.series && (
+          <SeriesBanner series={discovery.series} holdoutRows={discovery.split?.holdout || null} />
+        )}
         <EquationResultsView
           data={equationData}
           targetVariable={targetVariable}
           hasDiscovery={!!discovery}
           selection={discovery?.selection}
+          afterHero={afterHero}
+          hasEvidence={showEvidence}
         />
-        {discovery?.coherence && (
-          <SectionErrorBoundary name="The coherence check">
-            <CoherenceSection report={discovery.coherence} domain={equationData.coherence} />
+        {discovery && showEvidence && (
+          <SectionErrorBoundary name="The evidence">
+            <EvidenceSection
+              report={discovery}
+              domain={equationData.coherence}
+              loadPlot={loadPlot}
+            />
           </SectionErrorBoundary>
         )}
         {discovery && (
           <SectionErrorBoundary name="The discovery report">
-            <DiscoveryReportPanel report={discovery} loadPlot={loadPlot} />
+            <DiscoveryReportPanel report={discovery} />
           </SectionErrorBoundary>
         )}
       </div>

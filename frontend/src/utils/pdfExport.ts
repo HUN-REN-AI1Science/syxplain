@@ -5,28 +5,36 @@
 
 import jsPDF from 'jspdf';
 import {
+  asArray,
   asText,
   basisOf,
   COHERENCE_LABEL,
   COHERENCE_OVERALL_LABEL,
   domainChecksOf,
   fmtCeiling,
+  fmtR2,
+  hasEvidence,
   headlineReasonText,
   KNOWN_LAW_COMPARISON_TEXT,
   KNOWN_LAW_RELATION_LABEL,
   metricLabel,
+  metricShortLabel,
   metricValue,
+  originLabel,
   rejectedFormText,
   scatterBasisLabel,
+  seriesEvidence,
+  seriesSummary,
+  tiedModelIds,
   variableLegend,
 } from '@utils/discovery';
 import type {
-  CoherenceReport,
   DiscoveryReport,
   DomainCoherence,
   EquationResults,
   Equation,
   RunWarning,
+  SeriesReport,
 } from '@/types';
 
 // ============================================================================
@@ -35,6 +43,7 @@ import type {
 
 const BRAND_COLORS = {
   blue: [0, 72, 180] as const,
+  lightBlue: [239, 244, 255] as const,
   green: [21, 128, 61] as const,
   lightGreen: [240, 253, 244] as const,
   lightGray: [250, 250, 250] as const,
@@ -372,7 +381,7 @@ function renderRecommendation(
     });
     recHeight += rationaleHeight;
   }
-  if (reasonText) recHeight += 8;
+  recHeight += 14; // metrics line and legend
 
   drawSectionCard(ctx, recStartY, recHeight, BRAND_COLORS.green, BRAND_COLORS.lightGreen);
 
@@ -401,6 +410,36 @@ function renderRecommendation(
       pdf.text(line, margin + 5, ctx.y);
       ctx.y += 6;
     });
+
+    const legend = legendText(recEq);
+    if (legend) {
+      pdf.setFontSize(9);
+      pdf.setFont('times', 'normal');
+      pdf.setTextColor(90, 90, 90);
+      pdf.splitTextToSize(w(legend), contentWidth - 10).forEach((line: string) => {
+        pdf.text(line, margin + 5, ctx.y);
+        ctx.y += 4.5;
+      });
+    }
+
+    const r2 = metricValue(recEq);
+    const metrics = [
+      r2 !== null
+        ? `${metricShortLabel(recEq.metric_basis, recEq.holdout_n)} ${r2.toFixed(3)}`
+        : '',
+      typeof recEq.cv_r2 === 'number' && recEq.metric_basis !== 'cv'
+        ? `CV R² ${recEq.cv_r2.toFixed(3)}`
+        : '',
+      `complexity ${recEq.complexity}`,
+      reasonText,
+    ].filter(Boolean);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(60, 60, 60);
+    pdf.splitTextToSize(w(metrics.join('   |   ')), contentWidth - 10).forEach((line: string) => {
+      pdf.text(line, margin + 5, ctx.y + 1);
+      ctx.y += 5;
+    });
   }
 
   if (rationale.length > 0) {
@@ -423,18 +462,6 @@ function renderRecommendation(
     });
   }
 
-  if (reasonText) {
-    ctx.y += 2;
-    pdf.setFontSize(9);
-    pdf.setFont('times', 'italic');
-    pdf.setTextColor(80, 80, 80);
-    pdf
-      .splitTextToSize(`Model selection: ${reasonText}`, contentWidth - 10)
-      .forEach((line: string) => {
-        pdf.text(line, margin + 2, ctx.y);
-        ctx.y += 5;
-      });
-  }
   ctx.y += 10;
 
   // The explanation AI may prefer another equation than the selector's headline
@@ -462,7 +489,7 @@ function renderEquation(
   idx: number,
   totalCount: number,
   targetVariable: string | null | undefined,
-  isRecommended: boolean
+  tied: boolean
 ): void {
   const { pdf, margin, pageWidth, contentWidth } = ctx;
 
@@ -480,11 +507,10 @@ function renderEquation(
   pdf.setTextColor(20, 20, 20);
   const markers = [
     eq.model_id ? w(eq.model_id) : '',
-    isRecommended ? 'Recommended' : '',
-    eq.agent_recommended ? 'Agent pick' : '',
+    tied ? 'equally good as the recommended equation' : '',
   ].filter(Boolean);
   pdf.text(
-    `Equation Model ${eq.id}${markers.length ? `  (${markers.join(', ')})` : ''}`,
+    `Equation ${eq.id}${markers.length ? `  (${markers.join(', ')})` : ''}`,
     margin + 14,
     ctx.y + 1
   );
@@ -492,11 +518,10 @@ function renderEquation(
 
   // Metrics
   const r2 = metricValue(eq);
-  const lossStr = typeof eq.loss === 'number' ? eq.loss.toFixed(4) : 'N/A';
   const complexityStr = eq.complexity != null ? String(eq.complexity) : 'N/A';
   const metrics = [
+    eq.origin ? w(originLabel(eq.origin)) : '',
     r2 !== null ? `${metricLabel(eq.metric_basis, eq.holdout_n)}: ${r2.toFixed(3)}` : '',
-    `Loss: ${lossStr}`,
     `Complexity: ${complexityStr}`,
   ].filter(Boolean);
   addText(ctx, metrics.join('   |   '), 9, false, [80, 80, 80]);
@@ -530,11 +555,6 @@ function renderEquation(
   // Overview
   if (eq.overview) {
     addText(ctx, asText(eq.overview), 10, false, [40, 40, 40], 'justify');
-    ctx.y += 2;
-  }
-
-  if (eq.agent_recommended && eq.agent_why) {
-    addText(ctx, `Why the agent picked it: ${asText(eq.agent_why)}`, 9, false, [60, 60, 60]);
     ctx.y += 2;
   }
 
@@ -582,16 +602,11 @@ function renderEquation(
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(100, 100, 100);
-    pdf.text('REFERENCES', margin, ctx.y);
+    pdf.text('SCIENTIFIC SOURCES', margin, ctx.y);
     ctx.y += 5;
 
     eq.citations.forEach((citation, cIdx) => {
-      checkPageBreak(ctx, 10);
-      pdf.setFontSize(8);
-      pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(BRAND_COLORS.blue[0], BRAND_COLORS.blue[1], BRAND_COLORS.blue[2]);
-      pdf.text(`[${cIdx + 1}] ${w(citation)}`, margin + 4, ctx.y);
-      ctx.y += 4;
+      renderCitation(ctx, cIdx + 1, citation, eq.citation_titles?.[cIdx]);
     });
     ctx.y += 6;
   }
@@ -666,25 +681,132 @@ function renderEquation(
   }
 }
 
+/** The other equations (all but the recommended one), each with its full detail */
 function renderEquations(
   ctx: PdfContext,
   equations: Equation[],
   targetVariable: string | null | undefined,
-  recommendedId: number
+  recommendedId: number,
+  tiedIds: Set<string>
 ): void {
-  const { pdf } = ctx;
+  const others = (equations ?? []).filter((eq) => eq.id !== recommendedId);
+  if (!others.length) return;
 
-  if (!equations?.length) return;
-
-  pdf.addPage();
-  ctx.y = 30;
-
-  renderSectionHeading(ctx, 'Detailed Equation Analysis');
+  checkPageBreak(ctx, 80);
+  renderSectionHeading(
+    ctx,
+    `${recommendedId > 0 ? 'Other Equations' : 'Equations'} (${others.length})`
+  );
   ctx.y += 4;
 
-  equations.forEach((eq, idx) => {
-    renderEquation(ctx, eq, idx, equations.length, targetVariable, eq.id === recommendedId);
+  others.forEach((eq, idx) => {
+    renderEquation(
+      ctx,
+      eq,
+      idx,
+      others.length,
+      targetVariable,
+      !!eq.model_id && tiedIds.has(eq.model_id)
+    );
   });
+  ctx.y += 4;
+}
+
+/** "[n] Title" with the address beneath it (the address alone when no title is known) */
+function renderCitation(ctx: PdfContext, n: number, url: string, title?: string | null): void {
+  const { pdf, margin, contentWidth } = ctx;
+  checkPageBreak(ctx, 12);
+  const label = asText(title).trim();
+  pdf.setFont('helvetica', 'normal');
+  if (label) {
+    pdf.setFontSize(9);
+    pdf.setTextColor(30, 30, 30);
+    pdf.splitTextToSize(w(`[${n}] ${label}`), contentWidth - 6).forEach((line: string) => {
+      pdf.text(line, margin + 4, ctx.y);
+      ctx.y += 4.2;
+    });
+  }
+  pdf.setFontSize(8);
+  pdf.setTextColor(BRAND_COLORS.blue[0], BRAND_COLORS.blue[1], BRAND_COLORS.blue[2]);
+  pdf.text(w(label ? url : `[${n}] ${url}`), margin + (label ? 8 : 4), ctx.y);
+  ctx.y += 5;
+}
+
+/** Top-of-report note that the rows were analysed as a time series */
+function renderSeriesNote(ctx: PdfContext, series: SeriesReport, holdoutRows: number | null): void {
+  const { pdf, margin, contentWidth } = ctx;
+  const { along, tested, added, features } = seriesSummary(series, holdoutRows);
+  const text =
+    `Your rows form ${along}. Equations were therefore tested on predicting ${tested}` +
+    (features.length ? `${added.slice(0, -1)}: ${features.join(', ')}.` : added);
+  pdf.setFontSize(10);
+  pdf.setFont('times', 'normal');
+  const lines = pdf.splitTextToSize(w(text), contentWidth - 6);
+  const height = 8 + lines.length * 5;
+  checkPageBreak(ctx, height + 10);
+  drawSectionCard(ctx, ctx.y, height, BRAND_COLORS.blue, BRAND_COLORS.lightBlue);
+  pdf.setFontSize(11);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setTextColor(BRAND_COLORS.blue[0], BRAND_COLORS.blue[1], BRAND_COLORS.blue[2]);
+  pdf.text('Syxplain detected a time series', margin + 2, ctx.y);
+  ctx.y += 6;
+  pdf.setFontSize(10);
+  pdf.setFont('times', 'normal');
+  pdf.setTextColor(40, 40, 40);
+  lines.forEach((line: string) => {
+    pdf.text(line, margin + 2, ctx.y);
+    ctx.y += 5;
+  });
+  ctx.y += 10;
+}
+
+/** The time-series section: the earlier conditions selected, and the memory they explain */
+function renderSeries(ctx: PdfContext, series: SeriesReport): void {
+  const features = asArray(series.lag_features);
+  const { gains, before, after } = seriesEvidence(series);
+  checkPageBreak(ctx, 40);
+  renderSectionHeading(ctx, 'Time Series: Earlier Conditions');
+  if (series.feature_stage?.status === 'failed') {
+    addText(
+      ctx,
+      'The time-dependent feature step failed, so only the current values were used.',
+      10
+    );
+  } else if (features.length === 0) {
+    addText(
+      ctx,
+      'No earlier condition was selected: the target is modelled from the current values.',
+      10
+    );
+  }
+  features.forEach((f) => {
+    const gain = gains.get(f.feature);
+    addText(
+      ctx,
+      `${f.feature}: ${asText(f.description)}${typeof gain === 'number' ? ` (removes ${Math.round(gain * 100)}% of the remaining CV error)` : ''}`,
+      10,
+      true,
+      [30, 30, 30]
+    );
+    if (f.reason) addText(ctx, asText(f.reason), 9, false, [80, 80, 80]);
+  });
+  if (series.feature_stage?.rationale) {
+    addText(ctx, asText(series.feature_stage.rationale), 9, false, [80, 80, 80]);
+  }
+  const fmt = (v: number | null | undefined) => (typeof v === 'number' ? v.toFixed(2) : '-');
+  addText(
+    ctx,
+    `Lag-1 autocorrelation of the residuals: ${fmt(before)} with the current values only` +
+      (features.length ? `, ${fmt(after)} with the selected features` : '') +
+      ' (0 = no memory left).' +
+      (series.padded_rows
+        ? ` ${series.padded_rows} first rows filled with the nearest available value.`
+        : ''),
+    9,
+    false,
+    [90, 90, 90]
+  );
+  ctx.y += 6;
 }
 
 function renderSectionHeading(ctx: PdfContext, title: string): void {
@@ -708,31 +830,121 @@ function renderSubheading(ctx: PdfContext, title: string): void {
   ctx.y += 5;
 }
 
-function renderCoherence(
+/**
+ * "Does the evidence agree?": the coherence checks, then the SHAP effects, the relation to
+ * known laws and the published laws tested, then the AI's domain-plausibility judgement.
+ */
+function renderEvidence(
   ctx: PdfContext,
-  report: CoherenceReport,
+  report: DiscoveryReport,
   domain: DomainCoherence | null | undefined
 ): void {
-  checkPageBreak(ctx, 40);
-  renderSectionHeading(ctx, 'Coherence of the Recommended Equation');
+  const coherence = report.coherence;
+  const shap = report.shap;
+  const relations = asArray(report.relations?.headline);
+  const laws = asArray(report.literature?.laws);
+  const domainChecks = domainChecksOf(domain);
+  if (!hasEvidence(report, domain)) return;
 
-  addText(
-    ctx,
-    `Overall: ${COHERENCE_OVERALL_LABEL[report.overall] ?? w(report.overall)} (${w(report.model_id)})`,
-    10,
-    true,
-    [20, 20, 20]
-  );
-  for (const c of Array.isArray(report.checks) ? report.checks : []) {
+  checkPageBreak(ctx, 40);
+  renderSectionHeading(ctx, 'Does the Evidence Agree?');
+
+  if (coherence) {
     addText(
       ctx,
-      `${w(c.label)} (${COHERENCE_LABEL[c.status] ?? w(c.status)}): ${w(c.detail)}`,
-      9,
-      false,
-      [60, 60, 60]
+      `Overall: ${COHERENCE_OVERALL_LABEL[coherence.overall] ?? w(coherence.overall)}`,
+      10,
+      true,
+      [20, 20, 20]
     );
+    for (const c of asArray(coherence.checks)) {
+      addText(
+        ctx,
+        `${w(c.label)} (${COHERENCE_LABEL[c.status] ?? w(c.status)}): ${w(c.detail)}`,
+        9,
+        false,
+        [60, 60, 60]
+      );
+    }
   }
-  const domainChecks = domainChecksOf(domain);
+
+  if (shap?.available) {
+    ctx.y += 3;
+    renderSubheading(ctx, 'Feature effects (SHAP)');
+    if (shap.reliable === false) {
+      addText(
+        ctx,
+        asText(shap.reason) || 'No clear signal: SHAP effects are not reliable here.',
+        9,
+        false,
+        [90, 90, 90]
+      );
+    } else {
+      const agreement = new Map(asArray(report.shap_agreement).map((a) => [a.feature, a] as const));
+      asArray(shap.importance)
+        .slice(0, 8)
+        .forEach((f) => {
+          const a = agreement.get(f.feature);
+          const shape = shap.partial_effects?.[f.feature];
+          addText(
+            ctx,
+            `${f.feature}: ${Math.round(f.share * 100)}% of the attribution` +
+              (shape ? `; ${asText(shape)}` : '') +
+              (a ? `; equation ${a.verdict}${a.note ? ` (${asText(a.note)})` : ''}` : ''),
+            9,
+            false,
+            [40, 40, 40]
+          );
+        });
+      const pairs = asArray(shap.interactions).slice(0, 3);
+      if (pairs.length) {
+        addText(
+          ctx,
+          `Interacting pairs: ${pairs.map((p) => `${p.a} x ${p.b}`).join(', ')}`,
+          9,
+          false,
+          [90, 90, 90]
+        );
+      }
+    }
+  }
+
+  if (relations.length > 0) {
+    ctx.y += 3;
+    renderSubheading(ctx, 'Relation to known laws (fitted after the discovery)');
+    relations.forEach((r) => {
+      addText(
+        ctx,
+        `- ${asText(r.label)} (${r.law_id}): ${KNOWN_LAW_RELATION_LABEL[r.relation] ?? r.relation}; ` +
+          `${KNOWN_LAW_COMPARISON_TEXT[r.comparison] ?? ''} (CV R² ${fmtR2(r.cv_r2)}), ` +
+          `predictions agree R² ${fmtR2(r.agreement_r2)}`,
+        9,
+        false,
+        [40, 40, 40]
+      );
+    });
+  }
+
+  if (laws.length > 0) {
+    ctx.y += 3;
+    renderSubheading(ctx, 'Published laws tested');
+    laws.forEach((law) => {
+      const unmapped = asArray(law.unmapped).map(asText).filter(Boolean);
+      const fit =
+        law.model_id && typeof law.cv_r2 === 'number'
+          ? `fitted as ${law.model_id}: CV R² ${fmtR2(law.cv_r2)}`
+          : law.fit_error
+            ? `not fitted: ${asText(law.fit_error)}`
+            : unmapped.length
+              ? `not fitted: unmapped variables ${unmapped.join(', ')}`
+              : '';
+      addText(ctx, `- ${asText(law.equation)}${fit ? ` (${fit})` : ''}`, 9, false, [40, 40, 40]);
+      asArray(law.citations).forEach((c, i) =>
+        renderCitation(ctx, i + 1, asText(c), law.citation_titles?.[i])
+      );
+    });
+  }
+
   if (domainChecks.length > 0 || domain?.assessment) {
     ctx.y += 3;
     renderSubheading(ctx, 'Domain plausibility (AI assessment)');
@@ -747,11 +959,9 @@ function renderCoherence(
 }
 
 function renderDiscovery(ctx: PdfContext, report: DiscoveryReport): void {
-  const r2 = (v: number | null | undefined) => (typeof v === 'number' ? v.toFixed(3) : '-');
-  const list = <T>(x: T[] | null | undefined): T[] => (Array.isArray(x) ? x : []);
   const agent = report.agent ?? ({} as Partial<DiscoveryReport['agent']>);
   const split = report.split ?? { complete_rows: 0, train: 0, holdout: 0, scored_on: '' };
-  const leaderboard = list(report.leaderboard);
+  const leaderboard = asArray(report.leaderboard);
   const basis = basisOf(split.metric_basis ?? leaderboard[0]?.metric_basis);
   const ceiling = fmtCeiling(report.noise_ceiling_r2, report.noise_ceiling_sd);
 
@@ -780,7 +990,7 @@ function renderDiscovery(ctx: PdfContext, report: DiscoveryReport): void {
   if (agent.summary) {
     addText(ctx, asText(agent.summary), 10, false, [20, 20, 20], 'justify');
   }
-  const lateSearches = list(agent.late_searches);
+  const lateSearches = asArray(agent.late_searches);
   if (lateSearches.length > 0 || agent.stale) {
     addText(
       ctx,
@@ -810,7 +1020,7 @@ function renderDiscovery(ctx: PdfContext, report: DiscoveryReport): void {
     false,
     [90, 90, 90]
   );
-  list(split.excluded_columns).forEach((c) =>
+  asArray(split.excluded_columns).forEach((c) =>
     addText(ctx, `Excluded column ${asText(c.column)}: ${asText(c.reason)}`, 9, false, [90, 90, 90])
   );
   ctx.y += 2;
@@ -824,28 +1034,25 @@ function renderDiscovery(ctx: PdfContext, report: DiscoveryReport): void {
   const headlineId = report.selection?.headline_model_id;
   leaderboard.slice(0, 10).forEach((entry, i) => {
     checkPageBreak(ctx, 20);
-    const marks = [
-      entry.is_headline || entry.model_id === headlineId ? 'recommended' : '',
-      entry.agent_recommended ? 'agent pick' : '',
-    ].filter(Boolean);
+    const recommended = entry.is_headline || entry.model_id === headlineId;
     addText(
       ctx,
-      `${i + 1}. ${entry.model_id} ${asText(entry.label)} [${entry.kind}]${marks.length ? ` (${marks.join(', ')})` : ''} ` +
-        `on ${list(entry.features).join(', ')}: R² ${r2(metricValue(entry))}, complexity ${entry.complexity}`,
+      `${i + 1}. ${entry.model_id} ${asText(entry.label)} [${entry.kind}]${recommended ? ' (recommended)' : ''} ` +
+        `on ${asArray(entry.features).join(', ')}: R² ${fmtR2(metricValue(entry))}, complexity ${entry.complexity}`,
       9,
       true,
       [30, 30, 30]
     );
     addText(ctx, entry.equation, 9, false, [60, 60, 60]);
-    const reasons = list(entry.reasons).map(asText).filter(Boolean);
+    const reasons = asArray(entry.reasons).map(asText).filter(Boolean);
     if (reasons.length > 0) {
       addText(ctx, `Diagnosis: ${reasons.slice(0, 3).join('; ')}`, 9, false, [90, 90, 90]);
     }
   });
 
   const rejected = [
-    ...list(agent.rejected_forms).map(rejectedFormText),
-    ...list(report.notebook)
+    ...asArray(agent.rejected_forms).map(rejectedFormText),
+    ...asArray(report.notebook)
       .filter((n) => n.kind === 'rejected_form')
       .map((n) => asText(n.text)),
   ].filter(Boolean);
@@ -856,8 +1063,8 @@ function renderDiscovery(ctx: PdfContext, report: DiscoveryReport): void {
   }
 
   const insights = [
-    ...list(agent.insights).map(asText),
-    ...list(report.notebook)
+    ...asArray(agent.insights).map(asText),
+    ...asArray(report.notebook)
       .filter((n) => n.kind === 'insight')
       .map((n) => asText(n.text)),
   ].filter(Boolean);
@@ -867,46 +1074,50 @@ function renderDiscovery(ctx: PdfContext, report: DiscoveryReport): void {
     insights.forEach((text) => addText(ctx, `- ${text}`, 9, false, [40, 40, 40]));
   }
 
-  const questions = list(agent.open_questions).map(asText).filter(Boolean);
+  const questions = asArray(agent.open_questions).map(asText).filter(Boolean);
   if (questions.length > 0) {
     ctx.y += 3;
     renderSubheading(ctx, 'Open questions');
     questions.forEach((text) => addText(ctx, `- ${text}`, 9, false, [40, 40, 40]));
   }
 
-  const relations = list(report.relations?.headline);
-  if (relations.length > 0) {
+  const claims = asArray(agent.claims_failed);
+  if (claims.length > 0) {
     ctx.y += 3;
-    renderSubheading(ctx, 'Relation to known laws (fitted after the discovery)');
-    relations.forEach((r) => {
+    renderSubheading(
+      ctx,
+      'Unverified claims (statements the agent made that its results did not confirm)'
+    );
+    claims.forEach((c) =>
       addText(
         ctx,
-        `- ${asText(r.label)} (${r.law_id}): ${KNOWN_LAW_RELATION_LABEL[r.relation] ?? r.relation}; ` +
-          `${KNOWN_LAW_COMPARISON_TEXT[r.comparison] ?? ''} (CV R² ${r2(r.cv_r2)}), ` +
-          `predictions agree R² ${r2(r.agreement_r2)}`,
+        `- ${asText(c.text)}${c.issue ? ` (${asText(c.issue)})` : ''}`,
+        9,
+        false,
+        [90, 90, 90]
+      )
+    );
+  }
+
+  const searches = asArray(report.searches);
+  if (searches.length > 0) {
+    ctx.y += 3;
+    renderSubheading(ctx, `Symbolic searches (${searches.length})`);
+    searches.forEach((sr) => {
+      const what =
+        sr.engine === 'sindy'
+          ? `SINDy rate law on ${asArray(sr.features).join(', ')}`
+          : sr.template
+            ? `template ${sr.template}`
+            : asArray(sr.features).join(', ');
+      addText(
+        ctx,
+        `- ${sr.search_id} (${sr.status}): ${what}` +
+          (typeof sr.best_cv_r2 === 'number' ? `; best CV R² ${sr.best_cv_r2.toFixed(3)}` : ''),
         9,
         false,
         [40, 40, 40]
       );
-    });
-  }
-
-  const laws = list(report.literature?.laws);
-  if (laws.length > 0) {
-    ctx.y += 3;
-    renderSubheading(ctx, 'Published laws tested');
-    laws.forEach((law) => {
-      const unmapped = list(law.unmapped).map(asText).filter(Boolean);
-      const fit =
-        law.model_id && typeof law.cv_r2 === 'number'
-          ? `fitted as ${law.model_id}: CV R² ${r2(law.cv_r2)}`
-          : law.fit_error
-            ? `not fitted: ${asText(law.fit_error)}`
-            : unmapped.length
-              ? `not fitted: unmapped variables ${unmapped.join(', ')}`
-              : '';
-      addText(ctx, `- ${asText(law.equation)}${fit ? ` (${fit})` : ''}`, 9, false, [40, 40, 40]);
-      list(law.citations).forEach((c) => addText(ctx, `  ${asText(c)}`, 8, false, [0, 72, 180]));
     });
   }
   ctx.y += 6;
@@ -958,14 +1169,20 @@ export async function generateResultsPdf(
       : null;
 
   // Render sections
+  // Same order as the results page
   renderHeader(ctx, runId);
   renderWarnings(ctx, warnings, explanationError);
+
+  if (discovery?.series) {
+    renderSeriesNote(ctx, discovery.series, discovery.split?.holdout || null);
+  }
 
   if (summary) {
     renderSummary(ctx, summary);
   }
 
   const headline = equations.find((eq) => eq.is_headline);
+  const recommendedId = headline?.id ?? recommendation?.equation_id ?? 0;
   renderRecommendation(
     ctx,
     recommendation,
@@ -973,12 +1190,14 @@ export async function generateResultsPdf(
     targetVariable,
     discovery?.selection?.headline_reason
   );
-  if (discovery?.coherence) {
-    renderCoherence(ctx, discovery.coherence, data.coherence);
+  if (discovery?.series) {
+    renderSeries(ctx, discovery.series);
   }
-  renderEquations(ctx, equations, targetVariable, headline?.id ?? recommendation?.equation_id ?? 0);
+  const tiedIds = tiedModelIds(equations, discovery?.selection);
+  renderEquations(ctx, equations, targetVariable, recommendedId, tiedIds);
 
   if (discovery) {
+    renderEvidence(ctx, discovery, data.coherence);
     renderDiscovery(ctx, discovery);
   }
 

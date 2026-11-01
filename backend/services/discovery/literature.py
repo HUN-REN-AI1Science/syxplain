@@ -107,6 +107,7 @@ def fit_law(session: DiscoverySession, law: dict[str, Any], index: int) -> dict[
     record: dict[str, Any] = {
         "equation": text,
         "citations": [str(c) for c in law.get("citations") or []][:5],
+        "citation_titles": [str(t).strip() for t in law.get("citation_titles") or []][:5],
         "model_id": None,
         "cv_r2": None,
         "unmapped": [],

@@ -266,3 +266,41 @@ def test_run_usage_is_priced_per_model_with_cache_and_web_searches(monkeypatch):
 
     monkeypatch.setenv("LLM_PRICES_JSON", '{"gemini-3.1-pro-preview": [2, 0.2, 12]}')
     assert summarize(usage)["unpriced_models"] == []
+
+
+def test_stored_activity_keeps_the_whole_run_and_every_result_event():
+    from backend.services.discovery.report import MAX_STORED_EVENTS, stored_activity
+
+    short = [{"kind": "thought", "text": str(i)} for i in range(300)]
+    assert stored_activity(short) == short  # no longer only the last 200
+    events = [
+        {"kind": "fit" if i % 10 == 0 else "thought", "text": str(i)}
+        for i in range(MAX_STORED_EVENTS + 500)
+    ]
+    kept = stored_activity(events)
+    assert len(kept) == MAX_STORED_EVENTS
+    assert sum(e["kind"] == "fit" for e in kept) == sum(e["kind"] == "fit" for e in events)
+    assert kept[-1] == events[-1]  # the newest narration stays
+
+
+def test_citation_titles_reach_the_explanation_cards():
+    from backend.services.discovery.report import attach_citation_titles
+
+    literature = {
+        "laws": [
+            {
+                "citations": ["https://doi.org/10.1/a", "https://doi.org/10.1/b"],
+                "citation_titles": ["Light response of photosynthesis", ""],
+            }
+        ]
+    }
+    explanations = {
+        "equations": [
+            {"citations": ["https://doi.org/10.1/b", "https://doi.org/10.1/a"]},
+            {"citations": []},
+        ]
+    }
+    out = attach_citation_titles(explanations, literature)
+    assert out["equations"][0]["citation_titles"] == ["", "Light response of photosynthesis"]
+    assert "citation_titles" not in out["equations"][1]
+    assert attach_citation_titles({"error": "x"}, None) == {"error": "x"}  # old runs untouched

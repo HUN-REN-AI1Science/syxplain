@@ -93,6 +93,8 @@ export interface Equation {
   overview: string;
   term_explanations: TermExplanation[];
   citations?: string[];
+  /** Titles of the citations, in the same order ("" where unknown; absent on older runs) */
+  citation_titles?: string[];
   scatter_data?: ScatterData;
   /** "symbolic" (PySR), "classic: <family>", "custom: <label>" or "literature: <label>" */
   origin?: string;
@@ -106,6 +108,8 @@ export interface Equation {
   holdout_r2?: number | null;
   holdout_n?: number;
   cv_r2?: number | null;
+  /** Cross-validated RMSE (ties are judged on it) */
+  cv_rmse?: number | null;
   /** Standard error of the fold RMSE */
   cv_se?: number | null;
   n_params?: number;
@@ -338,6 +342,8 @@ export interface DiscoverySelection {
   /** e.g. 'agent_pick_within_1se' | 'best_cv_1se' | 'no_eligible_model' */
   headline_reason: string;
   shortlist: string[];
+  /** Models with a CV RMSE up to this are statistically tied with the best */
+  tie_threshold_rmse?: number | null;
   agent_pick_rejected: { model_id: string; reason: string }[];
   /** No discovered equation was usable, so the headline is a known (reference) law */
   headline_is_reference?: boolean;
@@ -352,6 +358,8 @@ export interface RejectedForm {
 export interface LiteratureLaw {
   equation: string;
   citations: string[];
+  /** Titles of the citations, in the same order (absent on older runs) */
+  citation_titles?: string[];
   model_id: string | null;
   cv_r2: number | null;
   unmapped: string[];

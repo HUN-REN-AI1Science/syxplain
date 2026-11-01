@@ -21,12 +21,16 @@ import { Scatter } from 'react-chartjs-2';
 import { escapeForAsciiMath } from '@utils/formatting';
 import { mathJaxConfig } from '@utils/mathjax';
 import { exportToCSV, exportToExcel } from '@utils/dataExport';
-import { sanitizeText, sanitizeUrl } from '@utils/security';
+import { sanitizeText } from '@utils/security';
+import { CitationLink } from '../CitationLink';
 import {
   headlineReasonText,
   metricLabel,
+  metricShortLabel,
   metricValue,
+  originLabel,
   scatterBasisLabel,
+  tiedModelIds,
   variableLegend,
 } from '@utils/discovery';
 import CitationText from './CitationText';
@@ -46,6 +50,10 @@ interface EquationResultsViewProps {
   hasDiscovery?: boolean;
   /** The selector's headline choice from the discovery report */
   selection?: DiscoverySelection;
+  /** Shown right after the recommended equation (time series, rate law) */
+  afterHero?: React.ReactNode;
+  /** The evidence section is on the page, so the hero can link to it */
+  hasEvidence?: boolean;
 }
 
 /** AsciiMath source "lhs = rhs"; the left-hand side is the target alias used by the equation */
@@ -160,105 +168,44 @@ const ScatterPlot: React.FC<{ data: ScatterData }> = ({ data }) => {
   );
 };
 
-/** "classic: Mitscherlich" -> "Classic law: Mitscherlich", "symbolic" -> "Symbolic regression" */
-const originLabel = (origin: string): string => {
-  if (origin === 'symbolic') return 'Symbolic regression';
-  const [kind, ...rest] = origin.split(':');
-  const name = rest.join(':').trim();
-  const prefix =
-    kind === 'classic' ? 'Classic law' : kind === 'literature' ? 'Published law' : 'Agent formula';
-  return name ? `${prefix}: ${name}` : prefix;
-};
-
-const EquationCard: React.FC<{
+/** Everything shown about one equation: tags, formula, overview, terms, plot and sources */
+const EquationDetails: React.FC<{
   equation: Equation;
-  isRecommended: boolean;
   targetVariable?: string | null;
-}> = ({ equation, isRecommended, targetVariable }) => {
-  const [detailsExpanded, setDetailsExpanded] = useState(false);
-
-  // Count available details
-  const detailsCount = [
-    equation.scatter_data ? 1 : 0,
-    (equation.term_explanations?.length ?? 0) > 0 ? 1 : 0,
-    (equation.citations?.length ?? 0) > 0 ? 1 : 0,
-  ].reduce((a, b) => a + b, 0);
-
-  const hasDetails = detailsCount > 0;
+}> = ({ equation, targetVariable }) => {
   const r2 = metricValue(equation);
   const scatterBasis = scatterBasisLabel(equation.scatter_data);
-
   return (
-    <div
-      className={`rounded-xl border overflow-visible transition-all duration-300 card-hover ${
-        isRecommended
-          ? 'border-l-4 border-green-500 bg-[rgba(34,197,94,0.06)] ring-1 ring-[rgba(34,197,94,0.2)]'
-          : 'border-[var(--color-border)] bg-surface hover:border-[var(--color-border)]'
-      }`}
-    >
-      {/* Header */}
-      <div
-        className={`px-5 py-4 flex items-center justify-between flex-wrap gap-2 rounded-t-xl ${
-          isRecommended
-            ? 'bg-[rgba(34,197,94,0.08)]'
-            : 'bg-gradient-to-r from-brand-50 to-surface-alt'
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg ${
-              isRecommended ? 'bg-green-500 text-white' : 'bg-blue-500 text-white'
-            }`}
-          >
-            {equation.id}
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-primary">Equation {equation.id}</span>
-              {equation.model_id && (
-                <code className="text-xs font-mono px-1.5 py-0.5 rounded bg-surface-alt text-secondary border border-[var(--color-border)]">
-                  {equation.model_id}
-                </code>
-              )}
-              {isRecommended && <Tag value="Recommended" severity="success" className="text-xs" />}
-              {equation.agent_recommended && (
-                <Tag value="Agent pick" severity="info" className="text-xs" />
-              )}
-              {equation.origin && (
-                <Tag
-                  value={originLabel(equation.origin)}
-                  className={`text-xs ${
-                    equation.origin === 'symbolic'
-                      ? 'bg-brand-50 text-brand-500'
-                      : 'bg-[rgba(34,197,94,0.12)] text-green-700'
-                  }`}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {r2 !== null && (
-            <Tag
-              value={`${metricLabel(equation.metric_basis, equation.holdout_n)}: ${r2.toFixed(3)}`}
-              className="bg-[rgba(34,197,94,0.12)] text-green-700 text-xs px-2 py-1"
-            />
-          )}
-          {typeof equation.loss === 'number' && (
-            <Tag
-              value={`Loss: ${equation.loss.toFixed(3)}`}
-              className="bg-[rgba(245,158,11,0.12)] text-[rgb(245,158,11)] text-xs px-2 py-1"
-            />
-          )}
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        {equation.model_id && (
+          <code className="text-xs font-mono px-1.5 py-0.5 rounded bg-surface-alt text-secondary border border-[var(--color-border)]">
+            {equation.model_id}
+          </code>
+        )}
+        {equation.origin && (
           <Tag
-            value={`Complexity: ${equation.complexity}`}
-            className="bg-surface-alt text-primary text-xs px-2 py-1"
+            value={originLabel(equation.origin)}
+            className={`text-xs ${
+              equation.origin === 'symbolic'
+                ? 'bg-brand-50 text-brand-500'
+                : 'bg-[rgba(34,197,94,0.12)] text-green-700'
+            }`}
           />
-        </div>
+        )}
+        {r2 !== null && (
+          <Tag
+            value={`${metricLabel(equation.metric_basis, equation.holdout_n)}: ${r2.toFixed(3)}`}
+            className="bg-[rgba(34,197,94,0.12)] text-green-700 text-xs px-2 py-1"
+          />
+        )}
+        <Tag
+          value={`Complexity: ${equation.complexity}`}
+          className="bg-surface-alt text-primary text-xs px-2 py-1"
+        />
       </div>
 
-      {/* Equation Display with MathJax */}
-      <div className="px-5 py-4">
+      <div>
         <div className="bg-surface-alt rounded-lg p-6 overflow-x-auto border border-[var(--color-border)] mathjax-equation">
           <MathJaxContext config={mathJaxConfig}>
             <MathJax inline dynamic>
@@ -267,147 +214,208 @@ const EquationCard: React.FC<{
           </MathJaxContext>
         </div>
         <VariablesLegend variables={equation.variables} />
+      </div>
 
-        {/* Overview */}
-        {equation.overview && (
-          <p className="mt-4 text-secondary leading-relaxed">
-            <CitationText text={equation.overview} citations={equation.citations} />
-          </p>
-        )}
+      {equation.overview && (
+        <p className="text-secondary leading-relaxed">
+          <CitationText text={equation.overview} citations={equation.citations} />
+        </p>
+      )}
 
-        {equation.agent_recommended && equation.agent_why && (
-          <p className="mt-3 text-sm text-secondary flex items-start gap-2">
-            <i className="pi pi-android text-brand-500 mt-0.5" aria-hidden="true"></i>
-            <span>
-              <span className="font-medium text-primary">Why the agent picked it:</span>{' '}
-              {sanitizeText(equation.agent_why)}
-            </span>
-          </p>
-        )}
+      {equation.term_explanations && equation.term_explanations.length > 0 && (
+        <div>
+          <h5 className="text-sm font-semibold text-primary flex items-center gap-2 mb-3">
+            <i className="pi pi-info-circle text-brand-500"></i>
+            Term Breakdown ({equation.term_explanations.length})
+          </h5>
+          <div className="space-y-2">
+            {equation.term_explanations.map((term, idx) => (
+              <div
+                key={idx}
+                className="bg-surface rounded-lg p-3 border border-[var(--color-border)]"
+              >
+                <code className="text-brand-500 font-mono text-sm bg-brand-50 px-2 py-1 rounded">
+                  {term.term}
+                </code>
+                <p className="mt-2 text-sm text-secondary">
+                  <CitationText text={term.explanation} citations={equation.citations} />
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-        {/* Foldable Details Section */}
-        {hasDetails && (
-          <div className="mt-4">
-            <Button
-              label={detailsExpanded ? 'Hide Details' : 'Show Details'}
-              icon={detailsExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'}
-              iconPos="left"
-              className="p-button-text p-button-sm !text-brand-500 hover:!bg-brand-50 !px-4 !py-2"
-              onClick={() => setDetailsExpanded(!detailsExpanded)}
-            />
-
-            <div
-              className={`overflow-hidden transition-all duration-400 ease-in-out ${
-                detailsExpanded ? 'max-h-[3000px] opacity-100 mt-4' : 'max-h-0 opacity-0'
-              }`}
-            >
-              <div className="space-y-4 bg-surface-alt rounded-lg p-4 border border-[var(--color-border)]">
-                {/* Term Explanations */}
-                {equation.term_explanations && equation.term_explanations.length > 0 && (
-                  <div>
-                    <h5 className="text-sm font-semibold text-primary flex items-center gap-2 mb-3">
-                      <i className="pi pi-info-circle text-brand-500"></i>
-                      Term Breakdown ({equation.term_explanations.length})
-                    </h5>
-                    <div className="space-y-2">
-                      {equation.term_explanations.map((term, idx) => (
-                        <div
-                          key={idx}
-                          className="bg-surface rounded-lg p-3 border border-[var(--color-border)]"
-                        >
-                          <code className="text-brand-500 font-mono text-sm bg-brand-50 px-2 py-1 rounded">
-                            {term.term}
-                          </code>
-                          <p className="mt-2 text-sm text-secondary">
-                            <CitationText text={term.explanation} citations={equation.citations} />
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Scatter Plot */}
-                {equation.scatter_data && (
-                  <div>
-                    <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-                      <h5 className="text-sm font-semibold text-primary flex items-center gap-2">
-                        <i className="pi pi-chart-line text-brand-500"></i>
-                        Predicted vs. Measured
-                        {scatterBasis && (
-                          <span className="font-normal text-muted">({scatterBasis})</span>
-                        )}
-                      </h5>
-                      <SplitButton
-                        label="Export Data"
-                        icon="pi pi-table"
-                        onClick={() => {
-                          exportToCSV([equation], `eq${equation.id}`);
-                        }}
-                        model={[
-                          {
-                            label: 'Excel (.xlsx)',
-                            icon: 'pi pi-file-excel',
-                            command: () => exportToExcel([equation], `eq${equation.id}`),
-                          },
-                        ]}
-                        className="equation-export-button"
-                        size="small"
-                      />
-                    </div>
-                    <div className="bg-surface rounded-lg p-4 border border-[var(--color-border)]">
-                      <ScatterPlot data={equation.scatter_data} />
-                    </div>
-                  </div>
-                )}
-
-                {/* Citations */}
-                {equation.citations && equation.citations.length > 0 && (
-                  <div>
-                    <h5 className="text-sm font-semibold text-primary flex items-center gap-2 mb-3">
-                      <i className="pi pi-book text-brand-500"></i>
-                      Scientific Sources ({equation.citations.length})
-                    </h5>
-                    <div className="bg-surface rounded-lg p-3 border border-[var(--color-border)]">
-                      <ul className="space-y-1">
-                        {equation.citations.map((citation, idx) => {
-                          const safeUrl = sanitizeUrl(citation);
-                          return (
-                            <li key={idx} className="text-sm">
-                              {safeUrl ? (
-                                <a
-                                  href={safeUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-link hover:underline break-all"
-                                >
-                                  <span className="citation-link">[{idx + 1}]</span> {safeUrl}
-                                </a>
-                              ) : (
-                                <span className="text-secondary">[{idx + 1}] Invalid URL</span>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  </div>
-                )}
+      {(equation.scatter_data || (equation.citations?.length ?? 0) > 0) && (
+        <div className="flex flex-wrap gap-4">
+          {equation.scatter_data && (
+            <div className="min-w-0" style={{ flex: '1 1 340px' }}>
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                <h5 className="text-sm font-semibold text-primary flex items-center gap-2">
+                  <i className="pi pi-chart-line text-brand-500"></i>
+                  Predicted vs. Measured
+                  {scatterBasis && <span className="font-normal text-muted">({scatterBasis})</span>}
+                </h5>
+                <SplitButton
+                  label="Export Data"
+                  icon="pi pi-table"
+                  onClick={() => {
+                    exportToCSV([equation], `eq${equation.id}`);
+                  }}
+                  model={[
+                    {
+                      label: 'Excel (.xlsx)',
+                      icon: 'pi pi-file-excel',
+                      command: () => exportToExcel([equation], `eq${equation.id}`),
+                    },
+                  ]}
+                  className="equation-export-button"
+                  size="small"
+                />
+              </div>
+              <div className="bg-surface rounded-lg p-4 border border-[var(--color-border)]">
+                <ScatterPlot data={equation.scatter_data} />
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+
+          {equation.citations && equation.citations.length > 0 && (
+            <div className="min-w-0" style={{ flex: '1 1 300px' }}>
+              <h5 className="text-sm font-semibold text-primary flex items-center gap-2 mb-3">
+                <i className="pi pi-book text-brand-500"></i>
+                Scientific Sources ({equation.citations.length})
+              </h5>
+              <div className="bg-surface rounded-lg p-3 border border-[var(--color-border)]">
+                <ul className="space-y-2">
+                  {equation.citations.map((citation, idx) => (
+                    <li key={idx} className="text-sm">
+                      <CitationLink
+                        index={idx + 1}
+                        url={citation}
+                        title={equation.citation_titles?.[idx]}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
+
+/** One compact row of the other equations; opening it shows every detail */
+const EquationRow: React.FC<{
+  equation: Equation;
+  tied: boolean;
+  targetVariable?: string | null;
+}> = ({ equation, tied, targetVariable }) => {
+  const [open, setOpen] = useState(false);
+  const r2 = metricValue(equation);
+  const note = [
+    tied ? 'equally good as the recommended equation' : '',
+    equation.origin ? originLabel(equation.origin) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="w-full grid items-center gap-3 px-4 py-3 text-left bg-surface border-0 cursor-pointer hover:bg-surface-alt transition-colors"
+        style={{ gridTemplateColumns: '2.25rem minmax(0, 1fr) 4.5rem 5rem 1rem' }}
+      >
+        <span className="w-8 h-8 rounded-lg bg-blue-500 text-white font-bold text-sm flex items-center justify-center">
+          {equation.id}
+        </span>
+        <span className="min-w-0 flex flex-col">
+          <span className="font-mono text-sm text-primary truncate">
+            {equation.target_alias || targetVariable
+              ? `${equation.target_alias || targetVariable} = `
+              : ''}
+            {equation.equation}
+          </span>
+          {note && <span className="text-xs text-muted truncate">{note}</span>}
+        </span>
+        <span className="text-sm font-semibold text-primary tabular-nums text-right">
+          {r2 !== null ? r2.toFixed(3) : '—'}
+        </span>
+        <span className="text-sm text-secondary tabular-nums text-right">
+          {equation.complexity}
+        </span>
+        <i
+          className={`pi ${open ? 'pi-chevron-up' : 'pi-chevron-down'} text-xs text-muted`}
+          aria-hidden="true"
+        ></i>
+      </button>
+      {open && (
+        <div className="px-4 pb-5 pt-1 bg-[var(--color-surface)]">
+          <EquationDetails equation={equation} targetVariable={targetVariable} />
+        </div>
+      )}
+    </li>
+  );
+};
+
+/** One line under the recommended equation: its scores and why it was chosen */
+const HeroMetrics: React.FC<{ equation: Equation; reason: string; hasEvidence: boolean }> = ({
+  equation,
+  reason,
+  hasEvidence,
+}) => {
+  const r2 = metricValue(equation);
+  const cv = typeof equation.cv_r2 === 'number' ? equation.cv_r2 : null;
+  const parts: React.ReactNode[] = [];
+  if (r2 !== null) {
+    parts.push(
+      <span key="r2">
+        <strong className="text-green-700 tabular-nums">
+          {metricShortLabel(equation.metric_basis, equation.holdout_n)} {r2.toFixed(3)}
+        </strong>
+      </span>
+    );
+  }
+  if (cv !== null && equation.metric_basis !== 'cv') {
+    parts.push(
+      <span key="cv" className="tabular-nums">
+        CV R² {cv.toFixed(3)}
+      </span>
+    );
+  }
+  parts.push(
+    <span key="cx" className="tabular-nums">
+      complexity {equation.complexity}
+    </span>
+  );
+  if (reason) parts.push(<span key="why">{reason}</span>);
+  return (
+    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-secondary">
+      {parts}
+      {hasEvidence && (
+        <a href="#evidence" className="text-link font-medium hover:underline">
+          See the evidence
+        </a>
+      )}
+    </div>
+  );
+};
+
+/** Rows shown before "Show all" */
+const OTHER_ROWS = 6;
 
 const EquationResultsView: React.FC<EquationResultsViewProps> = ({
   data,
   targetVariable,
   hasDiscovery = false,
   selection,
+  afterHero,
+  hasEvidence = false,
 }) => {
+  const [showAllOthers, setShowAllOthers] = useState(false);
   const { equations = [], summary, recommendation } = data;
   // The selector's headline is the single recommended model. Runs from before it existed
   // fall back to the explanation AI's recommendation.
@@ -419,6 +427,8 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({
     recommendation.equation_id > 0 &&
     recommendation.equation_id !== headline.id;
   const headlineReason = headline ? headlineReasonText(selection?.headline_reason) : '';
+  const others = equations.filter((eq) => eq.id !== recommendedId);
+  const tiedIds = tiedModelIds(equations, selection);
 
   // Handle parse error fallback
   if (data._parse_error) {
@@ -585,6 +595,16 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({
                       </MathJaxContext>
                     </div>
                   )}
+                  {recommendedEquation && (
+                    <VariablesLegend variables={recommendedEquation.variables} />
+                  )}
+                  {recommendedEquation && (
+                    <HeroMetrics
+                      equation={recommendedEquation}
+                      reason={headlineReason}
+                      hasEvidence={hasEvidence}
+                    />
+                  )}
                   {rationale.length > 0 && (
                     <ul className="mt-4 space-y-2">
                       {rationale.map((reason, idx) => (
@@ -595,76 +615,66 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({
                       ))}
                     </ul>
                   )}
-                  {headlineReason && (
-                    <p className="mt-3 text-xs text-muted">Model selection: {headlineReason}</p>
-                  )}
                 </div>
               </div>
             </div>
           );
         })()}
 
-      {/* Equations List */}
-      {equations && equations.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
+      {afterHero}
+
+      {/* The other equations: compact rows, each opening to the full detail */}
+      {others.length > 0 && (
+        <section className="rounded-xl border border-[var(--color-border)] bg-surface p-6 space-y-4">
+          <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-lg font-bold text-primary font-heading flex items-center gap-2">
               <i className="pi pi-list text-brand-500"></i>
-              All Equations ({equations.length})
+              {recommendedId > 0 ? 'Other equations' : 'Equations'} ({others.length})
             </h3>
             <HelpButton title="Understanding Equations">
               <h4>Equation Metrics</h4>
               <p>
                 The list mixes symbolic-regression equations with classic, custom and published
-                (literature) laws, ordered by complexity.
+                (literature) laws, ordered by complexity. Open a row for its explanation, term
+                breakdown, predicted-vs-measured plot and sources.
               </p>
               <ul>
                 <li>
-                  <strong>R²</strong> - Share of the target's variation the equation explains. It is
-                  measured on held-out rows no model was trained on, or, when the dataset is too
-                  small for a holdout, by cross-validation (CV R²).
-                </li>
-                <li>
-                  <strong>Loss (MSE)</strong> - Mean Squared Error on the same rows as the R²
-                  (held-out MSE or CV MSE). Lower is better.
+                  <strong>R²</strong> - Share of the target&apos;s variation the equation explains.
+                  It is measured on held-out rows no model was trained on, or, when the dataset is
+                  too small for a holdout, by cross-validation (CV R²).
                 </li>
                 <li>
                   <strong>Complexity</strong> - Number of terms/operations in the equation. Lower
                   means simpler.
                 </li>
+                <li>
+                  <strong>Equally good</strong> - Its error is statistically tied with the
+                  recommended equation; the recommended one was preferred as the simpler choice.
+                </li>
               </ul>
-
-              <h4>Pareto Frontier</h4>
-              <p>
-                Equations are arranged in a Pareto frontier, showing the optimal trade-off between
-                accuracy (loss) and simplicity (complexity). The first equations are simpler but may
-                be less accurate.
-              </p>
-
-              <h4>Scatter Plot</h4>
-              <p>
-                Click "Show Details" to see a measured vs. predicted scatter plot. Points close to
-                the 1:1 line indicate good predictions.
-              </p>
-
-              <h4>Term Breakdown</h4>
-              <p>
-                Each equation includes explanations for its mathematical terms, helping you
-                understand what each part represents scientifically.
-              </p>
             </HelpButton>
+            <span className="ml-auto text-xs text-muted">R² · complexity</span>
           </div>
-          <div className="space-y-4">
-            {equations.map((eq) => (
-              <EquationCard
+          <ul className="m-0 p-0 list-none border border-[var(--color-border)] rounded-lg overflow-hidden divide-y divide-[var(--color-border)]">
+            {(showAllOthers ? others : others.slice(0, OTHER_ROWS)).map((eq) => (
+              <EquationRow
                 key={eq.id}
                 equation={eq}
-                isRecommended={eq.id === recommendedId}
+                tied={!!eq.model_id && tiedIds.has(eq.model_id)}
                 targetVariable={targetVariable}
               />
             ))}
-          </div>
-        </div>
+          </ul>
+          {others.length > OTHER_ROWS && (
+            <Button
+              label={showAllOthers ? 'Show fewer' : `Show all ${others.length}`}
+              icon={showAllOthers ? 'pi pi-chevron-up' : 'pi pi-chevron-down'}
+              className="p-button-text p-button-sm !text-brand-500 hover:!bg-brand-50 !px-4 !py-2"
+              onClick={() => setShowAllOthers(!showAllOthers)}
+            />
+          )}
+        </section>
       )}
     </div>
   );

@@ -8,7 +8,7 @@
 
 import React from 'react';
 import HelpButton from '@components/HelpButton';
-import { asArray, fmtR2 } from '@utils/discovery';
+import { asArray, fmtR2, seriesEvidence } from '@utils/discovery';
 import type { SeriesReport } from '@/types';
 
 interface SeriesSectionProps {
@@ -18,14 +18,7 @@ interface SeriesSectionProps {
 
 export const SeriesSection: React.FC<SeriesSectionProps> = ({ series, targetColumn }) => {
   const features = asArray(series.lag_features);
-  // Runs from before the feature stage carry `screening` instead of `evidence`
-  const oldAc = series.screening?.residual_autocorrelation;
-  type Scored = { feature: string; gain: number | null };
-  const scored = asArray<Scored>(series.evidence?.candidates ?? series.screening?.candidates);
-  const gains = new Map(scored.map((c) => [c.feature, c.gain] as const));
-  const before =
-    series.residual_autocorrelation?.current_drivers_only ?? oldAc?.current_drivers_only;
-  const after = series.residual_autocorrelation?.with_selected ?? oldAc?.with_selected_lags;
+  const { gains, before, after } = seriesEvidence(series);
   const stage = series.feature_stage;
   const nCandidates = asArray(series.evidence?.candidates).length;
   const nRejected = asArray(series.rejected).length;
@@ -33,7 +26,7 @@ export const SeriesSection: React.FC<SeriesSectionProps> = ({ series, targetColu
 
   return (
     <div>
-      <h4 className="text-sm font-semibold text-secondary mb-2 flex items-center gap-2">
+      <h3 className="text-lg font-bold text-primary font-heading mb-3 flex items-center gap-2">
         <i className="pi pi-history text-brand-500" aria-hidden="true"></i>
         Time series: earlier conditions
         <HelpButton title="Time series">
@@ -59,7 +52,7 @@ export const SeriesSection: React.FC<SeriesSectionProps> = ({ series, targetColu
             later periods.
           </p>
         </HelpButton>
-      </h4>
+      </h3>
       {stage?.status === 'failed' ? (
         <p className="text-sm text-muted mb-2">
           The time-dependent feature step failed, so only the current values were used

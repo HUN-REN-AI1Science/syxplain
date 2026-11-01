@@ -276,18 +276,20 @@ class LiteratureLaws(dspy.Signature):
        - Find as many distinct relationships as the literature supports (aim for 3-8), including ones that use only a subset of the variables.
        - You may introduce constants or parameters (e.g. kappa, g, cp, alpha, Pmax, A, B).
        - Provide citation links (DOI, journal URLs, textbook links) supporting the equation.
+       - For each link give the cited work's title in "citation_titles", in the same order, exactly as the source states it; use "" when you could not see the title. Never invent a title.
     4. Do not include explanations, extra text, or commentary — only the json.
 
     ### REQUIRED OUTPUT SCHEMA
     Return STRICT JSON only — no markdown, no code fences, no commentary. Output must parse with json.loads().
     **USE DOUBLE QUOTES for all keys and strings.**
-    Each equation must contain only a pythonic equation and citation link(s).
+    Each equation must contain only a pythonic equation, its citation link(s) and their titles.
 
     {
         "equations": [
             {
                 "equation": "ustar = (mflux / rho)**0.5",
-                "citations": ["https://doi.org/10.1007/978-94-007-2351-1_4"]
+                "citations": ["https://doi.org/10.1007/978-94-007-2351-1_4"],
+                "citation_titles": ["<the title of the cited work, as the source states it>"]
             }
         ]
     }

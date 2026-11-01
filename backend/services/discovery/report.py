@@ -15,6 +15,7 @@ import re
 from typing import Any
 
 from backend.services.discovery.coherence import coherence_report
+from backend.services.discovery.events import trim_narration
 from backend.services.discovery.fitting import ModelResult
 from backend.services.discovery.relate import KNOWN_KINDS, is_known, relations
 from backend.services.discovery.selection import Selection, select, select_dynamic, usable
@@ -29,6 +30,15 @@ MAX_RELATIONS = 3  # known laws stored per discovered equation
 MAX_HEADLINE_RELATIONS = 8
 MAX_DYNAMIC = 6  # rate-law cards
 MAX_TRACED = 3  # rate laws whose simulated trajectories are stored
+# The agent's activity is stored with the results, so the live workspace can be replayed after
+# the run. Fits and search events are always kept; the oldest narration goes first beyond this.
+MAX_STORED_EVENTS = 2000
+
+
+def stored_activity(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The run's events for the results, oldest narration dropped beyond MAX_STORED_EVENTS."""
+    return trim_narration(events, MAX_STORED_EVENTS)[-MAX_STORED_EVENTS:]
+
 
 # Fields the backend owns on every equation card (overwrite whatever the LLM wrote).
 EQUATION_FIELDS = (
@@ -243,7 +253,7 @@ def build_results(
             "reviewed_searches": report.get("reviewed_searches", []),
             "error": agent_error,
         },
-        "activity": session.events[-200:],
+        "activity": stored_activity(session.events),
     }
     if session.known_laws is not None:
         discovery["literature"] = session.known_laws
@@ -535,6 +545,27 @@ def _normalize(eq: str) -> str:
     text = re.sub(r"\s+", "", str(eq)).replace("**", "^")
     text = re.sub(r"\((-?[\d.]+(?:e-?\d+)?)\)", r"\1", text)  # (-62.03) -> -62.03
     return text.replace("+-", "-").replace("-+", "-").replace("--", "+")
+
+
+def attach_citation_titles(
+    explanations: dict[str, Any], literature: dict[str, Any] | None
+) -> dict[str, Any]:
+    """
+    Give each explanation card the titles of its citations (``citation_titles``, in the
+    order of ``citations``; "" where unknown), from the published laws the scout collected.
+    """
+    titles: dict[str, str] = {}
+    for law in (literature or {}).get("laws") or []:
+        urls, names = law.get("citations") or [], law.get("citation_titles") or []
+        for url, title in zip(urls, names, strict=False):  # titles may be missing
+            if title and url not in titles:
+                titles[url] = title
+    if not titles:
+        return explanations
+    for card in explanations.get("equations") or []:
+        if isinstance(card, dict) and card.get("citations"):
+            card["citation_titles"] = [titles.get(str(u), "") for u in card["citations"]]
+    return explanations
 
 
 def merge_explanations(

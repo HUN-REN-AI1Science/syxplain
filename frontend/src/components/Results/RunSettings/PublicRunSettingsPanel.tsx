@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { Panel, type PanelHeaderTemplateOptions, type PanelToggleEvent } from 'primereact/panel';
+import { Panel, type PanelToggleEvent } from 'primereact/panel';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
 import { ProgressBar } from 'primereact/progressbar';
@@ -13,6 +13,7 @@ import { publicService } from '@services/api';
 import { formatFileSize } from '@utils/formatting';
 import { LegacyAnalysisModeCard } from './LegacyAnalysisModeCard';
 import type { RunDetails } from '@/types';
+import { runSettingsHeader } from './RunSettingsHeader';
 
 interface PublicRunSettingsPanelProps {
   shareToken: string;
@@ -64,25 +65,6 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
     }
   };
 
-  const headerTemplate = (options: PanelHeaderTemplateOptions) => {
-    return (
-      <div className="flex items-center justify-between w-full px-4 py-3">
-        <div className="flex items-center">
-          <i className="pi pi-cog text-muted text-lg mr-3"></i>
-          <span className="text-lg font-bold text-primary font-heading">Run Configuration</span>
-        </div>
-        <button
-          className="w-8 h-8 rounded-lg bg-surface-alt hover:bg-surface-alt flex items-center justify-center transition-colors"
-          onClick={options.onTogglerClick}
-        >
-          <i
-            className={`pi ${options.collapsed ? 'pi-chevron-down' : 'pi-chevron-up'} text-secondary text-sm`}
-          ></i>
-        </button>
-      </div>
-    );
-  };
-
   const { problem_description, csv_metadata } = runDetails || {};
   const features = problem_description?.features || {};
   const featureEntries = Object.entries(features);
@@ -100,7 +82,7 @@ const PublicRunSettingsPanel: React.FC<PublicRunSettingsPanelProps> = ({ shareTo
   return (
     <div className="mb-6 animate-fade-in">
       <Panel
-        headerTemplate={headerTemplate}
+        headerTemplate={runSettingsHeader}
         toggleable
         collapsed={collapsed}
         onToggle={handleToggle}

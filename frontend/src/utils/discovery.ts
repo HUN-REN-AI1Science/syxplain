@@ -4,11 +4,14 @@
 
 import type {
   CoherenceStatus,
+  DiscoveryReport,
+  DiscoverySelection,
   DomainCoherence,
   KnownLawRelation,
   MetricBasis,
   RejectedForm,
   ScatterData,
+  SeriesReport,
 } from '@/types';
 
 /**
@@ -167,3 +170,82 @@ export const domainChecksOf = (
   Array.isArray(domain?.domain_checks)
     ? domain.domain_checks.filter((d) => d !== null && typeof d === 'object')
     : [];
+
+/**
+ * Model ids statistically tied with the best cross-validated error (the selector's 1-SE
+ * rule), the headline excluded. Runs without the threshold fall back to the shortlist.
+ */
+export const tiedModelIds = (
+  equations: { model_id?: string; cv_rmse?: number | null }[],
+  selection: DiscoverySelection | null | undefined
+): Set<string> => {
+  const headline = selection?.headline_model_id;
+  const threshold = selection?.tie_threshold_rmse;
+  const ids =
+    typeof threshold === 'number'
+      ? equations
+          .filter((e) => typeof e.cv_rmse === 'number' && e.cv_rmse <= threshold)
+          .map((e) => e.model_id)
+      : (selection?.shortlist ?? []);
+  return new Set(ids.filter((id): id is string => !!id && id !== headline));
+};
+
+/** "classic: Mitscherlich" -> "Classic law: Mitscherlich", "symbolic" -> "Symbolic regression" */
+export const originLabel = (origin: string): string => {
+  if (origin === 'symbolic') return 'Symbolic regression';
+  const [kind, ...rest] = origin.split(':');
+  const name = rest.join(':').trim();
+  const prefix =
+    kind === 'classic' ? 'Classic law' : kind === 'literature' ? 'Published law' : 'Agent formula';
+  return name ? `${prefix}: ${name}` : prefix;
+};
+
+/**
+ * What the time-series note says, in parts so the page can emphasise the test period:
+ * how the rows were read, which rows the equations were tested on, and what was added.
+ */
+export const seriesSummary = (
+  series: SeriesReport,
+  holdoutRows: number | null | undefined
+): { along: string; tested: string; added: string; features: string[] } => {
+  const features = asArray(series.lag_features).map((f) => f.feature);
+  const many = (series.n_series ?? 1) > 1;
+  const n = features.length;
+  return {
+    along: many
+      ? `${series.n_series} series along ${series.time_column}, one per ${series.group_column ?? 'trajectory'}`
+      : `one series along ${series.time_column}`,
+    tested: holdoutRows
+      ? `the final ${holdoutRows} rows${many ? ' (the end of each series)' : ''}`
+      : 'later periods (cross-validation on contiguous time blocks)',
+    added: n
+      ? `, and ${n} earlier condition${n > 1 ? 's were' : ' was'} added as input${n > 1 ? 's' : ''}.`
+      : '. No earlier condition improved the fit.',
+    features,
+  };
+};
+
+/** Gains per feature and the residual memory before/after, also for runs before the feature stage */
+export const seriesEvidence = (series: SeriesReport) => {
+  const old = series.screening?.residual_autocorrelation;
+  type Scored = { feature: string; gain: number | null };
+  const scored = asArray<Scored>(series.evidence?.candidates ?? series.screening?.candidates);
+  return {
+    gains: new Map(scored.map((c) => [c.feature, c.gain] as const)),
+    before: series.residual_autocorrelation?.current_drivers_only ?? old?.current_drivers_only,
+    after: series.residual_autocorrelation?.with_selected ?? old?.with_selected_lags,
+  };
+};
+
+/** Whether the run has anything for the "Does the evidence agree?" section */
+export const hasEvidence = (
+  report: DiscoveryReport | null | undefined,
+  domain: DomainCoherence | null | undefined
+): boolean =>
+  !!report &&
+  (!!report.coherence ||
+    !!report.shap?.available ||
+    !!report.relations ||
+    !!report.literature ||
+    domainChecksOf(domain).length > 0 ||
+    !!asText(domain?.assessment));

@@ -282,11 +282,11 @@
   animation: stepDescriptionEnter var(--duration-slow) var(--ease-spring) forwards;
 }
 
-/* Agent activity feed: new rows slide in at the bottom of the scrolling log */
+/* Agent activity feed: new rows slide in at the top of the scrolling log (newest first) */
 @keyframes agentFeedRowEnter {
   0% {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(-12px);
     background-color: color-mix(in srgb, var(--color-brand-500) 12%, transparent);
   }
   60% {

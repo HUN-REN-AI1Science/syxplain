@@ -131,7 +131,7 @@ export const DynamicsSection: React.FC<DynamicsSectionProps> = ({
   const split = dynamics.split;
   return (
     <div>
-      <h4 className="text-sm font-semibold text-secondary mb-2 flex items-center gap-2">
+      <h3 className="text-lg font-bold text-primary font-heading mb-3 flex items-center gap-2">
         <i className="pi pi-chart-line text-brand-500" aria-hidden="true"></i>
         Rate law (dynamics)
         <HelpButton title="Rate law">
@@ -148,7 +148,7 @@ export const DynamicsSection: React.FC<DynamicsSectionProps> = ({
             with the measurements, on {split.scored_on}.
           </p>
         </HelpButton>
-      </h4>
+      </h3>
       <p className="text-xs text-muted mb-2">
         {split.trajectories} trajectories along {split.time_column} · inputs{' '}
         {dynamics.inputs.length ? dynamics.inputs.join(', ') : 'none'} · {dynamics.n_models} rate

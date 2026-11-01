@@ -11,6 +11,8 @@ import logging
 from collections import OrderedDict, defaultdict
 from typing import Any
 
+from backend.services.discovery.events import trim_narration
+
 logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = ("completed", "failed", "timeout", "cancelled")
@@ -18,26 +20,11 @@ MAX_QUEUE_SIZE = 256
 MAX_SSE_CONNECTIONS_PER_USER = 5
 MAX_RECENT_EVENTS = 300
 MAX_REPLAY_RUNS = 200
-# Events a rejoining client rebuilds its leaderboard and search panels from. The agent's
-# budget bounds how many a run has, so they are never evicted: only the narration around
-# them (thoughts, notes, tool steps) makes room once a run has MAX_RECENT_EVENTS events.
-RESULT_KINDS = frozenset(
-    {"fit", "search_started", "search_completed", "search_failed", "search_cancelled"}
-)
 
 
 def _trim_replay(recent: list[dict[str, Any]]) -> None:
     """Drop the oldest narration events until the log fits MAX_RECENT_EVENTS again."""
-    excess = len(recent) - MAX_RECENT_EVENTS
-    if excess <= 0:
-        return
-    kept = []
-    for message in recent:
-        if excess > 0 and message["event"].get("kind") not in RESULT_KINDS:
-            excess -= 1
-        else:
-            kept.append(message)
-    recent[:] = kept
+    recent[:] = trim_narration(recent, MAX_RECENT_EVENTS, lambda m: m["event"].get("kind"))
 
 
 class SSEConnectionManager:

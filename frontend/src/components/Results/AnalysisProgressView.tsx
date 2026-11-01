@@ -2,7 +2,8 @@
  * AnalysisProgressView Component
  * Live workspace for a running analysis: the pipeline steps with the overall progress, what the
  * discovery agent is thinking, its lab notebook, and beside them the best equation so far, a
- * live leaderboard and the searches running on the cluster.
+ * live leaderboard and the searches running on the cluster. With `finished` it replays a
+ * completed run from its stored activity, so the process can be revisited from the results.
  */
 
 import React, { useMemo } from 'react';
@@ -38,6 +39,10 @@ interface AnalysisProgressViewProps {
   phases?: ProgressPhase[];
   /** Index of the running phase in `phases` (-1 before the first) */
   phaseIndex?: number;
+  /** A completed run, replayed from its stored activity */
+  finished?: boolean;
+  /** How long the finished run took (e.g. "12m 3s") */
+  durationLabel?: string | null;
 }
 
 /** Steps shorter than this are not worth a timing line */
@@ -80,6 +85,73 @@ const formatDuration = (seconds: number): string =>
 const formatTypical = (seconds: number): string =>
   seconds < 60 ? `~${Math.round(seconds)}s` : `~${Math.round(seconds / 60)} min`;
 
+const StepPills: React.FC<{ steps: { label: string; state: StepState }[] }> = ({ steps }) => (
+  <ol className="m-0 p-0 list-none flex flex-wrap items-center gap-x-1 gap-y-2">
+    {steps.map((step, i) => (
+      <li key={i} className="flex items-center gap-1">
+        <span
+          aria-current={step.state === 'active' ? 'step' : undefined}
+          className={`inline-flex items-center gap-1.5 min-h-8 px-3 rounded-full text-sm ${STEP_PILL[step.state]}`}
+        >
+          {step.state === 'done' && (
+            <>
+              <i className="pi pi-check text-xs" aria-hidden="true" />
+              <span className="sr-only">Done:</span>
+            </>
+          )}
+          {step.state === 'active' && (
+            <span
+              className="w-2 h-2 rounded-full bg-white queue-pulse inline-block"
+              aria-hidden="true"
+            />
+          )}
+          {step.label}
+        </span>
+        {i < steps.length - 1 && (
+          <i className="pi pi-angle-right text-xs text-muted" aria-hidden="true" />
+        )}
+      </li>
+    ))}
+  </ol>
+);
+
+interface WorkspaceProps {
+  agent: ReturnType<typeof deriveAgentState>;
+  searches: ReturnType<typeof withSearchProgress>;
+  activity: AgentEvent[];
+  finished?: boolean;
+}
+
+/**
+ * The agent (thought and lab notebook) beside what it found. Both columns share the height of
+ * the taller one: the notebook grows to fill it and scrolls inside, never shorter than ~30rem.
+ */
+const Workspace: React.FC<WorkspaceProps> = ({ agent, searches, activity, finished = false }) => (
+  <div className="flex flex-wrap items-stretch gap-6">
+    <div className="flex flex-col gap-6 min-w-0" style={{ flex: '999 1 560px' }}>
+      {!finished && (
+        <CurrentThought
+          thought={agent.thought}
+          fallback="An AI agent designs equations from your data alone and steers symbolic regression towards better ones, then compares what it found with known scientific laws."
+          runningSearches={agent.activeSearches}
+        />
+      )}
+      <section className={`${CARD} relative flex-1 min-h-[30rem]`}>
+        {/* Out of the flow, so the notebook takes the column's height instead of setting it */}
+        <div className="absolute inset-0 p-5">
+          <AgentActivityFeed events={activity} title="Lab notebook" fill live={!finished} />
+        </div>
+      </section>
+    </div>
+
+    <aside className="flex flex-col gap-6 min-w-0" style={{ flex: '1 1 340px' }}>
+      <BestSoFar best={agent.models[0]} history={agent.bestHistory} endT={agent.lastT} />
+      <LiveLeaderboard models={agent.models} hasRateLaws={agent.hasRateLaws} />
+      <ClusterSearches searches={searches} />
+    </aside>
+  </div>
+);
+
 export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
   displayProgress,
   stepDescription,
@@ -90,6 +162,8 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
   stepTiming,
   phases = NO_PHASES,
   phaseIndex = -1,
+  finished = false,
+  durationLabel = null,
 }) => {
   const showTiming =
     !isInQueuePhase &&
@@ -101,7 +175,37 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
     () => withSearchProgress(agent.searches, searchProgress),
     [agent.searches, searchProgress]
   );
-  const steps = useMemo(() => groupSteps(phases, phaseIndex), [phases, phaseIndex]);
+  const steps = useMemo(
+    () => groupSteps(phases, finished ? phases.length : phaseIndex),
+    [phases, phaseIndex, finished]
+  );
+
+  if (finished) {
+    return (
+      <div className="py-6 flex flex-col gap-6 text-left">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <div className="flex items-center gap-2 text-sm text-muted">
+              <i className="pi pi-check-circle text-green-600" aria-hidden="true" />
+              Completed{durationLabel ? ` in ${durationLabel}` : ''}
+            </div>
+            <h2 className="m-0 text-2xl font-heading font-bold text-primary">
+              How the AI scientist worked on your data
+            </h2>
+          </div>
+        </header>
+        {steps.length > 0 && (
+          <nav
+            aria-label="Analysis steps"
+            className="bg-surface rounded-xl border border-[var(--color-border)] px-5 py-4"
+          >
+            <StepPills steps={steps} />
+          </nav>
+        )}
+        <Workspace agent={agent} searches={searches} activity={activity} finished />
+      </div>
+    );
+  }
 
   return (
     <div className="py-6 flex flex-col gap-6 text-left">
@@ -137,35 +241,7 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
         aria-label="Analysis steps"
         className="bg-surface rounded-xl border border-[var(--color-border)] px-5 py-4 flex flex-col gap-3.5"
       >
-        {steps.length > 0 && (
-          <ol className="m-0 p-0 list-none flex flex-wrap items-center gap-x-1 gap-y-2">
-            {steps.map((step, i) => (
-              <li key={i} className="flex items-center gap-1">
-                <span
-                  aria-current={step.state === 'active' ? 'step' : undefined}
-                  className={`inline-flex items-center gap-1.5 min-h-8 px-3 rounded-full text-sm ${STEP_PILL[step.state]}`}
-                >
-                  {step.state === 'done' && (
-                    <>
-                      <i className="pi pi-check text-xs" aria-hidden="true" />
-                      <span className="sr-only">Done:</span>
-                    </>
-                  )}
-                  {step.state === 'active' && (
-                    <span
-                      className="w-2 h-2 rounded-full bg-white queue-pulse inline-block"
-                      aria-hidden="true"
-                    />
-                  )}
-                  {step.label}
-                </span>
-                {i < steps.length - 1 && (
-                  <i className="pi pi-angle-right text-xs text-muted" aria-hidden="true" />
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
+        {steps.length > 0 && <StepPills steps={steps} />}
         {isInQueuePhase ? (
           <ProgressBar
             mode="indeterminate"
@@ -204,26 +280,7 @@ export const AnalysisProgressView: React.FC<AnalysisProgressViewProps> = ({
         )}
       </nav>
 
-      <div className="flex flex-wrap items-start gap-6">
-        {/* The agent: what it is thinking, and everything it has done */}
-        <div className="flex flex-col gap-6 min-w-0" style={{ flex: '999 1 560px' }}>
-          <CurrentThought
-            thought={agent.thought}
-            fallback="An AI agent designs equations from your data alone and steers symbolic regression towards better ones, then compares what it found with known scientific laws."
-            runningSearches={agent.activeSearches}
-          />
-          <section className={CARD}>
-            <AgentActivityFeed events={activity} title="Lab notebook" />
-          </section>
-        </div>
-
-        {/* What it has found so far */}
-        <aside className="flex flex-col gap-6 min-w-0" style={{ flex: '1 1 340px' }}>
-          <BestSoFar best={agent.models[0]} history={agent.bestHistory} endT={agent.lastT} />
-          <LiveLeaderboard models={agent.models} hasRateLaws={agent.hasRateLaws} />
-          <ClusterSearches searches={searches} />
-        </aside>
-      </div>
+      <Workspace agent={agent} searches={searches} activity={activity} />
     </div>
   );
 };

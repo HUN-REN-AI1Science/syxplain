@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { sanitizeUrl } from '@utils/security';
+import { CitationLink } from '../CitationLink';
 import { asText, fmtR2 } from '@utils/discovery';
 import type { DiscoveryReport } from '@/types';
 
@@ -38,8 +39,8 @@ export const LiteratureSection: React.FC<LiteratureSectionProps> = ({
         <ul className="space-y-2">
           {laws.map((law, i) => {
             const citations = (law.citations ?? [])
-              .map((c) => sanitizeUrl(asText(c)))
-              .filter(Boolean);
+              .map((c, idx) => ({ url: asText(c), title: law.citation_titles?.[idx] }))
+              .filter((c) => sanitizeUrl(c.url));
             const unmapped = (law.unmapped ?? []).map(asText).filter(Boolean);
             let fit: React.ReactNode;
             if (law.model_id && typeof law.cv_r2 === 'number') {
@@ -63,19 +64,13 @@ export const LiteratureSection: React.FC<LiteratureSectionProps> = ({
                 <code className="font-mono text-primary break-words">{asText(law.equation)}</code>
                 {fit && <p className="text-xs text-secondary mt-1">{fit}</p>}
                 {citations.length > 0 && (
-                  <p className="text-xs mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                    {citations.map((url, c) => (
-                      <a
-                        key={c}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-link hover:underline break-all"
-                      >
-                        [{c + 1}] {url}
-                      </a>
+                  <ul className="m-0 mt-1 p-0 list-none text-xs flex flex-col gap-1">
+                    {citations.map((c, idx) => (
+                      <li key={idx}>
+                        <CitationLink index={idx + 1} url={c.url} title={c.title} />
+                      </li>
                     ))}
-                  </p>
+                  </ul>
                 )}
               </li>
             );
