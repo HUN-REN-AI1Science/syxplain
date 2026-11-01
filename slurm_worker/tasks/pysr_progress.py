@@ -2,13 +2,14 @@
 Live PySR search progress, read from PySR's own iteration bar.
 
 Julia writes the bar ("Evolving for 800 iterations...  37%|...") to file descriptor 2, which
-Python cannot hook. While the search runs, fd 2 is routed through a pipe: a thread copies
+Python cannot hook. From before Julia starts, fd 2 is routed through a pipe: a thread copies
 everything through to the original stderr unchanged and reports the bar's percentage.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import os
 import re
 import threading
@@ -43,44 +44,95 @@ def _pump(read_fd: int, out_fd: int, on_percent: Callable[[int], None]) -> None:
             try:
                 on_percent(min(100, int(matches[-1])))
             except Exception:  # reporting must never stop the copy (a full pipe blocks Julia)
-                logger.debug("Progress callback failed", exc_info=True)
+                logger.warning("Search progress report failed", exc_info=True)
+
+
+class BarProgress:
+    """
+    Handle of an active capture. Once ``enable()`` is called (the fit starts), the bar first
+    creeps through ``start..bar_start`` on elapsed time while Julia compiles (~1-1.5 min,
+    no output to follow), then follows PySR's own percentage over ``bar_start..end``.
+    """
+
+    def __init__(
+        self,
+        report: Callable[[int], None],
+        start: int,
+        end: int,
+        bar_start: int | None = None,
+        compile_expected_s: float = 75.0,
+    ):
+        self._report = report
+        self._start, self._end = start, end
+        self._bar_start = start if bar_start is None else bar_start
+        self._compile_expected_s = compile_expected_s
+        self._last_value, self._last_at = start, 0.0
+        self._lock = threading.Lock()
+        self.enabled = False
+        self._seen = False
+
+    def _emit(self, value: int, force: bool = False) -> None:
+        with self._lock:
+            now = time.monotonic()
+            if value > self._last_value and (force or now - self._last_at >= _MIN_INTERVAL_S):
+                self._last_value, self._last_at = value, now
+                self._report(value)
+
+    def enable(self) -> None:
+        """The fit starts: report compile-time progress until PySR's bar appears."""
+        self.enabled = True
+        if self._bar_start <= self._start:
+            return
+        started = time.monotonic()
+
+        def tick() -> None:
+            while self.enabled and not self._seen:
+                frac = 1 - math.exp(-2 * (time.monotonic() - started) / self._compile_expected_s)
+                # Stop short of bar_start: only the bar itself may reach it
+                self._emit(self._start + int(frac * (self._bar_start - 1 - self._start)))
+                time.sleep(_MIN_INTERVAL_S)
+
+        threading.Thread(target=tick, daemon=True).start()
+
+    def disable(self) -> None:
+        self.enabled = False
+
+    def on_percent(self, pct: int) -> None:
+        if not self._seen:
+            self._seen = True
+            logger.info(f"Search progress: PySR bar found ({pct}%), enabled={self.enabled}")
+        if not self.enabled:
+            return
+        self._emit(self._bar_start + round(pct / 100 * (self._end - self._bar_start)))
 
 
 @contextmanager
-def pysr_bar_progress(report: Callable[[int], None], start: int, end: int) -> Iterator[None]:
+def pysr_bar_progress(
+    report: Callable[[int], None], start: int, end: int, bar_start: int | None = None
+) -> Iterator[BarProgress]:
     """
-    Report the search's progress, mapped onto ``start..end``, while the block runs.
+    Capture fd 2 for the block; while the handle is ``enabled``, report the search's progress
+    mapped onto ``start..end`` (at most every few seconds, only when it grows).
 
-    Reports at most every few seconds and only when the mapped value grows. If fd 2 cannot be
-    redirected, the block runs without live progress.
+    Enter it before PySR is imported: Julia binds its stderr when it starts, so a redirect
+    made later never sees the bar. Julia keeps writing to the pipe after the block, so the
+    copying thread outlives it. If fd 2 cannot be redirected, the block runs without progress.
     """
-    last = {"value": start, "at": 0.0}
-
-    def on_percent(pct: int) -> None:
-        value = start + round(pct / 100 * (end - start))
-        now = time.monotonic()
-        if value > last["value"] and now - last["at"] >= _MIN_INTERVAL_S:
-            last["value"], last["at"] = value, now
-            report(value)
-
+    bar = BarProgress(report, start, end, bar_start)
     try:
         saved = os.dup(2)
         read_fd, write_fd = os.pipe()
     except OSError:
         logger.warning("Could not capture stderr; no live search progress")
-        yield
+        yield bar
         return
 
     os.dup2(write_fd, 2)
     os.close(write_fd)
-    # Daemon: Julia worker processes that outlive the fit may keep the pipe open
-    thread = threading.Thread(target=_pump, args=(read_fd, saved, on_percent), daemon=True)
+    thread = threading.Thread(target=_pump, args=(read_fd, saved, bar.on_percent), daemon=True)
     thread.start()
     try:
-        yield
+        yield bar
     finally:
+        bar.disable()
         os.dup2(saved, 2)
-        thread.join(timeout=5)
-        if not thread.is_alive():
-            os.close(read_fd)
-            os.close(saved)

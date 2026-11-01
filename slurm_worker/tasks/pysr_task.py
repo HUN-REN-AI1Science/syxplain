@@ -14,7 +14,7 @@ import numpy as np
 from slurm_worker.config import PySRConfig
 from slurm_worker.logging_config import get_logger
 from slurm_worker.tasks.base import DataFrameInput, Task, TaskResult
-from slurm_worker.tasks.pysr_progress import pysr_bar_progress
+from slurm_worker.tasks.pysr_progress import BarProgress, pysr_bar_progress
 from slurm_worker.tasks.registry import TaskRegistry
 
 logger = get_logger("tasks.pysr")
@@ -289,6 +289,15 @@ class PySRTask(Task):
 
     def _execute(self, input_data: dict[str, Any]) -> TaskResult:
         """Execute PySR symbolic regression."""
+
+        def report_search(value: int) -> None:
+            self._report(value, "Running symbolic regression", "pysr_running")
+
+        # Opened before PySR is imported, because Julia binds its stderr when it starts
+        with pysr_bar_progress(report_search, start=3, end=97, bar_start=15) as bar:
+            return self._run(input_data, bar)
+
+    def _run(self, input_data: dict[str, Any], bar: BarProgress) -> TaskResult:
         from pysr import PySRRegressor
 
         self._report(2, "Loading data", "pysr_loading")
@@ -376,23 +385,22 @@ class PySRTask(Task):
             **extra_kwargs,
         )
 
-        # Fetching, loading and Julia start-up take ~10s of a several-minute job; the search
-        # itself fills the bar, following PySR's own iteration count
+        # Fetching and loading take ~15s of a several-minute job (1-3%); Julia then compiles
+        # for ~1-1.5 min (3-15%, on elapsed time) and the search fills 15-97% by PySR's own count
         self._report(3, "Running symbolic regression", "pysr_running")
 
-        def report_search(value: int) -> None:
-            self._report(value, "Running symbolic regression", "pysr_running")
-
-        with pysr_bar_progress(report_search, start=3, end=97):
-            try:
-                model.fit(X, y)
-            except Exception as e:
-                if "guesses" not in extra_kwargs:
-                    raise
-                # An unparsable guess must not cost the whole search.
-                logger.warning(f"Fit with guesses failed ({e}); retrying without them")
-                model.set_params(guesses=None)
-                model.fit(X, y)
+        bar.enable()
+        try:
+            model.fit(X, y)
+        except Exception as e:
+            if "guesses" not in extra_kwargs:
+                raise
+            # An unparsable guess must not cost the whole search.
+            logger.warning(f"Fit with guesses failed ({e}); retrying without them")
+            model.set_params(guesses=None)
+            model.fit(X, y)
+        finally:
+            bar.disable()
 
         self._report(98, "Extracting equations", "pysr_extracting")
 
