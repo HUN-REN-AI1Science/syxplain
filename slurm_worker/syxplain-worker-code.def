@@ -15,7 +15,7 @@ From: {{ base }}
     base=syxplain-worker.sif
 
 %labels
-    Version 3.1.0
+    Version 3.2.0
 
 %setup
     # Drop the old code first, so modules removed since then do not linger
