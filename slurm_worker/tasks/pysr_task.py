@@ -14,6 +14,7 @@ import numpy as np
 from slurm_worker.config import PySRConfig
 from slurm_worker.logging_config import get_logger
 from slurm_worker.tasks.base import DataFrameInput, Task, TaskResult
+from slurm_worker.tasks.pysr_progress import pysr_bar_progress
 from slurm_worker.tasks.registry import TaskRegistry
 
 logger = get_logger("tasks.pysr")
@@ -290,7 +291,7 @@ class PySRTask(Task):
         """Execute PySR symbolic regression."""
         from pysr import PySRRegressor
 
-        self._report(10, "Loading data", "pysr_loading")
+        self._report(2, "Loading data", "pysr_loading")
 
         # Parse input
         df_input = DataFrameInput.from_dict(input_data)
@@ -308,7 +309,7 @@ class PySRTask(Task):
 
         logger.info(f"Loaded data: {df_input.n_rows} rows, {df_input.n_features} predictors")
 
-        self._report(15, "Computing configuration", "pysr_config")
+        self._report(2, "Computing configuration", "pysr_config")
 
         # Build configuration
         config_builder = PySRConfigBuilder(config)
@@ -329,7 +330,7 @@ class PySRTask(Task):
             f"PySR config: niterations={niterations}, cpus={cpu_count}, julia_threads={cpu_count}"
         )
 
-        self._report(20, "Creating PySR model", "pysr_model")
+        self._report(3, "Creating PySR model", "pysr_model")
 
         extra_kwargs: dict[str, Any] = {}
         guesses = [g for g in input_data.get("guesses") or [] if isinstance(g, str) and g.strip()]
@@ -375,18 +376,25 @@ class PySRTask(Task):
             **extra_kwargs,
         )
 
-        self._report(30, "Running symbolic regression", "pysr_running")
-        try:
-            model.fit(X, y)
-        except Exception as e:
-            if "guesses" not in extra_kwargs:
-                raise
-            # An unparsable guess must not cost the whole search.
-            logger.warning(f"Fit with guesses failed ({e}); retrying without them")
-            model.set_params(guesses=None)
-            model.fit(X, y)
+        # Fetching, loading and Julia start-up take ~10s of a several-minute job; the search
+        # itself fills the bar, following PySR's own iteration count
+        self._report(3, "Running symbolic regression", "pysr_running")
 
-        self._report(85, "Extracting equations", "pysr_extracting")
+        def report_search(value: int) -> None:
+            self._report(value, "Running symbolic regression", "pysr_running")
+
+        with pysr_bar_progress(report_search, start=3, end=97):
+            try:
+                model.fit(X, y)
+            except Exception as e:
+                if "guesses" not in extra_kwargs:
+                    raise
+                # An unparsable guess must not cost the whole search.
+                logger.warning(f"Fit with guesses failed ({e}); retrying without them")
+                model.set_params(guesses=None)
+                model.fit(X, y)
+
+        self._report(98, "Extracting equations", "pysr_extracting")
 
         # Extract equations
         extractor = EquationExtractor(
@@ -396,7 +404,7 @@ class PySRTask(Task):
         )
         equations_list, scatter_data, best_equation = extractor.extract_equations(model, X, y)
 
-        self._report(90, "Finalizing", "pysr_finalizing")
+        self._report(98, "Finalizing", "pysr_finalizing")
 
         logger.info(f"PySR completed: {len(equations_list)} equations found")
 

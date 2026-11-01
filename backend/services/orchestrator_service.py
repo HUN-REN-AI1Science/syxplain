@@ -994,9 +994,9 @@ class AnalysisOrchestrator:
         phase's expected duration).
         """
         weights = get_progress_weights()
-        start = weights.get("discovery_agent", 7)
-        end = weights.get("discovery_wrapup", 85) - 1
-        expected_s = float((get_phase("discovery_agent") or {}).get("expected_s", 600))
+        start = weights.get("discovery_agent", 6)
+        end = weights.get("discovery_wrapup", 79) - 1
+        expected_s = float((get_phase("discovery_agent") or {}).get("expected_s", 630))
         try:
             while not agent_task.done():
                 await asyncio.sleep(10)

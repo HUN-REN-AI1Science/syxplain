@@ -12,9 +12,10 @@
 #   - expected_s: Typical duration in seconds. The frontend advances the bar along
 #     1 - exp(-2t / expected_s): ~86% of the phase's span at expected_s, never past its end.
 #
-# Spans follow measured step times (prod run 5db8668d, 2026-10-28, ~12 min in total:
-# setup ~3s, AI configuration ~20s, agent with two cluster searches ~10.5 min,
-# scoring and literature instant, explanation ~80s).
+# Spans follow measured step times: medians of the 12 prod runs of 2026-10-29..11-01
+# (backend logs; ~13.5 min in total): setup ~3s, AI configuration ~17s, agent ~630s
+# (418-1583s), collecting results instant, known laws ~51s, scoring and literature
+# instant, explanation ~103s.
 
 phases:
   - name: initialization
@@ -43,14 +44,14 @@ phases:
     group: "AI configuration"
     description: "AI is analyzing your data to find the best approach..."
     progress_start: 3
-    expected_s: 20
+    expected_s: 17
 
   - name: compute_submission
     label: "Submitting Jobs"
     group: "AI configuration"
     description: "Submitting a first symbolic regression search to the computing cluster..."
-    progress_start: 6
-    expected_s: 2
+    progress_start: 5
+    expected_s: 5
 
   # The bulk of the run. The orchestrator advances the bar from the agent's steps and
   # elapsed time; the agent's steps stream to the UI as activity events.
@@ -58,48 +59,48 @@ phases:
     label: "AI Scientist at Work"
     group: "AI scientist at work"
     description: "An AI agent is profiling your data, designing equations from it and steering symbolic regression on the cluster..."
-    progress_start: 7
-    expected_s: 600
+    progress_start: 6
+    expected_s: 630
 
   - name: discovery_wrapup
     label: "Collecting Results"
     group: "Collecting results"
     description: "Waiting for the last symbolic regression searches to finish..."
-    progress_start: 85
-    expected_s: 30
+    progress_start: 79
+    expected_s: 10
 
   # Known laws are fitted only after the blind exploration, as references.
   - name: relate_known_laws
     label: "Comparing with Known Laws"
     group: "Known laws and scoring"
     description: "Fitting named and published laws and comparing them with the discovered equations..."
-    progress_start: 86
-    expected_s: 20
+    progress_start: 80
+    expected_s: 51
 
   - name: final_scoring
     label: "Scoring Models"
     group: "Known laws and scoring"
     description: "Scoring every model on held-out data it has never seen..."
-    progress_start: 87
-    expected_s: 5
+    progress_start: 86
+    expected_s: 1
 
   - name: literature
     label: "Literature"
     group: "Known laws and scoring"
     description: "Comparing your equations with published laws..."
-    progress_start: 88
-    expected_s: 5
+    progress_start: 87
+    expected_s: 1
 
   - name: llm_explanation
     label: "Explaining Results"
     group: "Explanation"
     description: "AI is interpreting your equations and generating insights..."
-    progress_start: 89
-    expected_s: 80
+    progress_start: 88
+    expected_s: 103
 
   - name: finalization
     label: "Finalizing"
     group: "Explanation"
     description: "Preparing your final results..."
-    progress_start: 98
-    expected_s: 2
+    progress_start: 99
+    expected_s: 1

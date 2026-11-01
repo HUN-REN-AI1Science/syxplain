@@ -148,7 +148,7 @@ class WorkerRunner:
     def _execute_task(self, start_time: float) -> int:
         """Execute the task and write results."""
         # Fetch input (via HTTP or from file)
-        self.reporter.on_progress(5, "Fetching input", "fetching_input")
+        self.reporter.on_progress(1, "Fetching input", "fetching_input")
 
         if self.config.input_path:
             # Local file mode (for testing)
@@ -173,7 +173,7 @@ class WorkerRunner:
         result_dict["computation_time_seconds"] = elapsed
 
         # Write output
-        self.reporter.on_progress(95, "Writing output", "writing_output")
+        self.reporter.on_progress(99, "Writing output", "writing_output")
         self.file_handler.write_output(self.config.output_path, result_dict)
 
         # Report completion

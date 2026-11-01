@@ -234,14 +234,13 @@ def _mock_pysr_results(task_input: dict | None) -> dict:
 
 
 MOCK_PYSR_PROGRESS_STEPS = [
-    (5, "Fetching input", "fetching_input"),
-    (10, "Loading data", "pysr_loading"),
-    (15, "Computing configuration", "pysr_config"),
-    (20, "Creating PySR model", "pysr_model"),
-    (30, "Running symbolic regression", "pysr_running"),
-    (85, "Extracting equations", "pysr_extracting"),
-    (90, "Finalizing", "pysr_finalizing"),
-    (95, "Writing output", "writing_output"),
+    (1, "Fetching input", "fetching_input"),
+    (2, "Loading data", "pysr_loading"),
+    (3, "Creating PySR model", "pysr_model"),
+    (40, "Running symbolic regression", "pysr_running"),
+    (70, "Running symbolic regression", "pysr_running"),
+    (98, "Extracting equations", "pysr_extracting"),
+    (99, "Writing output", "writing_output"),
     (100, "Task completed", "completed"),
 ]
 
