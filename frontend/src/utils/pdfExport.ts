@@ -273,6 +273,18 @@ function checkPageBreak(ctx: PdfContext, requiredSpace: number): void {
   }
 }
 
+/** Draw pre-wrapped lines at x, breaking the page before any line that would reach the footer */
+function drawLines(ctx: PdfContext, lines: string[], x: number, lineHeight: number): void {
+  lines.forEach((line) => {
+    if (ctx.y > ctx.pageHeight - ctx.margin - 10) {
+      ctx.pdf.addPage();
+      ctx.y = 30;
+    }
+    ctx.pdf.text(line, x, ctx.y);
+    ctx.y += lineHeight;
+  });
+}
+
 // ============================================================================
 // Section Renderers
 // ============================================================================
@@ -360,30 +372,39 @@ function renderRecommendation(
       : [];
   const reasonText = headline ? w(headlineReasonText(headlineReason)) : '';
 
-  const recStartY = ctx.y;
-
-  // Estimate height
-  let recHeight = 35;
+  const innerWidth = contentWidth - 10;
+  const legend = recEq ? legendText(recEq) : '';
+  let eqLines: string[] = [];
+  let legendLines: string[] = [];
+  let metricLines: string[] = [];
   if (recEq) {
     pdf.setFontSize(12);
     pdf.setFont('times', 'italic');
-    const lines = pdf.splitTextToSize(equationText(recEq, targetVariable), contentWidth - 10);
-    recHeight += lines.length * 6 + 10;
-  }
-
-  if (rationale.length > 0) {
-    pdf.setFontSize(10);
+    eqLines = pdf.splitTextToSize(equationText(recEq, targetVariable), innerWidth);
+    pdf.setFontSize(9);
     pdf.setFont('times', 'normal');
-    let rationaleHeight = 6;
-    rationale.forEach((reason) => {
-      const lines = pdf.splitTextToSize(`• ${reason}`, contentWidth - 10);
-      rationaleHeight += lines.length * 6;
-    });
-    recHeight += rationaleHeight;
+    legendLines = legend ? pdf.splitTextToSize(w(legend), innerWidth) : [];
+    const r2 = metricValue(recEq);
+    const metrics = [
+      r2 !== null
+        ? `${metricShortLabel(recEq.metric_basis, recEq.holdout_n)} ${r2.toFixed(3)}`
+        : '',
+      typeof recEq.cv_r2 === 'number' && recEq.metric_basis !== 'cv'
+        ? `CV R² ${recEq.cv_r2.toFixed(3)}`
+        : '',
+      `complexity ${recEq.complexity}`,
+      reasonText,
+    ].filter(Boolean);
+    pdf.setFont('helvetica', 'normal');
+    metricLines = pdf.splitTextToSize(w(metrics.join('   |   ')), innerWidth);
   }
-  recHeight += 14; // metrics line and legend
 
-  drawSectionCard(ctx, recStartY, recHeight, BRAND_COLORS.green, BRAND_COLORS.lightGreen);
+  // The card is measured exactly and kept on one page; the rationale flows below it
+  const cardHeight =
+    8 + (recEq ? 6 + eqLines.length * 6 + legendLines.length * 4.5 + metricLines.length * 5 : 0);
+  checkPageBreak(ctx, cardHeight + 15);
+  drawSectionCard(ctx, ctx.y, cardHeight, BRAND_COLORS.green, BRAND_COLORS.lightGreen);
+  const cardBottom = ctx.y + cardHeight + 5;
 
   pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
@@ -405,64 +426,45 @@ function renderRecommendation(
     pdf.setFontSize(12);
     pdf.setFont('times', 'italic');
     pdf.setTextColor(40, 40, 40);
-    const eqLines = pdf.splitTextToSize(equationText(recEq, targetVariable), contentWidth - 10);
     eqLines.forEach((line: string) => {
       pdf.text(line, margin + 5, ctx.y);
       ctx.y += 6;
     });
 
-    const legend = legendText(recEq);
-    if (legend) {
-      pdf.setFontSize(9);
-      pdf.setFont('times', 'normal');
-      pdf.setTextColor(90, 90, 90);
-      pdf.splitTextToSize(w(legend), contentWidth - 10).forEach((line: string) => {
-        pdf.text(line, margin + 5, ctx.y);
-        ctx.y += 4.5;
-      });
-    }
-
-    const r2 = metricValue(recEq);
-    const metrics = [
-      r2 !== null
-        ? `${metricShortLabel(recEq.metric_basis, recEq.holdout_n)} ${r2.toFixed(3)}`
-        : '',
-      typeof recEq.cv_r2 === 'number' && recEq.metric_basis !== 'cv'
-        ? `CV R² ${recEq.cv_r2.toFixed(3)}`
-        : '',
-      `complexity ${recEq.complexity}`,
-      reasonText,
-    ].filter(Boolean);
     pdf.setFontSize(9);
+    pdf.setFont('times', 'normal');
+    pdf.setTextColor(90, 90, 90);
+    legendLines.forEach((line: string) => {
+      pdf.text(line, margin + 5, ctx.y);
+      ctx.y += 4.5;
+    });
+
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(60, 60, 60);
-    pdf.splitTextToSize(w(metrics.join('   |   ')), contentWidth - 10).forEach((line: string) => {
+    metricLines.forEach((line: string) => {
       pdf.text(line, margin + 5, ctx.y + 1);
       ctx.y += 5;
     });
   }
+  ctx.y = cardBottom + 6;
 
   if (rationale.length > 0) {
-    ctx.y += 3;
+    checkPageBreak(ctx, 20);
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(60, 60, 60);
-    pdf.text('Selection Rationale:', margin + 2, ctx.y);
+    pdf.text('Selection Rationale:', margin, ctx.y);
     ctx.y += 5;
 
     rationale.forEach((reason) => {
       pdf.setFontSize(10);
       pdf.setFont('times', 'normal');
       pdf.setTextColor(40, 40, 40);
-      const rLines = pdf.splitTextToSize(`• ${reason}`, contentWidth - 10);
-      rLines.forEach((line: string) => {
-        pdf.text(line, margin + 5, ctx.y);
-        ctx.y += 5;
-      });
+      drawLines(ctx, pdf.splitTextToSize(`• ${reason}`, contentWidth - 4), margin + 2, 5);
     });
   }
 
-  ctx.y += 10;
+  ctx.y += 8;
 
   // The explanation AI may prefer another equation than the selector's headline
   if (
@@ -561,6 +563,7 @@ function renderEquation(
   // Term Breakdown
   if (eq.term_explanations && eq.term_explanations.length > 0) {
     ctx.y += 2;
+    checkPageBreak(ctx, 30);
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(BRAND_COLORS.blue[0], BRAND_COLORS.blue[1], BRAND_COLORS.blue[2]);
@@ -568,30 +571,35 @@ function renderEquation(
     ctx.y += 6;
 
     eq.term_explanations.forEach((term) => {
-      checkPageBreak(ctx, 20);
-
-      const termPrefix = `${w(term.term)}: `;
+      checkPageBreak(ctx, 15);
+      // A list bullet ("- x"), not the minus sign of a negative term ("-110.8 / ...")
+      const label = w(term.term).replace(/^\s*[-•]\s+/, '');
+      const prefix = `${label}: `;
       pdf.setFontSize(10);
       pdf.setFont('times', 'bold');
-      pdf.setTextColor(0, 0, 0);
-      const prefixWidth = pdf.getTextWidth(termPrefix);
-      pdf.text(termPrefix, margin + 4, ctx.y);
+      const prefixWidth = pdf.getTextWidth(prefix);
 
-      pdf.setFont('times', 'normal');
-      pdf.setTextColor(60, 60, 60);
-
-      const explanationLines = pdf.splitTextToSize(
-        w(term.explanation),
-        contentWidth - prefixWidth - 4
-      );
-      if (explanationLines.length > 0) {
-        pdf.text(explanationLines[0], margin + 4 + prefixWidth, ctx.y);
-        for (let i = 1; i < explanationLines.length; i++) {
-          ctx.y += 5;
-          pdf.text(explanationLines[i], margin + 4 + prefixWidth, ctx.y);
-        }
+      if (prefixWidth <= contentWidth * 0.3) {
+        // Short term: label, then the explanation hanging beside it
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(prefix, margin + 4, ctx.y);
+        pdf.setFont('times', 'normal');
+        pdf.setTextColor(60, 60, 60);
+        drawLines(
+          ctx,
+          pdf.splitTextToSize(w(term.explanation), contentWidth - prefixWidth - 4),
+          margin + 4 + prefixWidth,
+          5
+        );
+      } else {
+        // Long term (often a whole sub-expression): on its own lines, explanation beneath
+        pdf.setTextColor(0, 0, 0);
+        drawLines(ctx, pdf.splitTextToSize(prefix.trim(), contentWidth - 4), margin + 4, 5);
+        pdf.setFont('times', 'normal');
+        pdf.setTextColor(60, 60, 60);
+        drawLines(ctx, pdf.splitTextToSize(w(term.explanation), contentWidth - 12), margin + 10, 5);
       }
-      ctx.y += 6;
+      ctx.y += 1.5;
     });
     ctx.y += 4;
   }
@@ -613,7 +621,7 @@ function renderEquation(
 
   // Scatter Plot
   if (eq.scatter_data && eq.scatter_data.measured.length > 0) {
-    checkPageBreak(ctx, 60);
+    checkPageBreak(ctx, 80);
 
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'bold');
@@ -622,7 +630,7 @@ function renderEquation(
     pdf.text(`Predicted vs. Measured${basisText ? ` (${basisText})` : ''}`, margin, ctx.y);
     ctx.y += 6;
 
-    const chartX = margin + 10;
+    const chartX = margin + 16;
     const chartY = ctx.y;
     const chartSize = 50;
 
@@ -663,13 +671,25 @@ function renderEquation(
       pdf.circle(px, py, 0.7, 'F');
     }
 
+    // Axis values (both axes share one range, so the 1:1 line is the diagonal)
+    const tick = (v: number) =>
+      Math.abs(v) >= 1e4 || (v !== 0 && Math.abs(v) < 0.01)
+        ? v.toExponential(1)
+        : String(Number(v.toPrecision(3)));
+    pdf.setFontSize(7);
+    pdf.setTextColor(110, 110, 110);
+    pdf.text(tick(minVal), chartX, chartY + chartSize + 3.5, { align: 'center' });
+    pdf.text(tick(maxVal), chartX + chartSize, chartY + chartSize + 3.5, { align: 'center' });
+    pdf.text(tick(minVal), chartX - 1.5, chartY + chartSize, { align: 'right' });
+    pdf.text(tick(maxVal), chartX - 1.5, chartY + 2, { align: 'right' });
+
     // Labels
     pdf.setFontSize(8);
     pdf.setTextColor(80, 80, 80);
-    pdf.text('Measured', chartX + chartSize / 2, chartY + chartSize + 5, { align: 'center' });
-    pdf.text('Predicted', chartX - 5, chartY + chartSize / 2, { angle: 90, align: 'center' });
+    pdf.text('Measured', chartX + chartSize / 2, chartY + chartSize + 7, { align: 'center' });
+    pdf.text('Predicted', chartX - 10, chartY + chartSize / 2, { angle: 90, align: 'center' });
 
-    ctx.y = chartY + chartSize + 15;
+    ctx.y = chartY + chartSize + 16;
   }
 
   // Separator line between equations
@@ -742,9 +762,10 @@ function renderSeriesNote(ctx: PdfContext, series: SeriesReport, holdoutRows: nu
   pdf.setFontSize(10);
   pdf.setFont('times', 'normal');
   const lines = pdf.splitTextToSize(w(text), contentWidth - 6);
-  const height = 8 + lines.length * 5;
+  const height = 6 + lines.length * 5;
   checkPageBreak(ctx, height + 10);
   drawSectionCard(ctx, ctx.y, height, BRAND_COLORS.blue, BRAND_COLORS.lightBlue);
+  const cardBottom = ctx.y + height + 5;
   pdf.setFontSize(11);
   pdf.setFont('helvetica', 'bold');
   pdf.setTextColor(BRAND_COLORS.blue[0], BRAND_COLORS.blue[1], BRAND_COLORS.blue[2]);
@@ -757,7 +778,7 @@ function renderSeriesNote(ctx: PdfContext, series: SeriesReport, holdoutRows: nu
     pdf.text(line, margin + 2, ctx.y);
     ctx.y += 5;
   });
-  ctx.y += 10;
+  ctx.y = cardBottom + 10;
 }
 
 /** The time-series section: the earlier conditions selected, and the memory they explain */
@@ -810,6 +831,7 @@ function renderSeries(ctx: PdfContext, series: SeriesReport): void {
 }
 
 function renderSectionHeading(ctx: PdfContext, title: string): void {
+  checkPageBreak(ctx, 30);
   const { pdf, margin, pageWidth } = ctx;
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
