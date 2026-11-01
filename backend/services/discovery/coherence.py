@@ -163,11 +163,16 @@ def _known_law_verdict(
     return "pass", r, detail
 
 
-def _known_laws(h: ModelResult, rels: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _known_laws(
+    h: ModelResult, rels: list[dict[str, Any]], fitted: dict[str, int] | None = None
+) -> list[dict[str, Any]]:
     """
     The headline against the published and the named laws, from ``relate.relations``. Known
     laws are fitted after the blind exploration, so a match is a rediscovery, not a start.
+    ``fitted`` counts the laws of each kind that were fitted: relations only cover the ones
+    better than the mean, so "none related" can still mean several were fitted.
     """
+    fitted = fitted or {}
     checks = []
     for key, (kind, noun, none_detail) in KNOWN_LAW_CHECKS.items():
         if is_known(h):
@@ -180,7 +185,14 @@ def _known_laws(h: ModelResult, rels: list[dict[str, Any]]) -> list[dict[str, An
             continue
         of_kind = [r for r in rels if r["kind"] == kind]
         if not of_kind:
-            checks.append(_check(key, "na", none_detail))
+            n = fitted.get(kind, 0)
+            detail = (
+                f"{n} {noun}{'s' if n != 1 else ''} fitted, none better than the mean, so none "
+                "is compared with the headline"
+                if n
+                else none_detail
+            )
+            checks.append(_check(key, "na", detail))
             continue
         status, r, detail = _known_law_verdict(h, of_kind, noun)
         checks.append(_check(key, status, detail, r["law_id"]))
@@ -278,6 +290,15 @@ def effect_directions(session: DiscoverySession, h: ModelResult) -> list[dict[st
     return out
 
 
+def _fitted_known_laws(session: DiscoverySession) -> dict[str, int]:
+    """How many known laws of each kind were fitted (usable or not)."""
+    counts: dict[str, int] = {}
+    for m in session.ranked_models():
+        if is_known(m):
+            counts[m.kind] = counts.get(m.kind, 0) + 1
+    return counts
+
+
 def coherence_report(
     session: DiscoverySession,
     selection: Selection,
@@ -296,7 +317,7 @@ def coherence_report(
         _fit_vs_ceiling(session, h),
         _generalization(session, h),
         _shap(shap_agreement),
-        *_known_laws(h, headline_relations),
+        *_known_laws(h, headline_relations, _fitted_known_laws(session)),
         _parameters(h),
         _agent(h, agent),
     ]

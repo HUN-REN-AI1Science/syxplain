@@ -86,6 +86,17 @@ def test_better_published_law_warns():
     assert lit["status"] == "warn" and lit["value"] == law.model_id
 
 
+def test_published_laws_worse_than_the_mean_are_reported_as_fitted():
+    s = _interaction_session()
+    good = s.fit_custom("k*x1*x2 + c*exp(x3)", label="right form")
+    # A constant far from the data: fitted, but worse than the mean, so never related
+    law = s.fit_custom("m + 0*x1", label="Published law 1", kind="literature")
+    s.models[law.model_id].cv_r2 = -5.0
+    lit = _literature_check(s, good)
+    assert lit["status"] == "na"
+    assert lit["detail"].startswith("1 published law fitted, none better than the mean")
+
+
 def test_no_signal_fails_and_shap_is_na():
     rng = np.random.default_rng(1)
     df = pd.DataFrame({"x1": rng.normal(size=300), "x2": rng.normal(size=300)})
