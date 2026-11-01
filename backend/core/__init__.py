@@ -26,7 +26,6 @@ from backend.core.exceptions import (
     register_exception_handlers,
 )
 from backend.core.logging import (
-    configure_debug_mode,
     configure_logging,
     configure_uvicorn_logging,
     get_logger,
@@ -59,7 +58,6 @@ __all__ = [
     # Security
     "User",
     "ValidationError",
-    "configure_debug_mode",
     # Logging
     "configure_logging",
     "configure_uvicorn_logging",

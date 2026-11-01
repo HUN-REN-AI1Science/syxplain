@@ -1,18 +1,19 @@
+# syntax=docker/dockerfile:1
 # Builder stage
 FROM python:3.10-slim AS builder
 
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_COMPILE_BYTECODE=0 \
+    UV_LINK_MODE=copy
 
-WORKDIR /app
+COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /usr/local/bin/uv
 
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+COPY requirements.txt /tmp/requirements.txt
+# All dependencies ship wheels for python3.10/x86_64, so no compiler is needed.
+# The cache mount keeps downloaded wheels between local builds.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /usr/local/bin/python --prefix=/install -r /tmp/requirements.txt
 
 # Runtime stage
 FROM python:3.10-slim
@@ -22,26 +23,17 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Create a non-root user
-RUN useradd -m -u 1000 appuser
+# Non-root user and the volume directories, owned by it
+RUN useradd -m -u 1000 appuser \
+    && mkdir -p /app/logs /app/data /app/outputs \
+    && chown appuser:appuser /app /app/logs /app/data /app/outputs
 
-# Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
-# Copy application code
-COPY . .
+# Only the backend package is needed at runtime (alembic + progress config live in it)
+COPY --chown=appuser:appuser backend/ /app/backend/
 
-# Create directories for volumes so they have correct ownership
-RUN mkdir -p /app/logs /app/data /app/outputs
-
-# Change ownership to non-root user
-RUN chown -R appuser:appuser /app
-
-# Switch to non-root user
 USER appuser
-
-# Note: Analysis now uses orchestrator service with compute backends (Slurm or local)
-# No warmup needed as Julia/PySR runs in separate worker processes
 
 EXPOSE 8000
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

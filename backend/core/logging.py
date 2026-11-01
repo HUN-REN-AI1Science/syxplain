@@ -235,8 +235,6 @@ def configure_logging(
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("multipart").setLevel(logging.WARNING)
-    logging.getLogger("langchain").setLevel(logging.INFO)
-    logging.getLogger("langgraph").setLevel(logging.INFO)
     logging.getLogger("dspy").setLevel(logging.INFO)
     logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
 
@@ -245,20 +243,6 @@ def configure_logging(
     # Log startup message
     log = logging.getLogger(__name__)
     log.info(f"Logging configured: console + {log_dir}/<date>/{log_filename}")
-
-
-def configure_debug_mode() -> None:
-    """
-    Enable debug mode for LangChain/LangGraph.
-
-    Call this when you need detailed debugging of AI operations.
-    """
-    import langchain
-
-    langchain.debug = True
-    logging.getLogger("langgraph").setLevel(logging.DEBUG)
-    logging.getLogger("langchain").setLevel(logging.DEBUG)
-    logging.getLogger(__name__).info("Debug mode enabled for LangChain/LangGraph")
 
 
 def get_logger(name: str) -> logging.Logger:

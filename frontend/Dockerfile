@@ -1,10 +1,11 @@
+# syntax=docker/dockerfile:1
 # Stage 1: Build
-FROM node:24-alpine as build
+FROM node:24-alpine AS build
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 ARG VITE_KEYCLOAK_URL
 ARG VITE_KEYCLOAK_REALM

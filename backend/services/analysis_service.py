@@ -130,10 +130,9 @@ async def _run_analysis(
     # Yield control so the HTTP response (with run_id) is sent first
     await asyncio.sleep(0)
 
-    from backend.core.logging import configure_debug_mode, configure_logging
+    from backend.core.logging import configure_logging
 
     configure_logging()
-    configure_debug_mode()
 
     logger.info(f"Analysis task started for Run ID: {run_id}")
 
