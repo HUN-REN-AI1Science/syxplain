@@ -1,5 +1,10 @@
-credentials/*.gpg
-outputs/*
+# Local-only files
+credentials/
+outputs/
+/scripts/
+/publication/
+.claude/
+api_results/
 /data/example_2/.~lock.Summary table.xlsx#
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,venv,node,react,visualstudiocode,macos
@@ -363,12 +368,6 @@ sketch
 ### venv ###
 # Virtualenv
 # http://iamzed.com/2009/05/07/a-primer-on-virtualenv/
-[Bb]in
-[Ii]nclude
-[Ll]ib
-[Ll]ib64
-[Ll]ocal
-[Ss]cripts
 pyvenv.cfg
 pip-selfcheck.json
 

@@ -9,19 +9,19 @@ Local tester for the compute side of the pipeline.
 
 Usage:
     # Classic-law screen on the soil phosphate example
-    python test_worker_local.py --task classic --example 1
+    python dev/run_worker_task.py --task classic --example 1
 
     # Run PySR with custom iterations
-    python test_worker_local.py --task pysr --example 3 --niterations 10
+    python dev/run_worker_task.py --task pysr --example 3 --niterations 10
 
     # PySR on a log-transformed target, seeded with a guess
-    python test_worker_local.py --task pysr --example 3 --target-transform log --guesses "Synapses + Degree"
+    python dev/run_worker_task.py --task pysr --example 3 --target-transform log --guesses "Synapses + Degree"
 
     # Save output to file
-    python test_worker_local.py --task pysr --example 1 --output results.json
+    python dev/run_worker_task.py --task pysr --example 1 --output results.json
 
     # Use custom data file
-    python test_worker_local.py --task classic --data path/to/data.csv --target my_target --predictors "col1,col2,col3"
+    python dev/run_worker_task.py --task classic --data path/to/data.csv --target my_target --predictors "col1,col2,col3"
 """
 
 import argparse
@@ -32,8 +32,9 @@ from typing import Any
 
 import pandas as pd
 
-# Add slurm_worker to path
-sys.path.insert(0, str(Path(__file__).parent))
+# Repository root (slurm_worker package and data/ live there)
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
 
 from slurm_worker.reporting.reporter import ProgressObserver
 from slurm_worker.tasks import TaskRegistry
@@ -57,6 +58,12 @@ EXAMPLES: dict[int, dict[str, Any]] = {
         "target": "Length",
         "predictors": ["Synapses", "Degree"],
         "description": "C. elegans neuron connectome (299 rows, 2 features)",
+    },
+    4: {
+        "path": "data/example_4/grassland_data.csv",
+        "target": "GPP",
+        "predictors": ["CO2", "AMO", "SD_VPDI", "PDSI", "SMI", "Tm_sprsum", "VPDI", "NAO"],
+        "description": "Grassland gross primary production from climate indices (yearly)",
     },
 }
 
@@ -300,13 +307,13 @@ def main():
         epilog="""
 Examples:
   # Screen classic laws on soil data (no Julia needed)
-  python test_worker_local.py --task classic --example 1
+  python dev/run_worker_task.py --task classic --example 1
 
   # Run PySR with limited iterations (faster)
-  python test_worker_local.py --task pysr --example 1 --niterations 5
+  python dev/run_worker_task.py --task pysr --example 1 --niterations 5
 
   # Use custom data file
-  python test_worker_local.py --task classic --data mydata.csv --target y --predictors "x1,x2,x3"
+  python dev/run_worker_task.py --task classic --data mydata.csv --target y --predictors "x1,x2,x3"
         """,
     )
 
@@ -378,7 +385,7 @@ Examples:
     if args.example:
         example = EXAMPLES[args.example]
         print(f"Loading example {args.example}: {example['description']}")
-        data_path = Path(__file__).parent / example["path"]
+        data_path = REPO_ROOT / example["path"]
         df = load_data(str(data_path))
         target = example["target"]
         predictors = example["predictors"]
