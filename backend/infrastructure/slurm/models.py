@@ -238,7 +238,7 @@ class SlurmJobSubmission:
     name: str
     partition: str
     cpus: int = 8
-    memory: str = "7941M"
+    memory: str = "8G"
     time_limit: str = "04:00:00"
     nodes: int = 1
     tasks: int = 1
@@ -262,11 +262,14 @@ class SlurmJobSubmission:
         # Note: nodes must be a string (e.g., "1" or "1-4"), not an integer
         job_spec: dict[str, Any] = {
             "name": self.name,
-            "partition": self.partition,
             "nodes": str(self.nodes),
             "tasks": self.tasks,
             "time_limit": {"set": True, "number": time_minutes},
         }
+
+        # Partition - omitted to use the cluster's default partition
+        if self.partition:
+            job_spec["partition"] = self.partition
 
         # Memory - use memory_per_node in MB
         memory_mb = _parse_memory(self.memory)

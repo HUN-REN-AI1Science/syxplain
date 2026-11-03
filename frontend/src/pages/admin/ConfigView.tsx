@@ -233,7 +233,9 @@ const ConfigView: React.FC<ConfigViewProps> = ({ toast }) => {
             <div>
               <p className="font-medium text-primary">Slurm Cluster</p>
               <p className="text-sm text-secondary">
-                {config.features.slurm_configured ? 'slurm.science-cloud.hu' : 'Connection issue'}
+                {config.features.slurm_configured
+                  ? (config.features.slurm_host ?? 'Configured')
+                  : 'Connection issue'}
               </p>
             </div>
           </div>

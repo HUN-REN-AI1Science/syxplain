@@ -80,12 +80,12 @@ cancelling the run.
 | `target_variable` | string | Yes | Name of the target column to predict |
 | `features` | object | Yes | Mapping of feature column names to descriptions (e.g. `{"pH": "Soil pH"}`) |
 | `provider` | string | No | `"gemini"` (default) or `"openai_compatible"` (any OpenAI-compatible endpoint: OpenAI, OpenRouter, vLLM, LiteLLM, ...) |
-| `api_key` | string | No | API key for the provider (required without HUN-REN access) |
+| `api_key` | string | No | API key for the provider (required without server-key access) |
 | `model` | string | No | Model name. Gemini: default `"gemini-3.1-pro-preview"`; OpenAI-compatible: required |
 | `api_base` | string | No | OpenAI-compatible base URL (default: `"https://api.openai.com/v1"`); must be publicly reachable |
 | `gemini_api_key` | string | No | Legacy alias of `api_key` for the Gemini provider |
 | `gemini_model` | string | No | Legacy alias of `model` for the Gemini provider |
-| `openai_api_key` | string | No | OpenAI API key for the literature search (without HUN-REN access; omitted = no literature step, unless `api_key` is an OpenAI key on the default OpenAI endpoint) |
+| `openai_api_key` | string | No | OpenAI API key for the literature search (without server-key access; omitted = no literature step, unless `api_key` is an OpenAI key on the default OpenAI endpoint) |
 
 **Example `params` value:**
 
@@ -167,9 +167,9 @@ async def analyze(
 
     # Validate columns exist in the file
     try:
-        has_hunren_access = current_user.has_hunren_access
-        # The user's own LLM settings; HUN-REN members always run on the server keys
-        user_llm = None if has_hunren_access else analyze_params.to_user_llm()
+        has_server_keys_access = current_user.has_server_keys_access
+        # The user's own LLM settings; users with server-key access always run on the server keys
+        user_llm = None if has_server_keys_access else analyze_params.to_user_llm()
 
         # Blocking (file parsing, DNS): off the event loop
         await asyncio.to_thread(
@@ -178,7 +178,7 @@ async def analyze(
             target_variable=analyze_params.target_variable,
             features=analyze_params.features,
             user_id=current_user.user_id,
-            has_hunren_access=has_hunren_access,
+            has_server_keys_access=has_server_keys_access,
             user_llm=user_llm,
         )
     except EntityNotFoundError as e:

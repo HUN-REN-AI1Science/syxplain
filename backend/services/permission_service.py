@@ -38,7 +38,7 @@ class PermissionService:
             Dictionary with permission flags
         """
         return {
-            "use_hunren_keys": user.has_hunren_access,
+            "use_server_keys": user.has_server_keys_access,
             "is_admin": user.is_admin,
         }
 
@@ -58,7 +58,7 @@ class PermissionService:
         Get all users with their permission status.
 
         Fetches users from Keycloak Admin API and checks their realm roles
-        for hunren-member or syxplain-admin.
+        for the server-keys role (SERVER_KEYS_ROLE) or syxplain-admin.
 
         Returns:
             List of users with permission info (includes email)
@@ -101,14 +101,17 @@ class PermissionService:
                 user_roles = self._get_user_realm_roles(admin_api_url, headers, user_id)
                 role_names = {r.get("name") for r in user_roles}
 
-                has_hunren = "hunren-member" in role_names or "syxplain-admin" in role_names
+                has_server_keys = (
+                    self.settings.auth.server_keys_role in role_names
+                    or "syxplain-admin" in role_names
+                )
 
                 result.append(
                     {
                         "user_id": user_id,
                         "email": user.get("email", ""),
                         "user_created_at": user.get("createdTimestamp"),
-                        "use_hunren_keys": has_hunren,
+                        "use_server_keys": has_server_keys,
                         "granted_by": None,
                         "permission_updated_at": None,
                     }
@@ -159,7 +162,7 @@ class PermissionService:
             app_roles = [
                 {"id": r["id"], "name": r["name"]}
                 for r in user_roles
-                if r.get("name") in ("syxplain-admin", "hunren-member")
+                if r.get("name") in ("syxplain-admin", self.settings.auth.server_keys_role)
             ]
 
             if not app_roles:

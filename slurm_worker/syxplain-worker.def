@@ -92,8 +92,9 @@ print('Julia pre-compilation complete')
     export PYTHONPATH=/app
     export LC_ALL=C.UTF-8
     export LANG=C.UTF-8
-    # Julia depot stacking: writable persistent storage on top of read-only precompiled depot
-    export JULIA_DEPOT_PATH="/storage/ai4science/syxplain/.julia:/opt/julia-depot"
+    # Julia depot stacking: writable depot on top of the read-only precompiled one. The backend
+    # overrides this with --env JULIA_DEPOT_PATH=<SLURM_JULIA_DEPOT>:/opt/julia-depot.
+    export JULIA_DEPOT_PATH="${HOME}/.julia:/opt/julia-depot"
     # Force pyjuliapkg to use the container's Julia instead of downloading its own
     export PYTHON_JULIAPKG_EXE=/opt/julia-1.11.5/bin/julia
     # Load the Julia environment resolved and precompiled at build time directly: with both

@@ -634,7 +634,7 @@ export interface ProblemFormPayload {
 // ============================================================================
 
 export interface UserPermissions {
-  use_hunren_keys: boolean;
+  use_server_keys: boolean;
   is_admin: boolean;
 }
 
@@ -741,6 +741,7 @@ export interface SystemHealth {
   database_connected: boolean;
   slurm_configured: boolean;
   slurm_connected: boolean;
+  slurm_host?: string | null;
   api_healthy: boolean;
   uptime_seconds: number;
   checked_at: string;
@@ -850,6 +851,7 @@ export interface RateLimitsConfig {
 
 export interface FeaturesConfig {
   slurm_configured: boolean;
+  slurm_host?: string | null;
   literature_search_enabled: boolean;
   user_api_keys_enabled: boolean;
 }

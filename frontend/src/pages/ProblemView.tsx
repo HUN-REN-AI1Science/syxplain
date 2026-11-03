@@ -35,7 +35,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   nanCounts,
   onSubmit,
 }) => {
-  const { hasHunrenAccess } = useAuth();
+  const { hasServerKeysAccess } = useAuth();
   const [mode, setMode] = useState<'form' | 'json'>('form');
   const [jsonContent, setJsonContent] = useState('');
   const toast = useRef<Toast>(null);
@@ -47,7 +47,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   // Columns the user manually removed from the analysis (issue #49)
   const [removedColumns, setRemovedColumns] = useState<string[]>([]);
 
-  // Main LLM state (for users without HUN-REN access): Gemini or an OpenAI-compatible
+  // Main LLM state (for users without server-key access): Gemini or an OpenAI-compatible
   // endpoint. Each provider keeps its own key so switching never sends one to the other.
   const [llmProvider, setLlmProvider] = useState<LlmProvider>('gemini');
   const [geminiApiKey, setGeminiApiKey] = useState('');
@@ -104,7 +104,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
 
   // Automatic column description suggestions (issue #45)
   const canSuggest =
-    hasHunrenAccess ||
+    hasServerKeysAccess ||
     (llmFields.api_key.length > 0 && (llmProvider === 'gemini' || Boolean(llmFields.model)));
   const lastSuggestedForRef = useRef('');
 
@@ -163,7 +163,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       project_description: projectDescription,
       target_variable: targetVariable || undefined,
       columns: emptyColumns,
-      ...(!hasHunrenAccess ? llmFields : {}),
+      ...(!hasServerKeysAccess ? llmFields : {}),
     });
   };
 
@@ -281,7 +281,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   // endpoint with one tiny live request (key, base URL and model)
   const validateLlmKey = async (): Promise<boolean> => {
     // Any edit resets the status, so 'valid' means unchanged since the last (paid) check
-    if (hasHunrenAccess || llmValidationStatus === 'valid') return true;
+    if (hasServerKeysAccess || llmValidationStatus === 'valid') return true;
 
     if (!llmFields.api_key) {
       setLlmKeyError(
@@ -334,8 +334,8 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   };
 
   const handleSubmit = async () => {
-    // Validate API keys for users without HUN-REN access
-    if (!hasHunrenAccess) {
+    // Validate API keys for users without server-key access
+    if (!hasServerKeysAccess) {
       // Independent checks; the OpenAI key is optional and validated only when provided
       const [isLlmValid, isOpenaiValid] = await Promise.all([
         validateLlmKey(),
@@ -346,7 +346,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
 
     // Build user_api_keys payload (the backend reuses an OpenAI main key on OpenAI's own
     // endpoint for the literature search when no separate key is given)
-    const userApiKeys: UserApiKeys | undefined = !hasHunrenAccess
+    const userApiKeys: UserApiKeys | undefined = !hasServerKeysAccess
       ? {
           ...llmFields,
           ...(openaiApiKey.trim() ? { openai_api_key: openaiApiKey.trim() } : {}),
@@ -577,8 +577,8 @@ const ProblemView: React.FC<ProblemViewProps> = ({
 
       <Toast ref={toast} />
 
-      {/* API Key Input for users without HUN-REN access */}
-      {!hasHunrenAccess && (
+      {/* API Key Input for users without server-key access */}
+      {!hasServerKeysAccess && (
         <div className="mt-6">
           <ApiKeyInputSection
             provider={llmProvider}

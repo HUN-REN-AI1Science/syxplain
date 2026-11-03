@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=syxplain-compute
-#SBATCH --partition=cpu_m2.2xlarge
+##SBATCH --partition=<your-partition>   # uncomment to pick a partition
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=4G
 #SBATCH --time=01:00:00
@@ -24,7 +24,7 @@
 #   CONTAINER_PATH - Path to Singularity container (default: see below)
 
 # Default container location
-CONTAINER_PATH="${CONTAINER_PATH:-/storage/ai4science/syxplain/containers/syxplain-worker.sif}"
+CONTAINER_PATH="${CONTAINER_PATH:-/storage/$USER/syxplain/containers/syxplain-worker.sif}"
 
 # Validate required variables
 if [ -z "$TASK_TYPE" ] || [ -z "$RUN_ID" ] || [ -z "$INPUT_PATH" ] || [ -z "$OUTPUT_PATH" ]; then

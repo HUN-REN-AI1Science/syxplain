@@ -14,7 +14,9 @@
 #   - SLURM_AUTH_TOKEN: Slurm JWT token
 #   - SLURM_STAGING_DIR: Shared staging directory path
 #   - KEYCLOAK_URL: Internal Keycloak URL (e.g. http://keycloak:8080/keycloak)
-#   - KC_HOSTNAME: Public hostname for Keycloak (e.g. syxplain.ai1science.net)
+#   - KC_HOSTNAME: Public hostname for Keycloak (e.g. syxplain.example.org)
+#   - KEYCLOAK_ISSUER: https://<KC_HOSTNAME>/keycloak/realms/syxplain
+#   - SERVER_NAME: Public domain for nginx/HTTPS (usually the same as KC_HOSTNAME)
 #
 # Architecture:
 #   Single PostgreSQL instance shared by backend (public schema) and
@@ -82,17 +84,21 @@ services:
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-syxplain-frontend}
       - KEYCLOAK_ADMIN_USERNAME=${KEYCLOAK_ADMIN_USERNAME:?KEYCLOAK_ADMIN_USERNAME is required}
       - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}
-      - KEYCLOAK_ISSUER=${KEYCLOAK_ISSUER:-https://syxplain.ai1science.net/keycloak/realms/syxplain}
+      - KEYCLOAK_ISSUER=${KEYCLOAK_ISSUER:?KEYCLOAK_ISSUER is required (https://<your-domain>/keycloak/realms/syxplain)}
+      - SERVER_KEYS_ROLE=${SERVER_KEYS_ROLE:-server-llm-access}
       # Slurm Configuration (REQUIRED - connects to external cluster)
       - SLURM_API_URL=${SLURM_API_URL:?SLURM_API_URL is required}
       - SLURM_AUTH_TOKEN=${SLURM_AUTH_TOKEN:?SLURM_AUTH_TOKEN is required}
       - SLURM_USER_NAME=${SLURM_USER_NAME:?SLURM_USER_NAME is required}
-      - SLURM_PARTITION=${SLURM_PARTITION:-cpu_m2.2xlarge}
+      - SLURM_PARTITION=${SLURM_PARTITION:-}
       - SLURM_CPUS=${SLURM_CPUS:-8}
       - SLURM_MEMORY=${SLURM_MEMORY:-16G}
       - SLURM_TIME_LIMIT=${SLURM_TIME_LIMIT:-04:00:00}
       - SLURM_STAGING_DIR=${SLURM_STAGING_DIR:?SLURM_STAGING_DIR is required}
       - SLURM_CONTAINER_PATH=${SLURM_CONTAINER_PATH:-}
+      - SLURM_CONTAINER_BINDS=${SLURM_CONTAINER_BINDS:-}
+      - SLURM_JULIA_DEPOT=${SLURM_JULIA_DEPOT:-}
+      - SLURM_RETRY_INTERVAL=${SLURM_RETRY_INTERVAL:-60}
       # Compute settings
       - WORKER_CALLBACK_URL=${WORKER_CALLBACK_URL:-}
       - WORKER_CALLBACK_TOKEN=${WORKER_CALLBACK_TOKEN:-}
@@ -152,6 +158,9 @@ services:
     image: ${FRONTEND_IMAGE:-ghcr.io/hun-ren-ai1science/syxplain-frontend:latest}
     container_name: syxplain-frontend
     restart: unless-stopped
+    environment:
+      # Public domain; HTTPS is enabled when /etc/letsencrypt/live/$SERVER_NAME exists
+      - SERVER_NAME=${SERVER_NAME:-}
     ports:
       - "${FRONTEND_HTTP_PORT:-80}:80"
       - "${FRONTEND_HTTPS_PORT:-443}:443"

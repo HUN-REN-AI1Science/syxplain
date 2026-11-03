@@ -169,7 +169,7 @@ class RunService:
         target_variable: str,
         features: dict[str, str],
         user_id: str,
-        has_hunren_access: bool = True,
+        has_server_keys_access: bool = True,
         user_llm: UserLLM | None = None,
     ) -> None:
         """
@@ -181,8 +181,8 @@ class RunService:
             target_variable: Target column name
             features: Dictionary of feature columns
             user_id: User UUID as string
-            has_hunren_access: Whether user has HUN-REN key permission
-            user_llm: The user's own LLM settings (users without HUN-REN access)
+            has_server_keys_access: Whether user has server-key permission
+            user_llm: The user's own LLM settings (users without server-key access)
 
         Raises:
             EntityNotFoundError: If file not found
@@ -190,7 +190,7 @@ class RunService:
             ConfigurationError: If server configuration is missing
         """
         # Check API key availability based on permissions
-        if has_hunren_access:
+        if has_server_keys_access:
             # User uses server keys - check server configuration
             if not self.settings.llm.openai_api_key:
                 raise ConfigurationError(

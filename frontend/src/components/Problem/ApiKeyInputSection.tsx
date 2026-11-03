@@ -1,6 +1,6 @@
 /**
  * ApiKeyInputSection Component
- * Displays API key input fields for users without HUN-REN access.
+ * Displays API key input fields for users without server-key access.
  * The main LLM is either Google Gemini or any OpenAI-compatible endpoint; an optional
  * OpenAI key enables the literature search.
  */
@@ -89,8 +89,8 @@ const ApiKeyHelpContent = () => (
         Want to Use Built-in API Keys?
       </h4>
       <p className="text-sm text-secondary">
-        If you'd like access to the built-in HUN-REN API keys (no personal key required), please
-        contact the system administrators to request access privileges.
+        If you'd like to use the server's built-in API keys (no personal key required), please
+        contact the system administrators to request access.
       </p>
     </div>
   </div>

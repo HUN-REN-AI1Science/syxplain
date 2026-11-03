@@ -1,5 +1,5 @@
 """
-The LLM settings of a user who brings their own key (users without HUN-REN access).
+The LLM settings of a user who brings their own key (users without server-key access).
 
 A user picks a provider: Google Gemini, or any endpoint that speaks the OpenAI API
 (OpenAI itself, OpenRouter, vLLM, LiteLLM, ...). The settings live only in memory for

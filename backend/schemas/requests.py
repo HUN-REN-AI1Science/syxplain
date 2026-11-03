@@ -128,7 +128,7 @@ class RunRequest(BaseModel):
     csv_filename: str = Field(..., min_length=1, description="Name of the uploaded file to analyze")
     user_api_keys: UserApiKeys | None = Field(
         default=None,
-        description="User-provided API keys (required for users without HUN-REN access)",
+        description="User-provided API keys (required for users without server-key access)",
     )
 
     class Config:

@@ -33,7 +33,7 @@ async def suggest_descriptions(
     """
     Suggest short descriptions for dataset columns based on the problem description.
 
-    HUN-REN members use the server's small model; other users must provide
+    Users with server-key access use the server's small model; other users must provide
     their own Gemini or OpenAI-compatible API key (server keys are never used on
     their behalf).
 
@@ -47,7 +47,7 @@ async def suggest_descriptions(
     """
     settings = get_settings().llm
 
-    if current_user.has_hunren_access:
+    if current_user.has_server_keys_access:
         user_llm = None
         model = settings.small_model_name
     else:

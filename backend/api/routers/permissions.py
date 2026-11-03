@@ -38,7 +38,7 @@ def get_my_permissions(
     Get current user's permissions.
 
     Returns:
-        PermissionResponse with use_hunren_keys and is_admin flags
+        PermissionResponse with use_server_keys and is_admin flags
     """
     return permission_service.get_my_permissions(user=current_user)
 

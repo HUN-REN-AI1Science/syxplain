@@ -128,7 +128,7 @@ def test_programmatic_params_accept_legacy_and_generic_fields():
     assert user_llm.api_base == "https://openrouter.ai/api/v1"
     assert user_llm.openai_key is None  # not OpenAI's endpoint: no literature search
 
-    # HUN-REN users send no key at all
+    # Users with server-key access send no key at all
     assert AnalyzeParams(**base).api_key is None
 
 
@@ -367,7 +367,7 @@ def test_run_validation_rejects_a_private_base():
             target_variable="y",
             features={"x": "x"},
             user_id="00000000-0000-0000-0000-000000000001",
-            has_hunren_access=False,
+            has_server_keys_access=False,
             user_llm=UserLLM(api_key="sk-user", model="m", api_base="http://169.254.169.254/v1"),
         )
     file_repo.get_latest_by_filename.assert_not_called()

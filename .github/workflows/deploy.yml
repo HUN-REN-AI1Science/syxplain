@@ -19,6 +19,8 @@ env:
 
 jobs:
   build-and-push-frontend:
+    # Deploys only from the canonical repo; forks have no deploy secrets
+    if: github.repository == 'HUN-REN-AI1Science/syxplain'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -62,9 +64,10 @@ jobs:
             VITE_KEYCLOAK_URL=${{ secrets.VITE_KEYCLOAK_URL }}
             VITE_KEYCLOAK_REALM=${{ secrets.VITE_KEYCLOAK_REALM }}
             VITE_KEYCLOAK_CLIENT_ID=${{ secrets.VITE_KEYCLOAK_CLIENT_ID }}
-            VITE_ENABLE_MICROSOFT_SSO=${{ secrets.VITE_ENABLE_MICROSOFT_SSO }}
 
   build-and-push-backend:
+    # Deploys only from the canonical repo; forks have no deploy secrets
+    if: github.repository == 'HUN-REN-AI1Science/syxplain'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -107,6 +110,7 @@ jobs:
 
   deploy:
     needs: [build-and-push-frontend, build-and-push-backend]
+    if: github.repository == 'HUN-REN-AI1Science/syxplain'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

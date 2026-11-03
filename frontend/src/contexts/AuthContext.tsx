@@ -19,7 +19,7 @@ interface AuthContextType {
   resetPassword: () => void;
   openAccountConsole: () => void;
   loading: boolean;
-  hasHunrenAccess: boolean;
+  hasServerKeysAccess: boolean;
   isAdmin: boolean;
   refreshPermissions: () => Promise<void>;
 }
@@ -28,7 +28,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const oidc = useOidcAuth();
-  const [hasHunrenAccess, setHasHunrenAccess] = useState(false);
+  const [hasServerKeysAccess, setHasServerKeysAccess] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const tokenGetterSet = useRef(false);
 
@@ -69,10 +69,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchPermissions = useCallback(async () => {
     try {
       const response = await permissionsService.getMyPermissions();
-      setHasHunrenAccess(response.data.use_hunren_keys);
+      setHasServerKeysAccess(response.data.use_server_keys);
       setIsAdmin(response.data.is_admin);
     } catch {
-      setHasHunrenAccess(false);
+      setHasServerKeysAccess(false);
       setIsAdmin(false);
     }
   }, []);
@@ -88,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user) {
       fetchPermissions();
     } else {
-      setHasHunrenAccess(false);
+      setHasServerKeysAccess(false);
       setIsAdmin(false);
     }
   }, [user?.id, fetchPermissions]);
@@ -149,7 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resetPassword,
         openAccountConsole,
         loading,
-        hasHunrenAccess,
+        hasServerKeysAccess,
         isAdmin,
         refreshPermissions,
       }}

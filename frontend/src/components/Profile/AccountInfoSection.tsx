@@ -9,14 +9,14 @@ import type { ProfileData } from '@/types';
 
 interface AccountInfoSectionProps {
   profile: ProfileData | null;
-  hasHunrenAccess?: boolean;
+  hasServerKeysAccess?: boolean;
   isAdmin?: boolean;
   userName?: string;
 }
 
 export const AccountInfoSection: React.FC<AccountInfoSectionProps> = ({
   profile,
-  hasHunrenAccess = false,
+  hasServerKeysAccess = false,
   isAdmin = false,
   userName,
 }) => (
@@ -53,8 +53,8 @@ export const AccountInfoSection: React.FC<AccountInfoSectionProps> = ({
         <div className="flex flex-wrap gap-2">
           {isAdmin ? (
             <Tag severity="warning" value="Administrator" icon="pi pi-shield" />
-          ) : hasHunrenAccess ? (
-            <Tag severity="success" value="HUN-REN Member" icon="pi pi-check-circle" />
+          ) : hasServerKeysAccess ? (
+            <Tag severity="success" value="Server Keys Access" icon="pi pi-check-circle" />
           ) : (
             <Tag severity="info" value="Standard User" icon="pi pi-user" />
           )}
@@ -63,10 +63,10 @@ export const AccountInfoSection: React.FC<AccountInfoSectionProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
         <span className="text-secondary text-sm sm:w-32 font-medium">API Access</span>
         <div className="flex flex-wrap gap-2">
-          {hasHunrenAccess ? (
+          {hasServerKeysAccess ? (
             <span className="text-sm text-green-700 flex items-center gap-1">
               <i className="pi pi-check text-green-600"></i>
-              Using built-in HUN-REN API keys
+              Using the server's built-in API keys
             </span>
           ) : (
             <span className="text-sm text-amber-700 flex items-center gap-1">

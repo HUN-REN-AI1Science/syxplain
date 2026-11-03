@@ -101,12 +101,12 @@ async def run_analysis(
 
     try:
         # Check user's permission status from JWT roles
-        has_hunren_access = current_user.has_hunren_access
+        has_server_keys_access = current_user.has_server_keys_access
 
-        # The user's own LLM settings; HUN-REN members always run on the server keys
+        # The user's own LLM settings; users with server-key access always run on the server keys
         user_llm = (
             request.user_api_keys.to_user_llm()
-            if request.user_api_keys and not has_hunren_access
+            if request.user_api_keys and not has_server_keys_access
             else None
         )
 
@@ -124,7 +124,7 @@ async def run_analysis(
             target_variable=request.problem_description.target_variable,
             features=request.problem_description.features,
             user_id=current_user.user_id,
-            has_hunren_access=has_hunren_access,
+            has_server_keys_access=has_server_keys_access,
             user_llm=user_llm,
         )
 

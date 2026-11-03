@@ -29,8 +29,8 @@
         "description": "Full admin access (admin panel, all endpoints)"
       },
       {
-        "name": "hunren-member",
-        "description": "HUN-REN API key access (built-in API keys)"
+        "name": "server-llm-access",
+        "description": "May run analyses on the server's LLM API keys (no own key needed)"
       }
     ]
   },
@@ -50,16 +50,14 @@
       "rootUrl": "",
       "baseUrl": "/",
       "redirectUris": [
-        "http://localhost:5173/*",
-        "https://syxplain.ai1science.net/*"
+        "http://localhost:5173/*"
       ],
       "webOrigins": [
-        "http://localhost:5173",
-        "https://syxplain.ai1science.net"
+        "http://localhost:5173"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:5173/*##https://syxplain.ai1science.net/*"
+        "post.logout.redirect.uris": "http://localhost:5173/*"
       },
       "defaultClientScopes": [
         "basic",

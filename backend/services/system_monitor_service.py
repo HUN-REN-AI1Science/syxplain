@@ -8,6 +8,7 @@ import contextlib
 import logging
 import time
 from datetime import datetime
+from urllib.parse import urlparse
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -55,6 +56,7 @@ class SystemMonitorService:
             "database_connected": database_connected,
             "slurm_configured": slurm_configured,
             "slurm_connected": slurm_connected,
+            "slurm_host": self._slurm_host(),
             "api_healthy": database_connected,  # API is healthy if database works
             "uptime_seconds": int(time.time() - _app_start_time),
             "checked_at": datetime.utcnow().isoformat(),
@@ -78,6 +80,14 @@ class SystemMonitorService:
             return slurm_settings.is_configured
         except Exception:
             return False
+
+    def _slurm_host(self) -> str | None:
+        """Host (and port) of the configured slurmrestd API, for display."""
+        try:
+            api_url = get_slurm_settings().api_url
+        except Exception:
+            return None
+        return (urlparse(api_url).netloc or None) if api_url else None
 
     def _check_slurm_sync(self) -> bool:
         """
@@ -326,6 +336,7 @@ class SystemMonitorService:
             },
             "features": {
                 "slurm_configured": self._is_slurm_configured(),
+                "slurm_host": self._slurm_host(),
                 "literature_search_enabled": literature_available(None),
                 "user_api_keys_enabled": True,
             },

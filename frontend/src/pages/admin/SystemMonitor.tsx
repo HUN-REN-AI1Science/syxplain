@@ -156,7 +156,9 @@ const SystemMonitor: React.FC<SystemMonitorProps> = ({ toast }) => {
           title="Slurm Cluster"
           healthy={health?.slurm_connected ?? false}
           icon="pi pi-sitemap"
-          description={health?.slurm_connected ? 'slurm.science-cloud.hu' : 'Disconnected'}
+          description={
+            health?.slurm_connected ? (health.slurm_host ?? 'Connected') : 'Disconnected'
+          }
         />
       </div>
 

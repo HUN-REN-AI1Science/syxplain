@@ -242,7 +242,7 @@ class MessageResponse(BaseModel):
 class PermissionResponse(BaseModel):
     """User's permission status."""
 
-    use_hunren_keys: bool
+    use_server_keys: bool
     is_admin: bool = False
 
 
@@ -381,6 +381,7 @@ class SystemHealthResponse(BaseModel):
     database_connected: bool
     slurm_configured: bool
     slurm_connected: bool
+    slurm_host: str | None = None
     api_healthy: bool
     uptime_seconds: int
     checked_at: str
@@ -561,6 +562,7 @@ class FeaturesConfig(BaseModel):
     """Feature flags."""
 
     slurm_configured: bool
+    slurm_host: str | None = None
     literature_search_enabled: bool
     user_api_keys_enabled: bool
 

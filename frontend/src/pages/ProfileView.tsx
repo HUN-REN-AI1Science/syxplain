@@ -37,7 +37,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
   const [sharedLoading, setSharedLoading] = useState(false);
   const [revokeRunId, setRevokeRunId] = useState<string | null>(null);
   const toast = useRef<Toast>(null);
-  const { user: authUser, signOut, hasHunrenAccess, isAdmin } = useAuth();
+  const { user: authUser, signOut, hasServerKeysAccess, isAdmin } = useAuth();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -183,7 +183,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ onBack, onSelectRun }) => {
 
       <AccountInfoSection
         profile={profile}
-        hasHunrenAccess={hasHunrenAccess}
+        hasServerKeysAccess={hasServerKeysAccess}
         isAdmin={isAdmin}
         userName={authUser?.name}
       />

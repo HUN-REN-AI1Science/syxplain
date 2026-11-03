@@ -47,6 +47,10 @@ class AuthSettings:
         default_factory=lambda: os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
     )
     keycloak_issuer: str = field(default_factory=lambda: os.environ.get("KEYCLOAK_ISSUER", ""))
+    # Realm role that lets a user run analyses on the server's LLM keys (no own key needed)
+    server_keys_role: str = field(
+        default_factory=lambda: os.environ.get("SERVER_KEYS_ROLE", "server-llm-access")
+    )
 
     @property
     def jwks_url(self) -> str:
@@ -207,20 +211,29 @@ class SlurmSettings:
     api_url: str = field(default_factory=lambda: os.environ.get("SLURM_API_URL", ""))
     auth_token: str = field(default_factory=lambda: os.environ.get("SLURM_AUTH_TOKEN", ""))
     user_name: str = field(default_factory=lambda: os.environ.get("SLURM_USER_NAME", "slurm"))
-    partition: str = field(
-        default_factory=lambda: os.environ.get("SLURM_PARTITION", "cpu_m2.2xlarge")
-    )
+    # Empty = the cluster's default partition
+    partition: str = field(default_factory=lambda: os.environ.get("SLURM_PARTITION", ""))
     staging_dir: str = field(
         default_factory=lambda: os.environ.get("SLURM_STAGING_DIR", "/tmp/syxplain")
     )
 
     # Resource allocation
     cpus: int = field(default_factory=lambda: int(os.environ.get("SLURM_CPUS", "4")))
-    memory: str = field(default_factory=lambda: os.environ.get("SLURM_MEMORY", "7941M"))
+    memory: str = field(default_factory=lambda: os.environ.get("SLURM_MEMORY", "8G"))
     time_limit: str = field(default_factory=lambda: os.environ.get("SLURM_TIME_LIMIT", "04:00:00"))
 
     # Singularity container path (if set, uses container instead of conda)
     container_path: str = field(default_factory=lambda: os.environ.get("SLURM_CONTAINER_PATH", ""))
+
+    # Host paths mounted into the container (comma-separated singularity --bind specs).
+    # Default: the staging directory, so the worker can write its logs and Julia depot there.
+    container_binds: str = field(
+        default_factory=lambda: os.environ.get("SLURM_CONTAINER_BINDS", "")
+    )
+
+    # Writable Julia package depot on shared storage (the image's read-only depot is appended).
+    # Default: {SLURM_STAGING_DIR}/.julia
+    julia_depot: str = field(default_factory=lambda: os.environ.get("SLURM_JULIA_DEPOT", ""))
 
     # Retry interval for quota/QOS errors (seconds)
     retry_interval: int = field(
@@ -231,6 +244,17 @@ class SlurmSettings:
     def is_configured(self) -> bool:
         """Check if Slurm is properly configured."""
         return bool(self.api_url and self.auth_token)
+
+    @property
+    def container_bind_list(self) -> list[str]:
+        """Bind specs for the worker container (defaults to the staging directory)."""
+        binds = [b.strip() for b in self.container_binds.split(",") if b.strip()]
+        return binds or [self.staging_dir]
+
+    @property
+    def julia_depot_path(self) -> str:
+        """Writable Julia depot on shared storage."""
+        return self.julia_depot or f"{self.staging_dir.rstrip('/')}/.julia"
 
 
 @dataclass

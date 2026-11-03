@@ -56,9 +56,9 @@ class User:
         return "syxplain-admin" in self.roles
 
     @property
-    def has_hunren_access(self) -> bool:
-        """Check if user has HUN-REN API key access (admin or hunren-member)."""
-        return "syxplain-admin" in self.roles or "hunren-member" in self.roles
+    def has_server_keys_access(self) -> bool:
+        """Check if the user may run on the server's LLM keys (admin or SERVER_KEYS_ROLE)."""
+        return "syxplain-admin" in self.roles or get_auth_settings().server_keys_role in self.roles
 
     def __repr__(self) -> str:
         return f"User(id={self.user_id}, email={self.email})"

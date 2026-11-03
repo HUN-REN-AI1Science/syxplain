@@ -6,7 +6,7 @@ Create Date: 2026-02-25
 
 Creates all tables matching current SQLAlchemy models.
 User permissions are now managed via Keycloak realm roles
-(syxplain-admin, hunren-member) — no user_permissions table needed.
+(syxplain-admin and the server-keys role, SERVER_KEYS_ROLE) — no user_permissions table needed.
 """
 
 from typing import Sequence, Union
