@@ -1,0 +1,15 @@
+{
+  "project_description": "I want to predict annual gross primary production (GPP) from all the other factors.",
+  "target_variable": "GPP",
+  "features": {
+    "AMO": "Atlantic Multidecadal Oscillation (indicator of sea-surface temperature in the North Atlantic)",
+    "CO2": "Atmospheric carbon dioxide concentration",
+    "NAO": "North Atlantic Oscillation (indicator of sea-surface atmospheric pressure in the North Atlantic)",
+    "SMI": "soil moisture indicator",
+    "PDSI": "Palmer drought severity index",
+    "VPDI": "vapour pressure deficit indicator",
+    "Year": "Year",
+    "SD_VPDI": "standard deviation of vapour pressure deficit indicator",
+    "Tm_sprsum": "spring-summer mean temperature"
+  }
+}

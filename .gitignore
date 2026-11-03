@@ -5,6 +5,8 @@ outputs/
 /publication/
 .claude/
 api_results/
+# Third-party data that may not be redistributed
+data/example_5/
 /data/example_2/.~lock.Summary table.xlsx#
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,venv,node,react,visualstudiocode,macos
