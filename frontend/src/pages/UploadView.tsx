@@ -140,7 +140,8 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadComplete }) => {
                   <strong>Text data</strong> - Convert to numerical representations
                 </li>
                 <li>
-                  <strong>Time series</strong> - Add lagged features or derivatives
+                  <strong>Time series</strong> - Keep a date or time column; lagged features and
+                  rate laws are derived automatically
                 </li>
                 <li>
                   <strong>Missing values</strong> - Impute or remove rows with missing data

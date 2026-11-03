@@ -65,10 +65,19 @@ export const ResultsHeader: React.FC<ResultsHeaderProps> = ({
                 data
               </li>
               <li>
-                <strong>Recommended Equation</strong> - The best balance of accuracy and simplicity
+                <strong>Recommended Equation</strong> - The simplest model that is as accurate as
+                the best one (cross-validation), scored once on held-out rows
               </li>
               <li>
-                <strong>All Equations</strong> - Complete list sorted by complexity
+                <strong>Other equations</strong> - The other candidates, with their fit and plots
+              </li>
+              <li>
+                <strong>Does the evidence agree?</strong> - Checks of the recommended equation
+                against the noise ceiling, held-out rows, SHAP effects and known laws
+              </li>
+              <li>
+                <strong>How the equations were found</strong> - The agent's work and the model
+                leaderboard
               </li>
             </ul>
 

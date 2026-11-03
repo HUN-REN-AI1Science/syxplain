@@ -202,12 +202,13 @@ export const DiscoveryReportPanel: React.FC<DiscoveryReportPanelProps> = ({ repo
           </span>
         </button>
         <HelpButton title="Discovery report">
-          <h4>Classic laws first</h4>
+          <h4>Blind exploration</h4>
           <p>
-            An AI agent first fits classic, named laws (for example Mitscherlich, Langmuir or a
-            power law) to your data. For each one it diagnoses <strong>why</strong> it falls short:
-            a wrong curve shape, a missing variable, noise that grows with the value, or parameters
-            the data cannot pin down.
+            An AI agent designs its own formulas from the shapes it sees in your data, without
+            access to known laws, so existing knowledge cannot bias the search. For each formula it
+            gets a diagnosis of <strong>why</strong> it falls short: a wrong curve shape, a missing
+            variable, noise that grows with the value, or parameters the data cannot pin down. Known
+            laws are fitted and compared only afterwards.
           </p>
           <h4>Feature effects</h4>
           <p>
