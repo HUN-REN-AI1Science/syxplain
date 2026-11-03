@@ -5,7 +5,7 @@
 # - Default (WITH_PYSR=false): PySR searches are faked with least-squares equations, so the
 #   image builds in seconds and needs no Julia. Good for UI and pipeline work.
 # - WITH_PYSR=true: Julia + PySR are installed and precompiled, and PySR searches run for
-#   real (LOCAL_PYSR=true in docker-compose.yml sets both the build arg and the runtime flag).
+#   real (LOCAL_PYSR=true in docker-compose.yml sets the build arg; the emulator detects PySR).
 #   The first build takes 10-20 minutes.
 #
 # Build context must be the repo root (context: .)
@@ -31,6 +31,19 @@ ENV JULIA_DEPOT_PATH=/opt/julia-depot \
     PYTHON_JULIACALL_EXE=/opt/julia/bin/julia \
     PYTHON_JULIACALL_PROJECT=/opt/julia-env
 
+# Julia (only with WITH_PYSR=true), in its own layer so requirement changes don't re-download it
+RUN if [ "$WITH_PYSR" = "true" ]; then \
+        case "${TARGETARCH:-amd64}" in \
+            amd64) JARCH=x64; JFILE=x86_64 ;; \
+            arm64) JARCH=aarch64; JFILE=aarch64 ;; \
+            *) echo "Unsupported architecture: $TARGETARCH" && exit 1 ;; \
+        esac \
+        && JMINOR=$(echo "$JULIA_VERSION" | cut -d. -f1,2) \
+        && curl -fsSL "https://julialang-s3.julialang.org/bin/linux/${JARCH}/${JMINOR}/julia-${JULIA_VERSION}-linux-${JFILE}.tar.gz" \
+            | tar -xz -C /opt \
+        && mv "/opt/julia-${JULIA_VERSION}" /opt/julia; \
+    fi
+
 # Python deps: worker requirements (pysr/juliacall only with WITH_PYSR) + mock server deps
 COPY slurm_worker/requirements.txt /tmp/worker-requirements.txt
 RUN if [ "$WITH_PYSR" = "true" ]; then \
@@ -44,21 +57,12 @@ RUN if [ "$WITH_PYSR" = "true" ]; then \
         uvicorn[standard] \
     && rm /tmp/worker-requirements.txt /tmp/filtered-requirements.txt
 
-# Julia + precompiled PySR packages (only with WITH_PYSR=true)
+# Precompile PySR's Julia packages, then one warm-up fit with turbo=True as the jobs use
 RUN if [ "$WITH_PYSR" = "true" ]; then \
-        case "${TARGETARCH:-amd64}" in \
-            amd64) JARCH=x64; JFILE=x86_64 ;; \
-            arm64) JARCH=aarch64; JFILE=aarch64 ;; \
-            *) echo "Unsupported architecture: $TARGETARCH" && exit 1 ;; \
-        esac \
-        && JMINOR=$(echo "$JULIA_VERSION" | cut -d. -f1,2) \
-        && curl -fsSL "https://julialang-s3.julialang.org/bin/linux/${JARCH}/${JMINOR}/julia-${JULIA_VERSION}-linux-${JFILE}.tar.gz" \
-            | tar -xz -C /opt \
-        && mv "/opt/julia-${JULIA_VERSION}" /opt/julia \
-        && cd "$(mktemp -d)" \
+        cd "$(mktemp -d)" \
         && env -u PYTHON_JULIACALL_EXE -u PYTHON_JULIACALL_PROJECT \
             python -c "import pysr; pysr.load_all_packages()" \
-        && python -c "import numpy as np; from pysr import PySRRegressor; X = np.random.randn(20, 2); PySRRegressor(niterations=2, verbosity=0, progress=False).fit(X, X[:, 0] * X[:, 1]); print('PySR warm-up complete')" \
+        && python -c "import numpy as np; from pysr import PySRRegressor; X = np.random.randn(20, 2); PySRRegressor(niterations=2, turbo=True, verbosity=0, progress=False).fit(X, X[:, 0] * X[:, 1]); print('PySR warm-up complete')" \
         && cd / ; \
     fi
 
@@ -69,8 +73,7 @@ COPY dev/mock_slurmrestd.py /app/dev/mock_slurmrestd.py
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     LC_ALL=C.UTF-8 \
-    LANG=C.UTF-8 \
-    MOCK_SLURM_REAL_PYSR=$WITH_PYSR
+    LANG=C.UTF-8
 
 WORKDIR /app
 EXPOSE 6820

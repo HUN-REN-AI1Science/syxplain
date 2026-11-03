@@ -1,7 +1,7 @@
 # pre-commit install   (once, after `uv sync` or `pip install pre-commit`)
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.17.3  # keep in sync with ruff in uv.lock
     hooks:
       - id: ruff
         args: [--fix]

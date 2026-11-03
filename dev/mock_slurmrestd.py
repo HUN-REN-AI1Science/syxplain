@@ -7,11 +7,10 @@ and monitor jobs without a real Slurm cluster.
 - PySR tasks, default: faked (no Julia/PySR needed). The emulator fetches
   the task input from the backend and returns least-squares equations over the
   requested features, so agent-launched searches get plausible results.
-- PySR tasks with ``MOCK_SLURM_REAL_PYSR=true`` (image built with
-  ``WITH_PYSR=true``): run for real, like every other task type.
-- Other task types: launched as real ``python -m slurm_worker`` subprocesses.
-
-``LOCAL_PYSR_CPUS`` (default 2) sets the CPUs each real PySR search may use.
+- PySR tasks when PySR is installed (image built with ``WITH_PYSR=true``):
+  run for real, like every other task type.
+- Other task types: launched as real ``python -m slurm_worker`` subprocesses,
+  with the job's ``cpus_per_task`` exported as ``SLURM_CPUS_PER_TASK``.
 
 Usage:
     python dev/mock_slurmrestd.py --port 6820
@@ -19,6 +18,7 @@ Usage:
 
 import argparse
 import atexit
+import importlib.util
 import logging
 import os
 import re
@@ -63,6 +63,7 @@ class MockJob:
     end_time: int = 0
     exit_code: int = 0
     script: str = ""
+    cpus: int = 1
     env: dict[str, str] = field(default_factory=dict)
     task_type: str = ""
     task_key: str = ""
@@ -81,7 +82,7 @@ class JobStore:
         self._lock = threading.Lock()
         self._next_id = 1000
 
-    def create(self, script: str) -> MockJob:
+    def create(self, script: str, cpus: int = 1) -> MockJob:
         with self._lock:
             job_id = self._next_id
             self._next_id += 1
@@ -89,6 +90,7 @@ class JobStore:
                 job_id=job_id,
                 submit_time=int(time.time()),
                 script=script,
+                cpus=cpus,
             )
             self._jobs[job_id] = job
             return job
@@ -108,8 +110,8 @@ class JobStore:
 
 store = JobStore()
 
-# Run PySR searches for real (needs the image built with WITH_PYSR=true)
-REAL_PYSR = os.environ.get("MOCK_SLURM_REAL_PYSR", "false").lower() in ("1", "true", "yes")
+# Run PySR searches for real when PySR is installed (image built with WITH_PYSR=true)
+REAL_PYSR = importlib.util.find_spec("pysr") is not None
 
 # ---------------------------------------------------------------------------
 # Script parsing
@@ -341,8 +343,8 @@ def _launch_worker(job: MockJob, callback_url: str, callback_token: str) -> None
     if callback_token:
         env["CALLBACK_TOKEN"] = callback_token
     env.setdefault("PYTHONPATH", "/app")
-    # CPUs per job, as Slurm would allocate them (the PySR task reads SLURM_CPUS_PER_TASK)
-    env["SLURM_CPUS_PER_TASK"] = os.environ.get("LOCAL_PYSR_CPUS", "2")
+    # CPUs the job asked for, as Slurm exports them (the PySR task reads SLURM_CPUS_PER_TASK)
+    env["SLURM_CPUS_PER_TASK"] = str(job.cpus)
 
     cmd = [
         sys.executable,
@@ -474,7 +476,7 @@ async def submit_job(request: Request):
             content={"errors": [{"error": "No script provided"}]},
         )
 
-    job = store.create(script)
+    job = store.create(script, cpus=int((body.get("job") or {}).get("cpus_per_task") or 1))
     logger.info(f"Job {job.job_id}: submitted")
 
     threading.Thread(target=_dispatch_job, args=(job,), daemon=True).start()

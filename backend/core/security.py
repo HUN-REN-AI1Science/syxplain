@@ -35,6 +35,14 @@ def _get_jwks_client(settings: AuthSettings) -> PyJWKClient:
     return _jwks_client
 
 
+ADMIN_ROLE = "syxplain-admin"
+
+
+def grants_server_keys(roles) -> bool:
+    """Whether these realm roles allow runs on the server's LLM keys (admin or SERVER_KEYS_ROLE)."""
+    return ADMIN_ROLE in roles or get_auth_settings().server_keys_role in roles
+
+
 class User:
     """
     Represents an authenticated user.
@@ -53,12 +61,12 @@ class User:
     @property
     def is_admin(self) -> bool:
         """Check if user has the syxplain-admin realm role."""
-        return "syxplain-admin" in self.roles
+        return ADMIN_ROLE in self.roles
 
     @property
     def has_server_keys_access(self) -> bool:
-        """Check if the user may run on the server's LLM keys (admin or SERVER_KEYS_ROLE)."""
-        return "syxplain-admin" in self.roles or get_auth_settings().server_keys_role in self.roles
+        """Check if the user may run on the server's LLM keys."""
+        return grants_server_keys(self.roles)
 
     def __repr__(self) -> str:
         return f"User(id={self.user_id}, email={self.email})"

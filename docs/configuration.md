@@ -68,12 +68,12 @@ running on a real cluster.
 | `JOB_POLL_INTERVAL` | `10` | Seconds between job status polls |
 | `COMPUTE_MAX_RETRIES` | `3` | Retries of a failed submission |
 
-The local emulator's own settings exist only in development (`docker-compose.yml`):
+The local emulator's own setting exists only in development (`docker-compose.yml`). It
+runs each job with the CPUs the job requests (`SLURM_CPUS`).
 
 | Variable | Default | Description |
 |---|---|---|
 | `LOCAL_PYSR` | `false` | `true` builds Julia + PySR into the emulator and runs searches for real |
-| `LOCAL_PYSR_CPUS` | `2` | CPUs per local PySR search |
 
 ## Discovery agent
 

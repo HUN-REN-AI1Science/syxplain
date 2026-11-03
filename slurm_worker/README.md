@@ -258,7 +258,7 @@ completion.
 directory, so code changes apply to the next job. PySR searches are faked with
 least-squares fits unless you start it with `LOCAL_PYSR=true docker compose up --build`,
 which builds Julia and PySR into the emulator image and runs this package's real PySR
-task (`LOCAL_PYSR_CPUS`, default 2, sets the CPUs per search). Details in
+task (`SLURM_CPUS`, default 4, sets the CPUs per search). Details in
 [docs/slurm.md](../docs/slurm.md#local-development-without-a-cluster).
 
 **One task directly.** `dev/run_worker_task.py` (run from the repository root) runs a

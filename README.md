@@ -87,7 +87,7 @@ LOCAL_PYSR=true docker compose up --build
 ```
 
 The first build installs Julia and PySR into the emulator image, which takes 10–20
-minutes. `LOCAL_PYSR_CPUS` (default 2) sets the CPUs per search.
+minutes. `SLURM_CPUS` (default 4) sets the CPUs per search, as on a cluster.
 
 ### Your own Slurm cluster
 

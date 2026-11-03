@@ -4,7 +4,6 @@ import pytest
 
 from backend.core import config
 from backend.core.security import User
-from backend.infrastructure.slurm import backend as slurm_backend
 from backend.infrastructure.slurm.backend import SlurmBackend
 from backend.infrastructure.slurm.models import SlurmJobSubmission, TaskInput
 
@@ -22,26 +21,25 @@ def env(monkeypatch):
     config.clear_settings_cache()
 
 
-def _container_script(monkeypatch, **values) -> str:
-    for key, value in values.items():
-        monkeypatch.setenv(key, value)
-    monkeypatch.setenv("SLURM_CONTAINER_PATH", "/shared/worker.sif")
-    monkeypatch.setattr(slurm_backend, "get_slurm_settings", config.SlurmSettings)
+def _container_script(env, **values) -> str:
+    env(SLURM_CONTAINER_PATH="/shared/worker.sif", **values)
     task = TaskInput(task_type="pysr", run_id="run1", input_data={})
     return SlurmBackend()._generate_worker_script(
         task, "/shared/out.json", "/shared/o.log", "/shared/e.log", "/shared/logs"
     )
 
 
-def test_container_binds_and_julia_depot_default_to_staging_dir(monkeypatch):
-    script = _container_script(monkeypatch, SLURM_STAGING_DIR="/shared/syxplain")
+def test_container_binds_and_julia_depot_default_to_staging_dir(env, monkeypatch):
+    monkeypatch.delenv("SLURM_CONTAINER_BINDS", raising=False)
+    monkeypatch.delenv("SLURM_JULIA_DEPOT", raising=False)
+    script = _container_script(env, SLURM_STAGING_DIR="/shared/syxplain")
     assert "--bind /shared/syxplain " in script
     assert "--env JULIA_DEPOT_PATH=/shared/syxplain/.julia:/opt/julia-depot" in script
 
 
-def test_container_binds_and_julia_depot_are_configurable(monkeypatch):
+def test_container_binds_and_julia_depot_are_configurable(env):
     script = _container_script(
-        monkeypatch,
+        env,
         SLURM_STAGING_DIR="/shared/syxplain",
         SLURM_CONTAINER_BINDS="/storage, /scratch:/scratch",
         SLURM_JULIA_DEPOT="/scratch/julia",

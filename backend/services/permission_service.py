@@ -10,7 +10,7 @@ import logging
 import httpx
 
 from backend.core.config import get_settings
-from backend.core.security import User
+from backend.core.security import ADMIN_ROLE, User, grants_server_keys
 from backend.infrastructure.keycloak.admin_client import get_keycloak_admin_token
 
 logger = logging.getLogger(__name__)
@@ -101,10 +101,7 @@ class PermissionService:
                 user_roles = self._get_user_realm_roles(admin_api_url, headers, user_id)
                 role_names = {r.get("name") for r in user_roles}
 
-                has_server_keys = (
-                    self.settings.auth.server_keys_role in role_names
-                    or "syxplain-admin" in role_names
-                )
+                has_server_keys = grants_server_keys(role_names)
 
                 result.append(
                     {
@@ -162,7 +159,7 @@ class PermissionService:
             app_roles = [
                 {"id": r["id"], "name": r["name"]}
                 for r in user_roles
-                if r.get("name") in ("syxplain-admin", self.settings.auth.server_keys_role)
+                if r.get("name") in (ADMIN_ROLE, self.settings.auth.server_keys_role)
             ]
 
             if not app_roles:

@@ -82,12 +82,11 @@ class SystemMonitorService:
             return False
 
     def _slurm_host(self) -> str | None:
-        """Host (and port) of the configured slurmrestd API, for display."""
+        """Hostname of the configured slurmrestd API, for display."""
         try:
-            api_url = get_slurm_settings().api_url
+            return self._url_host(get_slurm_settings().api_url)
         except Exception:
             return None
-        return (urlparse(api_url).netloc or None) if api_url else None
 
     def _check_slurm_sync(self) -> bool:
         """
@@ -290,24 +289,14 @@ class SystemMonitorService:
             return "***"
         return f"***{secret[-visible_chars:]}"
 
-    def _extract_db_host(self, database_url: str | None) -> str | None:
-        """
-        Extract the hostname from a database URL.
-
-        Args:
-            database_url: Database connection URL like postgresql://user:pass@host:port/db
-
-        Returns:
-            Just the hostname, or None if URL is empty/invalid
-        """
-        if not database_url:
+    @staticmethod
+    def _url_host(url: str | None) -> str | None:
+        """Hostname from a URL (no credentials or port), or None if empty or invalid."""
+        if not url:
             return None
         try:
-            from urllib.parse import urlparse
-
-            parsed = urlparse(database_url)
-            return parsed.hostname
-        except Exception:
+            return urlparse(url).hostname
+        except ValueError:
             return None
 
     def get_config_summary(self) -> dict:
@@ -345,7 +334,7 @@ class SystemMonitorService:
                 "slurm_auth_token": self._mask_secret(
                     slurm_settings.auth_token if slurm_settings else None
                 ),
-                "database_host": self._extract_db_host(settings.database.url),
+                "database_host": self._url_host(settings.database.url),
             },
         }
 

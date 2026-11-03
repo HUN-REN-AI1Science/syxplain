@@ -20,14 +20,14 @@ For running tests and tools outside Docker:
 ```bash
 # Python 3.10 (the backend image's version); uv picks it from pyproject.toml
 uv run --with-requirements requirements.txt pytest       # backend tests
-uvx ruff check . && uvx ruff format --check .            # lint + format
+uv run ruff check . && uv run ruff format --check .      # lint + format (ruff from uv.lock)
 
 # Frontend (Node 24)
 cd frontend && npm ci
 npm run lint && npm run typecheck && npm run format:check
 ```
 
-Install the git hooks once with `uvx pre-commit install`. They run ruff and prettier on
+Install the git hooks once with `uv run pre-commit install`. They run ruff and prettier on
 every commit.
 
 The backend tests need no database, cluster, Keycloak or LLM key: LLM calls use DSPy's

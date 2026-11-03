@@ -475,7 +475,7 @@ backend's defaults point at it (`SLURM_API_URL=http://mock-slurm:6820`,
   for UI and pipeline work.
 - **Real PySR:** `LOCAL_PYSR=true docker compose up --build` builds Julia and PySR into
   the emulator image (the first build takes 10 to 20 minutes) and runs real searches with
-  the worker code. `LOCAL_PYSR_CPUS` (default 2) sets how many CPUs each search may use.
+  the worker code. Each search gets the job's `SLURM_CPUS` (default 4), as on a cluster.
 - Task types other than `pysr` always run for real, as `python -m slurm_worker`
   subprocesses.
 

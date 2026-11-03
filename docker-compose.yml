@@ -71,14 +71,10 @@ services:
       - SLURM_API_URL=${SLURM_API_URL:-http://mock-slurm:6820}
       - SLURM_AUTH_TOKEN=${SLURM_AUTH_TOKEN:-mock-token}
       - SLURM_USER_NAME=${SLURM_USER_NAME:-syxplain}
-      - SLURM_PARTITION=${SLURM_PARTITION:-}
       - SLURM_STAGING_DIR=${SLURM_STAGING_DIR:-/tmp/syxplain}
       - SLURM_CPUS=${SLURM_CPUS:-4}
-      - SLURM_MEMORY=${SLURM_MEMORY:-8G}
       - SLURM_TIME_LIMIT=${SLURM_TIME_LIMIT:-04:00:00}
       - SLURM_CONTAINER_PATH=${SLURM_CONTAINER_PATH:-}
-      - SLURM_CONTAINER_BINDS=${SLURM_CONTAINER_BINDS:-}
-      - SLURM_JULIA_DEPOT=${SLURM_JULIA_DEPOT:-}
       # Compute settings (set WORKER_CALLBACK_URL in .env for Slurm workers to reach backend)
       - WORKER_CALLBACK_URL=${WORKER_CALLBACK_URL:-http://backend:8000/api/internal}
       - WORKER_CALLBACK_TOKEN=${WORKER_CALLBACK_TOKEN:-dev-callback-token}
@@ -125,8 +121,6 @@ services:
       - ./dev:/app/dev
     environment:
       - PYTHONPATH=/app
-      - MOCK_SLURM_REAL_PYSR=${LOCAL_PYSR:-false}
-      - LOCAL_PYSR_CPUS=${LOCAL_PYSR_CPUS:-2}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6820/slurm/v0.0.41/ping')"]
       interval: 5s
