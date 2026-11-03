@@ -3,12 +3,13 @@
 # self-registered users would get stuck at email verification).
 #
 # Usage: ./dev/create-dev-user.sh [email] [password]
-# Defaults: dev@example.com / dev-password. The user gets the syxplain-admin role, which
-# also allows running analyses on the server's LLM keys (OPENAI_API_KEY in .env).
+# Defaults: dev@example.com / Dev-password-1 (the realm requires a digit and a
+# special character). The user gets the syxplain-admin role, which also allows running
+# analyses on the server's LLM keys (OPENAI_API_KEY in .env).
 set -euo pipefail
 
 EMAIL="${1:-dev@example.com}"
-PASSWORD="${2:-dev-password}"
+PASSWORD="${2:-Dev-password-1}"
 CONTAINER="${KEYCLOAK_CONTAINER:-syxplain-keycloak}"
 ADMIN_USER="${KEYCLOAK_ADMIN_USERNAME:-admin}"
 ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"

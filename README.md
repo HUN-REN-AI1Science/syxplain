@@ -63,7 +63,7 @@ docker compose up --build
 ./dev/create-dev-user.sh      # in a second terminal, once Keycloak is up
 ```
 
-Open http://localhost:5173 and log in as `dev@example.com` / `dev-password`. Upload one
+Open http://localhost:5173 and log in as `dev@example.com` / `Dev-password-1`. Upload one
 of the [example datasets](data/) and start an analysis.
 
 The development stack contains:
