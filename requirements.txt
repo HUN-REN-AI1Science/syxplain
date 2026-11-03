@@ -6,7 +6,7 @@ pandas
 numpy
 sympy
 # SINDy rate-law searches (discovery agent, run in the backend)
-pysindy>=2.0,<3
+pysindy>=2.1.0,<3
 matplotlib
 scipy
 scikit-learn
@@ -16,9 +16,9 @@ psycopg2-binary
 alembic
 pyjwt[crypto]
 # Pinned: the discovery agent extends dspy.ReAct internals
-dspy>=3.4,<3.5
+dspy>=3.4.1,<3.5
 # LiteLLM imports it for every Responses API call with tools (literature web search)
-mcp>=1.0
+mcp>=2.3.0
 openpyxl
 rich
 httpx
