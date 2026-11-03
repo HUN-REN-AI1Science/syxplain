@@ -1,181 +1,172 @@
-# Syxplain Slurm Worker
+# Syxplain Slurm worker
 
-Standalone worker for executing PySR symbolic-regression searches on Slurm clusters. Each search of a run has its own task key (`--task-key pysr_2`), under which the backend stores its input and results.
+`slurm_worker` is the program that runs on the compute nodes. It runs one task per
+Slurm job, currently one PySR symbolic-regression search. Each search of a run has its own
+task key (`pysr_1`, `pysr_2`, ...), under which the backend stores its input and its
+result.
 
-> **Note:** For overall Slurm integration setup (environment variables, SSH tunnels, token management), see [SLURM.md](../SLURM.md).
+This README is for people working on the worker code. To connect Syxplain to a cluster
+(configuration, building and deploying the image, network requirements, troubleshooting)
+see [docs/slurm.md](../docs/slurm.md).
 
-## Table of Contents
+Current version: `__version__` in [`__init__.py`](__init__.py) (3.2.0). The `Version`
+labels in the `.def` files are not authoritative.
 
-- [Quick Start](#quick-start)
-- [Local Testing](#local-testing)
-- [Singularity Container](#singularity-container)
-- [Task Types](#task-types)
-- [Adding New Tasks](#adding-new-tasks)
-- [Progress Callbacks](#progress-callbacks)
-- [Troubleshooting](#troubleshooting)
+## Contents
 
-## Quick Start
+- [Package layout](#package-layout)
+- [How a task runs](#how-a-task-runs)
+- [Command line](#command-line)
+- [Environment variables](#environment-variables)
+- [Backend endpoints](#backend-endpoints)
+- [Task types](#task-types)
+- [Adding a task type](#adding-a-task-type)
+- [Running locally](#running-locally)
+- [Building the image](#building-the-image)
 
-### 1. Deploy Worker Code to Cluster
+## Package layout
 
-Copy the worker code to the cluster's shared storage:
+```
+slurm_worker/
+├── __init__.py              # __version__, TaskRegistry export
+├── __main__.py              # entry point for python -m slurm_worker
+├── cli.py                   # argument parsing, WorkerRunner (fetch input, run task, report)
+├── config.py                # CallbackConfig, PySRConfig, WorkerConfig
+├── logging_config.py        # logging to stdout
+├── io/file_handler.py       # read --input, write --output (result or error JSON)
+├── reporting/reporter.py    # ProgressReporter: HTTP callbacks to the backend
+├── tasks/
+│   ├── base.py              # Task base class, TaskResult, DataFrameInput
+│   ├── registry.py          # TaskRegistry (task type name -> class)
+│   ├── pysr_task.py         # the "pysr" task
+│   └── pysr_progress.py     # live search progress, read from PySR's progress bar
+├── requirements.txt         # dependencies for a non-container (conda) install
+├── syxplain-worker.def      # full Singularity/Apptainer image
+├── syxplain-worker-code.def # code-only rebuild on top of an existing image
+└── example-job.sbatch       # manual test job (local input file, no backend)
+```
+
+## How a task runs
+
+The backend never sends files to the cluster. It stores the task input in its database,
+submits a job whose script exports `CALLBACK_URL` and `CALLBACK_TOKEN`, and runs:
 
 ```bash
-scp -r slurm_worker ai4science@slurm.science-cloud.hu:/storage/ai4science/syxplain/
+singularity run [...] syxplain-worker.sif \
+    --task-type pysr --task-key pysr_2 --run-id <run-uuid> --output /tmp/syxplain_<uuid>/output.json
 ```
 
-### 2. Build the Singularity Container on Cluster
+(or `python -m slurm_worker` with the same arguments in a conda environment). The worker
+then:
 
-SSH to the cluster and build (no local Singularity installation needed):
+1. reports progress 1% ("Fetching input");
+2. fetches its input with `GET {CALLBACK_URL}/input/{run_id}`, or reads `--input` if given;
+3. creates the task from `TaskRegistry` and runs it, which validates the input, executes,
+   and reports progress along the way;
+4. writes the result JSON to `--output`, reports 100% and posts the result to
+   `{CALLBACK_URL}/complete/{run_id}`;
+5. on any exception, posts the error and traceback to `{CALLBACK_URL}/error/{run_id}`,
+   writes an error JSON to `--output` and exits with code 1.
 
-```bash
-# SSH to the cluster
-ssh ai4science@slurm.science-cloud.hu
+The backend reads the result from the completion callback, not from the output file. In
+backend-submitted jobs the output file is in the node's `/tmp` and is only useful for
+debugging on the node.
 
-# Create containers directory
-mkdir -p /storage/ai4science/syxplain/containers
+## Command line
 
-# Build the container
-cd /storage/ai4science/syxplain/slurm_worker
-singularity build --fakeroot ../containers/syxplain-worker.sif syxplain-worker.def
+```
+python -m slurm_worker --task-type {pysr} --output PATH [options]
 ```
 
-This creates `syxplain-worker.sif` with all dependencies pre-installed and every PySR Julia package installed and precompiled into the image (about 25 minutes). The build fails if that preloading fails, and its self-test imports and fits PySR offline on the read-only image, so jobs never download, resolve or compile anything at run time.
+| Argument | Required | Description |
+|---|---|---|
+| `--task-type` | yes | Registered task type (`pysr`). |
+| `--output` | yes | Path of the output JSON. Parent directories are created. |
+| `--task-key` | no | Key of the task within the run, for example `pysr_2`. Default: the task type. |
+| `--run-id` | no | Run ID used in callback URLs. Default: `$SLURM_JOB_ID`, else `local`. |
+| `--input` | no | Read the input from this JSON file instead of fetching it from the backend. |
+| `--callback-url` | no | Overrides `CALLBACK_URL`. |
+| `--callback-token` | no | Overrides `CALLBACK_TOKEN`. |
+| `--verbose`, `-v` | no | Accepted; currently has no effect. |
 
-For a first install, building straight into `containers/` is fine. **To update a running deployment, do not overwrite the live image**: build beside it, smoke-test on a compute node, deploy the backend, then swap the image in, as described in [SLURM.md → Deploy Order](../SLURM.md#deploy-order-worker-and-backend-together).
+The worker needs an input source: either `--input`, or both a callback URL and a token.
+Without either it fails with `No input source: provide --input file or configure
+callback URL`. With `--input` and no callback configuration, it runs without reporting
+(useful for testing) and logs a warning.
 
-### 3. Test the Container
+## Environment variables
 
-On the cluster, verify it works:
+Variables the worker reads:
 
-```bash
-# Test PySR import
-singularity exec ../containers/syxplain-worker.sif python -c "import pysr; print('PySR', pysr.__version__)"
+| Variable | Read by | Purpose |
+|---|---|---|
+| `CALLBACK_URL` | `config.py` | Base URL of the backend's worker API, ending in `/api/internal`. Set by the job script from the backend's `WORKER_CALLBACK_URL`. |
+| `CALLBACK_TOKEN` | `config.py` | Sent as the `X-Worker-Token` header. Set from `WORKER_CALLBACK_TOKEN`. |
+| `SLURM_JOB_ID` | `config.py`, `pysr_task.py` | Fallback run ID. |
+| `SLURM_CPUS_PER_TASK` | `pysr_task.py` | Number of PySR worker processes and Julia threads. Falls back to `os.cpu_count()`. |
 
-# Test CLI help
-singularity run ../containers/syxplain-worker.sif --help
-```
+Julia-related variables set by the image (`%environment` in `syxplain-worker.def`) or by
+the job script:
 
-Expected output:
-```
-PySR 2.7.0
-usage: __main__.py [-h] --task-type {pysr} [--task-key TASK_KEY] ...
-```
+| Variable | Value | Purpose |
+|---|---|---|
+| `JULIA_DEPOT_PATH` | `<SLURM_JULIA_DEPOT>:/opt/julia-depot` (set by the job script) | Writable depot on shared storage, stacked on the image's read-only precompiled depot. |
+| `PYTHON_JULIACALL_EXE`, `PYTHON_JULIACALL_PROJECT` | `/opt/julia-1.11.5/bin/julia`, `/opt/julia-env` | Make juliacall load the Julia environment baked into the image, without resolving or downloading anything. |
+| `PYTHON_JULIAPKG_EXE` | Julia binary in the image | Keeps juliapkg from downloading its own Julia. |
+| `JULIA_CPU_TARGET` | broad x86_64 target | Matches the build-time precompilation, so the native code runs on different node CPUs. |
 
-### 4. Update/Refresh the Container
+The backend-side settings (`SLURM_*`, `WORKER_CALLBACK_*`) are listed in
+[docs/slurm.md](../docs/slurm.md#configuration-reference).
 
-When you make changes to the worker code:
+## Backend endpoints
 
-```bash
-# From your local machine - copy updated code
-scp -r slurm_worker ai4science@slurm.science-cloud.hu:/storage/ai4science/syxplain/
+All under `CALLBACK_URL` (the backend's `/api/internal` router, `backend/api/routers/progress.py`).
+Every request carries `X-Worker-Token: <CALLBACK_TOKEN>`; the backend answers `401` if
+the token is wrong or not configured.
 
-# SSH and rebuild beside the live image (swap it in after the backend deploy, see SLURM.md)
-ssh ai4science@slurm.science-cloud.hu
-cd /storage/ai4science/syxplain/slurm_worker
-singularity build --fakeroot ../containers/syxplain-worker.sif.new syxplain-worker.def
-```
+| Request | Body / query | Notes |
+|---|---|---|
+| `GET /input/{run_id}` | query: `task_type`, `task_key`, `worker_version` | Returns `{"input": {...}}`. One-time: the backend replaces the stored input with `{"fetched": true, "worker_version": ...}`, and later requests get `410 Gone`. |
+| `POST /progress/{run_id}` | `progress` (0-100), `status`, `step_name`, `task_type`, `task_key` | Sent at milestones and, during the search, whenever PySR's progress bar moves (at most every 5 s). |
+| `POST /complete/{run_id}` | `results`, `task_key` | The task's result dict. 30 s timeout. |
+| `POST /error/{run_id}` | `error`, `details` (with `traceback`), `task_key` | |
+| `GET /health` | (no token) | Connectivity check. |
 
-## Local Testing
+Failed progress, completion and error callbacks are logged as warnings and do not stop
+the worker. A lost completion callback still loses the result, because the backend does
+not read the output file.
 
-Test tasks locally without Slurm using the example data:
+## Task types
 
-```bash
-# Install dependencies (if not using container)
-pip install -r slurm_worker/requirements.txt
+### `pysr`
 
-# Screen classic laws (Mitscherlich, Langmuir, power law, ...) on the soil example
-python test_worker_local.py --task classic --example 1
+Symbolic regression with [PySR](https://github.com/MilesCranmer/PySR) 2.7.0 (pinned,
+because the backend relies on its `guesses` argument and equation string format).
 
-# Run PySR with limited iterations (faster)
-python test_worker_local.py --task pysr --example 1 --niterations 5 --output results.json
+Input:
 
-# PySR on log(target), seeded with a guess
-python test_worker_local.py --task pysr --example 3 --target-transform log --guesses "Synapses + Degree"
-```
-
-Available examples:
-- `--example 1`: Soil phosphate prediction (119 rows, 5 features)
-- `--example 2`: Perovskite solar cell (33 rows, auto-detected features)
-- `--example 3`: C. elegans connectome (299 rows, 2 features)
-
-Use custom data:
-```bash
-python test_worker_local.py --task classic \
-    --data path/to/data.csv \
-    --target my_target \
-    --predictors "col1,col2,col3"
-```
-
-## Singularity Container
-
-The Singularity container is the recommended deployment method. It includes:
-
-- Python 3.11 with scientific computing stack
-- Julia 1.11 with PySR 2.7.0 (pinned) packages pre-compiled
-- The worker code ready to execute
-
-Build instructions are in the [Quick Start](#quick-start) section above.
-
-### Container Storage
-
-The container is deployed to a location accessible by all compute nodes:
-
-```bash
-# Container location on slurm.science-cloud.hu
-/storage/ai4science/syxplain/containers/syxplain-worker.sif
-
-# Worker source code location
-/storage/ai4science/syxplain/slurm_worker/
-```
-
-### Running the Container
-
-```bash
-# Basic usage
-singularity run syxplain-worker.sif --help
-
-# With storage bind mount
-singularity run --bind /storage:/storage syxplain-worker.sif \
-    --task-type pysr \
-    --task-key pysr_1 \
-    --run-id abc123 \
-    --input /storage/user/staging/abc123/input.json \
-    --output /storage/user/staging/abc123/output.json
-
-# With progress callbacks
-singularity run --bind /storage:/storage \
-    --env CALLBACK_URL="https://syxplain.example.com/api/internal" \
-    --env CALLBACK_TOKEN="secret-token" \
-    syxplain-worker.sif \
-    --task-type pysr \
-    --run-id abc123 \
-    --input /storage/user/staging/abc123/input.json \
-    --output /storage/user/staging/abc123/output.json
-```
-
-## Task Types
-
-### PySR (`--task-type pysr`)
-
-Performs symbolic regression to discover equations.
-
-**Input JSON:**
 ```json
 {
   "data": {
     "columns": ["x1", "x2", "y"],
-    "index": [0, 1, 2],
-    "data": [[1.0, 2.0, 3.0], ...]
+    "data": [[1.0, 2.0, 5.0], [2.0, 3.0, 8.0]]
   },
   "target_column": "y",
   "predictor_columns": ["x1", "x2"],
   "config": {
     "niterations": 40,
     "populations": 15,
+    "population_size": 33,
+    "ncycles_per_iteration": 550,
     "binary_operators": ["+", "-", "*", "/"],
-    "unary_operators": ["exp", "log", "sqrt"],
-    "maxsize": 20
+    "unary_operators": ["exp", "log", "sqrt", "abs"],
+    "maxsize": 20,
+    "maxdepth": 10,
+    "timeout_in_seconds": 3600,
+    "parsimony": 0.0032,
+    "turbo": true,
+    "template": null,
+    "template_expressions": []
   },
   "target_transform": null,
   "guesses": ["x1 + 2*x2"],
@@ -183,135 +174,153 @@ Performs symbolic regression to discover equations.
 }
 ```
 
-- `target_transform` (`log`, `log1p`, `sqrt` or null): PySR searches `f(X) ~ transform(y)`; the backend applies the inverse when it scores the equations.
-- `guesses`: seed formulas (PySR's warm start). If a guess cannot be parsed, the search reruns without them.
-- `return_full_front`: return the whole hall of fame without scatter data (the backend re-scores every equation itself).
+- `data` is passed to `pandas.DataFrame(**data)`, so the `split` orientation
+  (`columns`, `data`, optionally `index`) works.
+- `data`, `target_column` and a non-empty `predictor_columns` are required. Every `config`
+  field is optional; the values above are the defaults, except `niterations`, which is
+  estimated from the data size when omitted.
+- `target_transform` (`log`, `log1p`, `sqrt` or null): PySR fits `f(X) ~ transform(y)`.
+  The backend applies the inverse when it scores the equations.
+- `template` and `template_expressions`: a PySR template such as `"f(a, b) + g(c)"` and the
+  names of its subexpressions. Equations then come back as `f = ...; g = ...`, and the
+  backend composes them.
+- `guesses`: seed formulas (PySR's warm start). If the fit with guesses fails, the search
+  reruns without them.
+- `return_full_front`: return the whole hall of fame without scatter data (the backend
+  re-scores every equation itself).
 
-**Output JSON:**
+Output (the `results` of the completion callback, and the content of `--output`):
+
 ```json
 {
   "status": "success",
   "equations": [
-    {"equation": "x1 + x2", "complexity": 3, "loss": 0.01, "score": 0.95}
+    {"equation": "x1 + 2*x2", "complexity": 5, "loss": 0.01, "score": 0.95, "sympy_format": "x1 + 2*x2"}
   ],
-  "best_equation": {...},
+  "best_equation": {"equation": "x1 + 2*x2", "...": "..."},
   "iterations_completed": 40,
-  "computation_time_seconds": 1234.5
+  "scatter_data": {},
+  "target_transform": null,
+  "computation_time_seconds": 312.4
 }
 ```
 
-## Adding New Tasks
+On failure the output is `{"status": "error", "error": "...", "traceback": "..."}`.
 
-To add a new task type, create a new file in `tasks/`:
+Progress: 1-3% for input and setup, 3-15% while Julia starts and compiles (estimated from
+elapsed time), 15-97% following PySR's own iteration bar, then 98-100% for extraction and
+completion.
 
-```python
-# slurm_worker/tasks/my_task.py
-from slurm_worker.tasks.base import Task, TaskResult
-from slurm_worker.tasks.registry import TaskRegistry
+## Adding a task type
 
-@TaskRegistry.register("my_task")
-class MyTask(Task):
-    name = "my_task"
+1. Create a module in `tasks/`:
 
-    def _validate_input(self, input_data):
-        # Validate input data
-        if "required_field" not in input_data:
-            raise ValueError("Missing required_field")
+   ```python
+   # slurm_worker/tasks/my_task.py
+   from slurm_worker.tasks.base import Task, TaskResult
+   from slurm_worker.tasks.registry import TaskRegistry
 
-    def _execute(self, input_data):
-        self._report(10, "Starting", "my_task_start")
 
-        # Do computation...
-        result = {"answer": 42}
+   @TaskRegistry.register("my_task")
+   class MyTask(Task):
+       name = "my_task"
 
-        self._report(90, "Finalizing", "my_task_done")
-        return TaskResult.success(**result)
-```
+       def _validate_input(self, input_data):
+           if "required_field" not in input_data:
+               raise ValueError("Missing required_field")
 
-Then import it in `tasks/__init__.py`:
-```python
-from slurm_worker.tasks import my_task  # noqa: F401
-```
+       def _execute(self, input_data):
+           self._report(10, "Starting", "my_task_start")
+           answer = 42  # the computation
+           self._report(90, "Finalizing", "my_task_done")
+           return TaskResult.success(answer=answer)
+   ```
 
-After adding new tasks, rebuild the Singularity container.
+2. Import it in `tasks/__init__.py` so that it registers:
 
-## Progress Callbacks
+   ```python
+   from slurm_worker.tasks import my_task  # noqa: F401
+   ```
 
-If `CALLBACK_URL` and `CALLBACK_TOKEN` are configured, the worker will:
+3. Submit it from the backend with a `TaskInput(task_type="my_task", ...)`
+   (`backend/infrastructure/slurm/models.py`). The task type may contain only letters, digits,
+   `_` and `-` (the backend checks this before putting it into the job script).
 
-- POST progress updates to `{CALLBACK_URL}/progress/{run_id}`
-- POST errors to `{CALLBACK_URL}/error/{run_id}`
-- POST completion to `{CALLBACK_URL}/complete/{run_id}`
+4. Add any new dependency to `requirements.txt` and to the `pip install` line in
+   `syxplain-worker.def`, then rebuild the image (a code-only rebuild is enough if there
+   are no new dependencies). The local emulator runs task types other than `pysr` for
+   real, so you can try the task with `docker compose up` before building an image.
 
-All requests include the `X-Worker-Token` header for authentication.
+## Running locally
 
-## Troubleshooting
+**Through the full stack.** `docker compose up` starts a local Slurm emulator
+(`mock-slurm`, `dev/mock_slurmrestd.py`) that the backend uses by default. It mounts this
+directory, so code changes apply to the next job. PySR searches are faked with
+least-squares fits unless you start it with `LOCAL_PYSR=true docker compose up --build`,
+which builds Julia and PySR into the emulator image and runs this package's real PySR
+task (`LOCAL_PYSR_CPUS`, default 2, sets the CPUs per search). Details in
+[docs/slurm.md](../docs/slurm.md#local-development-without-a-cluster).
 
-### Container Build Fails
+**One task directly.** `dev/run_worker_task.py` (run from the repository root) runs a
+task on an example data set, with progress printed to the console and no backend, Slurm
+or database:
 
-**Fakeroot not available:**
 ```bash
-# Use sudo instead
-sudo singularity build syxplain-worker.sif syxplain-worker.def
+# classic-law screen (Mitscherlich, Langmuir, power law, ...) with the backend's fitting
+# engine; needs the backend's Python dependencies, not Julia
+python dev/run_worker_task.py --task classic --example 1
+
+# the PySR task; needs PySR and Julia (pip install -r slurm_worker/requirements.txt)
+python dev/run_worker_task.py --task pysr --example 1 --niterations 5 --output results.json
+
+# PySR on log(target), seeded with a guess
+python dev/run_worker_task.py --task pysr --example 3 --target-transform log --guesses "Synapses + Degree"
+
+# your own data
+python dev/run_worker_task.py --task classic --data path/to/data.csv \
+    --target my_target --predictors "col1,col2,col3"
 ```
 
-**Out of disk space:**
+The first PySR run on a machine installs Julia and PySR's Julia packages, which takes
+several minutes. Run `python dev/run_worker_task.py --help` for the list of examples and
+options.
+
+**The CLI with a local input file.**
+
 ```bash
-# Build in a directory with more space
-export SINGULARITY_TMPDIR=/path/to/large/tmp
+python -m slurm_worker --task-type pysr --input input.json --output output.json
+```
+
+Use the input format from [Task types](#task-types); no callbacks are needed.
+
+**The image.** After building it, on any machine with Singularity or Apptainer:
+
+```bash
+singularity run --bind "$PWD" syxplain-worker.sif \
+    --task-type pysr --run-id test --input "$PWD/input.json" --output "$PWD/output.json"
+```
+
+## Building the image
+
+From this directory:
+
+```bash
+# full image: Python 3.11, Julia 1.11.5, PySR 2.7.0 precompiled (about 25 minutes)
 singularity build --fakeroot syxplain-worker.sif syxplain-worker.def
+
+# code-only: replace /app/slurm_worker in an existing image (seconds)
+singularity build --fakeroot --build-arg base=/path/to/syxplain-worker.sif \
+    syxplain-worker-<version>.sif syxplain-worker-code.def
 ```
 
-### Julia Compilation Slow
-
-The container pre-compiles Julia, but if you're not using the container:
-```bash
-python -c "from pysr import PySRRegressor; PySRRegressor(niterations=1).fit([[1,2],[3,4]], [1,2])"
-```
-
-### Container Can't Access Files
-
-Ensure the storage path is bind-mounted:
-```bash
-singularity run --bind /storage:/storage syxplain-worker.sif ...
-```
-
-### Memory Issues
-
-Increase job memory allocation:
-```bash
-#SBATCH --mem=8G
-```
-
-Or reduce subsampling in the input config.
-
-### Callback Failures
-
-Workers continue running even if callbacks fail. Results are always written to the output file.
-
-### Testing Container Locally
+The full build fails if PySR's Julia packages cannot be installed and precompiled, and
+its `%test` fits a small PySR model offline on the finished, read-only image. Check the
+version in an image with:
 
 ```bash
-# Create test input
-cat > /tmp/test-input.json << 'EOF'
-{
-  "data": {
-    "columns": ["x1", "x2", "y"],
-    "index": [0, 1, 2, 3, 4],
-    "data": [[1, 2, 5], [2, 3, 8], [3, 4, 11], [4, 5, 14], [5, 6, 17]]
-  },
-  "target_column": "y",
-  "predictor_columns": ["x1", "x2"]
-}
-EOF
-
-# Run PySR task
-singularity run --bind /tmp:/tmp syxplain-worker.sif \
-    --task-type pysr \
-    --run-id test \
-    --input /tmp/test-input.json \
-    --output /tmp/test-output.json
-
-# Check output
-cat /tmp/test-output.json
+singularity exec syxplain-worker.sif python -c "import slurm_worker; print(slurm_worker.__version__)"
 ```
+
+Where to build, build space, deploying the image to a running installation and keeping
+backend and worker versions in step are covered in
+[docs/slurm.md](../docs/slurm.md#building-the-worker-image).
