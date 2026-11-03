@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use Syxplain, please cite it as below."
+title: "Syxplain: an AI-scientist agent for interpretable equation discovery"
+type: software
+authors:
+  - name: "HUN-REN AI1Science"
+version: 1.0.0
+date-released: "2026-11-03"
+license: MIT
+repository-code: "https://github.com/HUN-REN-AI1Science/syxplain"
+url: "https://syxplain.ai1science.net"
+abstract: >-
+  Syxplain finds interpretable equations in tabular and time-series data. An LLM agent
+  steers PySR symbolic-regression searches while exploring blind to known laws; the
+  discoveries are then related to classic and published laws, the headline model is
+  selected by cross-validation and a holdout, and a coherence verdict checks it against
+  the noise ceiling, SHAP effects and known laws.
+keywords:
+  - symbolic regression
+  - equation discovery
+  - scientific discovery
+  - large language models
+  - PySR
+  - explainable AI

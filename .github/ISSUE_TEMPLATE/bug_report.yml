@@ -1,0 +1,46 @@
+name: Bug report
+description: Something does not work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please do not include API keys, tokens or private data.
+        For security issues, use [private vulnerability reporting](../security/advisories/new) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Steps, and if possible a small dataset or one of the examples in data/.
+    validations:
+      required: true
+  - type: dropdown
+    id: setup
+    attributes:
+      label: Setup
+      options:
+        - Local development (docker compose, fake PySR)
+        - Local development (LOCAL_PYSR=true)
+        - Own Slurm cluster
+        - Production deployment (docker-compose.prod.yml)
+        - Public API
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: e.g. v1.0.0 or 4a19e2b
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant backend or worker output (`docker logs syxplain-backend`).
+      render: text
