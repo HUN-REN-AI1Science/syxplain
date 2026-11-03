@@ -1,7 +1,17 @@
 {
   "name": "syxplain-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Syxplain web app: upload data, run the equation-discovery agent, explore the results",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HUN-REN-AI1Science/syxplain.git",
+    "directory": "frontend"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +20,8 @@
     "lint:fix": "eslint . --ext ts,tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "axios": "^1.6.0",
