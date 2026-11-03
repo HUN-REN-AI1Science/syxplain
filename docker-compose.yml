@@ -1,16 +1,19 @@
 # Development Docker Compose
-# This configuration includes everything needed to run locally with hot reload:
+# Everything needed to run locally with hot reload:
 # - PostgreSQL database
-# - Mock Slurm server (runs worker tasks as local subprocesses)
-# - Backend API (with hot reload)
-# - Frontend (with hot reload via Vite)
-#
-# By default, Slurm jobs run locally via the mock-slurm service.
-# To use a real Slurm cluster instead, set SLURM_API_URL and SLURM_AUTH_TOKEN in .env.
+# - Keycloak (auth, admin console on http://localhost:8080/keycloak, admin/admin)
+# - Local Slurm emulator (mock-slurm: runs worker tasks as local subprocesses)
+# - Backend API (http://localhost:8000, hot reload)
+# - Frontend (http://localhost:5173, hot reload via Vite)
 #
 # Quick start:
-#   1. Copy .env.example to .env and configure required variables
-#   2. Run: docker-compose up --build
+#   1. cp .env.example .env   and set OPENAI_API_KEY
+#   2. docker compose up --build
+#   3. ./dev/create-dev-user.sh   (creates a verified admin login)
+#
+# PySR searches are faked by default (least-squares equations, no Julia needed).
+# For real symbolic regression on this machine:  LOCAL_PYSR=true docker compose up --build
+# To use a real Slurm cluster instead, set SLURM_API_URL and SLURM_AUTH_TOKEN in .env.
 
 services:
   postgres:
@@ -38,6 +41,11 @@ services:
     container_name: syxplain-backend
     ports:
       - "8000:8000"
+    # Every variable in .env reaches the backend (DISCOVERY_*, LLM_PRICES_JSON, ...);
+    # the explicit entries below set dev defaults and win over .env only where they are fixed
+    env_file:
+      - path: .env
+        required: false
     environment:
       # LLM Configuration (set these in .env)
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -62,13 +70,15 @@ services:
       # Slurm Configuration (defaults to local mock-slurm service)
       - SLURM_API_URL=${SLURM_API_URL:-http://mock-slurm:6820}
       - SLURM_AUTH_TOKEN=${SLURM_AUTH_TOKEN:-mock-token}
-      - SLURM_USER_NAME=${SLURM_USER_NAME:-ai4science}
-      - SLURM_PARTITION=${SLURM_PARTITION:-cpu_m2.2xlarge}
-      - SLURM_STAGING_DIR=${SLURM_STAGING_DIR:-/storage/ai4science/syxplain}
+      - SLURM_USER_NAME=${SLURM_USER_NAME:-syxplain}
+      - SLURM_PARTITION=${SLURM_PARTITION:-}
+      - SLURM_STAGING_DIR=${SLURM_STAGING_DIR:-/tmp/syxplain}
       - SLURM_CPUS=${SLURM_CPUS:-4}
       - SLURM_MEMORY=${SLURM_MEMORY:-8G}
       - SLURM_TIME_LIMIT=${SLURM_TIME_LIMIT:-04:00:00}
       - SLURM_CONTAINER_PATH=${SLURM_CONTAINER_PATH:-}
+      - SLURM_CONTAINER_BINDS=${SLURM_CONTAINER_BINDS:-}
+      - SLURM_JULIA_DEPOT=${SLURM_JULIA_DEPOT:-}
       # Compute settings (set WORKER_CALLBACK_URL in .env for Slurm workers to reach backend)
       - WORKER_CALLBACK_URL=${WORKER_CALLBACK_URL:-http://backend:8000/api/internal}
       - WORKER_CALLBACK_TOKEN=${WORKER_CALLBACK_TOKEN:-dev-callback-token}
@@ -104,6 +114,9 @@ services:
     build:
       context: .
       dockerfile: dev/Dockerfile.mock-slurm
+      args:
+        WITH_PYSR: ${LOCAL_PYSR:-false}
+    image: syxplain-mock-slurm:${LOCAL_PYSR:-false}
     container_name: syxplain-mock-slurm
     ports:
       - "127.0.0.1:6820:6820"
@@ -112,6 +125,8 @@ services:
       - ./dev:/app/dev
     environment:
       - PYTHONPATH=/app
+      - MOCK_SLURM_REAL_PYSR=${LOCAL_PYSR:-false}
+      - LOCAL_PYSR_CPUS=${LOCAL_PYSR_CPUS:-2}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6820/slurm/v0.0.41/ping')"]
       interval: 5s
@@ -129,7 +144,6 @@ services:
       - VITE_KEYCLOAK_URL=http://localhost:8080/keycloak
       - VITE_KEYCLOAK_REALM=syxplain
       - VITE_KEYCLOAK_CLIENT_ID=syxplain-frontend
-      - VITE_ENABLE_MICROSOFT_SSO=${VITE_ENABLE_MICROSOFT_SSO:-false}
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules  # Persist node_modules

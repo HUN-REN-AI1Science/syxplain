@@ -1,13 +1,17 @@
 """
-Mock slurmrestd server for local development.
+Local Slurm emulator for development.
 
 Impersonates the slurmrestd REST API (v0.0.41) so the backend can submit
 and monitor jobs without a real Slurm cluster.
 
-- PySR tasks: faked (avoids needing Julia/PySR installed). The mock fetches
+- PySR tasks, default: faked (no Julia/PySR needed). The emulator fetches
   the task input from the backend and returns least-squares equations over the
   requested features, so agent-launched searches get plausible results.
-- Other task types: launched as real ``python -m slurm_worker`` subprocesses
+- PySR tasks with ``MOCK_SLURM_REAL_PYSR=true`` (image built with
+  ``WITH_PYSR=true``): run for real, like every other task type.
+- Other task types: launched as real ``python -m slurm_worker`` subprocesses.
+
+``LOCAL_PYSR_CPUS`` (default 2) sets the CPUs each real PySR search may use.
 
 Usage:
     python dev/mock_slurmrestd.py --port 6820
@@ -103,6 +107,9 @@ class JobStore:
 
 
 store = JobStore()
+
+# Run PySR searches for real (needs the image built with WITH_PYSR=true)
+REAL_PYSR = os.environ.get("MOCK_SLURM_REAL_PYSR", "false").lower() in ("1", "true", "yes")
 
 # ---------------------------------------------------------------------------
 # Script parsing
@@ -334,6 +341,8 @@ def _launch_worker(job: MockJob, callback_url: str, callback_token: str) -> None
     if callback_token:
         env["CALLBACK_TOKEN"] = callback_token
     env.setdefault("PYTHONPATH", "/app")
+    # CPUs per job, as Slurm would allocate them (the PySR task reads SLURM_CPUS_PER_TASK)
+    env["SLURM_CPUS_PER_TASK"] = os.environ.get("LOCAL_PYSR_CPUS", "2")
 
     cmd = [
         sys.executable,
@@ -405,7 +414,7 @@ def _dispatch_job(job: MockJob) -> None:
     """Route job to real worker or mock based on task type."""
     callback_url, callback_token = _parse_job_script(job)
 
-    if job.task_type == "pysr":
+    if job.task_type == "pysr" and not REAL_PYSR:
         _run_mock_pysr(job, callback_url, callback_token)
     else:
         _launch_worker(job, callback_url, callback_token)
@@ -516,7 +525,8 @@ def main():
     parser.add_argument("--host", default="0.0.0.0", help="Listen host")
     args = parser.parse_args()
 
-    logger.info(f"Starting mock slurmrestd on {args.host}:{args.port}")
+    pysr_mode = "real PySR" if REAL_PYSR else "fake PySR (least squares)"
+    logger.info(f"Starting mock slurmrestd on {args.host}:{args.port} ({pysr_mode})")
 
     # Filter out noisy health check ping logs from uvicorn access logger
     class _PingFilter(logging.Filter):
