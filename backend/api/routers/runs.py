@@ -11,13 +11,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from backend.api.dependencies import get_run_service
-from backend.core.constants import RunStatus
+from backend.core.constants import STANDARD_ANALYSIS, RunStatus
 from backend.core.exceptions import (
+    ComputeUnavailableError,
     ConfigurationError,
     EntityNotFoundError,
     ValidationError,
 )
 from backend.core.security import User, get_current_user_jwt_only
+from backend.infrastructure.slurm.health import is_slurm_reachable
 from backend.schemas.requests import RunRequest, SortField, SortOrder
 from backend.schemas.responses import (
     MessageResponse,
@@ -34,46 +36,6 @@ from backend.utils.security_utils import safe_content_disposition
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Runs"])
-
-
-_slurm_health_cache: dict[str, float | bool] = {"ts": 0.0, "ok": False}
-_SLURM_HEALTH_TTL = 30.0  # seconds
-
-
-async def _check_slurm_reachable() -> bool:
-    """Check slurmrestd is reachable, cached for 30s to avoid per-request overhead."""
-    import time
-
-    now = time.monotonic()
-    if now - _slurm_health_cache["ts"] < _SLURM_HEALTH_TTL:
-        return bool(_slurm_health_cache["ok"])
-
-    import httpx
-
-    from backend.core.config import get_slurm_settings
-    from backend.infrastructure.slurm.client import API_VERSION
-
-    try:
-        settings = get_slurm_settings()
-        if not settings.api_url or not settings.auth_token:
-            result = False
-        else:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                response = await client.get(
-                    f"{settings.api_url}/slurm/{API_VERSION}/diag",
-                    headers={
-                        "Authorization": f"Bearer {settings.auth_token}",
-                        "Slurm-User-Name": settings.user_name,
-                    },
-                )
-            result = response.status_code == 200
-    except Exception as e:
-        logger.debug(f"Slurm pre-flight check failed: {e}")
-        result = False
-
-    _slurm_health_cache["ts"] = now
-    _slurm_health_cache["ok"] = result
-    return result
 
 
 @router.post("/run", response_model=RunResponse)
@@ -111,11 +73,8 @@ async def run_analysis(
         )
 
         # Check Slurm cluster is reachable before accepting the run
-        if not await _check_slurm_reachable():
-            raise HTTPException(
-                status_code=503,
-                detail="The computing cluster is temporarily unavailable. Please try again later.",
-            )
+        if not await is_slurm_reachable():
+            raise ComputeUnavailableError()
 
         # Validate the request with permission context (blocking: file parsing, DNS)
         await asyncio.to_thread(
@@ -201,7 +160,7 @@ def list_runs(
                 csv_filename=run.csv_filename,
                 target_variable=run.target_variable,
                 progress=run.progress or 0,
-                analysis_type=run.analysis_type or "quick",
+                analysis_type=run.analysis_type or STANDARD_ANALYSIS,
                 start_time=run.start_time,
                 finish_time=run.finish_time,
             )

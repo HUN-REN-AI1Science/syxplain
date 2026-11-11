@@ -4,6 +4,39 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- MCP endpoint at `/mcp` (streamable HTTP) for chat assistants such as LibreChat: start an
+  analysis from inline CSV text, follow it, and read a compact result summary. It runs
+  on the server's LLM keys only.
+- Technical access: Keycloak service accounts (client-credentials tokens) are accepted on
+  `/api/v1` and `/mcp`; `dev/create-technical-client.sh` creates a client and its API key.
+- `GET /api/v1/runs/{run_id}/summary`: the outcome of a run in compact form.
+- Run status reports the pipeline `phase`, `warnings`, `target_variable`, and the interim
+  results of a running analysis. `POST /api/v1/analyze` returns `renamed_columns` and
+  accepts column names as written in the file.
+- `GET /api/v1/models` reports `server_keys`.
+- Settings: `KEYCLOAK_ALLOWED_CLIENTS`, `MAX_ACTIVE_RUNS_PER_USER`, `MCP_MAX_CSV_KB`.
+
+### Changed
+- An account can have 3 pending or running analyses at a time by default
+  (`MAX_ACTIVE_RUNS_PER_USER`; `0` removes the limit).
+- `/api/v1` and `/mcp` are rate-limited per credential instead of per client address.
+- `POST /api/v1/analyze` checks the columns and the cluster before storing the file.
+- ID and refresh tokens no longer authenticate API calls.
+- API-key roles are re-checked against Keycloak every five minutes, also for keys in
+  constant use.
+- Requires `mcp` 2.3 or later.
+
+### Fixed
+- A run could load another user's file when both had uploaded the same filename.
+- Excel files whose column names had to be rewritten could not be analysed.
+- Runs cut off by a backend restart stayed "running" forever; they are now marked failed
+  at startup.
+- The API reported `analysis_type: "quick"` for new runs and documented result fields and
+  artifacts that no longer exist.
+
 ## [1.0.0] - 2026-11
 
 First public release.

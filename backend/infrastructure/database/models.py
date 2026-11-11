@@ -12,7 +12,7 @@ from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, LargeBina
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import declarative_base, relationship
 
-from backend.core.constants import RunStatus
+from backend.core.constants import STANDARD_ANALYSIS, RunStatus
 
 Base = declarative_base()
 
@@ -52,7 +52,8 @@ class Run(Base):
     status = Column(
         String, default=RunStatus.PENDING, index=True
     )  # pending, running, completed, failed, timeout, cancelled
-    analysis_type = Column(String, default="quick")  # "quick" or "deep"
+    # "standard"; runs from before the single analysis mode keep "quick" or "deep"
+    analysis_type = Column(String, default=STANDARD_ANALYSIS)
     slurm_job_ids = Column(JSONB, nullable=True)  # {"pysr_1": "<job id>", "pysr_2": ...}
     progress = Column(Integer, default=0)  # 0-100 percentage
     problem_description = Column(JSONB, nullable=False)

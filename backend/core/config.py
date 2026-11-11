@@ -51,6 +51,14 @@ class AuthSettings:
     server_keys_role: str = field(
         default_factory=lambda: os.environ.get("SERVER_KEYS_ROLE", "server-llm-access")
     )
+    # Keycloak clients whose access tokens the backend accepts (comma-separated, matched
+    # against the token's azp claim); empty = any client of the realm
+    allowed_clients: str = field(
+        default_factory=lambda: os.environ.get("KEYCLOAK_ALLOWED_CLIENTS", "")
+    )
+
+    def get_allowed_clients(self) -> list[str]:
+        return [c.strip() for c in self.allowed_clients.split(",") if c.strip()]
 
     @property
     def jwks_url(self) -> str:
@@ -119,6 +127,15 @@ class AnalysisSettings:
     )
     max_file_size_mb: int = field(
         default_factory=lambda: int(os.environ.get("MAX_FILE_SIZE_MB", "50"))
+    )
+
+    # Pending or running analyses one account may have at a time (0 = unlimited)
+    max_active_runs_per_user: int = field(
+        default_factory=lambda: int(os.environ.get("MAX_ACTIVE_RUNS_PER_USER", "3"))
+    )
+    # Largest inline CSV the MCP start_analysis tool accepts, in kilobytes
+    mcp_max_csv_kb: int = field(
+        default_factory=lambda: int(os.environ.get("MCP_MAX_CSV_KB", "256"))
     )
 
     @property

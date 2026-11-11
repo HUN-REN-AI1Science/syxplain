@@ -5,7 +5,6 @@ Streamlined API designed for script, notebook, and CI/CD pipeline usage.
 Provides combined upload+analyze, status polling, and artifact download.
 """
 
-import asyncio
 import json
 import logging
 
@@ -14,12 +13,15 @@ from fastapi.responses import JSONResponse
 
 from backend.api.dependencies import get_file_repository, get_run_service
 from backend.core.config import get_settings
-from backend.core.constants import RunStatus
+from backend.core.constants import STANDARD_ANALYSIS, RunStatus
 from backend.core.exceptions import (
+    ComputeUnavailableError,
     ConfigurationError,
     EntityNotFoundError,
     FileTooLargeError,
     FileValidationError,
+    SyxplainException,
+    TooManyActiveRunsError,
     ValidationError,
 )
 from backend.core.rate_limit import limiter
@@ -32,17 +34,28 @@ from backend.schemas.programmatic import (
     CancelResponse,
     ErrorResponse,
     ModelsResponse,
+    RunDigestResponse,
     RunListResponse,
     RunStatusResponse,
     RunSummary,
 )
-from backend.services.analysis_service import start_analysis_run
-from backend.services.file_service import get_file_service
+from backend.services.run_digest import run_digest_payload, run_state, run_warnings
 from backend.services.run_service import RunService
+from backend.services.submission_service import submit_analysis
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["Syxplain API"])
+
+
+# Refusals of a submission: (exception, HTTP status, error code), most specific first
+_SUBMISSION_ERRORS: tuple[tuple[type[SyxplainException], int, str], ...] = (
+    ((FileTooLargeError, FileValidationError), 400, "file_error"),
+    (TooManyActiveRunsError, 429, "too_many_active_runs"),
+    (ComputeUnavailableError, 503, "compute_unavailable"),
+    (ValidationError, 400, "validation_error"),
+    (ConfigurationError, 500, "configuration_error"),
+)
 
 
 def _api_error(
@@ -78,7 +91,7 @@ cancelling the run.
 |-------|------|----------|-------------|
 | `project_description` | string | Yes | Description of the project and analysis goals |
 | `target_variable` | string | Yes | Name of the target column to predict |
-| `features` | object | Yes | Mapping of feature column names to descriptions (e.g. `{"pH": "Soil pH"}`) |
+| `features` | object | Yes | Mapping of feature column names to descriptions (e.g. `{"pH": "Soil pH"}`). Good descriptions with units matter: the LLM steps reason from them |
 | `provider` | string | No | `"gemini"` (default) or `"openai_compatible"` (any OpenAI-compatible endpoint: OpenAI, OpenRouter, vLLM, LiteLLM, ...) |
 | `api_key` | string | No | API key for the provider (required without server-key access) |
 | `model` | string | No | Model name. Gemini: default `"gemini-3.1-pro-preview"`; OpenAI-compatible: required |
@@ -87,6 +100,17 @@ cancelling the run.
 | `gemini_model` | string | No | Legacy alias of `model` for the Gemini provider |
 | `openai_api_key` | string | No | OpenAI API key for the literature search (without server-key access; omitted = no literature step, unless `api_key` is an OpenAI key on the default OpenAI endpoint) |
 
+Accounts with server-key access (see `GET /api/v1/models`) run on the server's LLM keys:
+they send no LLM fields, and any they send are ignored.
+
+Column names that are not valid identifiers (spaces, dots, hyphens, ...) are renamed with
+underscores. `target_variable` and `features` may use the names as written in the file or the
+renamed ones; the response lists the renames in `renamed_columns`.
+
+For a time series, keep the time column (and the column identifying each series, if any) in
+the file. The time structure is detected from the data; the split is then chronological and
+features of earlier periods may be derived.
+
 **Example `params` value:**
 
 ```json
@@ -94,7 +118,7 @@ cancelling the run.
   "project_description": "Predict soil phosphorus availability",
   "target_variable": "P_availability",
   "features": {"pH": "Soil pH (H2O)", "organic_C": "Organic carbon (%)"},
-  "gemini_api_key": "AIza..."
+  "api_key": "AIza..."
 }
 ```
 
@@ -121,7 +145,12 @@ With an OpenAI-compatible endpoint instead of Gemini:
             "description": "Invalid input: malformed JSON, unsupported file type, or missing required fields",
             "model": ErrorResponse,
         },
-        401: {"description": "Missing or invalid API key", "model": ErrorResponse},
+        401: {"description": "Missing or invalid credentials", "model": ErrorResponse},
+        429: {
+            "description": "Rate limit, or the account's limit of active analyses is reached",
+            "model": ErrorResponse,
+        },
+        503: {"description": "The computing cluster is unreachable", "model": ErrorResponse},
     },
 )
 @limiter.limit("5/minute")
@@ -130,7 +159,7 @@ async def analyze(
     file: UploadFile = File(..., description="CSV or Excel file to analyze"),
     params: str = Form(
         ...,
-        description='JSON string with analysis parameters. Required fields: project_description, target_variable, features. Example: {"project_description": "...", "target_variable": "Y", "features": {"X1": "desc"}, "gemini_api_key": "AIza..."}',
+        description='JSON string with analysis parameters. Required fields: project_description, target_variable, features. Example: {"project_description": "...", "target_variable": "Y", "features": {"X1": "desc"}, "api_key": "AIza..."}',
     ),
     current_user: User = Depends(get_current_user),
     run_service: RunService = Depends(get_run_service),
@@ -146,69 +175,29 @@ async def analyze(
     except Exception as e:
         return _api_error(400, "validation_error", str(e))
 
-    # Process file upload (reuse existing FileService)
-    file_service = get_file_service()
     try:
-        filename = file.filename or "upload.csv"
-        content, metadata = file_service.process_upload(file.file, filename)
-
-        # Store in database
-        file_repo.create_file(
-            filename=filename,
-            content=content,
-            user_id=current_user.user_id,
-            media_type=metadata.media_type,
+        submission = await submit_analysis(
+            user=current_user,
+            filename=file.filename or "upload.csv",
+            file_obj=file.file,
+            params=analyze_params,
+            run_service=run_service,
+            file_repo=file_repo,
         )
-        csv_filename = metadata.filename
-    except (FileTooLargeError, FileValidationError) as e:
-        return _api_error(400, "file_error", e.message, e.details)
-    except Exception as e:
-        return _api_error(400, "file_error", f"File processing failed: {e}")
+    except SyxplainException as e:
+        for kinds, status_code, code in _SUBMISSION_ERRORS:
+            if isinstance(e, kinds):
+                return _api_error(status_code, code, e.message, e.details or None)
+        raise
 
-    # Validate columns exist in the file
-    try:
-        has_server_keys_access = current_user.has_server_keys_access
-        # The user's own LLM settings; users with server-key access always run on the server keys
-        user_llm = None if has_server_keys_access else analyze_params.to_user_llm()
-
-        # Blocking (file parsing, DNS): off the event loop
-        await asyncio.to_thread(
-            run_service.validate_run_request,
-            csv_filename=csv_filename,
-            target_variable=analyze_params.target_variable,
-            features=analyze_params.features,
-            user_id=current_user.user_id,
-            has_server_keys_access=has_server_keys_access,
-            user_llm=user_llm,
-        )
-    except EntityNotFoundError as e:
-        return _api_error(404, "not_found", e.message, e.details)
-    except ValidationError as e:
-        return _api_error(400, "validation_error", e.message, e.details)
-    except ConfigurationError as e:
-        return _api_error(500, "configuration_error", e.message)
-
-    # Start analysis run
-    problem_desc = {
-        "project_description": analyze_params.project_description,
-        "target_variable": analyze_params.target_variable,
-        "features": analyze_params.features,
-    }
-
-    run_id = start_analysis_run(
-        problem_desc=problem_desc,
-        csv_filename=csv_filename,
-        user_id=current_user.user_id,
-        user_llm=user_llm,
-    )
-
-    logger.info(f"api/analyze: Run {run_id} started for user {current_user.user_id}")
-
+    run_id = submission.run_id
     return AnalyzeResponse(
         run_id=run_id,
         status=RunStatus.PENDING,
         status_url=f"/api/v1/runs/{run_id}",
         cancel_url=f"/api/v1/runs/{run_id}/cancel",
+        summary_url=f"/api/v1/runs/{run_id}/summary",
+        renamed_columns=submission.renamed_columns,
     )
 
 
@@ -225,13 +214,21 @@ async def analyze(
 Poll this endpoint to check the progress and retrieve results of an analysis run.
 
 When the run reaches a terminal state (`completed`, `failed`, `timeout`, or `cancelled`),
-polling can stop. For completed runs, the `results` field contains the full analysis output
-including discovered equations, summary, and recommendation. The `artifacts` list provides
-download URLs for generated plots and files.
+polling can stop. A typical analysis takes 10 to 30 minutes; poll every 15 to 30 seconds.
+While it runs, `phase` names the pipeline step.
+
+For completed runs, `results` holds the full output: the shortlisted `equations` and the
+`best_equation` with holdout and cross-validation scores, the `explanations`, and the
+`discovery` record (data split, time-series features, agent report, literature and known-law
+comparison). `warnings` lists steps that were skipped or failed without failing the run.
+The `artifacts` list provides download URLs for generated plots and files.
+`GET /api/v1/runs/{run_id}/summary` returns the same outcome in compact form.
 
 **Status lifecycle:** `pending` -> `running` -> `completed` | `failed` | `timeout` | `cancelled`
 
-**Fields populated on completion:** `results`, `artifacts`, `duration_seconds`, `finish_time`
+**Fields populated on completion:** `artifacts`, `duration_seconds`, `finish_time`; `results`
+is complete then (a running analysis already exposes the interim results once the equation
+search has finished)
 """,
     responses={
         200: {
@@ -251,7 +248,7 @@ def get_run_status(
     current_user: User = Depends(get_current_user),
     run_service: RunService = Depends(get_run_service),
 ):
-    """Get run status with inline results when completed."""
+    """Get run status with inline results."""
     try:
         run = run_service.get_run_for_user(run_id, current_user.user_id)
     except EntityNotFoundError:
@@ -275,18 +272,58 @@ def get_run_status(
             )
 
     return RunStatusResponse(
-        run_id=str(run.id),
-        status=run.status,
-        progress=run.progress or 0,
-        analysis_type=run.analysis_type or "quick",
+        **run_state(run),
+        analysis_type=run.analysis_type or STANDARD_ANALYSIS,
         created_at=run.created_at,
         start_time=run.start_time,
         finish_time=run.finish_time,
         duration_seconds=duration_seconds,
-        error=run.error,
-        results=run.results if run.status == RunStatus.COMPLETED else None,
+        warnings=run_warnings(run.results),
+        results=run.results or None,
         artifacts=artifacts,
     )
+
+
+# ============================================================================
+# GET /api/v1/runs/{run_id}/summary — Compact result summary
+# ============================================================================
+
+
+@router.get(
+    "/runs/{run_id}/summary",
+    response_model=RunDigestResponse,
+    summary="Get a compact summary of the results",
+    description="""
+The outcome of a run without the plot data, the full model leaderboard and the agent's
+activity log: the selected equation and the shortlist with their scores, how the data was
+split and what the scores are measured on, the time-series features that were derived, the
+agent's conclusions, the comparison with published and classic laws, the explanation, the
+warnings and the LLM cost.
+
+Suited to chat assistants and dashboards; `GET /api/v1/runs/{run_id}` has everything.
+`summary` is null until results exist.
+""",
+    responses={
+        200: {"description": "Run state and the compact summary", "model": RunDigestResponse},
+        404: {
+            "description": "Run not found or not owned by the authenticated user",
+            "model": ErrorResponse,
+        },
+    },
+)
+@limiter.limit("60/minute")
+def get_run_summary(
+    request: Request,
+    run_id: str = Path(..., description="Unique identifier of the run to summarize"),
+    current_user: User = Depends(get_current_user),
+    run_service: RunService = Depends(get_run_service),
+):
+    """Compact summary of a run's results."""
+    try:
+        run = run_service.get_run_for_user(run_id, current_user.user_id)
+    except EntityNotFoundError:
+        return _api_error(404, "not_found", f"Run '{run_id}' not found")
+    return run_digest_payload(run)
 
 
 # ============================================================================
@@ -335,7 +372,7 @@ def list_runs(
             run_id=str(r.id),
             status=r.status,
             progress=r.progress or 0,
-            analysis_type=r.analysis_type or "quick",
+            analysis_type=r.analysis_type or STANDARD_ANALYSIS,
             csv_filename=r.csv_filename,
             target_variable=r.target_variable,
             created_at=r.created_at,
@@ -453,13 +490,13 @@ def download_artifact(
 @router.get(
     "/models",
     response_model=ModelsResponse,
-    summary="List available analysis models",
+    summary="Which LLM your analyses run on",
     description="""
-Returns the available models that can be used in analysis requests.
+Tells whether your analyses run on the server's LLM keys (`server_keys: true`: send no LLM
+fields) or need your own key.
 
-Lists the Gemini models for the main LLM pipeline with your own Gemini key; pass one as
-`model` (or the legacy `gemini_model`). With `provider: "openai_compatible"`, `model` is
-any model your endpoint serves.
+With your own Gemini key, `models` lists the suggested `model` values (the first is the
+default). With `provider: "openai_compatible"`, `model` is any model your endpoint serves.
 """,
     responses={
         200: {"description": "Lists of available model identifiers", "model": ModelsResponse},
@@ -468,7 +505,9 @@ any model your endpoint serves.
 @limiter.limit("30/minute")
 def list_models(request: Request, current_user: User = Depends(get_current_user)):
     """List available models for analysis."""
-    settings = get_settings()
+    models = get_settings().llm.get_user_api_model_list()
     return ModelsResponse(
-        gemini_models=settings.llm.get_user_api_model_list(),
+        server_keys=current_user.has_server_keys_access,
+        models=models,
+        gemini_models=models,
     )

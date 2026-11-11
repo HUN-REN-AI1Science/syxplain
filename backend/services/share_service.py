@@ -10,6 +10,7 @@ import secrets
 from typing import Any
 from uuid import UUID
 
+from backend.core.constants import STANDARD_ANALYSIS
 from backend.core.exceptions import EntityNotFoundError
 from backend.repositories.artifact_repository import ArtifactRepository
 from backend.repositories.file_repository import FileRepository
@@ -140,7 +141,7 @@ class ShareService:
                     "id": str(run.id),
                     "target_variable": run.target_variable,
                     "csv_filename": run.csv_filename,
-                    "analysis_type": run.analysis_type or "quick",
+                    "analysis_type": run.analysis_type or STANDARD_ANALYSIS,
                     "created_at": run.created_at.isoformat() if run.created_at else None,
                     "share_token": run.public_share_token,
                     "share_url": f"/share/{run.public_share_token}",
@@ -206,7 +207,7 @@ class ShareService:
             "problem_description": run.problem_description,
             "csv_filename": run.csv_filename,
             "csv_metadata": csv_metadata,
-            "analysis_type": run.analysis_type or "quick",
+            "analysis_type": run.analysis_type or STANDARD_ANALYSIS,
             "error": run.error,
         }
 

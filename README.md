@@ -110,8 +110,15 @@ export SYXPLAIN_API_KEY=syxp_...
 python examples/api_client.py data/example_1 --base-url http://localhost:8000
 ```
 
-[docs/api.md](docs/api.md) describes the endpoints. The backend serves interactive docs at
-`/docs`.
+[docs/api.md](docs/api.md) describes the endpoints and the results. The backend serves
+interactive docs at `/docs`.
+
+## Chat assistants (MCP)
+
+The backend also serves a Model Context Protocol endpoint at `/mcp`: an assistant such as
+LibreChat or Claude can start an analysis from a conversation and report the results.
+[docs/mcp.md](docs/mcp.md) covers the tools, the technical account a chat platform
+connects with, and the LibreChat configuration.
 
 ## Development
 
@@ -133,8 +140,8 @@ backend/        FastAPI app: API, orchestration, discovery agent (services/disco
 frontend/       React + TypeScript web app (Vite, PrimeReact, Tailwind)
 slurm_worker/   Compute worker (PySR) and its Singularity image definitions
 keycloak/       Realm export and login/email theme
-dev/            Local Slurm emulator, dev login script, local runners
-docs/           How it works, configuration, deployment, Slurm, API
+dev/            Local Slurm emulator, dev login and technical-client scripts, local runners
+docs/           How it works, configuration, deployment, Slurm, API, MCP
 data/           Example datasets
 examples/       API client example
 ```
@@ -146,6 +153,7 @@ examples/       API client example
 - [Deployment](docs/deployment.md): production with Docker Compose, TLS, Keycloak
 - [Slurm](docs/slurm.md): running the compute on your own cluster
 - [API](docs/api.md)
+- [MCP server and technical access](docs/mcp.md)
 
 ## Citing
 

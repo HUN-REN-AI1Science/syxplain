@@ -10,10 +10,11 @@ from typing import Any
 from uuid import UUID
 
 from backend.core.config import get_settings
-from backend.core.constants import RunStatus
+from backend.core.constants import STANDARD_ANALYSIS, RunStatus
 from backend.core.exceptions import (
     ConfigurationError,
     EntityNotFoundError,
+    TooManyActiveRunsError,
     ValidationError,
 )
 from backend.infrastructure.database.models import Run
@@ -159,7 +160,7 @@ class RunService:
             "problem_description": run.problem_description,
             "csv_filename": run.csv_filename,
             "csv_metadata": csv_metadata,
-            "analysis_type": run.analysis_type or "quick",
+            "analysis_type": run.analysis_type or STANDARD_ANALYSIS,
             "error": run.error,
         }
 
@@ -189,6 +190,38 @@ class RunService:
             ValidationError: If configuration is invalid
             ConfigurationError: If server configuration is missing
         """
+        self.check_can_start(user_id, has_server_keys_access, user_llm)
+
+        # Verify file exists and belongs to user
+        db_file = self.file_repo.get_latest_by_filename(csv_filename, parse_uuid(user_id))
+        if not db_file:
+            raise EntityNotFoundError("File", csv_filename)
+
+        # Validate columns exist
+        df = self.file_service.parse_dataframe(db_file.content, csv_filename)
+        self.file_service.validate_columns_exist(df, target_variable, features)
+
+    def check_can_start(
+        self, user_id: str, has_server_keys_access: bool, user_llm: UserLLM | None = None
+    ) -> None:
+        """
+        The checks of a new run that do not depend on its dataset: an LLM to use and
+        room under the account's limit of active runs. Blocking (DNS, database).
+        """
+        self.validate_llm_access(has_server_keys_access, user_llm)
+        self.check_active_run_limit(user_id)
+
+    def validate_llm_access(
+        self, has_server_keys_access: bool, user_llm: UserLLM | None = None
+    ) -> None:
+        """
+        Check that the run has an LLM to use: the server keys, or the user's own.
+        Blocking (DNS lookup of a user's endpoint).
+
+        Raises:
+            ValidationError: If the user's own key or endpoint is missing or unsafe
+            ConfigurationError: If the server keys are not configured
+        """
         # Check API key availability based on permissions
         if has_server_keys_access:
             # User uses server keys - check server configuration
@@ -211,14 +244,20 @@ class RunService:
                 except UnsafeUrlError as e:
                     raise ValidationError(str(e), field="user_api_keys")
 
-        # Verify file exists and belongs to user
-        db_file = self.file_repo.get_latest_by_filename(csv_filename, parse_uuid(user_id))
-        if not db_file:
-            raise EntityNotFoundError("File", csv_filename)
+    def check_active_run_limit(self, user_id: str) -> None:
+        """
+        Refuse a new run when the account already has MAX_ACTIVE_RUNS_PER_USER
+        pending or running analyses.
 
-        # Validate columns exist
-        df = self.file_service.parse_dataframe(db_file.content, csv_filename)
-        self.file_service.validate_columns_exist(df, target_variable, features)
+        Raises:
+            TooManyActiveRunsError: If the limit is reached
+        """
+        limit = self.settings.analysis.max_active_runs_per_user
+        if limit <= 0:
+            return
+        active = self.run_repo.count_active_for_user(parse_uuid(user_id))
+        if active >= limit:
+            raise TooManyActiveRunsError(active=active, limit=limit)
 
     async def cancel_run(self, run_id: str, user_id: str) -> bool:
         """

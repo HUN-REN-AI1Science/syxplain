@@ -8,7 +8,7 @@ parsing, validation, and metadata extraction.
 import io
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pandas as pd
 
@@ -39,6 +39,8 @@ class FileMetadata:
     row_count: int
     size_bytes: int
     media_type: str
+    # Columns renamed to valid identifiers on upload: {name in the file: stored name}
+    renamed_columns: dict[str, str] = field(default_factory=dict)
 
 
 class FileService:
@@ -342,7 +344,7 @@ class FileService:
             ),
         )
 
-    def process_upload(self, file_obj, filename: str) -> tuple[bytes, FileMetadata]:
+    def process_upload(self, file_obj, filename: str) -> tuple[bytes, FileMetadata, pd.DataFrame]:
         """
         Full upload processing pipeline.
 
@@ -351,7 +353,9 @@ class FileService:
             filename: Original filename
 
         Returns:
-            Tuple of (file content, metadata)
+            Tuple of (content to store, metadata, the parsed DataFrame). Store the
+            content under ``metadata.filename``: a file whose columns had to be renamed
+            is re-serialized as CSV, and an Excel upload then gets a .csv name.
 
         Raises:
             FileValidationError: If validation fails
@@ -367,21 +371,30 @@ class FileService:
         df = self.parse_dataframe(content, filename)
 
         # Sanitize column names for PySR/Julia compatibility
+        original_columns = [str(c) for c in df.columns]
         df, renamed = self.sanitize_column_names(df, filename)
 
         # Re-serialize if columns were renamed so stored content has clean names
         if renamed:
             content = df.to_csv(index=False).encode("utf-8")
+            if self.is_excel_file(filename):
+                filename = filename.rsplit(".", 1)[0] + ".csv"
 
         # Validate content
         self.validate_dataframe(df, filename)
 
         # Extract metadata
         metadata = self.extract_metadata(df, filename, content)
+        if renamed:
+            metadata.renamed_columns = {
+                old: new
+                for old, new in zip(original_columns, metadata.columns, strict=True)
+                if old != new
+            }
 
         logger.info(f"File {filename} validated successfully. Columns: {metadata.columns}")
 
-        return content, metadata
+        return content, metadata, df
 
     def validate_columns_exist(
         self, df: pd.DataFrame, target_variable: str, features: dict[str, str]

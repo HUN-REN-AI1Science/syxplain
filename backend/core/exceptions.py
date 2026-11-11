@@ -126,6 +126,34 @@ class FileTooLargeError(ValidationError):
         )
 
 
+class TooManyActiveRunsError(SyxplainException):
+    """
+    Raised when an account already has its maximum of pending or running analyses.
+    """
+
+    status_code = 429
+
+    def __init__(self, active: int, limit: int):
+        super().__init__(
+            message=(
+                f"{active} analyses are already pending or running for this account "
+                f"(limit {limit}). Wait for one to finish or cancel it."
+            ),
+            details={"active_runs": active, "limit": limit},
+        )
+
+
+class ComputeUnavailableError(SyxplainException):
+    """Raised when the computing cluster cannot be reached, before a run is accepted."""
+
+    status_code = 503
+
+    def __init__(self):
+        super().__init__(
+            message="The computing cluster is temporarily unavailable. Please try again later."
+        )
+
+
 class ExternalServiceError(SyxplainException):
     """
     Raised when an external service call fails.

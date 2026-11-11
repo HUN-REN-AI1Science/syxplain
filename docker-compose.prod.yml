@@ -86,6 +86,7 @@ services:
       - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}
       - KEYCLOAK_ISSUER=${KEYCLOAK_ISSUER:?KEYCLOAK_ISSUER is required (https://<your-domain>/keycloak/realms/syxplain)}
       - SERVER_KEYS_ROLE=${SERVER_KEYS_ROLE:-server-llm-access}
+      - KEYCLOAK_ALLOWED_CLIENTS=${KEYCLOAK_ALLOWED_CLIENTS:-}
       # Slurm Configuration (REQUIRED - connects to external cluster)
       - SLURM_API_URL=${SLURM_API_URL:?SLURM_API_URL is required}
       - SLURM_AUTH_TOKEN=${SLURM_AUTH_TOKEN:?SLURM_AUTH_TOKEN is required}
@@ -123,6 +124,8 @@ services:
       - DISCOVERY_MAX_CATEGORICAL_LEVELS=${DISCOVERY_MAX_CATEGORICAL_LEVELS:-10}
       - ANALYSIS_TIMEOUT_HOURS=${ANALYSIS_TIMEOUT_HOURS:-24}
       - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
+      - MAX_ACTIVE_RUNS_PER_USER=${MAX_ACTIVE_RUNS_PER_USER:-3}
+      - MCP_MAX_CSV_KB=${MCP_MAX_CSV_KB:-256}
       # CORS (REQUIRED - set to your frontend domain)
       - CORS_ORIGINS=${CORS_ORIGINS:?CORS_ORIGINS is required}
     volumes:

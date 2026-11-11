@@ -41,6 +41,7 @@ any OpenAI-compatible endpoint.
 | `KEYCLOAK_ADMIN_USERNAME` / `KEYCLOAK_ADMIN_PASSWORD` | `admin` / `admin` | Admin account, used to manage user roles. **Change in production** |
 | `KEYCLOAK_ISSUER` | – | Expected token issuer. Empty in development; `https://<domain>/keycloak/realms/syxplain` in production |
 | `SERVER_KEYS_ROLE` | `server-llm-access` | Realm role that lets a user run on the server's LLM keys (`syxplain-admin` always can) |
+| `KEYCLOAK_ALLOWED_CLIENTS` | – | Comma-separated Keycloak client ids whose access tokens are accepted (the token's `azp`). Empty accepts any client of the realm; in production list the web client and the [technical clients](mcp.md#technical-account) |
 | `VITE_KEYCLOAK_URL` / `VITE_KEYCLOAK_REALM` / `VITE_KEYCLOAK_CLIENT_ID` | dev values | Frontend build-time settings (browser-reachable Keycloak URL) |
 
 ## Compute (Slurm)
@@ -103,6 +104,8 @@ These are budget ceilings; the agent stops earlier when it is done.
 | `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` / `DB_POOL_TIMEOUT` / `DB_POOL_RECYCLE` | `40` / `5` / `30` / `300` | Connection pool |
 | `ANALYSIS_TIMEOUT_HOURS` | `24` | Run timeout; `0` disables it |
 | `MAX_FILE_SIZE_MB` | `50` | Upload size limit |
+| `MAX_ACTIVE_RUNS_PER_USER` | `3` | Pending and running analyses one account may have at a time; `0` removes the limit. Raise it for a technical account shared by many people |
+| `MCP_MAX_CSV_KB` | `256` | Largest CSV the MCP `start_analysis` tool accepts as text |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins (set your domain in production) |
 | `GITHUB_FEEDBACK_TOKEN` / `_REPO_OWNER` / `_REPO_NAME` | – | When all three are set, in-app feedback opens GitHub issues; otherwise it is only logged |
 

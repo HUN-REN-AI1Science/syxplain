@@ -27,7 +27,13 @@ class RunStatus(str, Enum):
     def is_terminal(cls, status: str) -> bool:
         return status in _TERMINAL_STATUSES
 
+    @classmethod
+    def active_statuses(cls) -> frozenset["RunStatus"]:
+        """Statuses of a run that has not finished yet."""
+        return _ACTIVE_STATUSES
+
 
 _TERMINAL_STATUSES = frozenset(
     {RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.TIMEOUT, RunStatus.CANCELLED}
 )
+_ACTIVE_STATUSES = frozenset({RunStatus.PENDING, RunStatus.RUNNING})

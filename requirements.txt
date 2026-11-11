@@ -17,8 +17,9 @@ alembic
 pyjwt[crypto]
 # Pinned: the discovery agent extends dspy.ReAct internals
 dspy>=3.4,<3.5
-# LiteLLM imports it for every Responses API call with tools (literature web search)
-mcp>=1.0
+# The MCP endpoint (backend/api/mcp, the 2.x MCPServer API); LiteLLM also imports it
+# for every Responses API call with tools (literature web search)
+mcp>=2.3,<3
 openpyxl
 rich
 httpx

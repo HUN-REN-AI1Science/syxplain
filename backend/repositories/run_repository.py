@@ -11,7 +11,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import desc, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from backend.core.constants import RunStatus
 from backend.infrastructure.database.models import Run
@@ -107,8 +107,9 @@ class RunRepository(BaseRepository[Run]):
         filters = filters or RunFilters()
         pagination = pagination or PaginationParams()
 
-        # Base query for user's runs
-        query = self.db.query(Run).filter(Run.user_id == user_id)
+        # Base query for user's runs. The list never reads the stored results (the
+        # largest column by far), so they are only loaded if a caller touches them
+        query = self.db.query(Run).options(defer(Run.results)).filter(Run.user_id == user_id)
 
         # Apply filters
         if filters.status:
@@ -285,6 +286,40 @@ class RunRepository(BaseRepository[Run]):
             .filter(Run.status.in_(["running", "pending"]), Run.created_at < cutoff_time)
             .all()
         )
+
+    def count_active_for_user(self, user_id: UUID) -> int:
+        """Count a user's pending and running runs."""
+        return (
+            self.db.query(Run)
+            .filter(Run.user_id == user_id, Run.status.in_(RunStatus.active_statuses()))
+            .count()
+        )
+
+    def fail_interrupted_runs(self, error: str) -> dict[str, dict[str, Any]]:
+        """
+        Mark every pending or running run as failed. Runs are tasks of the backend
+        process, so at startup none of them can still be alive.
+
+        Returns:
+            The marked runs: run id -> its Slurm job ids (empty when it submitted none),
+            so the caller can cancel jobs nobody will collect
+        """
+        active = self.db.query(Run).filter(Run.status.in_(RunStatus.active_statuses()))
+        interrupted = {
+            str(r.id): dict(r.slurm_job_ids or {}) for r in active.options(defer(Run.results))
+        }
+        if not interrupted:
+            return {}
+        active.update(
+            {
+                Run.status: RunStatus.FAILED,
+                Run.error: error,
+                Run.finish_time: datetime.utcnow(),
+            },
+            synchronize_session=False,
+        )
+        self.db.commit()
+        return interrupted
 
     def count_for_user(self, user_id: UUID) -> int:
         """

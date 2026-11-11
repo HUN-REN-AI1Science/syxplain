@@ -36,6 +36,10 @@ def _get_jwks_client(settings: AuthSettings) -> PyJWKClient:
 
 
 ADMIN_ROLE = "syxplain-admin"
+# Every Syxplain API key starts with this; a token that does not is a Keycloak JWT
+API_KEY_PREFIX = "syxp_"
+# Keycloak names a client's service-account user "service-account-<client id>"
+SERVICE_ACCOUNT_PREFIX = "service-account-"
 
 
 def grants_server_keys(roles) -> bool:
@@ -49,7 +53,7 @@ class User:
 
     Attributes:
         user_id: Unique identifier from Keycloak (sub claim)
-        email: User's email address
+        email: User's email address (a service account has none: its username stands in)
         roles: Realm roles from Keycloak JWT (realm_access.roles)
     """
 
@@ -57,6 +61,11 @@ class User:
         self.user_id = user_id
         self.email = email
         self.roles = roles or []
+
+    @property
+    def is_service_account(self) -> bool:
+        """A Keycloak client's service account (technical access, client_credentials grant)."""
+        return bool(self.email) and self.email.startswith(SERVICE_ACCOUNT_PREFIX)
 
     @property
     def is_admin(self) -> bool:
@@ -70,6 +79,21 @@ class User:
 
     def __repr__(self) -> str:
         return f"User(id={self.user_id}, email={self.email})"
+
+
+def check_token_claims(payload: dict, settings: AuthSettings) -> None:
+    """
+    Accept access tokens only, and only from the allowed Keycloak clients.
+
+    Keycloak signs ID and refresh tokens with the same realm key; they carry
+    typ "ID" / "Refresh" and must not authenticate API calls.
+    """
+    token_type = payload.get("typ")
+    if token_type is not None and token_type != "Bearer":
+        raise jwt.InvalidTokenError(f"not an access token (typ={token_type})")
+    allowed = settings.get_allowed_clients()
+    if allowed and payload.get("azp") not in allowed:
+        raise jwt.InvalidTokenError(f"client not allowed (azp={payload.get('azp')})")
 
 
 def decode_jwt_token(token: str, settings: AuthSettings) -> dict:
@@ -103,6 +127,7 @@ def decode_jwt_token(token: str, settings: AuthSettings) -> dict:
             signing_key.key,
             **decode_kwargs,
         )
+        check_token_claims(payload, settings)
         return payload
     except jwt.ExpiredSignatureError:
         logger.warning("JWT decode failed: token expired")
@@ -142,6 +167,13 @@ def _authenticate_jwt(credentials: HTTPAuthorizationCredentials, settings: AuthS
                 detail="Email not verified. Please verify your email address.",
             )
 
+        if not email:
+            # Service accounts (client_credentials) have no email; their username
+            # "service-account-<client>" identifies them wherever an email is recorded
+            username = payload.get("preferred_username") or ""
+            if username.startswith(SERVICE_ACCOUNT_PREFIX):
+                email = username
+
         roles = payload.get("realm_access", {}).get("roles", [])
         return User(user_id=user_id, email=email, roles=roles)
 
@@ -151,6 +183,54 @@ def _authenticate_jwt(credentials: HTTPAuthorizationCredentials, settings: AuthS
             detail=e.message,
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def _authenticate_api_key(raw_key: str) -> User:
+    """Authenticate an X-API-Key value; raises HTTPException(401) when it is not valid."""
+    try:
+        from backend.repositories.api_key_repository import ApiKeyRepository
+        from backend.services.api_key_service import ApiKeyService
+
+        db_gen = _get_db_session()()
+        db = next(db_gen)
+        try:
+            return ApiKeyService(ApiKeyRepository(db)).authenticate_by_api_key(raw_key)
+        finally:
+            with contextlib.suppress(StopIteration):
+                next(db_gen)
+    except AuthenticationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=e.message,
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+
+
+def authenticate_credentials(
+    api_key: str | None, bearer_token: str | None, settings: AuthSettings | None = None
+) -> User:
+    """
+    Authenticate by API key (X-API-Key) or Bearer token. An API key may also come as
+    the Bearer token, for clients that can only set an Authorization header.
+    Blocking (database or JWKS lookup).
+
+    Raises:
+        HTTPException: 401 without valid credentials, 403 for an unverified email
+    """
+    if not api_key and bearer_token and bearer_token.startswith(API_KEY_PREFIX):
+        api_key, bearer_token = bearer_token, None
+    if api_key:
+        return _authenticate_api_key(api_key)
+    if bearer_token:
+        return _authenticate_jwt(
+            HTTPAuthorizationCredentials(scheme="Bearer", credentials=bearer_token),
+            settings or get_auth_settings(),
+        )
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required. Provide a Bearer token or X-API-Key header.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 async def get_current_user_jwt_only(
@@ -182,12 +262,8 @@ async def get_current_user(
     settings: AuthSettings = Depends(get_auth_settings),
 ) -> User:
     """
-    FastAPI dependency that validates either a JWT token or API key.
-
-    Authentication order:
-    1. If X-API-Key header present → authenticate via API key
-    2. Else if Bearer token present → validate JWT (existing flow)
-    3. Else → 401
+    FastAPI dependency that validates either an API key or a JWT (see
+    authenticate_credentials; the API key wins when both are sent).
 
     Returns:
         User object with id, email, and roles
@@ -199,37 +275,8 @@ async def get_current_user(
     if x_api_key and credentials:
         logger.warning("Request contains both X-API-Key and Bearer token; using API key")
 
-    # Path 1: API key authentication
-    if x_api_key:
-        try:
-            from backend.repositories.api_key_repository import ApiKeyRepository
-            from backend.services.api_key_service import ApiKeyService
-
-            db_gen = _get_db_session()()
-            db = next(db_gen)
-            try:
-                repo = ApiKeyRepository(db)
-                service = ApiKeyService(repo)
-                return service.authenticate_by_api_key(x_api_key)
-            finally:
-                with contextlib.suppress(StopIteration):
-                    next(db_gen)
-        except AuthenticationError as e:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=e.message,
-                headers={"WWW-Authenticate": "ApiKey"},
-            )
-
-    # Path 2: JWT Bearer token authentication
-    if credentials:
-        return _authenticate_jwt(credentials, settings)
-
-    # Path 3: No credentials provided
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required. Provide a Bearer token or X-API-Key header.",
-        headers={"WWW-Authenticate": "Bearer"},
+    return authenticate_credentials(
+        x_api_key, credentials.credentials if credentials else None, settings
     )
 
 

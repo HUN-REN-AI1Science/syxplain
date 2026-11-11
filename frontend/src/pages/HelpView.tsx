@@ -52,6 +52,7 @@ const NAV: NavItem[] = [
     children: [
       { id: 'llm-keys', label: 'Using your own LLM key' },
       { id: 'programmatic-api', label: 'Programmatic API' },
+      { id: 'chat-assistants', label: 'Chat assistants (MCP)' },
     ],
   },
 ];
@@ -485,8 +486,12 @@ const KeysApi: React.FC = () => (
         <Code>provider</Code>, <Code>api_key</Code>, <Code>model</Code>, <Code>api_base</Code>).
       </li>
       <li>
-        <Code>GET /api/v1/runs/{'{run_id}'}</Code> returns the run&apos;s status, and the results
-        once it has completed. Poll it until the run finishes.
+        <Code>GET /api/v1/runs/{'{run_id}'}</Code> returns the run&apos;s status, its current phase,
+        any warnings, and the full results. Poll it until the run finishes.
+      </li>
+      <li>
+        <Code>GET /api/v1/runs/{'{run_id}'}/summary</Code> returns the outcome in compact form: the
+        selected equation with its scores, the data split, the explanation and the warnings.
       </li>
       <li>
         <Code>GET /api/v1/runs</Code> lists your runs;{' '}
@@ -497,6 +502,15 @@ const KeysApi: React.FC = () => (
       The interactive API documentation at <a href="/docs">/docs</a> lists every endpoint and
       parameter, with examples, and lets you try requests with your key.
     </InfoBox>
+
+    <SubHeading id="chat-assistants" title="Chat assistants (MCP)" />
+    <Prose>
+      Chat assistants that support the Model Context Protocol, such as LibreChat or Claude, can
+      connect to this server at <Code>/mcp</Code> with your API key in the <Code>X-API-Key</Code>{' '}
+      header. The assistant can then start an analysis from a small table pasted into the
+      conversation, follow its progress and report the results. This requires Server Keys Access:
+      analyses started this way always run on the server&apos;s LLM keys.
+    </Prose>
   </>
 );
 

@@ -11,12 +11,13 @@ Each user may have at most one active key at a time.
 import hashlib
 import logging
 import secrets
+import time
 from datetime import datetime
 from typing import Any
 
 from backend.core.config import get_settings
 from backend.core.exceptions import AuthenticationError, ValidationError
-from backend.core.security import User
+from backend.core.security import API_KEY_PREFIX, User
 from backend.infrastructure.database.models import ApiKey
 from backend.infrastructure.keycloak.admin_client import get_keycloak_admin_token
 from backend.repositories.api_key_repository import ApiKeyRepository
@@ -24,13 +25,18 @@ from backend.utils import parse_uuid
 
 logger = logging.getLogger(__name__)
 
-KEY_PREFIX = "syxp_"
 ROLE_CACHE_TTL_SECONDS = 300  # 5 minutes
+# last_used_at is informational: written at most this often, not on every request
+LAST_USED_RESOLUTION_SECONDS = 60
+
+# When each key's roles were last checked against Keycloak (key id -> monotonic time).
+# In memory: the first use after a restart checks again.
+_roles_refreshed_at: dict[str, float] = {}
 
 
 def _generate_key() -> str:
     """Generate a new API key: syxp_ + 32 bytes of URL-safe randomness."""
-    return KEY_PREFIX + secrets.token_urlsafe(32)
+    return API_KEY_PREFIX + secrets.token_urlsafe(32)
 
 
 def _hash_key(raw_key: str) -> str:
@@ -144,12 +150,14 @@ class ApiKeyService:
         if not api_key:
             raise AuthenticationError(message="Invalid API key", reason="not_found")
 
-        # Refresh roles from Keycloak if stale (must happen before updating last_used_at,
-        # because _maybe_refresh_roles uses last_used_at to compute staleness)
         self._maybe_refresh_roles(api_key)
 
-        # Update last used timestamp
-        self.repo.update_last_used(api_key)
+        last_used = api_key.last_used_at
+        if (
+            last_used is None
+            or (datetime.utcnow() - last_used).total_seconds() >= LAST_USED_RESOLUTION_SECONDS
+        ):
+            self.repo.update_last_used(api_key)
 
         return User(
             user_id=str(api_key.user_id),
@@ -163,10 +171,14 @@ class ApiKeyService:
 
         This is best-effort: if Keycloak is unreachable, we use stale roles.
         """
-        if api_key.last_used_at:
-            age = (datetime.utcnow() - api_key.last_used_at).total_seconds()
-            if age < ROLE_CACHE_TTL_SECONDS:
-                return
+        # Timed from the last refresh, not the last use: a key in constant use (a chat
+        # platform's technical key) must still pick up a removed role or a deleted account
+        key_id = str(api_key.id)
+        now = time.monotonic()
+        refreshed = _roles_refreshed_at.get(key_id)
+        if refreshed is not None and now - refreshed < ROLE_CACHE_TTL_SECONDS:
+            return
+        _roles_refreshed_at[key_id] = now
 
         try:
             admin_token = get_keycloak_admin_token()
@@ -176,7 +188,7 @@ class ApiKeyService:
             auth_settings = self.settings.auth
             import httpx as httpx_sync
 
-            # Synchronous call — this runs rarely (once per hour per key)
+            # Synchronous call — this runs rarely (at most every five minutes per key)
             with httpx_sync.Client() as client:
                 resp = client.get(
                     f"{auth_settings.admin_api_url}/users/{api_key.user_id}/role-mappings/realm",

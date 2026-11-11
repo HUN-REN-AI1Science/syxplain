@@ -15,6 +15,7 @@ from backend.infrastructure.database.models import File as DbFile
 from backend.infrastructure.database.models import Run
 from backend.services.file_service import get_file_service
 from backend.services.orchestrator_service import AnalysisCancelledError
+from backend.utils import parse_uuid
 from backend.utils.user_llm import UserLLM
 
 logger = logging.getLogger(__name__)
@@ -119,7 +120,9 @@ async def _run_analysis(
     run_id: str,
     problem_desc: dict[str, Any],
     csv_filename: str,
+    user_id: str,
     user_llm: UserLLM | None = None,
+    file_id: str | None = None,
 ) -> None:
     """
     Async function that runs the orchestrated analysis.
@@ -141,23 +144,23 @@ async def _run_analysis(
         file_service = get_file_service()
 
         with get_db_session() as db:
-            db_file = (
-                db.query(DbFile)
-                .filter(DbFile.filename == csv_filename)
-                .order_by(DbFile.created_at.desc())
-                .first()
-            )
+            if file_id:
+                # The file stored for this run (a later upload of the same name is another file)
+                db_file = db.query(DbFile).filter(DbFile.id == parse_uuid(file_id)).first()
+            else:
+                # The owner's latest file of that name, uploaded before the run was started
+                db_file = (
+                    db.query(DbFile)
+                    .filter(DbFile.filename == csv_filename, DbFile.user_id == parse_uuid(user_id))
+                    .order_by(DbFile.created_at.desc())
+                    .first()
+                )
 
             if not db_file:
                 raise Exception(f"File {csv_filename} not found in database")
 
             logger.info(f"Loading data for {csv_filename} from DB")
             data = file_service.parse_dataframe(db_file.content, csv_filename)
-
-        # Get user_id from run record
-        with get_db_session() as db:
-            run = db.query(Run).filter(Run.id == run_id).first()
-            user_id = str(run.user_id)
 
         # Run orchestrated analysis
         from backend.services.orchestrator_service import run_orchestrated_analysis
@@ -190,6 +193,7 @@ def start_analysis_run(
     csv_filename: str,
     user_id: str,
     user_llm: UserLLM | None = None,
+    file_id: str | None = None,
 ) -> str:
     """
     Create a run record and start background processing.
@@ -200,6 +204,8 @@ def start_analysis_run(
         user_id: Owner's UUID as string
         user_llm: The user's own LLM settings (None = server keys; never stored, only
             in memory)
+        file_id: The stored file to analyse; None = the user's latest file named
+            ``csv_filename``
 
     Returns:
         The run UUID as string
@@ -228,7 +234,9 @@ def start_analysis_run(
             run_id,
             problem_desc,
             csv_filename,
+            user_id,
             user_llm=user_llm,
+            file_id=file_id,
         )
     )
     _running_tasks[run_id] = task

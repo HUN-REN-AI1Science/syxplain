@@ -51,6 +51,12 @@ async def delete_profile(
     Raises:
         HTTPException: If deletion fails
     """
+    if current_user.is_service_account:
+        # Deleting the Keycloak user behind a client would break that client
+        raise HTTPException(
+            status_code=403,
+            detail="Service accounts cannot be deleted here; remove the client in Keycloak.",
+        )
     try:
         await profile_service.delete_account(current_user.user_id)
         return ProfileDeleteResponse()

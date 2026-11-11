@@ -10,6 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from backend.core.constants import STANDARD_ANALYSIS
+
 # ============================================================================
 # Run Responses
 # ============================================================================
@@ -46,7 +48,7 @@ class RunSummary(BaseModel):
     csv_filename: str
     target_variable: str | None = None
     progress: int = Field(default=0, ge=0, le=100)
-    analysis_type: str = "quick"
+    analysis_type: str = STANDARD_ANALYSIS
     start_time: datetime | None = None
     finish_time: datetime | None = None
 
@@ -83,7 +85,7 @@ class RunDetailsResponse(BaseModel):
     problem_description: dict[str, Any]
     csv_filename: str
     csv_metadata: CSVMetadata | None = None
-    analysis_type: str = "quick"
+    analysis_type: str = STANDARD_ANALYSIS
     error: str | None = None
 
 
@@ -119,7 +121,7 @@ class SharedRunSummary(BaseModel):
     id: str
     target_variable: str | None = None
     csv_filename: str
-    analysis_type: str = "quick"
+    analysis_type: str = STANDARD_ANALYSIS
     created_at: datetime | None = None
     share_token: str
     share_url: str
@@ -324,7 +326,7 @@ class AdminRunSummary(BaseModel):
     csv_filename: str
     target_variable: str | None = None
     progress: int = Field(default=0, ge=0, le=100)
-    analysis_type: str = "quick"
+    analysis_type: str = STANDARD_ANALYSIS
     start_time: datetime | None = None
     finish_time: datetime | None = None
     error: str | None = None
@@ -353,7 +355,7 @@ class AdminRunDetailResponse(BaseModel):
     created_at: datetime | None = None
     problem_description: dict[str, Any]
     csv_filename: str
-    analysis_type: str = "quick"
+    analysis_type: str = STANDARD_ANALYSIS
     error: str | None = None
     progress: int = 0
     start_time: datetime | None = None

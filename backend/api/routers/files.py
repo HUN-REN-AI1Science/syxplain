@@ -49,11 +49,11 @@ def upload_file(
 
     try:
         # Process the upload (validates and extracts metadata)
-        content, metadata = file_service.process_upload(file.file, file.filename)
+        content, metadata, _ = file_service.process_upload(file.file, file.filename)
 
-        # Store in database
+        # Store in database (an Excel file with renamed columns is stored as .csv)
         file_repo.create_file(
-            filename=file.filename,
+            filename=metadata.filename,
             content=content,
             user_id=current_user.user_id,
             media_type=metadata.media_type,

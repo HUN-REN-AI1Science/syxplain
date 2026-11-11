@@ -101,6 +101,9 @@ never re-imported. In the admin console (`https://<domain>/keycloak/admin`):
    - `syxplain-admin`: admin panel and all endpoints
    - `server-llm-access` (or your `SERVER_KEYS_ROLE`): may run analyses on the server's
      LLM keys. Other users bring their own key.
+4. **Technical clients (optional).** For a chat platform or another program that connects
+   as itself, create a client with `dev/create-technical-client.sh` and list the accepted
+   clients in `KEYCLOAK_ALLOWED_CLIENTS`. See [MCP server and technical access](mcp.md).
 
 ## Updating
 

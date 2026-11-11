@@ -59,24 +59,19 @@ def get_file_service_dep() -> FileService:
     return get_file_service()
 
 
-def get_run_service(
-    run_repo: RunRepository = Depends(get_run_repository),
-    file_repo: FileRepository = Depends(get_file_repository),
-    artifact_repo: ArtifactRepository = Depends(get_artifact_repository),
-    file_service: FileService = Depends(get_file_service_dep),
-) -> RunService:
-    """
-    Provide RunService instance with all dependencies.
-
-    Dependencies are automatically injected by FastAPI's
-    dependency injection system.
-    """
+def build_run_service(db: Session) -> RunService:
+    """A RunService on one database session (also used outside FastAPI, by the MCP server)."""
     return RunService(
-        run_repo=run_repo,
-        file_repo=file_repo,
-        artifact_repo=artifact_repo,
-        file_service=file_service,
+        run_repo=RunRepository(db),
+        file_repo=FileRepository(db),
+        artifact_repo=ArtifactRepository(db),
+        file_service=get_file_service(),
     )
+
+
+def get_run_service(db: Session = Depends(get_db)) -> RunService:
+    """Provide RunService instance with all dependencies."""
+    return build_run_service(db)
 
 
 def get_share_service(

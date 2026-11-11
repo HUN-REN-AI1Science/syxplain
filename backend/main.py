@@ -6,7 +6,9 @@ registers middleware, and includes all routers. Business logic has been
 moved to the service layer for cleaner separation of concerns.
 """
 
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +17,9 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+from starlette.routing import Route
 
+from backend.api.mcp.server import MCP_PATH, build_mcp
 from backend.api.routers import (
     admin,
     api_keys,
@@ -36,7 +40,8 @@ from backend.core.exceptions import register_exception_handlers
 from backend.core.logging import configure_logging, configure_uvicorn_logging
 from backend.core.rate_limit import limiter
 from backend.core.security_logging import SecurityLoggingMiddleware
-from backend.infrastructure.database.connection import init_db
+from backend.infrastructure.database.connection import get_db_session, init_db
+from backend.repositories.run_repository import RunRepository
 
 # ============================================================================
 # Logging Configuration (must be first)
@@ -84,6 +89,34 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # ============================================================================
 
 
+def _fail_interrupted_runs() -> dict[str, dict]:
+    """
+    Analyses are tasks of this process: whatever is still pending or running in the
+    database at startup was cut off by a restart and would otherwise never finish.
+
+    Returns:
+        The interrupted runs with their Slurm job ids (run id -> job ids)
+    """
+    try:
+        with get_db_session() as db:
+            interrupted = RunRepository(db).fail_interrupted_runs(
+                "The analysis was interrupted by a server restart. Please start it again."
+            )
+        if interrupted:
+            logger.warning(f"Marked {len(interrupted)} interrupted run(s) as failed")
+        return interrupted
+    except Exception as e:
+        logger.error(f"Could not mark interrupted runs: {e}")
+        return {}
+
+
+async def _cancel_interrupted_jobs(interrupted: dict[str, dict]) -> None:
+    """Cancel the Slurm jobs of interrupted runs: no orchestrator will collect them."""
+    for run_id, job_ids in interrupted.items():
+        if job_ids:
+            await progress._cancel_slurm_jobs(run_id, job_ids)
+
+
 def create_app() -> FastAPI:
     """
     Create and configure the FastAPI application.
@@ -92,6 +125,27 @@ def create_app() -> FastAPI:
         Configured FastAPI application instance
     """
     settings = get_settings()
+    mcp_server, mcp_app = build_mcp()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        logger.info("Starting Syxplain API...")
+
+        # Configure uvicorn access log filtering
+        configure_uvicorn_logging()
+
+        # Initialize database and run migrations
+        init_db()
+        interrupted = _fail_interrupted_runs()
+        # In the background: an unreachable cluster must not delay the startup
+        app.state.cancel_interrupted_jobs = asyncio.create_task(
+            _cancel_interrupted_jobs(interrupted)
+        )
+
+        # The MCP endpoint's session manager lives as long as the application
+        async with mcp_server.session_manager.run():
+            logger.info("Syxplain API started successfully")
+            yield
 
     app = FastAPI(
         title="Syxplain API",
@@ -99,46 +153,21 @@ def create_app() -> FastAPI:
             "**Syxplain** -- Neurosymbolic Scientific Discovery Platform\n\n"
             "Automated symbolic regression + LLM explanation for scientific data.\n\n"
             "## Authentication\n\n"
-            "All endpoints require an API key passed via the `X-API-Key` header.\n\n"
-            "Generate an API key in the web UI (Profile -> API Keys).\n\n"
+            "Every endpoint takes either of:\n\n"
+            "- an API key in the `X-API-Key` header, generated in the web UI "
+            "(Profile -> API Keys);\n"
+            "- a Keycloak access token as `Authorization: Bearer <token>`, for technical "
+            "clients that hold a service account (client-credentials grant).\n\n"
+            "The same analyses are available to chat assistants through the MCP endpoint "
+            "at `/mcp`.\n\n"
             "## API Specification\n\n"
             "- **OpenAPI JSON:** [`/openapi.json`](/openapi.json) (download for code generation)"
         ),
         version="1.0.0",
         redoc_url=None,
         openapi_tags=None,
+        lifespan=lifespan,
     )
-
-    # Override OpenAPI schema to remove internal auth schemes (HTTPBearer)
-    def custom_openapi():
-        if app.openapi_schema:
-            return app.openapi_schema
-        from fastapi.openapi.utils import get_openapi
-
-        schema = get_openapi(
-            title=app.title,
-            version=app.version,
-            description=app.description,
-            routes=app.routes,
-            tags=None,
-        )
-        # Remove HTTPBearer scheme — only X-API-Key is relevant for public docs
-        components = schema.get("components", {})
-        security_schemes = components.get("securitySchemes", {})
-        security_schemes.pop("HTTPBearer", None)
-        # Remove Bearer security requirement from all endpoints
-        for path_methods in schema.get("paths", {}).values():
-            for operation in path_methods.values():
-                if isinstance(operation, dict) and "security" in operation:
-                    operation["security"] = [
-                        s for s in operation["security"] if "HTTPBearer" not in s
-                    ]
-                    if not operation["security"]:
-                        del operation["security"]
-        app.openapi_schema = schema
-        return schema
-
-    app.openapi = custom_openapi
 
     # -------------------------------------------------------------------------
     # Middleware Configuration (order matters - first added = last executed)
@@ -205,22 +234,8 @@ def create_app() -> FastAPI:
     app.include_router(suggestions.router, include_in_schema=False)
     app.include_router(runs.router, include_in_schema=False)
 
-    # -------------------------------------------------------------------------
-    # Lifecycle Events
-    # -------------------------------------------------------------------------
-
-    @app.on_event("startup")
-    async def on_startup():
-        """Initialize database."""
-        logger.info("Starting Syxplain API...")
-
-        # Configure uvicorn access log filtering
-        configure_uvicorn_logging()
-
-        # Initialize database and run migrations
-        init_db()
-
-        logger.info("Syxplain API started successfully")
+    # MCP endpoint for chat assistants (streamable HTTP; authenticates in McpAccess)
+    app.router.routes.append(Route(MCP_PATH, endpoint=mcp_app))
 
     return app
 
