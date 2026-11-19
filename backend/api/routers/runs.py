@@ -88,7 +88,7 @@ async def run_analysis(
         )
 
         run_id = start_analysis_run(
-            problem_desc=request.problem_description.model_dump(),
+            problem_desc=request.problem_description.model_dump(exclude_none=True),
             csv_filename=request.csv_filename,
             user_id=current_user.user_id,
             user_llm=user_llm,

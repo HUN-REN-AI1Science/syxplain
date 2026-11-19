@@ -26,6 +26,7 @@ from backend.infrastructure.llm.signatures import (
     PySrConfigGenerator,
     SeriesFeatureProposer,
     SeriesFeatureSelector,
+    SuppliedLiteratureScout,
 )
 from backend.infrastructure.monitoring.llm_costs import record_web_searches
 from backend.utils.json_utils import clean_and_fix_json_string
@@ -263,6 +264,35 @@ def find_literature_laws(
     except Exception as e:
         logger.error(f"Error in find_literature_laws: {e}")
         raise
+
+
+def read_supplied_literature(
+    literature_text: str, features_dict: dict[str, str], lm: Any
+) -> dict[str, Any]:
+    """
+    What the user's own literature states about the target: equations and constraints.
+    No web search; the scout sees only ``literature_text`` and the variable descriptions.
+
+    Returns:
+        Dictionary with 'equations' and 'constraints' lists and source 'supplied'
+    """
+    with dspy.settings.context(lm=lm):
+        response = dspy.Predict(SuppliedLiteratureScout)(
+            literature_text=literature_text,
+            features_json=json.dumps(features_dict, indent=2),
+        )
+    cleaned = clean_and_fix_json_string(response.findings)
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse supplied-literature JSON: {e}. Raw: {cleaned[:200]}")
+        return {"equations": [], "constraints": [], "source": "supplied", "_parse_error": str(e)}
+    if not isinstance(parsed, dict):
+        parsed = {"equations": parsed if isinstance(parsed, list) else []}
+    parsed.setdefault("equations", [])
+    parsed.setdefault("constraints", [])
+    parsed["source"] = "supplied"
+    return parsed
 
 
 def generate_equation_explanation(

@@ -11,7 +11,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.core.constants import STANDARD_ANALYSIS
-from backend.schemas.requests import UserLLMFields
+from backend.schemas.requests import MAX_LITERATURE_CHARS, UserLLMFields
 
 
 class AnalyzeParams(UserLLMFields):
@@ -43,6 +43,14 @@ class AnalyzeParams(UserLLMFields):
         json_schema_extra={
             "examples": [{"pH": "Soil pH (H2O)", "organic_C": "Organic carbon (%)"}]
         },
+    )
+
+    literature_text: str | None = Field(
+        default=None,
+        max_length=MAX_LITERATURE_CHARS,
+        description="Optional: your own literature on the problem (papers, notes) as plain "
+        "text. When given, it replaces the web literature search, and the recommended "
+        "equation is chosen among those coherent with what it states",
     )
 
     @field_validator("features")

@@ -215,6 +215,15 @@ async def start_analysis(
     dataset_name: Annotated[
         str, Field(description="Short name for the dataset, shown in the run list.")
     ] = "dataset",
+    literature_text: Annotated[
+        str | None,
+        Field(
+            description="Optional: the user's own literature on the problem (papers, notes) "
+            "as plain text. It replaces the web literature search, and the recommended "
+            "equation is then chosen among those coherent with what the text states. "
+            "Pass only text the user supplied."
+        ),
+    ] = None,
 ) -> dict[str, Any]:
     """Start an equation-discovery analysis of a small table passed as CSV text.
 
@@ -240,6 +249,7 @@ async def start_analysis(
             project_description=project_description,
             target_variable=target_variable,
             features=features,
+            literature_text=literature_text or None,
         )
     except ValueError as e:
         raise ToolError(f"Invalid parameters: {e}")

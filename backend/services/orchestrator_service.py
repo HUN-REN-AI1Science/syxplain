@@ -126,6 +126,33 @@ class OrchestratorConfig:
     max_retries: int = 3
 
 
+# A challenger this many standard errors better than the coherent recommendation is
+# reported as a disagreement between the data and the supplied literature
+COHERENCE_GAP_WARNING_SE = 1.0
+
+
+def _coherence_first_warning(info: dict[str, Any] | None) -> str | None:
+    """A warning when the coherence-first selection and the metric clearly disagree."""
+    if not info:
+        return None
+    if info.get("status") == "no_coherent_model":
+        return (
+            "No equation is coherent with the supplied literature, so the recommended "
+            "equation was chosen on the cross-validated error alone; it conflicts with: "
+            + "; ".join((info.get("headline_conflicts") or [])[:3])
+        )
+    gap, challenger = info.get("gap_se"), info.get("challenger_model_id")
+    if challenger and gap is not None and gap >= COHERENCE_GAP_WARNING_SE:
+        return (
+            f"The data and the supplied literature disagree: {challenger} has a lower "
+            f"cross-validated error than the recommended equation by {gap:.1f} standard "
+            "errors, but conflicts with the literature ("
+            + "; ".join((info.get("challenger_conflicts") or [])[:3])
+            + "). Both are shown; which one to trust is a scientific judgement."
+        )
+    return None
+
+
 @dataclass
 class AnalysisContext:
     """Context for an analysis run."""
@@ -141,6 +168,9 @@ class AnalysisContext:
     user_llm: UserLLM = field(default_factory=UserLLM)
     # SHAP plots of the training data: [{"name", "kind", "feature", "title", "b64"}]
     shap_plots: list[dict[str, Any]] = field(default_factory=list)
+    # Literature supplied by the user. Kept out of problem_description, which the
+    # exploring LLM steps read: the exploration stays blind to it.
+    literature_text: str = ""
 
 
 class AnalysisOrchestrator:
@@ -700,7 +730,24 @@ class AnalysisOrchestrator:
                     rationale="Baseline: all continuous features, operators chosen from the feature plots",
                     enforce_budget=False,
                 )
-            if self._wants_literature(context):
+            if context.literature_text:
+                # The user's own literature replaces the web search: the scout reads only
+                # that text, and its statements decide which equations are coherent.
+                session.literature_task = asyncio.create_task(
+                    run_literature(
+                        session,
+                        self._supplied_literature_lookup(
+                            context,
+                            literature_features(
+                                session,
+                                descriptions,
+                                context.problem_description.get("project_description", ""),
+                            ),
+                            settings.model_name,
+                        ),
+                    )
+                )
+            elif self._wants_literature(context):
                 features_for_lit = literature_features(
                     session,
                     descriptions,
@@ -824,7 +871,16 @@ class AnalysisOrchestrator:
 
             # SELECT + PERSIST
             results = await asyncio.to_thread(build_results, session, agent_report, agent_error)
-            if results["discovery"]["selection"]["headline_is_reference"]:
+            chosen = results["discovery"]["selection"]
+            if chosen["headline_reason"] == "coherent_literature_law":
+                warnings.append(
+                    {
+                        "stage": "selection",
+                        "message": "No discovered equation is coherent with the supplied "
+                        "literature, so the recommended equation is a law from that literature",
+                    }
+                )
+            elif chosen["headline_is_reference"]:
                 warnings.append(
                     {
                         "stage": "selection",
@@ -832,6 +888,8 @@ class AnalysisOrchestrator:
                         "equation is a known law",
                     }
                 )
+            if (message := _coherence_first_warning(chosen.get("coherence_first"))) is not None:
+                warnings.append({"stage": "selection", "message": message})
             results["warnings"] = warnings
             context.shap_plots = session.shap_plots
             logger.info(
@@ -967,6 +1025,20 @@ class AnalysisOrchestrator:
 
     def _wants_literature(self, context: AnalysisContext) -> bool:
         return literature_available(context.user_llm)
+
+    def _supplied_literature_lookup(
+        self, context: AnalysisContext, features: dict[str, str], model_name: str
+    ):
+        """One reading of the user's own literature by the main LLM (no web search)."""
+        from backend.services.llm_service import read_supplied_literature
+
+        async def lookup() -> dict[str, Any]:
+            lm = self._discovery_lm(context, model_name)
+            return await asyncio.to_thread(
+                read_supplied_literature, context.literature_text, features, lm
+            )
+
+        return lookup
 
     def _literature_lookup(self, user_openai_key: str | None, features: dict[str, str]):
         """One call to the literature search (features keyed by alias, with the target)."""
@@ -1347,7 +1419,8 @@ async def run_orchestrated_analysis(
     context = AnalysisContext(
         run_id=run_id,
         user_id=user_id,
-        problem_description=problem_desc,
+        problem_description={k: v for k, v in problem_desc.items() if k != "literature_text"},
+        literature_text=str(problem_desc.get("literature_text") or "").strip(),
         data=data,
         target_column=target_column,
         predictor_columns=numeric_predictors,

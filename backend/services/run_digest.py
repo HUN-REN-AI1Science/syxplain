@@ -35,6 +35,7 @@ _EQUATION_FIELDS = (
     "is_headline",
     "agent_recommended",
     "agent_why",
+    "literature_conflicts",
 )
 _SPLIT_FIELDS = (
     "uploaded",
@@ -115,10 +116,14 @@ def _literature_digest(literature: Any) -> dict[str, Any] | None:
     if not isinstance(literature, dict):
         return None
     laws = [law for law in literature.get("laws") or [] if isinstance(law, dict)]
-    return _pick(literature, ("status", "error")) | {
+    constraints = [c for c in literature.get("constraints") or [] if isinstance(c, dict)]
+    out = _pick(literature, ("status", "error", "source")) | {
         "n_laws": len(laws),
         "laws": [_pick(law, _LAW_FIELDS) for law in laws[:MAX_DIGEST_LAWS]],
     }
+    if constraints:
+        out["constraints"] = [_pick(c, ("id", "type", "text", "source")) for c in constraints]
+    return out
 
 
 def _explanation_digest(explanations: Any, headline_id: str | None) -> dict[str, Any] | None:
@@ -160,7 +165,12 @@ def build_run_digest(results: dict[str, Any] | None) -> dict[str, Any]:
         )
         selection = _pick(
             discovery.get("selection"),
-            ("headline_reason", "headline_is_reference", "agent_pick_rejected"),
+            (
+                "headline_reason",
+                "headline_is_reference",
+                "agent_pick_rejected",
+                "coherence_first",
+            ),
         )
         if selection:
             digest["selection"] = selection

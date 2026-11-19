@@ -92,6 +92,7 @@ cancelling the run.
 | `project_description` | string | Yes | Description of the project and analysis goals |
 | `target_variable` | string | Yes | Name of the target column to predict |
 | `features` | object | Yes | Mapping of feature column names to descriptions (e.g. `{"pH": "Soil pH"}`). Good descriptions with units matter: the LLM steps reason from them |
+| `literature_text` | string | No | Your own literature on the problem as plain text. Replaces the web literature search; the recommended equation is then chosen among those coherent with what the text states |
 | `provider` | string | No | `"gemini"` (default) or `"openai_compatible"` (any OpenAI-compatible endpoint: OpenAI, OpenRouter, vLLM, LiteLLM, ...) |
 | `api_key` | string | No | API key for the provider (required without server-key access) |
 | `model` | string | No | Model name. Gemini: default `"gemini-3.1-pro-preview"`; OpenAI-compatible: required |

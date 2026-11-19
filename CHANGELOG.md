@@ -18,6 +18,15 @@ All notable changes to this project are documented here. The format follows
   accepts column names as written in the file.
 - `GET /api/v1/models` reports `server_keys`.
 - Settings: `KEYCLOAK_ALLOWED_CLIENTS`, `MAX_ACTIVE_RUNS_PER_USER`, `MCP_MAX_CSV_KB`.
+- Supplied literature: `literature_text` on `POST /api/v1/analyze`, the MCP
+  `start_analysis` tool and the problem description. The literature step then reads only
+  that text (no web search) and returns, besides the published laws, what the text states
+  about the target. Every fitted equation is tested against those statements, and the
+  selection is coherence first: the recommended equation is chosen among the equations
+  without a conflict, and the best-scoring equation overall is kept beside it as the
+  challenger, with the gap between the two in standard errors
+  (`discovery.selection.coherence_first`, `literature_conflicts` per equation, a
+  `supplied_literature` coherence check). Runs without `literature_text` are unchanged.
 
 ### Changed
 - An account can have 3 pending or running analyses at a time by default

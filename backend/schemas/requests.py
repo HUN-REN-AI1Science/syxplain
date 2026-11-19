@@ -32,6 +32,10 @@ class SortOrder(str, Enum):
     DESC = "desc"
 
 
+# Supplied literature travels in the prompt of one LLM call
+MAX_LITERATURE_CHARS = 60_000
+
+
 class ProblemDescription(BaseModel):
     """Describes the analysis problem configuration."""
 
@@ -43,6 +47,12 @@ class ProblemDescription(BaseModel):
     )
     features: dict[str, str] = Field(
         ..., description="Dictionary mapping feature names to their descriptions"
+    )
+    literature_text: str | None = Field(
+        default=None,
+        max_length=MAX_LITERATURE_CHARS,
+        description="Optional literature supplied by the user (plain text); replaces the "
+        "web literature search and makes the selection coherence first",
     )
 
     @field_validator("features")

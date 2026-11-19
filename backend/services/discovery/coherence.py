@@ -33,6 +33,7 @@ LABELS = {
     "generalization": "Held-out generalization",
     "shap": "Agreement with SHAP effects",
     "literature": "Published laws",
+    "supplied_literature": "Coherence with the supplied literature",
     "named_laws": "Named laws",
     "parameters": "Parameters and domain of definition",
     "agent": "Agent's own conclusion",
@@ -244,6 +245,51 @@ def _agent(h: ModelResult, agent: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+# A challenger this many standard errors better than the coherent headline is a warning
+SUPPLIED_GAP_WARN_SE = 1.0
+
+
+def _supplied_literature(selection: Selection) -> list[dict[str, Any]]:
+    """
+    The headline against what the user's own literature states (coherence-first
+    selection). Absent when no literature was supplied.
+    """
+    info = selection.coherence_first
+    if not info:
+        return []
+    conflicts = info.get("headline_conflicts") or []
+    if conflicts:
+        return [
+            _check(
+                "supplied_literature",
+                "fail",
+                "the headline conflicts with the supplied literature: " + "; ".join(conflicts[:3]),
+                len(conflicts),
+            )
+        ]
+    gap, challenger = info.get("gap_se"), info.get("challenger_model_id")
+    if challenger and gap is not None and gap >= SUPPLIED_GAP_WARN_SE:
+        return [
+            _check(
+                "supplied_literature",
+                "warn",
+                f"the headline is coherent with the supplied literature, but {challenger} "
+                f"fits better by {gap:.1f} standard errors and conflicts with it: "
+                + "; ".join((info.get("challenger_conflicts") or [])[:3]),
+                gap,
+            )
+        ]
+    return [
+        _check(
+            "supplied_literature",
+            "pass",
+            f"the headline is coherent with the supplied literature "
+            f"({info.get('n_coherent')} of {info.get('n_candidates')} candidates are)",
+            gap,
+        )
+    ]
+
+
 def effect_directions(session: DiscoverySession, h: ModelResult) -> list[dict[str, Any]]:
     """Shape of the equation's partial dependence on each continuous feature it uses."""
     if h.parsed is None:
@@ -318,6 +364,7 @@ def coherence_report(
         _generalization(session, h),
         _shap(shap_agreement),
         *_known_laws(h, headline_relations, _fitted_known_laws(session)),
+        *_supplied_literature(selection),
         _parameters(h),
         _agent(h, agent),
     ]

@@ -86,6 +86,29 @@ it send none, and any they send are ignored.
 | `api_base` | Base URL for OpenAI-compatible providers (default `https://api.openai.com/v1`) |
 | `openai_api_key` | OpenAI key for the literature search. Without it there is no literature step, unless `api_key` is itself an OpenAI key on the default endpoint |
 
+### Supplying your own literature
+
+`literature_text` (optional, plain text, up to 60 000 characters) holds your own
+literature on the problem: papers, notes, reports. When it is given:
+
+- the literature step reads only this text, with the main LLM and without a web search;
+- the exploration stays blind to it, as it is to every known law;
+- besides equations for the target, the step returns what the text states about it:
+  variables that are not causes, the region where an equation must be defined, the
+  direction of an effect, the limit of a quantity;
+- every fitted equation is tested against these statements by code;
+- the recommended equation is chosen among the equations without a conflict
+  (coherence first), by the usual cross-validation rule. The best-scoring equation
+  overall is kept beside it as the challenger.
+
+`discovery.selection.coherence_first` reports the outcome: `n_candidates`, `n_coherent`,
+`challenger_model_id`, `gap_se` (how much better the challenger scores, in standard
+errors) and `challenger_conflicts`. A small gap with a conflicting challenger points to a
+wrong relationship; a large gap means the data and the literature disagree, and a
+warning says so. If no discovered equation is coherent, a coherent law from the
+literature is recommended (`headline_reason` `coherent_literature_law`); if there is none
+either, the cross-validated error alone decides (`..._no_coherent_model`).
+
 ```bash
 curl -X POST http://localhost:8000/api/v1/analyze \
   -H "X-API-Key: $SYXPLAIN_API_KEY" \
@@ -138,10 +161,10 @@ written.
 | `explanations` | The LLM's reading: one card per equation (`overview`, `term_explanations`, `citations`), `summary` (`key_drivers`, `findings`), `recommendation`, `coherence`. `{"error": ...}` when it could not be written |
 | `discovery.split` | Rows uploaded, complete and dropped; train and holdout sizes; `metric_basis` (`holdout`, or `cv` for data too small to hold rows out); `order` (`random` or `chronological`) |
 | `discovery.series` | Time series only, otherwise `null`: `time_column`, `group_column`, `n_series`, the derived `lag_features` with the reason for each, `feature_stage` |
-| `discovery.selection` | Why the headline was chosen, and whether the agent's pick was overruled |
-| `discovery.leaderboard` | Every fitted model with its scores |
+| `discovery.selection` | Why the headline was chosen, and whether the agent's pick was overruled. With supplied literature also `coherence_first` (see above) |
+| `discovery.leaderboard` | Every fitted model with its scores, and with supplied literature its `literature_conflicts` |
 | `discovery.agent` | The agent's summary, insights, rejected forms and open questions |
-| `discovery.literature` | Published laws found by the literature search and how each fits the data |
+| `discovery.literature` | Published laws found by the literature search and how each fits the data. With supplied literature, `source` is `supplied` and `constraints` lists the statements read from it |
 | `discovery.relations` | How the headline relates to classic and published laws |
 | `discovery.coherence` | Consistency checks of the headline (noise ceiling, holdout, SHAP, known laws) |
 | `discovery.dynamics` | Rate laws (SINDy), for time-ordered data |

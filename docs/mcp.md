@@ -12,7 +12,7 @@ settings, and the endpoint refuses accounts without server-key access.
 
 | Tool | Purpose |
 |---|---|
-| `start_analysis` | Start an analysis of a table passed as CSV text, with the project description, the target column and a description of each predictor. Returns a `run_id` at once |
+| `start_analysis` | Start an analysis of a table passed as CSV text, with the project description, the target column and a description of each predictor. Optional `literature_text`: the user's own literature, which replaces the web literature search and makes the recommendation coherence first (see [api.md](api.md#supplying-your-own-literature)). Returns a `run_id` at once |
 | `get_analysis_status` | Status, progress and pipeline phase of a run |
 | `get_analysis_results` | The outcome in compact form: headline equation and shortlist with holdout and cross-validation scores, data split, derived time-series features, the agent's conclusions, comparison with published laws, explanation, warnings, LLM cost |
 | `list_analyses` | The account's most recent runs |

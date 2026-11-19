@@ -15,6 +15,14 @@ Protocol (deterministic, no LLM):
 5. Rate laws (d target/dt) are scored on the derivative, so they get their own headline
    (``select_dynamic``) by the same protocol, after a simulation guard: a law that
    diverges, or does not reproduce the training trajectories when integrated, is vetoed.
+6. Coherence first (only when the user supplied literature, ``literature_coherence.py``):
+   the models without a conflict with that literature are selected among by steps 1-4,
+   and the best-scoring model overall is kept beside the headline as the challenger,
+   with the gap between the two in standard errors. A small gap with a conflicting
+   challenger points to a wrong relationship, a large one to data that disagree with
+   the literature; which of the two it is, is the reader's judgement. If no discovered
+   model is coherent, a coherent supplied law is recommended; if there is none either,
+   the metric alone decides and the reason says so.
 """
 
 from collections.abc import Callable
@@ -63,9 +71,11 @@ class Selection:
     headline_is_reference: bool = False
     # model_id -> why it is not usable (relaxed guard); not stored, the report shows it per card
     vetoes: dict[str, str] = field(default_factory=dict)
+    # Coherence-first selection (supplied literature): counts, the challenger and the gap
+    coherence_first: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out = {
             "headline_model_id": self.headline.model_id if self.headline else None,
             "headline_reason": self.headline_reason,
             "shortlist": [m.model_id for m in self.shortlist],
@@ -73,6 +83,9 @@ class Selection:
             "tie_threshold_rmse": self.tie_threshold,
             "headline_is_reference": self.headline_is_reference,
         }
+        if self.coherence_first is not None:
+            out["coherence_first"] = self.coherence_first
+        return out
 
 
 def _simplicity(m: ModelResult) -> tuple:
@@ -86,24 +99,91 @@ def usable(
     return [m for m in models if guard(m, strict=False, extra=extra) is None]
 
 
+def _gap(challenger: ModelResult, coherent: ModelResult) -> float | None:
+    """How much worse the coherent model's CV RMSE is, in standard errors of the challenger."""
+    if not challenger.cv_se:
+        return None
+    return float((coherent.cv_rmse - challenger.cv_rmse) / challenger.cv_se)
+
+
+def _coherent_reference(
+    models: list[ModelResult],
+    discovered: Selection,
+    reference: Callable[[ModelResult], bool],
+    conflicts: Callable[[ModelResult], list[str]],
+    extra_guard: Callable[[ModelResult], str | None] | None,
+) -> Selection | None:
+    """
+    No discovered model is coherent with the supplied literature: recommend the best
+    coherent supplied law instead, with the discovered headline as the challenger.
+    """
+    laws = [
+        m
+        for m in models
+        if reference(m)
+        and m.kind == "literature"
+        and guard(m, strict=False, extra=extra_guard) is None
+        and not conflicts(m)
+    ]
+    challenger = discovered.headline
+    if not laws or challenger is None:
+        return None
+    law = min(laws, key=lambda m: m.cv_rmse)
+    info = dict(discovered.coherence_first or {})
+    info.update(
+        {
+            "status": "coherent_reference",
+            "challenger_model_id": challenger.model_id,
+            "challenger_cv_rmse": challenger.cv_rmse,
+            "best_coherent_cv_rmse": law.cv_rmse,
+            "gap_se": _gap(challenger, law),
+            "challenger_conflicts": conflicts(challenger),
+        }
+    )
+    shortlist = [law, *[m for m in discovered.shortlist if m is not law]][:3]
+    return Selection(
+        law,
+        "coherent_literature_law",
+        shortlist,
+        discovered.agent_pick_rejected,
+        discovered.tie_threshold,
+        headline_is_reference=True,
+        vetoes=discovered.vetoes,
+        coherence_first=info,
+    )
+
+
 def select(
     models: list[ModelResult],
     recommended_ids: list[str],
     reference: Callable[[ModelResult], bool] | None = None,
     extra_guard: Callable[[ModelResult], str | None] | None = None,
+    conflicts: Callable[[ModelResult], list[str]] | None = None,
 ) -> Selection:
     """
     The headline among the candidates; models matching ``reference`` (known laws) are
     for comparison and become the headline only when no candidate is usable.
     ``extra_guard`` vetoes models on a problem-specific test (rate-law simulation).
+    ``conflicts`` lists a model's conflicts with the supplied literature; when given,
+    the selection is coherence first (step 6 of the protocol).
     """
     if reference is not None:
         selection = select(
-            [m for m in models if not reference(m)], recommended_ids, extra_guard=extra_guard
+            [m for m in models if not reference(m)],
+            recommended_ids,
+            extra_guard=extra_guard,
+            conflicts=conflicts,
         )
         if selection.headline is None:
-            selection = select(models, recommended_ids, extra_guard=extra_guard)
+            selection = select(
+                models, recommended_ids, extra_guard=extra_guard, conflicts=conflicts
+            )
             selection.headline_is_reference = selection.headline is not None
+        elif conflicts is not None and (selection.coherence_first or {}).get("n_coherent") == 0:
+            selection = (
+                _coherent_reference(models, selection, reference, conflicts, extra_guard)
+                or selection
+            )
         return selection
     by_id = {m.model_id: m for m in models}
     vetoes = {m.model_id: why for m in models if (why := guard(m, strict=False, extra=extra_guard))}
@@ -119,9 +199,15 @@ def select(
             )
         return Selection(None, "no_eligible_model", [], rejected, vetoes=vetoes)
 
-    best = min(pool, key=lambda m: m.cv_rmse)
+    # Coherence first: rank among the models without a conflict with the supplied literature
+    challenger = min(pool, key=lambda m: m.cv_rmse)
+    conflict_of = {m.model_id: conflicts(m) for m in pool} if conflicts is not None else {}
+    coherent = [m for m in pool if not conflict_of.get(m.model_id)] if conflicts else []
+    rank_pool = coherent or pool
+
+    best = min(rank_pool, key=lambda m: m.cv_rmse)
     threshold = best.cv_rmse + (best.cv_se or 0.0)
-    tied = [m for m in pool if m.cv_rmse <= threshold]
+    tied = [m for m in rank_pool if m.cv_rmse <= threshold]
 
     headline, reason = None, ""
     for mid in recommended_ids:
@@ -132,6 +218,14 @@ def select(
         why = guard(m, strict=strict, extra=extra_guard)
         if why:
             rejected.append({"model_id": mid, "reason": why})
+        elif coherent and conflict_of.get(mid):
+            rejected.append(
+                {
+                    "model_id": mid,
+                    "reason": "conflicts with the supplied literature: "
+                    + "; ".join(conflict_of[mid][:3]),
+                }
+            )
         elif m.cv_rmse > threshold:
             rejected.append(
                 {
@@ -149,11 +243,38 @@ def select(
     if not strict:
         reason += "_weak"  # nothing passed the strict guards
 
+    coherence_first = None
+    if conflicts is not None:
+        if coherent:
+            reason = "coherent_" + reason
+        else:
+            reason += "_no_coherent_model"
+        shown = challenger is not best
+        coherence_first = {
+            "status": "coherent" if coherent else "no_coherent_model",
+            "n_candidates": len(pool),
+            "n_coherent": len(coherent),
+            "challenger_model_id": challenger.model_id if shown else None,
+            "challenger_cv_rmse": challenger.cv_rmse if shown else None,
+            "best_coherent_cv_rmse": best.cv_rmse if coherent else None,
+            "gap_se": _gap(challenger, best) if shown else 0.0 if coherent else None,
+            "challenger_conflicts": conflict_of.get(challenger.model_id, []) if shown else [],
+            "headline_conflicts": conflict_of.get(headline.model_id, []),
+        }
+
     shortlist = [headline]
-    for m in [best, *sorted(tied, key=_simplicity)]:
+    for m in [challenger, best, *sorted(tied, key=_simplicity)]:
         if m not in shortlist and len(shortlist) < 3:
             shortlist.append(m)
-    return Selection(headline, reason, shortlist, rejected, threshold, vetoes=vetoes)
+    return Selection(
+        headline,
+        reason,
+        shortlist,
+        rejected,
+        threshold,
+        vetoes=vetoes,
+        coherence_first=coherence_first,
+    )
 
 
 SIMULATION_MIN_R2 = 0.0

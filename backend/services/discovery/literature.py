@@ -1,5 +1,6 @@
 """
-Literature scout: published laws, found by web search and fitted to the data.
+Literature scout: published laws, found by web search (or read from the literature the
+user supplied) and fitted to the data.
 
 The scout runs once, in the background, from the start of the run (it is slow: a
 web-searching research model). Its laws are parsed, their variables mapped onto
@@ -8,6 +9,10 @@ other model (ids L<n>, published constants as starting values). The agent never 
 them: they are fitted after exploration and compared with what it discovered
 (``relate.py``); the explanation step gets the citations. Nothing here ever calls the
 research model twice.
+
+When the user supplies their own literature, the scout reads only that text, with no web
+search, and also returns constraints (``literature_coherence.py``) that the selection
+uses: the recommended equation is then chosen among those coherent with the literature.
 """
 
 import asyncio
@@ -22,6 +27,7 @@ from backend.services.discovery.expression import (
     parameterize_constants,
     parse_expression,
 )
+from backend.services.discovery.literature_coherence import normalize_constraints
 from backend.services.discovery.session import DiscoverySession
 
 logger = logging.getLogger(__name__)
@@ -196,6 +202,19 @@ async def run_literature(
         result = await lookup()
         equations = (result or {}).get("equations") or []
         raw = [law for law in equations[:MAX_LAWS] if isinstance(law, dict)]
+        constraints = (result or {}).get("constraints")
+        if isinstance(constraints, list) and constraints:
+            session.literature_constraints_raw = constraints
+        if (result or {}).get("source") == "supplied":
+            session.literature_source = "supplied"
+        if not raw and session.literature_constraints_raw:
+            session.literature_raw = []  # statements about the target, but no equation for it
+            await session.emit(
+                "literature",
+                f"Supplied literature: {len(constraints)} statements about the target; the "
+                "recommendation is chosen among the equations coherent with them",
+            )
+            return
         if not raw:
             session.known_laws = {
                 "status": "empty",
@@ -208,7 +227,13 @@ async def run_literature(
         await session.emit(
             "literature",
             f"Literature: {len(raw)} published laws found; they are compared with the "
-            "discovered equations at the end",
+            "discovered equations at the end"
+            + (
+                f", and {len(constraints)} statements about the target decide which "
+                "equations are coherent with the literature"
+                if session.literature_constraints_raw
+                else ""
+            ),
         )
     except asyncio.CancelledError:
         session.known_laws = {"status": "failed", "laws": [], "error": "cancelled"}
@@ -239,7 +264,16 @@ def fit_literature_laws(session: DiscoverySession) -> list[dict[str, Any]]:
                     "fit_error": f"fit failed: {str(e)[:150]}",
                 }
             )
-    session.known_laws = {"status": "ok", "laws": laws}
+    session.known_laws = {"status": "ok", "laws": laws, "source": session.literature_source}
+    if session.literature_constraints_raw:
+        try:
+            kept, dropped = normalize_constraints(session, session.literature_constraints_raw)
+        except Exception as e:  # the scout's text must never sink the run
+            logger.warning(f"Reading the literature constraints failed: {e}")
+            kept, dropped = [], []
+        session.literature_constraints = kept or None
+        session.known_laws["constraints"] = kept
+        session.known_laws["dropped_constraints"] = dropped[:20]
     return [law for law in laws if law["model_id"] and law["cv_r2"] is not None]
 
 

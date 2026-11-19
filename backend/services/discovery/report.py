@@ -14,6 +14,7 @@ import math
 import re
 from typing import Any
 
+from backend.services.discovery import literature_coherence
 from backend.services.discovery.coherence import coherence_report
 from backend.services.discovery.events import trim_narration
 from backend.services.discovery.fitting import ModelResult
@@ -201,10 +202,25 @@ def build_results(
     }
     recommended = [mid for mid in agent_why if mid not in dynamic_ids]
     ranked = session.ranked_models()
-    selection = select(ranked, recommended, reference=is_known)
+    # Supplied literature: the selection is coherence first (selection.py, step 6)
+    try:
+        literature = literature_coherence.build(session)
+    except Exception as e:  # never sink the results on the literature's constraints
+        logger.warning(f"Literature constraints unusable: {e}")
+        literature = None
+    selection = select(
+        ranked,
+        recommended,
+        reference=is_known,
+        conflicts=literature.conflicts if literature else None,
+    )
 
     models = select_equations(session, selection, recommended, ranked)
-    equations = [_equation_entry(session, m, selection, agent_why) for m in models]
+    equations = [
+        _equation_entry(session, m, selection, agent_why)
+        | ({"literature_conflicts": literature.conflicts(m)} if literature else {})
+        for m in models
+    ]
     scatter_data = {e["equation"]: e["scatter_data"] for e in equations if e["scatter_data"]}
     best_equation = next((e for e in equations if e["is_headline"]), None)
 
@@ -229,7 +245,9 @@ def build_results(
         "selection": selection.to_dict(),
         "n_models_total": len(ranked),
         "leaderboard": [
-            _leaderboard_entry(session, m, selection, agent_why) for m in ranked[:MAX_LEADERBOARD]
+            _leaderboard_entry(session, m, selection, agent_why)
+            | ({"literature_conflicts": literature.conflicts(m)} if literature else {})
+            for m in ranked[:MAX_LEADERBOARD]
         ],
         "failed_fits": [
             {"model_id": m.model_id, "label": m.label, "features": m.features, "reason": m.error}

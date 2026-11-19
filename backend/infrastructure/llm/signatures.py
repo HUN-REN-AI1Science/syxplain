@@ -386,6 +386,50 @@ class GuessColumnDescriptions(dspy.Signature):
     )
 
 
+class SuppliedLiteratureScout(dspy.Signature):
+    """
+    You are the literature step of an equation-discovery system. The ONLY literature that exists for you is LITERATURE_TEXT, supplied by the user (papers, notes, reports). Do not use any other knowledge of the field and do not search for anything. If the text says nothing about something, write nothing about it. Do not judge whether the text is right.
+
+    FEATURES_JSON maps each variable name to its meaning; exactly one is marked TARGET. Use these names, exactly as written, in everything you return.
+
+    Return what LITERATURE_TEXT states about the TARGET:
+
+    1. "equations": equations for the TARGET that the text states, completely or in form. Write each solved for the target ("<target> = <Python expression>"), using only the variable names of FEATURES_JSON. Write a form with unknown constants as free parameters p1, p2, ... and keep constants the text gives. Do not combine statements into an equation the text does not state. "citations" names where in the text the equation is (section, note or paper title). Leave the list empty if the text gives no equation for the target.
+    2. "constraints": statements about the target, each of one of these types.
+       - "not_a_cause": a predictor that, according to the text, does not act on the target directly once the other listed predictors are known: a variable the text calls irrelevant, one that is only a reading determined by other variables, or one that acts only through another predictor that is in the list.
+       - "defined_over": a region of predictor values in which, according to the text, the system is operated, so an equation for the target must give a finite real number there. Include only predictors for which the text gives a range.
+       - "monotone": the text says the target rises or falls with this predictor (other predictors fixed), without reversing.
+       - "limit": the text says what a quantity tends to when a predictor becomes large or goes to zero. "quantity" is a Python expression in the word target and predictor names, for example "target" or "target*thickness".
+
+    Rules: every entry names its "source" in the text and gives a one-sentence "reason" taken from it. Prefer fewer, well-founded entries over many weak ones. Python syntax: *, /, **, sqrt(), exp(), log().
+
+    ### REQUIRED OUTPUT SCHEMA
+    Return STRICT JSON only: no markdown, no code fences, no commentary. Use double quotes.
+
+    {
+        "equations": [
+            {"equation": "y = p1 * x / (p2 + x)", "citations": ["Note 3"]}
+        ],
+        "constraints": [
+            {"type": "not_a_cause", "variable": "humidity", "source": "Note 1", "reason": "..."},
+            {"type": "defined_over", "ranges": {"x": [0.1, 20]}, "source": "Note 1", "reason": "..."},
+            {"type": "monotone", "variable": "x", "direction": "increasing", "source": "Note 3", "reason": "..."},
+            {"type": "limit", "variable": "x", "toward": "large", "quantity": "target", "expect": "finite_positive", "source": "Note 3", "reason": "..."}
+        ]
+    }
+
+    "direction" is "increasing" or "decreasing"; "toward" is "large" or "zero"; "expect" is "finite_positive", "zero" or "infinite".
+    """
+
+    literature_text: str = dspy.InputField(desc="The literature supplied by the user")
+    features_json: str = dspy.InputField(
+        desc="JSON string of feature dictionary mapping variable names to descriptions"
+    )
+    findings: str = dspy.OutputField(
+        desc="STRICT JSON with the keys equations and constraints, as in the schema"
+    )
+
+
 class ExplainPySrEquationsWithLiterature(dspy.Signature):
     """
     You are an agent who explains the output of symbolic regression with deep scientific research context.

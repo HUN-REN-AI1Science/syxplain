@@ -256,6 +256,11 @@ class DiscoverySession:
         self.known_laws: dict[str, Any] | None = None
         # Published laws collected by the scout, fitted only after exploration (relate.py)
         self.literature_raw: list[dict[str, Any]] | None = None
+        # Supplied literature: "web" or "supplied", what the scout read from it (raw), and
+        # the constraints mapped onto the data at RELATE (literature_coherence.py)
+        self.literature_source: str = "web"
+        self.literature_constraints_raw: list[Any] | None = None
+        self.literature_constraints: list[dict[str, Any]] | None = None
         self.literature_task: asyncio.Task | None = None
         self.agent_finished_at: float | None = None
         self.cancelled = False
