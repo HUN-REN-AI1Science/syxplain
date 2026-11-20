@@ -2,9 +2,13 @@
 
 import asyncio
 
+import numpy as np
+import pandas as pd
 import pytest
 
 from backend.schemas.programmatic import AnalyzeParams
+from backend.services.discovery.coherence import _known_laws
+from backend.services.discovery.fitting import ModelResult
 from backend.services.discovery.literature import fit_literature_laws, run_literature
 from backend.services.discovery.literature_coherence import (
     LiteratureCoherence,
@@ -13,6 +17,7 @@ from backend.services.discovery.literature_coherence import (
 from backend.services.discovery.relate import is_known
 from backend.services.discovery.report import build_results
 from backend.services.discovery.selection import select
+from backend.services.discovery.session import DiscoverySession
 from backend.services.run_digest import build_run_digest
 from backend.tests.test_discovery_shap import _interaction_session
 
@@ -118,12 +123,98 @@ def test_no_coherent_discovery_falls_back_to_a_coherent_law_or_the_metric():
     info = sel.coherence_first
     assert info["challenger_model_id"] == good.model_id and info["gap_se"] > 1
     assert info["headline_conflicts"] == [] and info["challenger_conflicts"]
+    # The discovered equations were usable: the check must not say they were not
+    details = [c["detail"] for c in _known_laws(law, [], None, sel.headline_reason)]
+    assert any("coherent with the supplied literature" in d for d in details)
+    assert not any("was usable" in d for d in details)
+
+    # An agent's pick that the law overrules is recorded as rejected, with the reason
+    sel = select([good, law], [good.model_id], reference=is_known, conflicts=lit.conflicts)
+    assert sel.headline is law
+    assert sel.agent_pick_rejected[-1]["model_id"] == good.model_id
+    assert "supplied literature" in sel.agent_pick_rejected[-1]["reason"]
 
     # No coherent law either: the metric decides, and the reason says so
     sel = select([good], [], reference=is_known, conflicts=lit.conflicts)
     assert sel.headline is good and sel.headline_reason.endswith("_no_coherent_model")
     assert sel.coherence_first["status"] == "no_coherent_model"
     assert sel.coherence_first["headline_conflicts"]
+
+
+def test_gap_is_measured_from_the_headline():
+    def model(model_id: str, cv_rmse: float, complexity: int) -> ModelResult:
+        return ModelResult(
+            model_id=model_id,
+            kind="custom",
+            name=model_id,
+            label=model_id,
+            expression="x",
+            features=["x"],
+            complexity=complexity,
+            cv_r2=0.9,
+            cv_rmse=cv_rmse,
+            cv_se=0.1,
+            verdict="good",
+        )
+
+    challenger, best, simple = model("M1", 1.0, 9), model("M2", 1.2, 7), model("M3", 1.25, 3)
+    sel = select(
+        [challenger, best, simple], [], conflicts=lambda m: ["uses z"] if m is challenger else []
+    )
+    # The headline is the simplest tied model, not the best coherent one
+    assert sel.headline is simple and sel.headline_reason == "coherent_simplest_within_1se"
+    assert sel.coherence_first["best_coherent_cv_rmse"] == 1.2
+    assert sel.coherence_first["gap_se"] == pytest.approx(2.5)
+
+
+def test_limit_on_a_single_variable_equation_and_the_target_by_its_alias():
+    rng = np.random.default_rng(0)
+    x = rng.uniform(0.5, 10, 300)
+    df = pd.DataFrame({"dose (mg)": x, "Yield (t/ha)": 5 * x / (2 + x) + rng.normal(0, 0.1, 300)})
+    s = DiscoverySession(df, "Yield (t/ha)", ["dose (mg)"])
+    dose = s.features[0]
+    assert s.target_alias != s.target_column
+    kept, dropped = normalize_constraints(
+        s,
+        [
+            {
+                "type": "limit",
+                "variable": dose,
+                "toward": "large",
+                "quantity": "target",
+                "expect": "finite_positive",
+            },
+            {  # the target under its alias, the name the scout is given for it
+                "type": "limit",
+                "variable": dose,
+                "toward": "large",
+                "quantity": f"{s.target_alias}/{dose}",
+                "expect": "zero",
+            },
+            # Malformed ranges are dropped alone; they do not take the others with them
+            {"type": "defined_over", "ranges": [[0, 1]]},
+            {"type": "defined_over", "ranges": {dose: {"min": 0, "max": 1}}},
+        ],
+    )
+    assert [c["type"] for c in kept] == ["limit", "limit"] and len(dropped) == 2
+    assert kept[1]["quantity"] == f"{s.target_alias}/{dose}"
+
+    lit = LiteratureCoherence(s, kept)
+    saturating = s.fit_custom(f"p*{dose}/(q + {dose})", label="saturating")
+    linear = s.fit_custom(f"p*{dose} + q", label="linear")
+    assert [r["status"] for r in lit.evaluate(saturating)] == ["agrees", "agrees"]
+    assert [r["status"] for r in lit.evaluate(linear)] == ["conflict", "conflict"]
+
+
+def test_the_grid_stays_within_its_budget():
+    rng = np.random.default_rng(0)
+    names = [f"v{i}" for i in range(12)]
+    df = pd.DataFrame({n: rng.uniform(1, 2, 80) for n in names})
+    df["y"] = df.sum(axis=1)
+    s = DiscoverySession(df, "y", names)
+    lit = LiteratureCoherence(s, [])
+    grid = lit._grid(s.features, {}, lead=s.features[0])
+    assert len(grid[s.features[0]]) <= 200_000
 
 
 def test_supplied_literature_reaches_the_results():

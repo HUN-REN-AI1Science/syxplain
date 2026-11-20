@@ -99,6 +99,19 @@ def usable(
     return [m for m in models if guard(m, strict=False, extra=extra) is None]
 
 
+# A challenger this many standard errors better than the coherent recommendation is
+# reported as a disagreement between the data and the supplied literature
+COHERENCE_GAP_WARN_SE = 1.0
+
+
+def disagrees(info: dict[str, Any]) -> bool:
+    """Whether a coherence-first selection's challenger is clearly better on the metric."""
+    gap = info.get("gap_se")
+    return (
+        bool(info.get("challenger_model_id")) and gap is not None and gap >= COHERENCE_GAP_WARN_SE
+    )
+
+
 def _gap(challenger: ModelResult, coherent: ModelResult) -> float | None:
     """How much worse the coherent model's CV RMSE is, in standard errors of the challenger."""
     if not challenger.cv_se:
@@ -142,11 +155,21 @@ def _coherent_reference(
         }
     )
     shortlist = [law, *[m for m in discovered.shortlist if m is not law]][:3]
+    rejected = list(discovered.agent_pick_rejected)
+    if discovered.headline_reason.startswith("agent_pick"):
+        # The agent's pick was the discovered headline: it is overruled here, so say why
+        rejected.append(
+            {
+                "model_id": challenger.model_id,
+                "reason": "conflicts with the supplied literature: "
+                + "; ".join(info["challenger_conflicts"][:3]),
+            }
+        )
     return Selection(
         law,
         "coherent_literature_law",
         shortlist,
-        discovered.agent_pick_rejected,
+        rejected,
         discovered.tie_threshold,
         headline_is_reference=True,
         vetoes=discovered.vetoes,
@@ -258,7 +281,9 @@ def select(
             "challenger_model_id": challenger.model_id if shown else None,
             "challenger_cv_rmse": challenger.cv_rmse if shown else None,
             "best_coherent_cv_rmse": best.cv_rmse if coherent else None,
-            "gap_se": _gap(challenger, best) if shown else 0.0 if coherent else None,
+            # Against the headline, not the best coherent model: the headline may be a
+            # simpler model or the agent's pick, up to one standard error behind it
+            "gap_se": _gap(challenger, headline) if shown else 0.0 if coherent else None,
             "challenger_conflicts": conflict_of.get(challenger.model_id, []) if shown else [],
             "headline_conflicts": conflict_of.get(headline.model_id, []),
         }

@@ -204,7 +204,11 @@ class ShareService:
             "id": str(run.id),
             "status": run.status,
             "created_at": run.created_at.isoformat() if run.created_at else None,
-            "problem_description": run.problem_description,
+            # The literature the owner supplied (papers, notes) is theirs: a share link
+            # shows the problem, not the full text they uploaded
+            "problem_description": {
+                k: v for k, v in (run.problem_description or {}).items() if k != "literature_text"
+            },
             "csv_filename": run.csv_filename,
             "csv_metadata": csv_metadata,
             "analysis_type": run.analysis_type or STANDARD_ANALYSIS,

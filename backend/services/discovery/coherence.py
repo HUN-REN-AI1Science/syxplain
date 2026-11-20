@@ -16,7 +16,7 @@ import numpy as np
 from backend.services.discovery.fitting import ModelResult
 from backend.services.discovery.profiling import _shape_kind, profile_shape
 from backend.services.discovery.relate import is_known
-from backend.services.discovery.selection import Selection
+from backend.services.discovery.selection import Selection, disagrees
 from backend.services.discovery.session import DiscoverySession
 
 CEILING_PASS = 0.9  # headline CV R2 / noise ceiling
@@ -165,13 +165,18 @@ def _known_law_verdict(
 
 
 def _known_laws(
-    h: ModelResult, rels: list[dict[str, Any]], fitted: dict[str, int] | None = None
+    h: ModelResult,
+    rels: list[dict[str, Any]],
+    fitted: dict[str, int] | None = None,
+    headline_reason: str = "",
 ) -> list[dict[str, Any]]:
     """
     The headline against the published and the named laws, from ``relate.relations``. Known
     laws are fitted after the blind exploration, so a match is a rediscovery, not a start.
     ``fitted`` counts the laws of each kind that were fitted: relations only cover the ones
     better than the mean, so "none related" can still mean several were fitted.
+    ``headline_reason`` tells why a known law is the headline: no discovered equation was
+    usable, or none was coherent with the supplied literature.
     """
     fitted = fitted or {}
     checks = []
@@ -179,7 +184,12 @@ def _known_laws(
         if is_known(h):
             # Only the headline's own kind is worth a caution; the other has nothing to add.
             if h.kind == kind:
-                detail = f"no discovered equation was usable; the headline is the {noun} {h.label}"
+                why = (
+                    "no discovered equation is coherent with the supplied literature"
+                    if headline_reason == "coherent_literature_law"
+                    else "no discovered equation was usable"
+                )
+                detail = f"{why}; the headline is the {noun} {h.label}"
                 checks.append(_check(key, "warn", detail))
             else:
                 checks.append(_check(key, "na", "the headline is a known law"))
@@ -245,10 +255,6 @@ def _agent(h: ModelResult, agent: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-# A challenger this many standard errors better than the coherent headline is a warning
-SUPPLIED_GAP_WARN_SE = 1.0
-
-
 def _supplied_literature(selection: Selection) -> list[dict[str, Any]]:
     """
     The headline against what the user's own literature states (coherence-first
@@ -268,7 +274,7 @@ def _supplied_literature(selection: Selection) -> list[dict[str, Any]]:
             )
         ]
     gap, challenger = info.get("gap_se"), info.get("challenger_model_id")
-    if challenger and gap is not None and gap >= SUPPLIED_GAP_WARN_SE:
+    if disagrees(info):
         return [
             _check(
                 "supplied_literature",
@@ -363,7 +369,7 @@ def coherence_report(
         _fit_vs_ceiling(session, h),
         _generalization(session, h),
         _shap(shap_agreement),
-        *_known_laws(h, headline_relations, _fitted_known_laws(session)),
+        *_known_laws(h, headline_relations, _fitted_known_laws(session), selection.headline_reason),
         *_supplied_literature(selection),
         _parameters(h),
         _agent(h, agent),

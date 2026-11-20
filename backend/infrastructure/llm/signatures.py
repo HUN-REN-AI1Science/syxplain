@@ -191,7 +191,7 @@ class ExplainPySrEquations(dspy.Signature):
     If discovery.coherence is null, return "coherence": null.
 
     ### RECOMMENDATION RULE
-    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied); if selection.headline_is_reference is true, no discovered equation was usable and the headline is a reference law. Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
+    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied); if selection.headline_is_reference is true, the headline is a reference law: no discovered equation was usable or, when selection.headline_reason is "coherent_literature_law", none was coherent with the literature the user supplied (selection.coherence_first names the better-scoring discovered equation as the challenger, with its conflicts). Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
 
     ### TEXT FORMATTING (CRITICAL)
     - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", "rationale" or "coherence" fields.
@@ -487,7 +487,7 @@ class ExplainPySrEquationsWithLiterature(dspy.Signature):
     If discovery.coherence is null, return "coherence": null.
 
     ### RECOMMENDATION RULE
-    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied); if selection.headline_is_reference is true, no discovered equation was usable and the headline is a reference law. Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
+    DATA_SPEC.selection.headline_position is the equation chosen by a deterministic selection protocol among the discovered equations (best cross-validated error, simplest among statistical ties, the agent's pick when it is tied); if selection.headline_is_reference is true, the headline is a reference law: no discovered equation was usable or, when selection.headline_reason is "coherent_literature_law", none was coherent with the literature the user supplied (selection.coherence_first names the better-scoring discovered equation as the challenger, with its conflicts). Recommend it (recommendation.equation_id = that position, agrees_with_headline = true) unless you have a concrete scientific reason it is implausible; then recommend another equation, set agrees_with_headline = false and give the reason in disagreement_reason.
 
     ### TEXT FORMATTING (CRITICAL)
     - Do NOT use LaTeX, MathJax, or any mathematical formatting in the "overview", "term_explanations", "findings", "rationale" or "coherence" fields.

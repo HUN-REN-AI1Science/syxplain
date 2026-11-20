@@ -215,11 +215,12 @@ def build_results(
         conflicts=literature.conflicts if literature else None,
     )
 
+    def conflicts_field(m: ModelResult) -> dict[str, Any]:
+        return {"literature_conflicts": literature.conflicts(m)} if literature else {}
+
     models = select_equations(session, selection, recommended, ranked)
     equations = [
-        _equation_entry(session, m, selection, agent_why)
-        | ({"literature_conflicts": literature.conflicts(m)} if literature else {})
-        for m in models
+        _equation_entry(session, m, selection, agent_why) | conflicts_field(m) for m in models
     ]
     scatter_data = {e["equation"]: e["scatter_data"] for e in equations if e["scatter_data"]}
     best_equation = next((e for e in equations if e["is_headline"]), None)
@@ -245,8 +246,7 @@ def build_results(
         "selection": selection.to_dict(),
         "n_models_total": len(ranked),
         "leaderboard": [
-            _leaderboard_entry(session, m, selection, agent_why)
-            | ({"literature_conflicts": literature.conflicts(m)} if literature else {})
+            _leaderboard_entry(session, m, selection, agent_why) | conflicts_field(m)
             for m in ranked[:MAX_LEADERBOARD]
         ],
         "failed_fits": [

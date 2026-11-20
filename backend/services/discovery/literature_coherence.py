@@ -77,11 +77,12 @@ def normalize_constraints(
         }
         if kind == "defined_over":
             ranges = {}
-            for name, bounds in (c.get("ranges") or {}).items():
+            stated = c.get("ranges")
+            for name, bounds in (stated if isinstance(stated, dict) else {}).items():
                 alias = _map(name, session)
                 try:
                     lo, hi = float(bounds[0]), float(bounds[1])
-                except (TypeError, ValueError, IndexError):
+                except (TypeError, ValueError, IndexError, KeyError):
                     continue
                 if alias and np.isfinite([lo, hi]).all() and lo < hi:
                     ranges[alias] = [lo, hi]
@@ -139,11 +140,13 @@ def _quantity(text: str, session: DiscoverySession) -> str | None:
     except ExpressionError:
         return None
     out = text
+    # Imported here: literature.py imports this module for the RELATE step.
+    from backend.services.discovery.literature import _map_identifier
+
     for name in sorted(raw.parameters, key=len, reverse=True):
-        if name == "target" or name == session.target_column:
-            alias = session.target_alias
-        else:
-            alias = _map(name, session)
+        # The target may be written as the word "target", as its column or as its alias
+        # (the name the scout is given for it); every other name must be a predictor.
+        alias = session.target_alias if name == "target" else _map_identifier(name, session)
         if alias is None:
             return None
         if alias != name:
@@ -166,16 +169,22 @@ class LiteratureCoherence:
             if c["type"] == "defined_over":
                 self.ranges.update({k: (v[0], v[1]) for k, v in c["ranges"].items()})
         self._cache: dict[str, list[dict[str, Any]]] = {}
+        self._level_cache: dict[str, np.ndarray] = {}
+        self._by_id = {c["id"]: c for c in constraints}
 
     # -- grids ---------------------------------------------------------------------------
 
     def _levels(self, feature: str) -> np.ndarray:
         """Representative values of a feature the literature gives no range for."""
-        x = np.asarray(self.session.fit_data.X[feature], dtype=float)
-        if self.session.kinds.get(feature) == "categorical":
-            values, counts = np.unique(x[np.isfinite(x)], return_counts=True)
-            return values[np.argsort(-counts)][:1]
-        return np.unique(np.quantile(x[np.isfinite(x)], QUANTILES))
+        if feature not in self._level_cache:
+            x = np.asarray(self.session.fit_data.X[feature], dtype=float)
+            if self.session.kinds.get(feature) == "categorical":
+                values, counts = np.unique(x[np.isfinite(x)], return_counts=True)
+                levels = values[np.argsort(-counts)][:1]
+            else:
+                levels = np.unique(np.quantile(x[np.isfinite(x)], QUANTILES))
+            self._level_cache[feature] = levels
+        return self._level_cache[feature]
 
     def _grid(
         self, features: list[str], ranges: dict[str, tuple[float, float]], lead: str | None = None
@@ -192,7 +201,15 @@ class LiteratureCoherence:
         others = [f for f in features if f not in ranges and f != lead]
         fixed = {f: self._levels(f) for f in others}
         budget = MAX_GRID_POINTS / (LEAD_GRID if lead else 1)
-        budget /= max(1, int(np.prod([len(v) for v in fixed.values()])))
+        # Every axis multiplies the mesh: an axis without a range that no longer fits in
+        # the budget (with three points left for each ranged axis) is held at its middle level.
+        room = max(1.0, budget / 3.0 ** len(ranged))
+        size = 1
+        for f, values in fixed.items():
+            if size * len(values) > room:
+                fixed[f] = values[len(values) // 2 :][:1]
+            size *= len(fixed[f])
+        budget /= size
         n = RANGE_GRID
         if ranged:
             n = int(np.clip(budget ** (1 / len(ranged)), 3, RANGE_GRID))
@@ -262,7 +279,9 @@ class LiteratureCoherence:
             return "na", "not all variables are available"
         others = [f for f in needed if f != v]
         levels = [self._levels(f) if i < 5 else self._levels(f)[:1] for i, f in enumerate(others)]
-        combos = np.array(list(itertools.product(*levels)), dtype=float).reshape(-1, len(others))
+        # One row per setting of the other variables; a single empty row when there are none
+        settings = list(itertools.product(*levels))
+        combos = np.array(settings, dtype=float).reshape(len(settings), len(others))
         x = np.abs(np.asarray(X[v], dtype=float))
         scale = float(np.nanmax(x)) if c["toward"] == "large" else float(np.nanmedian(x))
         scale = scale if np.isfinite(scale) and scale > 0 else 1.0
@@ -327,7 +346,7 @@ class LiteratureCoherence:
 
     def conflicts(self, m: ModelResult) -> list[str]:
         """Readable conflicts of ``m`` with the supplied literature ([] = coherent)."""
-        by_id = {c["id"]: c for c in self.constraints}
+        by_id = self._by_id
         return [
             r["detail"] + (f" ({by_id[r['id']]['source']})" if by_id[r["id"]]["source"] else "")
             for r in self.evaluate(m)
@@ -337,5 +356,5 @@ class LiteratureCoherence:
 
 def build(session: DiscoverySession) -> LiteratureCoherence | None:
     """The evaluator for the session's supplied-literature constraints, or None without any."""
-    constraints = getattr(session, "literature_constraints", None)
+    constraints = session.literature_constraints
     return LiteratureCoherence(session, constraints) if constraints else None

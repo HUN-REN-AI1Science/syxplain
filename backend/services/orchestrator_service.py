@@ -39,6 +39,7 @@ from backend.infrastructure.slurm import (
     get_slurm_backend,
 )
 from backend.infrastructure.slurm.client import is_quota_error
+from backend.services.discovery.selection import disagrees
 from backend.services.discovery.session import (
     ALLOWED_BINARY,
     ALLOWED_UNARY,
@@ -126,11 +127,6 @@ class OrchestratorConfig:
     max_retries: int = 3
 
 
-# A challenger this many standard errors better than the coherent recommendation is
-# reported as a disagreement between the data and the supplied literature
-COHERENCE_GAP_WARNING_SE = 1.0
-
-
 def _coherence_first_warning(info: dict[str, Any] | None) -> str | None:
     """A warning when the coherence-first selection and the metric clearly disagree."""
     if not info:
@@ -142,7 +138,7 @@ def _coherence_first_warning(info: dict[str, Any] | None) -> str | None:
             + "; ".join((info.get("headline_conflicts") or [])[:3])
         )
     gap, challenger = info.get("gap_se"), info.get("challenger_model_id")
-    if challenger and gap is not None and gap >= COHERENCE_GAP_WARNING_SE:
+    if disagrees(info):
         return (
             f"The data and the supplied literature disagree: {challenger} has a lower "
             f"cross-validated error than the recommended equation by {gap:.1f} standard "
@@ -730,35 +726,20 @@ class AnalysisOrchestrator:
                     rationale="Baseline: all continuous features, operators chosen from the feature plots",
                     enforce_budget=False,
                 )
-            if context.literature_text:
-                # The user's own literature replaces the web search: the scout reads only
-                # that text, and its statements decide which equations are coherent.
-                session.literature_task = asyncio.create_task(
-                    run_literature(
-                        session,
-                        self._supplied_literature_lookup(
-                            context,
-                            literature_features(
-                                session,
-                                descriptions,
-                                context.problem_description.get("project_description", ""),
-                            ),
-                            settings.model_name,
-                        ),
-                    )
-                )
-            elif self._wants_literature(context):
+            if context.literature_text or self._wants_literature(context):
                 features_for_lit = literature_features(
                     session,
                     descriptions,
                     context.problem_description.get("project_description", ""),
                 )
-                session.literature_task = asyncio.create_task(
-                    run_literature(
-                        session,
-                        self._literature_lookup(context.user_llm.openai_key, features_for_lit),
-                    )
+                # The user's own literature replaces the web search: the scout reads only
+                # that text, and its statements decide which equations are coherent.
+                lookup = (
+                    self._supplied_literature_lookup(context, features_for_lit, settings.model_name)
+                    if context.literature_text
+                    else self._literature_lookup(context.user_llm.openai_key, features_for_lit)
                 )
+                session.literature_task = asyncio.create_task(run_literature(session, lookup))
             elif context.user_llm.api_key:
                 warnings.append(
                     {
