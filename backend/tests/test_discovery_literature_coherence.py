@@ -117,6 +117,7 @@ def test_no_coherent_discovery_falls_back_to_a_coherent_law_or_the_metric():
     assert sel.headline_reason == "coherent_literature_law"
     info = sel.coherence_first
     assert info["challenger_model_id"] == good.model_id and info["gap_se"] > 1
+    assert info["headline_conflicts"] == [] and info["challenger_conflicts"]
 
     # No coherent law either: the metric decides, and the reason says so
     sel = select([good], [], reference=is_known, conflicts=lit.conflicts)

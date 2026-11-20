@@ -138,6 +138,7 @@ def _coherent_reference(
             "best_coherent_cv_rmse": law.cv_rmse,
             "gap_se": _gap(challenger, law),
             "challenger_conflicts": conflicts(challenger),
+            "headline_conflicts": [],  # the law is coherent; the challenger's are above
         }
     )
     shortlist = [law, *[m for m in discovered.shortlist if m is not law]][:3]
