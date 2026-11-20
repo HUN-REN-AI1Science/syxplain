@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from backend.schemas.programmatic import AnalyzeParams
-from backend.services.discovery.coherence import _known_laws
+from backend.services.discovery.coherence import _known_laws, _supplied_literature
 from backend.services.discovery.fitting import ModelResult
 from backend.services.discovery.literature import fit_literature_laws, run_literature
 from backend.services.discovery.literature_coherence import (
@@ -16,7 +16,7 @@ from backend.services.discovery.literature_coherence import (
 )
 from backend.services.discovery.relate import is_known
 from backend.services.discovery.report import build_results
-from backend.services.discovery.selection import select
+from backend.services.discovery.selection import Selection, select
 from backend.services.discovery.session import DiscoverySession
 from backend.services.run_digest import build_run_digest
 from backend.tests.test_discovery_shap import _interaction_session
@@ -285,3 +285,41 @@ def test_a_recommended_literature_law_has_its_own_counts():
     assert info["best_coherent_cv_rmse"] == law.cv_rmse and info["headline_conflicts"] == []
     assert info["challenger_model_id"] == good.model_id and info["challenger_conflicts"]
     assert sel.shortlist[0] is law and good in sel.shortlist
+
+
+def test_the_supplied_literature_check_has_a_text_for_every_outcome():
+    s = _interaction_session()
+    good = s.fit_custom("k*x1*x2 + c*exp(x3)", label="right form")
+    law = s.fit_custom("a*x2 + b", label="Published law 1", kind="literature")
+    s.final_scoring()
+    kept, _ = normalize_constraints(s, [{"type": "not_a_cause", "variable": "x1"}])
+    lit = LiteratureCoherence(s, kept)
+
+    # A law of the literature is recommended and the discovered equation fits far better
+    (check,) = _supplied_literature(
+        select([good, law], [], reference=is_known, conflicts=lit.conflicts)
+    )
+    assert check["status"] == "warn" and check["detail"].startswith("the headline is a law")
+    assert good.model_id in check["detail"] and "x1" in check["detail"]
+
+    # No coherent equation at all: the headline itself conflicts
+    (check,) = _supplied_literature(select([good], [], reference=is_known, conflicts=lit.conflicts))
+    assert check["status"] == "fail" and "x1" in check["detail"]
+
+    # A coherent discovered headline, with a clearly better-fitting challenger and without
+    info = {
+        "status": "coherent",
+        "n_candidates": 2,
+        "n_coherent": 1,
+        "challenger_model_id": "S1",
+        "gap_se": 2.5,
+        "challenger_conflicts": ["uses x3"],
+        "headline_conflicts": [],
+    }
+    (check,) = _supplied_literature(Selection(good, "coherent_best_cv", coherence_first=info))
+    assert check["status"] == "warn" and check["detail"].startswith("the headline is coherent")
+    assert "S1 fits better by 2.5 standard errors" in check["detail"]
+    calm = info | {"gap_se": 0.4}
+    (check,) = _supplied_literature(Selection(good, "coherent_best_cv", coherence_first=calm))
+    assert check["status"] == "pass" and "1 of 2 candidates" in check["detail"]
+    assert _supplied_literature(select([good], [])) == []

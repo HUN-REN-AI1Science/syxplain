@@ -275,18 +275,18 @@ def _supplied_literature(selection: Selection) -> list[dict[str, Any]]:
         ]
     gap, challenger = info.get("gap_se"), info.get("challenger_model_id")
     if disagrees(info):
+        lead = (
+            "the headline is a law of the supplied literature, because no discovered "
+            "equation is coherent with it; "
+            if info.get("status") == "coherent_reference"
+            else "the headline is coherent with the supplied literature, but "
+        )
         return [
             _check(
                 "supplied_literature",
                 "warn",
-                +(
-                    "the headline is a law of the supplied literature, because no discovered "
-                    "equation is coherent with it; "
-                    if info.get("status") == "coherent_reference"
-                    else "the headline is coherent with the supplied literature, but "
-                )
-                + f"{challenger} fits better by {gap:.1f} standard errors and conflicts with it: "
-                + "; ".join((info.get("challenger_conflicts") or [])[:3]),
+                f"{lead}{challenger} fits better by {gap:.1f} standard errors and conflicts "
+                "with it: " + "; ".join((info.get("challenger_conflicts") or [])[:3]),
                 gap,
             )
         ]
