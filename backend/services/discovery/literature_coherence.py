@@ -32,13 +32,8 @@ RANGE_GRID = 13
 LEAD_GRID = 60
 MAX_GRID_POINTS = 200_000
 QUANTILES = (0.1, 0.5, 0.9)
-# "Large" and "towards zero" for a limit, relative to the variable's scale in the data:
-# two probes one decade apart, far out. The quantity's trend between them decides: a change
-# of more than LIMIT_TREND decades per decade is growth or decay (a square root has 0.5,
-# a logarithm about 0.05, the logarithm of a logarithm about 0.01, a saturating law
-# about 0.00001), anything flatter is a finite limit.
-LIMIT_SCALES = {"large": (1e5, 1e6), "zero": (1e-5, 1e-6)}
-LIMIT_TREND = 0.005
+# "Large" and "towards zero" for a limit, relative to the variable's scale in the data
+LIMIT_SCALES = {"large": (1e3, 1e6), "zero": (1e-3, 1e-6)}
 EXPECTATIONS = ("finite_positive", "zero", "infinite")
 
 
@@ -304,20 +299,16 @@ class LiteratureCoherence:
         ref = float(np.nanmedian(np.abs(quantity.evaluate(observed, {})))) or 1.0
         finite = bool(np.isfinite(near).all() and np.isfinite(far).all())
         with np.errstate(all="ignore"):
-            # Decades the quantity moves per decade toward the limit (-inf once it is zero)
-            trend = np.log10(np.abs(far) / np.abs(near))
-            vanished = np.abs(far) < 1e-9 * ref
             if c["expect"] == "finite_positive":
                 ok = (
                     finite
                     and bool((far > 1e-3 * ref).all())
-                    and bool((np.abs(trend) < LIMIT_TREND).all())
+                    and bool((np.abs(far / near - 1) < 0.05).all())
                 )
             elif c["expect"] == "zero":
-                shrinking = (trend < -LIMIT_TREND) & (np.abs(far) < ref)
-                ok = finite and bool((vanished | shrinking).all())
+                ok = finite and bool((np.abs(far) < 1e-3 * ref).all())
             else:
-                ok = (not finite) or bool((trend > LIMIT_TREND).all())
+                ok = (not finite) or bool((np.abs(far) > 100 * np.abs(near)).all())
         return ("agrees", c["text"]) if ok else ("conflict", f"not true that {c['text']}")
 
     # -- all checks of a model -----------------------------------------------------------
