@@ -266,3 +266,48 @@ def test_literature_text_is_an_optional_bounded_parameter():
     assert AnalyzeParams(**base, literature_text="Note 1 ...").literature_text == "Note 1 ..."
     with pytest.raises(ValueError):
         AnalyzeParams(**base, literature_text="x" * 60_001)
+
+
+def _limit_status(s, expression: str, toward: str, expect: str) -> str:
+    raw = {"type": "limit", "variable": "x1", "toward": toward, "quantity": "target"}
+    kept, _ = normalize_constraints(s, [raw | {"expect": expect}])
+    model = s.fit_custom(expression, label=f"{expression} {toward} {expect}")
+    return LiteratureCoherence(s, kept).evaluate(model)[0]["status"]
+
+
+def test_a_limit_is_judged_by_the_trend_so_slow_growth_and_decay_count():
+    s = _interaction_session()
+    # Growth without bound: a square root and a logarithm grow slowly, but they grow
+    for grows in ("k*sqrt(x1)*x2", "k*log(x1 + 1)*x2", "k*x1*x2", "k*exp(x1)*x2"):
+        assert _limit_status(s, grows, "large", "infinite") == "agrees", grows
+        assert _limit_status(s, grows, "large", "finite_positive") == "conflict", grows
+    # A saturating law tends to a finite value and does not grow without bound
+    assert _limit_status(s, "k*x1/(x1 + a)*x2", "large", "finite_positive") == "agrees"
+    assert _limit_status(s, "k*x1/(x1 + a)*x2", "large", "infinite") == "conflict"
+    # Vanishing toward zero: slowly for a square root; an offset does not vanish
+    assert _limit_status(s, "k*sqrt(x1)*x2", "zero", "zero") == "agrees"
+    assert _limit_status(s, "k*x1*x2", "zero", "zero") == "agrees"
+    assert _limit_status(s, "k*x1*x2 + 5", "zero", "zero") == "conflict"
+    assert _limit_status(s, "k*x1*x2 + 5", "zero", "finite_positive") == "agrees"
+    # Decay toward large values, fast and slow
+    assert _limit_status(s, "k*x2/sqrt(x1)", "large", "zero") == "agrees"
+    assert _limit_status(s, "k*x2*exp(-x1)", "large", "zero") == "agrees"
+
+
+def test_a_recommended_literature_law_has_its_own_counts():
+    s = _interaction_session()
+    good = s.fit_custom("k*x1*x2 + c*exp(x3)", label="right form")
+    law = s.fit_custom("a*x2 + b", label="Published law 1", kind="literature")
+    bad_law = s.fit_custom("a*x1 + b", label="Published law 2", kind="literature")
+    s.final_scoring()
+    kept, _ = normalize_constraints(s, [{"type": "not_a_cause", "variable": "x1"}])
+    lit = LiteratureCoherence(s, kept)
+
+    sel = select([good, law, bad_law], [], reference=is_known, conflicts=lit.conflicts)
+    info = sel.coherence_first
+    assert sel.headline is law and info["status"] == "coherent_reference"
+    # One discovered equation and two laws were candidates; only one law is coherent
+    assert info["n_candidates"] == 3 and info["n_coherent"] == 1
+    assert info["best_coherent_cv_rmse"] == law.cv_rmse and info["headline_conflicts"] == []
+    assert info["challenger_model_id"] == good.model_id and info["challenger_conflicts"]
+    assert sel.shortlist[0] is law and good in sel.shortlist

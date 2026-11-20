@@ -36,22 +36,27 @@ interface KnownLawsSectionProps {
   relations: KnownLawRelations;
   /** Renders a model id as a leaderboard link when it has a row */
   renderModelId: (modelId: string) => React.ReactNode;
-  /** No discovered equation was usable, so the headline is itself a known law */
+  /** The headline is itself a known law */
   headlineIsReference?: boolean;
+  /** ...because no discovered equation is coherent with the supplied literature */
+  coherentLiteratureLaw?: boolean;
 }
 
 export const KnownLawsSection: React.FC<KnownLawsSectionProps> = ({
   relations,
   renderModelId,
   headlineIsReference = false,
+  coherentLiteratureLaw = false,
 }) => {
   const rows = Array.isArray(relations.headline) ? relations.headline : [];
   const n = relations.n_known_laws ?? { classic: 0, literature: 0 };
-  const emptyText = headlineIsReference
-    ? 'No discovered equation was usable, so the recommended equation is itself a known law.'
-    : n.classic + n.literature > 0
-      ? 'No discovered equation was recommended to compare with the known laws.'
-      : 'No known law fits these data better than the mean.';
+  const emptyText = coherentLiteratureLaw
+    ? 'No discovered equation is coherent with your literature, so the recommended equation is a law from it.'
+    : headlineIsReference
+      ? 'No discovered equation was usable, so the recommended equation is itself a known law.'
+      : n.classic + n.literature > 0
+        ? 'No discovered equation was recommended to compare with the known laws.'
+        : 'No known law fits these data better than the mean.';
   return (
     <div>
       <h4 className="text-sm font-semibold text-secondary mb-2 flex items-center gap-2">

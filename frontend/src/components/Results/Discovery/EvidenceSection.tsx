@@ -136,6 +136,7 @@ export const EvidenceSection: React.FC<EvidenceSectionProps> = ({ report, domain
           relations={report.relations}
           renderModelId={plainId}
           headlineIsReference={report.selection?.headline_is_reference === true}
+          coherentLiteratureLaw={report.selection?.headline_reason === 'coherent_literature_law'}
         />
       );
     }

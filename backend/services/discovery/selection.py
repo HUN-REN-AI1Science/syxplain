@@ -119,6 +119,34 @@ def _gap(challenger: ModelResult, coherent: ModelResult) -> float | None:
     return float((coherent.cv_rmse - challenger.cv_rmse) / challenger.cv_se)
 
 
+def _coherence_info(
+    status: str,
+    n_candidates: int,
+    n_coherent: int,
+    headline: ModelResult,
+    challenger: ModelResult | None,
+    best_coherent: ModelResult | None,
+    conflicts: Callable[[ModelResult], list[str]],
+) -> dict[str, Any]:
+    """
+    The stored record of a coherence-first selection, written once the headline is known.
+    ``challenger`` is the model with the best cross-validated error when it is not the one
+    the ranking started from (None otherwise); the gap is measured to the headline, which
+    may be a simpler model or the agent's pick, up to one standard error behind the best.
+    """
+    return {
+        "status": status,
+        "n_candidates": n_candidates,
+        "n_coherent": n_coherent,
+        "challenger_model_id": challenger.model_id if challenger else None,
+        "challenger_cv_rmse": challenger.cv_rmse if challenger else None,
+        "best_coherent_cv_rmse": best_coherent.cv_rmse if best_coherent else None,
+        "gap_se": _gap(challenger, headline) if challenger else 0.0 if best_coherent else None,
+        "challenger_conflicts": conflicts(challenger) if challenger else [],
+        "headline_conflicts": conflicts(headline),
+    }
+
+
 def _coherent_reference(
     models: list[ModelResult],
     discovered: Selection,
@@ -136,25 +164,22 @@ def _coherent_reference(
         if reference(m)
         and m.kind == "literature"
         and guard(m, strict=False, extra=extra_guard) is None
-        and not conflicts(m)
     ]
+    coherent = [m for m in laws if not conflicts(m)]
     challenger = discovered.headline
-    if not laws or challenger is None:
+    if not coherent:
         return None
-    law = min(laws, key=lambda m: m.cv_rmse)
-    info = dict(discovered.coherence_first or {})
-    info.update(
-        {
-            "status": "coherent_reference",
-            "challenger_model_id": challenger.model_id,
-            "challenger_cv_rmse": challenger.cv_rmse,
-            "best_coherent_cv_rmse": law.cv_rmse,
-            "gap_se": _gap(challenger, law),
-            "challenger_conflicts": conflicts(challenger),
-            "headline_conflicts": [],  # the law is coherent; the challenger's are above
-        }
+    law = min(coherent, key=lambda m: m.cv_rmse)
+    # The candidates are now the discovered equations and the literature's own laws
+    info = _coherence_info(
+        "coherent_reference",
+        discovered.coherence_first["n_candidates"] + len(laws),
+        len(coherent),
+        law,
+        challenger,
+        law,
+        conflicts,
     )
-    shortlist = [law, *[m for m in discovered.shortlist if m is not law]][:3]
     rejected = list(discovered.agent_pick_rejected)
     if discovered.headline_reason.startswith("agent_pick"):
         # The agent's pick was the discovered headline: it is overruled here, so say why
@@ -168,7 +193,7 @@ def _coherent_reference(
     return Selection(
         law,
         "coherent_literature_law",
-        shortlist,
+        [law, *discovered.shortlist][:3],
         rejected,
         discovered.tie_threshold,
         headline_is_reference=True,
@@ -203,7 +228,7 @@ def select(
                 models, recommended_ids, extra_guard=extra_guard, conflicts=conflicts
             )
             selection.headline_is_reference = selection.headline is not None
-        elif conflicts is not None and (selection.coherence_first or {}).get("n_coherent") == 0:
+        elif selection.coherence_first and selection.coherence_first["n_coherent"] == 0:
             selection = (
                 _coherent_reference(models, selection, reference, conflicts, extra_guard)
                 or selection
@@ -273,20 +298,15 @@ def select(
             reason = "coherent_" + reason
         else:
             reason += "_no_coherent_model"
-        shown = challenger is not best
-        coherence_first = {
-            "status": "coherent" if coherent else "no_coherent_model",
-            "n_candidates": len(pool),
-            "n_coherent": len(coherent),
-            "challenger_model_id": challenger.model_id if shown else None,
-            "challenger_cv_rmse": challenger.cv_rmse if shown else None,
-            "best_coherent_cv_rmse": best.cv_rmse if coherent else None,
-            # Against the headline, not the best coherent model: the headline may be a
-            # simpler model or the agent's pick, up to one standard error behind it
-            "gap_se": _gap(challenger, headline) if shown else 0.0 if coherent else None,
-            "challenger_conflicts": conflict_of.get(challenger.model_id, []) if shown else [],
-            "headline_conflicts": conflict_of.get(headline.model_id, []),
-        }
+        coherence_first = _coherence_info(
+            "coherent" if coherent else "no_coherent_model",
+            len(pool),
+            len(coherent),
+            headline,
+            challenger if challenger is not best else None,
+            best if coherent else None,
+            lambda m: conflict_of[m.model_id],
+        )
 
     shortlist = [headline]
     for m in [challenger, best, *sorted(tied, key=_simplicity)]:

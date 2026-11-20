@@ -107,16 +107,37 @@ export const splitModelIds = (text: string): string[] =>
 
 /** Human wording for the selector's headline reason */
 export const headlineReasonText = (reason: string | null | undefined): string => {
-  switch (reason) {
+  if (!reason) return '';
+  if (reason === 'coherent_literature_law')
+    return 'A law from your literature: no discovered equation is coherent with it.';
+  if (reason === 'no_eligible_model')
+    return 'No model met the selection criteria; this is the best available.';
+  // <coherent_>base<_weak><_no_coherent_model>: the selector composes the reason
+  const coherent = reason.startsWith('coherent_');
+  const noCoherent = reason.endsWith('_no_coherent_model');
+  let base = reason.replace(/^coherent_/, '').replace(/_no_coherent_model$/, '');
+  const weak = base.endsWith('_weak');
+  base = base.replace(/_weak$/, '');
+  const among = coherent ? ' among the equations coherent with your literature' : '';
+  let text: string;
+  switch (base) {
     case 'agent_pick_within_1se':
-      return "The agent's pick, within one standard error of the best cross-validated score.";
+      text = `The agent's pick, within one standard error of the best cross-validated score${among}.`;
+      break;
+    case 'simplest_within_1se':
     case 'best_cv_1se':
-      return 'The simplest model within one standard error of the best cross-validated score.';
-    case 'no_eligible_model':
-      return 'No model met the selection criteria; this is the best available.';
+      text = `The simplest model within one standard error of the best cross-validated score${among}.`;
+      break;
+    case 'best_cv':
+      text = `The best cross-validated score${among}.`;
+      break;
     default:
       return '';
   }
+  if (noCoherent)
+    text += ' No equation is coherent with your literature, so the score alone decided.';
+  if (weak) text += ' No model passed the strict quality checks.';
+  return text;
 };
 
 /** alias = column pairs, skipping identity mappings */

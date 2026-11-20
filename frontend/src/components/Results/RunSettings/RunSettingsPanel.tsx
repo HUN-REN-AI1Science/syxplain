@@ -45,6 +45,7 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
         project_description: problem.project_description,
         target_variable: problem.target_variable,
         features: problem.features,
+        ...(problem.literature_text ? { literature_text: problem.literature_text } : {}),
       },
       `${base}_problem_config.json`
     );
@@ -220,6 +221,23 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
                 {problem_description?.project_description || 'No description provided.'}
               </p>
             </div>
+
+            {/* Supplied literature: only the owner sees it, a share link leaves it out */}
+            {problem_description?.literature_text && (
+              <div className="bg-surface-alt rounded-xl p-5 border border-[var(--color-border)]">
+                <div className="flex items-center mb-3">
+                  <i className="pi pi-book text-muted text-lg mr-3 flex-shrink-0"></i>
+                  <h4 className="font-bold text-primary">Your Literature</h4>
+                </div>
+                <p className="text-sm text-secondary mb-2">
+                  Used instead of the web literature search; the recommendation was chosen among the
+                  equations coherent with it.
+                </p>
+                <p className="text-primary text-sm leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">
+                  {problem_description.literature_text}
+                </p>
+              </div>
+            )}
 
             {/* Features - Table Layout */}
             {featureEntries.length > 0 && (

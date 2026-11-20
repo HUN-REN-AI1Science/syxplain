@@ -52,6 +52,8 @@ export interface ProblemDescription {
   project_description: string;
   target_variable: string;
   features: Record<string, string>;
+  /** The user's own literature; replaces the web search and makes the selection coherence first */
+  literature_text?: string | null;
 }
 
 export interface CsvMetadata {
@@ -337,16 +339,35 @@ export interface DiscoverySplit {
   holdout_extrapolates?: Record<string, number>;
 }
 
+/** Coherence-first selection: present when the user supplied their own literature */
+export interface CoherenceFirst {
+  /** 'coherent' | 'coherent_reference' (a law of the literature) | 'no_coherent_model' */
+  status: string;
+  n_candidates: number;
+  n_coherent: number;
+  /** The equation with the lowest CV error, when it conflicts with the literature */
+  challenger_model_id: string | null;
+  /** How far the headline is behind the challenger, in standard errors */
+  gap_se: number | null;
+  challenger_conflicts: string[];
+  headline_conflicts: string[];
+}
+
 export interface DiscoverySelection {
   headline_model_id: string | null;
-  /** e.g. 'agent_pick_within_1se' | 'best_cv_1se' | 'no_eligible_model' */
+  /**
+   * 'best_cv' | 'simplest_within_1se' | 'agent_pick_within_1se' | 'no_eligible_model' |
+   * 'coherent_literature_law', with the prefix 'coherent_' and the suffixes '_weak' and
+   * '_no_coherent_model'
+   */
   headline_reason: string;
   shortlist: string[];
   /** Models with a CV RMSE up to this are statistically tied with the best */
   tie_threshold_rmse?: number | null;
   agent_pick_rejected: { model_id: string; reason: string }[];
-  /** No discovered equation was usable, so the headline is a known (reference) law */
+  /** The headline is a known (reference) law: nothing discovered was usable or coherent */
   headline_is_reference?: boolean;
+  coherence_first?: CoherenceFirst | null;
 }
 
 export interface RejectedForm {
@@ -627,6 +648,7 @@ export interface ProblemFormPayload {
   project_description: string;
   target_variable: string;
   features: Record<string, string>;
+  literature_text?: string;
 }
 
 // ============================================================================

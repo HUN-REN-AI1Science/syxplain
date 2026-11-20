@@ -27,6 +27,8 @@ All notable changes to this project are documented here. The format follows
   challenger, with the gap between the two in standard errors
   (`discovery.selection.coherence_first`, `literature_conflicts` per equation, a
   `supplied_literature` coherence check). Runs without `literature_text` are unchanged.
+- Web application: a field for your own literature on the Define Problem step; the
+  results name the coherence-first selection reason.
 
 ### Changed
 - An account can have 3 pending or running analyses at a time by default

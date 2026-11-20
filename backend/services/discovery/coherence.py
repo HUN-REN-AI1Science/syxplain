@@ -279,18 +279,25 @@ def _supplied_literature(selection: Selection) -> list[dict[str, Any]]:
             _check(
                 "supplied_literature",
                 "warn",
-                f"the headline is coherent with the supplied literature, but {challenger} "
-                f"fits better by {gap:.1f} standard errors and conflicts with it: "
+                +(
+                    "the headline is a law of the supplied literature, because no discovered "
+                    "equation is coherent with it; "
+                    if info.get("status") == "coherent_reference"
+                    else "the headline is coherent with the supplied literature, but "
+                )
+                + f"{challenger} fits better by {gap:.1f} standard errors and conflicts with it: "
                 + "; ".join((info.get("challenger_conflicts") or [])[:3]),
                 gap,
             )
         ]
+    counts = f"{info.get('n_coherent')} of {info.get('n_candidates')} candidates are"
+    if info.get("status") == "coherent_reference":
+        counts += ", none of them a discovered equation"
     return [
         _check(
             "supplied_literature",
             "pass",
-            f"the headline is coherent with the supplied literature "
-            f"({info.get('n_coherent')} of {info.get('n_candidates')} candidates are)",
+            f"the headline is coherent with the supplied literature ({counts})",
             gap,
         )
     ]

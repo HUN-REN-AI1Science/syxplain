@@ -14,6 +14,8 @@ import type { LlmProvider, UserApiKeys, UserLlmFields } from '@/types';
 import {
   ExcludedColumnsWarning,
   ProjectDetailsSection,
+  LiteratureSection,
+  MAX_LITERATURE_CHARS,
   TargetVariableSection,
   FeaturesSection,
   JsonConfigUpload,
@@ -42,6 +44,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
 
   // Form state
   const [projectDescription, setProjectDescription] = useState('');
+  const [literatureText, setLiteratureText] = useState('');
   const [targetVariable, setTargetVariable] = useState('');
   const [featureDescriptions, setFeatureDescriptions] = useState<Record<string, string>>({});
   // Columns the user manually removed from the analysis (issue #49)
@@ -253,10 +256,20 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       features[col] = featureDescriptions[col];
     });
 
+    if (literatureText.length > MAX_LITERATURE_CHARS) {
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Validation Error',
+        detail: `Your literature is too long (${literatureText.length.toLocaleString()} characters; the limit is ${MAX_LITERATURE_CHARS.toLocaleString()}).`,
+      });
+      return null;
+    }
+
     return {
       project_description: projectDescription,
       target_variable: targetVariable,
       features: features,
+      ...(literatureText.trim() ? { literature_text: literatureText.trim() } : {}),
     };
   };
 
@@ -470,6 +483,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       try {
         const parsed = JSON.parse(jsonContent);
         if (parsed.project_description) setProjectDescription(parsed.project_description);
+        setLiteratureText(typeof parsed.literature_text === 'string' ? parsed.literature_text : '');
         if (parsed.target_variable) setTargetVariable(parsed.target_variable);
         if (parsed.features) {
           setFeatureDescriptions(parsed.features);
@@ -498,7 +512,12 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       });
       setJsonContent(
         JSON.stringify(
-          { project_description: projectDescription, target_variable: targetVariable, features },
+          {
+            project_description: projectDescription,
+            target_variable: targetVariable,
+            features,
+            ...(literatureText.trim() ? { literature_text: literatureText.trim() } : {}),
+          },
           null,
           2
         )
@@ -545,6 +564,8 @@ const ProblemView: React.FC<ProblemViewProps> = ({
             onChange={setProjectDescription}
             onBlur={handleDescriptionBlur}
           />
+
+          <LiteratureSection literatureText={literatureText} onChange={setLiteratureText} />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1">
