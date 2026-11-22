@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from backend.schemas.programmatic import AnalyzeParams
+from backend.services.discovery import literature_coherence
 from backend.services.discovery.formula_space import (
     challenger_reading,
     measure_relation,
@@ -61,6 +62,10 @@ def test_a_relationship_is_measured_as_published_and_refitted():
         s, {"equation": "gauge = 2 * humidity", "conditions": "in an open chamber"}
     )
     assert wrong["status"] == "does_not_hold" and wrong["conditions"] == "in an open chamber"
+
+    # stated for the other variables fixed: the data cannot test it alone
+    alone = measure_relation(s, {"equation": "rate = p1 * precursor / (p2 + precursor)"})
+    assert alone["status"] == "not_testable_alone" and "temp" in alone["left_out"]
 
     # the target may stand on the right side of a relationship
     assert measure_relation(s, {"equation": "temp = p1 * rate"})["status"] != "na"
@@ -216,10 +221,9 @@ def test_a_web_statement_decides_only_when_it_is_valid_in_the_context():
 
     open_ = results_for("unknown")
     assert "temp" in open_["best_equation"]["equation"]  # the statement only warns
-    assert open_["discovery"]["selection"].get("coherence_first") is None
+    assert open_["discovery"]["selection"]["coherence_first"]["status"] == "coherent"
     checks = {c["key"]: c for c in open_["discovery"]["coherence"]["checks"]}
     assert checks["web_statements"]["status"] == "warn"
-    assert "supplied_literature" not in checks
 
     valid = results_for("yes")
     # now it decides: the selection is coherence first and sees the conflict
@@ -258,3 +262,52 @@ def test_the_headline_using_connected_variables_is_pointed_out():
     )
     checks = {c["key"]: c for c in results["discovery"]["coherence"]["checks"]}
     assert "gauge together with" in checks["literature_relations"]["detail"]
+
+
+def _soil_session() -> DiscoverySession:
+    """A concentration that rises with p; four of the highest values sit just above lime 0.9."""
+    rng = np.random.default_rng(3)
+    n = 300
+    p = rng.uniform(5, 300, n)
+    lime = np.where(rng.random(n) < 0.5, rng.uniform(0, 0.6, n), rng.uniform(1.2, 20, n))
+    y = 3 * p * rng.lognormal(0, 0.1, n) + 80 / (lime - 0.888)
+    df = pd.DataFrame({"p": p, "lime": lime, "conc": y})
+    s = DiscoverySession(df, "conc", ["p", "lime"])
+    s.profile()
+    return s
+
+
+def test_an_equation_must_stay_in_the_realistic_range_inside_the_data():
+    s = _soil_session()
+    lit = literature_coherence.build(s)
+    plain = s.fit_custom("a*p", label="plain")
+    assert lit.conflicts(plain) == []
+
+    # divides by zero at a lime content inside the range of the data
+    divides = s.fit_custom("a*p + b/(lime - 0.888)", initial_params={"b": 50.0}, label="divides")
+    (conflict,) = lit.conflicts(divides)
+    assert "for lime near 0." in conflict and "inside the range of the data" in conflict
+
+    # the context gives a lower limit for the target
+    negative = s.fit_custom("a*p - 400", label="negative")
+    assert lit.conflicts(negative) == []  # without a limit from the context: no conflict
+    s.context_ranges = {"low": -150, "high": None, "reason": "the sensor's lower limit"}
+    (conflict,) = literature_coherence.build(s).conflicts(negative)
+    assert "below -150" in conflict and "the sensor's lower limit" in conflict
+
+    # a limit that the measured target itself breaks is not used
+    s.context_ranges = {"low": 1e9, "high": "nonsense"}
+    c = literature_coherence.realistic_range_constraint(s)
+    assert c["low"] is None and c["high"] is None
+
+
+def test_the_context_decides_the_recommendation_without_any_literature():
+    s = _soil_session()
+    s.fit_custom("a*p", label="plain")
+    divides = s.fit_custom("a*p + b/(lime - 0.888)", initial_params={"b": 50.0}, label="divides")
+    results = build_results(s, None, None)
+    info = results["discovery"]["selection"]["coherence_first"]
+    assert info is not None and results["best_equation"]["model_id"] != divides.model_id
+    assert results["discovery"]["context"]["realistic_range"]["origin"] == "context"
+    row = next(m for m in results["discovery"]["leaderboard"] if m["model_id"] == divides.model_id)
+    assert row["literature_conflicts"]

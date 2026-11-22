@@ -397,6 +397,23 @@ class GuessColumnDescriptions(dspy.Signature):
     )
 
 
+class ContextRanges(dspy.Signature):
+    """
+    You read the scientific context of a dataset: the project description and the meaning and unit of the TARGET variable. Say which values of the TARGET are realistic at all.
+
+    Give a limit only when it follows from what the TARGET is and from its unit: a concentration, a mass, a rate of growth or a count is not negative; a percentage or a fraction lies between 0 and 100 or 0 and 1; a pH lies between 0 and 14. Do not guess a narrow range from experience, and do not use typical values. Use null where the meaning gives no limit.
+
+    Return STRICT JSON only, with double quotes:
+    {"low": 0, "high": null, "reason": "one sentence: why these are the limits"}
+    """
+
+    project_description: str = dspy.InputField(desc="What the data is and what is asked")
+    features_json: str = dspy.InputField(
+        desc="JSON mapping variable names to their meaning and unit; one is marked TARGET"
+    )
+    limits: str = dspy.OutputField(desc="STRICT JSON with the keys low, high and reason")
+
+
 class SuppliedLiteratureScout(dspy.Signature):
     """
     You are the literature step of an equation-discovery system. The ONLY literature that exists for you is LITERATURE_TEXT, supplied by the user (papers, notes, reports). Do not use any other knowledge of the field and do not search for anything. If the text says nothing about something, write nothing about it. Do not judge whether the text is right.

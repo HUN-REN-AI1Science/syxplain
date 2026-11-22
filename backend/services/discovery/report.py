@@ -202,11 +202,12 @@ def build_results(
     }
     recommended = [mid for mid in agent_why if mid not in dynamic_ids]
     ranked = session.ranked_models()
-    # Supplied literature: the selection is coherence first (selection.py, step 6)
+    # The selection is coherence first (selection.py, step 6): the context always states
+    # the realistic range, the literature adds its statements
     try:
         literature = literature_coherence.build(session)
-    except Exception as e:  # never sink the results on the literature's constraints
-        logger.warning(f"Literature constraints unusable: {e}")
+    except Exception as e:  # never sink the results on the constraints
+        logger.warning(f"Context and literature constraints unusable: {e}")
         literature = None
     selection = select(
         ranked,
@@ -278,6 +279,8 @@ def build_results(
     }
     if session.known_laws is not None:
         discovery["literature"] = session.known_laws
+    if literature is not None:
+        discovery["context"] = {"realistic_range": literature.constraints[0]}
     try:
         discovery["dynamics"] = build_dynamics(
             session, [mid for mid in agent_why if mid in dynamic_ids], agent_why

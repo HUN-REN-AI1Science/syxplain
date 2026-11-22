@@ -39,7 +39,7 @@ LABELS = {
     "generalization": "Held-out generalization",
     "shap": "Agreement with SHAP effects",
     "literature": "Published laws",
-    "supplied_literature": "Coherence with the literature",
+    "supplied_literature": "Coherence with the context and the literature",
     "literature_relations": "The literature's relationships in the data",
     "web_statements": "Statements of the web literature research",
     "named_laws": "Named laws",
@@ -263,6 +263,12 @@ def _agent(h: ModelResult, agent: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _short(text: str, limit: int = 140) -> str:
+    """A condition of the literature, cut at a word and marked when it was longer."""
+    text = str(text).strip()
+    return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0] + " ..."
+
+
 def _reading_text(statements: list[dict[str, Any]] | None) -> str:
     """What the data says about the statements the better-fitting expression breaks."""
     reading = challenger_reading(statements or [])
@@ -275,7 +281,7 @@ def _reading_text(statements: list[dict[str, Any]] | None) -> str:
                     "recommendation leaves unexplained"
                 )
                 if s.get("conditions"):
-                    text += f" (the literature states it for: {s['conditions']})"
+                    text += f" (the literature states it for: {_short(s['conditions'])})"
                 parts.append(text)
         return (
             ". The data speaks against the literature here, so this may be a paradigm shift: "
@@ -330,6 +336,10 @@ def _literature_relations(session: DiscoverySession, h: ModelResult) -> list[dic
     ]
     if not measured:
         return []
+    # A relationship stated for other variables held fixed is neither kept nor counted
+    # against the context: the data cannot test it alone
+    alone = [r for r in measured if r["status"] == "not_testable_alone"]
+    measured = [r for r in measured if r not in alone]
     holding = [r for r in measured if r["status"] in ("holds", "holds_in_form")]
     failing = [r for r in measured if r not in holding]
 
@@ -338,8 +348,18 @@ def _literature_relations(session: DiscoverySession, h: ModelResult) -> list[dic
         score = r["r2_published"] if r["status"] == "holds" else max(scores)
         text = f"{r['equation']} {STATUS_TEXT[r['status']]} (R2 {score:.2f})"
         if r in failing and r.get("conditions"):
-            text += f", the literature states it for: {r['conditions']}"
+            text += f", the literature states it for: {_short(r['conditions'])}"
         return text
+
+    untested = ""
+    if alone:
+        names = sorted({v for r in alone for v in r.get("left_out") or {}})
+        untested = (
+            f". {len(alone)} more could not be tested alone, because the data also varies "
+            f"in {', '.join(names[:4])}, which they leave out"
+        )
+    if not measured:
+        return [_check("literature_relations", "na", untested[2:], len(alone))]
 
     connected = []
     for r in holding:
@@ -364,6 +384,7 @@ def _literature_relations(session: DiscoverySession, h: ModelResult) -> list[dic
                 f"{counts} relationships of the literature among the other variables hold in "
                 "the data, a hint that the context of the data differs from the literature's: "
                 + "; ".join(one(r) for r in failing[:3])
+                + untested
                 + note,
                 len(failing),
             )
@@ -373,7 +394,7 @@ def _literature_relations(session: DiscoverySession, h: ModelResult) -> list[dic
             "literature_relations",
             "pass",
             f"all {len(measured)} relationships of the literature among the other variables "
-            "hold in the data: " + "; ".join(one(r) for r in holding[:3]) + note,
+            "hold in the data: " + "; ".join(one(r) for r in holding[:3]) + untested + note,
             0,
         )
     ]
@@ -396,7 +417,8 @@ def _supplied_literature(
             _check(
                 "supplied_literature",
                 "fail",
-                "the headline conflicts with the literature: " + "; ".join(conflicts[:3]),
+                "the headline conflicts with the context or the literature: "
+                + "; ".join(conflicts[:3]),
                 len(conflicts),
             )
         ]
@@ -406,7 +428,7 @@ def _supplied_literature(
             "the headline is a law of the literature, because no discovered "
             "equation is coherent with it; "
             if info.get("status") == "coherent_reference"
-            else "the headline is coherent with the literature, but "
+            else "the headline is coherent with the context and the literature, but "
         )
         return [
             _check(
@@ -426,7 +448,7 @@ def _supplied_literature(
         _check(
             "supplied_literature",
             "pass",
-            f"the headline is coherent with the literature ({counts})",
+            f"the headline is coherent with the context and the literature ({counts})",
             gap,
         )
     ]

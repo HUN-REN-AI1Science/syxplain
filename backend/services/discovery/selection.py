@@ -186,7 +186,7 @@ def _coherent_reference(
         rejected.append(
             {
                 "model_id": challenger.model_id,
-                "reason": "conflicts with the literature: "
+                "reason": "conflicts with the context or the literature: "
                 + "; ".join(info["challenger_conflicts"][:3]),
             }
         )
@@ -271,7 +271,8 @@ def select(
             rejected.append(
                 {
                     "model_id": mid,
-                    "reason": "conflicts with the literature: " + "; ".join(conflict_of[mid][:3]),
+                    "reason": "conflicts with the context or the literature: "
+                    + "; ".join(conflict_of[mid][:3]),
                 }
             )
         elif m.cv_rmse > threshold:

@@ -474,7 +474,7 @@ export interface DiscoveryReport {
 /** A relationship of the literature among the data's variables, measured on the data */
 export interface LiteratureRelation {
   equation: string;
-  /** 'holds' | 'holds_in_form' | 'partly' | 'does_not_hold' | 'na' */
+  /** 'holds' | 'holds_in_form' | 'partly' | 'does_not_hold' | 'not_testable_alone' | 'na' */
   status: string;
   r2_published: number | null;
   r2_refitted: number | null;

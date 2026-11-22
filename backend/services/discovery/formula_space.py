@@ -21,6 +21,7 @@ import re
 from typing import Any
 
 import numpy as np
+from scipy import stats
 
 from backend.services.discovery.expression import (
     ExpressionError,
@@ -28,7 +29,12 @@ from backend.services.discovery.expression import (
     parse_expression,
     substitute_parameters,
 )
-from backend.services.discovery.fitting import ModelResult, _least_squares, r2_score
+from backend.services.discovery.fitting import (
+    ModelResult,
+    _least_squares,
+    binned_dependence,
+    r2_score,
+)
 from backend.services.discovery.session import DiscoverySession
 
 logger = logging.getLogger(__name__)
@@ -40,7 +46,14 @@ PARTLY_R2 = 0.5
 # for the data to speak against the statement
 CONTRADICTED_SHARE = 0.5
 
+# A relationship that explains part of its variable (R2 above PARTIAL_MIN_R2) while another
+# variable of the data explains this share of what it leaves: stated for the other
+# variables held fixed, so the data cannot test it alone
+PARTIAL_MIN_R2 = 0.1
+LEFT_OUT_SHARE = 0.3
+
 STATUS_TEXT = {
+    "not_testable_alone": "cannot be tested alone on the data",
     "holds": "holds in the data as published",
     "holds_in_form": "holds in the data in form, with other constants than published",
     "partly": "holds only partly in the data",
@@ -59,6 +72,30 @@ def _score(expr, X: dict[str, np.ndarray], y: np.ndarray, params: dict[str, floa
     if ok.sum() < max(5, 0.8 * len(y)):
         return None
     return float(r2_score(y[ok], pred[ok]))
+
+
+def _left_out(
+    expr, X: dict[str, np.ndarray], y: np.ndarray, params: dict[str, float], left: str
+) -> dict[str, float]:
+    """
+    Variables of the data that the relationship does not use and that explain a large
+    share of what it leaves unexplained: the sign of a relationship stated for the other
+    variables held fixed (rate against one setting, while another setting also varies).
+    """
+    resid = y - expr.evaluate(X, params)
+    ok = np.isfinite(resid)
+    out: dict[str, float] = {}
+    if ok.sum() < 30 or np.var(resid[ok]) == 0:
+        return out
+    for name, x in X.items():
+        if name == left or name in expr.variables or np.ptp(x[ok]) == 0:
+            continue
+        dep = binned_dependence(resid[ok], x[ok])
+        rho = stats.spearmanr(resid[ok], x[ok]).statistic
+        share = max(dep[0] if dep else 0.0, float(rho) ** 2 if np.isfinite(rho) else 0.0)
+        if share >= LEFT_OUT_SHARE:
+            out[name] = round(share, 3)
+    return dict(sorted(out.items(), key=lambda kv: -kv[1]))
 
 
 def is_other_relation(session: DiscoverySession, equation: str) -> bool:
@@ -86,6 +123,7 @@ def measure_relation(session: DiscoverySession, raw: dict[str, Any]) -> dict[str
         "r2_published": None,
         "r2_refitted": None,
         "status": "na",
+        "left_out": {},
         "error": None,
     }
     lhs, sep, rhs = text.partition("=")
@@ -147,12 +185,14 @@ def measure_relation(session: DiscoverySession, raw: dict[str, Any]) -> dict[str
         record["r2_published"] = _score(expr, held, y_held, published)
     # Constants fitted again on the training rows, scored on the held-out rows
     names = expr.parameters
+    best_params = dict(published)
     if names:
         p0 = np.array([published.get(n, 1.0) for n in names], dtype=float)
         fit = _least_squares(expr, train, y_train, p0, np.full(len(names), -np.inf), 2000)
         if fit is not None:
             params = dict(zip(names, map(float, fit[0]), strict=True))
             record["r2_refitted"] = _score(expr, held, y_held, params)
+            best_params = params
             record["fitted_equation"] = f"{left} = {substitute_parameters(template, params)}"
     else:
         record["r2_refitted"] = record["r2_published"]
@@ -169,6 +209,10 @@ def measure_relation(session: DiscoverySession, raw: dict[str, Any]) -> dict[str
         record["status"] = "partly"
     else:
         record["status"] = "does_not_hold"
+    if record["status"] in ("partly", "does_not_hold") and best is not None:
+        record["left_out"] = _left_out(expr, train, y_train, best_params, left)
+        if best >= PARTIAL_MIN_R2 and record["left_out"]:
+            record["status"] = "not_testable_alone"
     for key in ("r2_published", "r2_refitted"):
         if record[key] is not None:
             record[key] = round(record[key], 4)

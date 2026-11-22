@@ -141,7 +141,7 @@ def _literature_digest(literature: Any) -> dict[str, Any] | None:
             _pick(
                 r,
                 ("equation", "status", "r2_published", "r2_refitted", "fitted_equation")
-                + ("source", "conditions", "error"),
+                + ("source", "conditions", "left_out", "error"),
             )
             for r in relations
         ]
@@ -202,6 +202,8 @@ def build_run_digest(results: dict[str, Any] | None) -> dict[str, Any]:
         agent = _pick(discovery.get("agent"), _AGENT_FIELDS)
         if agent:
             digest["agent"] = agent
+        if isinstance(discovery.get("context"), dict):
+            digest["context"] = discovery["context"]
         literature = _literature_digest(discovery.get("literature"))
         if literature is not None:
             digest["literature"] = literature

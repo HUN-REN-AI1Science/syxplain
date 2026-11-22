@@ -133,16 +133,16 @@ def _coherence_first_warning(info: dict[str, Any] | None) -> str | None:
         return None
     if info.get("status") == "no_coherent_model":
         return (
-            "No equation is coherent with the literature, so the recommended "
+            "No equation is coherent with the context and the literature, so the recommended "
             "equation was chosen on the cross-validated error alone; it conflicts with: "
             + "; ".join((info.get("headline_conflicts") or [])[:3])
         )
     gap, challenger = info.get("gap_se"), info.get("challenger_model_id")
     if disagrees(info):
         return (
-            f"The data and the literature disagree: {challenger} has a lower "
+            f"The metric and the coherence check disagree: {challenger} has a lower "
             f"cross-validated error than the recommended equation by {gap:.1f} standard "
-            "errors, but conflicts with the literature ("
+            "errors, but conflicts with the context or the literature ("
             + "; ".join((info.get("challenger_conflicts") or [])[:3])
             + "). Both are shown; which one to trust is a scientific judgement."
         )
@@ -732,15 +732,17 @@ class AnalysisOrchestrator:
             web = (context.web_literature or not context.literature_text) and (
                 self._wants_literature(context)
             )
-            if context.literature_text or web:
-                features_for_lit = literature_features(
-                    session,
-                    descriptions,
-                    context.problem_description.get("project_description", ""),
+            project_text = context.problem_description.get("project_description", "")
+            features_for_lit = literature_features(session, descriptions, project_text)
+            # The scientific context is always read for the realistic limits of the target.
+            # Both kinds of literature research run beside it; each can be off, never both.
+            # Their statements decide which equations are coherent.
+            lookups = {}
+            if settings.enabled:
+                lookups["context"] = self._context_lookup(
+                    context, project_text, features_for_lit, settings.model_name
                 )
-                # Both kinds of literature research run side by side; each can be off, never
-                # both. Their statements decide which equations are coherent.
-                lookups = {}
+            if lookups or context.literature_text or web:
                 if context.literature_text:
                     lookups["supplied"] = self._supplied_literature_lookup(
                         context, features_for_lit, settings.model_name
@@ -869,7 +871,7 @@ class AnalysisOrchestrator:
                 warnings.append(
                     {
                         "stage": "selection",
-                        "message": "No discovered equation is coherent with the supplied "
+                        "message": "No discovered equation is coherent with the "
                         "literature, so the recommended equation is a law from that literature",
                     }
                 )
@@ -1018,6 +1020,18 @@ class AnalysisOrchestrator:
 
     def _wants_literature(self, context: AnalysisContext) -> bool:
         return literature_available(context.user_llm)
+
+    def _context_lookup(
+        self, context: AnalysisContext, project: str, features: dict[str, str], model_name: str
+    ):
+        """One reading of the scientific context by the main LLM: the target's limits."""
+        from backend.services.llm_service import read_context_ranges
+
+        async def lookup() -> dict[str, Any]:
+            lm = self._discovery_lm(context, model_name)
+            return await asyncio.to_thread(read_context_ranges, project, features, lm)
+
+        return lookup
 
     def _supplied_literature_lookup(
         self, context: AnalysisContext, features: dict[str, str], model_name: str

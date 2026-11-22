@@ -16,6 +16,7 @@ const RELATION_TEXT: Record<string, string> = {
   holds_in_form: 'Holds in your data in form, with other constants',
   partly: 'Holds only partly in your data',
   does_not_hold: 'Does not hold in your data',
+  not_testable_alone: 'Cannot be tested alone: your data also varies in variables it leaves out',
   na: 'Not measured',
 };
 

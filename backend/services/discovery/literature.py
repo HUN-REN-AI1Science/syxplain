@@ -202,7 +202,7 @@ def merged_lookup(
     """
 
     async def lookup() -> dict[str, Any]:
-        order = [k for k in ("supplied", "web") if k in lookups]
+        order = [k for k in ("supplied", "web", "context") if k in lookups]
         results = await asyncio.gather(*(lookups[k]() for k in order), return_exceptions=True)
         merged: dict[str, Any] = {"equations": [], "constraints": [], "relations": []}
         errors, used = [], []
@@ -211,7 +211,11 @@ def merged_lookup(
                 raise result
             if isinstance(result, BaseException):
                 logger.warning(f"Literature research ({origin}) failed: {result}")
-                errors.append(f"{origin}: {str(result)[:150]}")
+                if origin != "context":  # the range of the data still stands without it
+                    errors.append(f"{origin}: {str(result)[:150]}")
+                continue
+            if origin == "context":
+                merged["context_ranges"] = result
                 continue
             used.append(origin)
             for key in ("equations", "constraints", "relations"):
@@ -221,9 +225,9 @@ def merged_lookup(
                         merged[key].append(item | {"origin": origin})
             if (result or {}).get("_parse_error"):
                 errors.append(f"{origin}: {result['_parse_error']}")
-        if not used:
+        if not used and len(order) > ("context" in order):
             raise RuntimeError("; ".join(errors) or "no literature research ran")
-        merged["source"] = "both" if len(used) == 2 else used[0]
+        merged["source"] = "both" if len(used) == 2 else (used[0] if used else "none")
         if errors:
             merged["_parse_error"] = "; ".join(errors)
         return merged
@@ -290,6 +294,11 @@ async def run_literature(
     session.known_laws = {"status": "pending", "laws": []}
     try:
         result = await lookup()
+        if isinstance((result or {}).get("context_ranges"), dict):
+            session.context_ranges = result["context_ranges"]
+        if (result or {}).get("source") == "none":  # only the context was read
+            session.known_laws = None
+            return
         equations = (result or {}).get("equations") or []
         raw = [law for law in equations[:MAX_LAWS] if isinstance(law, dict)]
         constraints = (result or {}).get("constraints")

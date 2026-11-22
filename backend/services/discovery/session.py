@@ -263,6 +263,9 @@ class DiscoverySession:
         self.literature_constraints: list[dict[str, Any]] | None = None
         # Relationships of the literature among the other variables (formula_space.py)
         self.literature_relations_raw: list[Any] | None = None
+        # Realistic limits of the target read from the scientific context
+        # ({"low", "high", "reason"}; literature_coherence.realistic_range_constraint)
+        self.context_ranges: dict[str, Any] | None = None
         self.literature_task: asyncio.Task | None = None
         self.agent_finished_at: float | None = None
         self.cancelled = False

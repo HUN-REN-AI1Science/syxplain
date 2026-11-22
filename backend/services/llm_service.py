@@ -19,6 +19,7 @@ from backend.core.config import get_settings
 from backend.infrastructure.llm.client import create_dspy_model, create_literature_model
 from backend.infrastructure.llm.images import png_images
 from backend.infrastructure.llm.signatures import (
+    ContextRanges,
     ExplainPySrEquations,
     ExplainPySrEquationsWithLiterature,
     GuessColumnDescriptions,
@@ -264,6 +265,26 @@ def find_literature_laws(
     except Exception as e:
         logger.error(f"Error in find_literature_laws: {e}")
         raise
+
+
+def read_context_ranges(
+    project_description: str, features_dict: dict[str, str], lm: Any
+) -> dict[str, Any]:
+    """
+    The realistic limits of the target that follow from the scientific context (its
+    meaning and unit): {"low", "high", "reason"}, each limit a number or None.
+    """
+    with dspy.settings.context(lm=lm):
+        response = dspy.Predict(ContextRanges)(
+            project_description=project_description,
+            features_json=json.dumps(features_dict, indent=2),
+        )
+    try:
+        parsed = json.loads(clean_and_fix_json_string(response.limits))
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse the context limits: {e}")
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def read_supplied_literature(

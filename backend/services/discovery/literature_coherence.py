@@ -33,6 +33,14 @@ LEAD_GRID = 60
 MAX_GRID_POINTS = 200_000
 QUANTILES = (0.1, 0.5, 0.9)
 # "Large" and "towards zero" for a limit, relative to the variable's scale in the data
+# Realistic range: characteristic values of a variable (a fine sweep over the range of the
+# data, plus the points halfway between neighbouring measured values), tried on a few
+# measured rows; a result further than RANGE_MARGIN target spans outside the measured
+# target, or beyond a bound of the context by more than BOUND_TOLERANCE spans, is unrealistic
+SWEEP_POINTS = 1500
+SWEEP_ROWS = 25
+RANGE_MARGIN = 2.0
+BOUND_TOLERANCE = 0.05
 LIMIT_SCALES = {"large": (1e3, 1e6), "zero": (1e-3, 1e-6)}
 EXPECTATIONS = ("finite_positive", "zero", "infinite")
 
@@ -244,6 +252,60 @@ class LiteratureCoherence:
             return "conflict", f"undefined on {bad:.1%} of the range the literature states"
         return "agrees", "defined over the stated range"
 
+    def _realistic_range(self, m: ModelResult, c: dict[str, Any]) -> tuple[str, str]:
+        """
+        Characteristic values of each variable, inside the range of the data: does the
+        equation give a number there, and does it stay in the realistic range of the target?
+        """
+        s = self.session
+        X = {f: np.asarray(s.fit_data.X[f], dtype=float) for f in m.features}
+        y = np.asarray(s.fit_data.y, dtype=float)
+        y_lo, y_hi = float(np.nanmin(y)), float(np.nanmax(y))
+        span = (y_hi - y_lo) or 1.0
+        rows = np.unique(np.linspace(0, len(y) - 1, min(SWEEP_ROWS, len(y))).astype(int))
+        low, high = c.get("low"), c.get("high")
+        target = s.target_column
+        for f in m.features:
+            if s.kinds.get(f) == "categorical":
+                continue
+            x = X[f][np.isfinite(X[f])]
+            lo, hi = float(x.min()), float(x.max())
+            if lo == hi:
+                continue
+            measured = np.unique(x)
+            sweep = np.unique(
+                np.concatenate(
+                    [np.linspace(lo, hi, SWEEP_POINTS), (measured[:-1] + measured[1:]) / 2]
+                )
+            )
+            grid = {g: np.repeat(X[g][rows], len(sweep)) for g in m.features}
+            grid[f] = np.tile(sweep, len(rows))
+            out = predict(m.parsed, m.params, grid, m.target_transform)
+            where = f"for {f} near {{:.4g}}, inside the range of the data ({lo:.4g} to {hi:.4g})"
+            bad = ~np.isfinite(out)
+            if bad.any():
+                at = where.format(grid[f][np.argmax(bad)])
+                return "conflict", f"gives no number {at}"
+            far = (out < y_lo - RANGE_MARGIN * span) | (out > y_hi + RANGE_MARGIN * span)
+            if far.any():
+                i = int(np.argmax(np.where(far, np.abs(out - (y_lo + y_hi) / 2), -1.0)))
+                return "conflict", (
+                    f"gives {out[i]:.4g} {where.format(grid[f][i])}, while the measured "
+                    f"{target} lies between {y_lo:.4g} and {y_hi:.4g}"
+                )
+            for bound, beyond, word in (
+                (low, out < (low if low is not None else 0) - BOUND_TOLERANCE * span, "below"),
+                (high, out > (high if high is not None else 0) + BOUND_TOLERANCE * span, "above"),
+            ):
+                if bound is not None and beyond.any():
+                    i = int(np.argmax(np.where(beyond, np.abs(out - bound), -1.0)))
+                    reason = f": {c['reason']}" if c.get("reason") else ""
+                    return "conflict", (
+                        f"gives {out[i]:.4g} {where.format(grid[f][i])}, {word} {bound:g}, "
+                        f"the realistic limit of {target} in the context{reason}"
+                    )
+        return "agrees", "stays in the realistic range at the characteristic values"
+
     def _monotone(self, m: ModelResult, c: dict[str, Any]) -> tuple[str, str]:
         v = c["variable"]
         if v not in m.features:
@@ -337,6 +399,8 @@ class LiteratureCoherence:
                             if used
                             else ("agrees", f"does not use {c['variable']}")
                         )
+                    elif c["type"] == "realistic_range":
+                        status, detail = self._realistic_range(m, c)
                     elif c["type"] == "defined_over":
                         status, detail = self._defined_over(m, c)
                     elif c["type"] == "monotone":
@@ -364,7 +428,46 @@ class LiteratureCoherence:
         ]
 
 
-def build(session: DiscoverySession) -> LiteratureCoherence | None:
-    """The evaluator for the session's supplied-literature constraints, or None without any."""
-    constraints = session.literature_constraints
-    return LiteratureCoherence(session, constraints) if constraints else None
+def realistic_range_constraint(session: DiscoverySession) -> dict[str, Any]:
+    """
+    The statement the context always makes: at characteristic values inside the range of
+    the data, an equation gives a realistic value of the target. The limits of the target
+    come from the reading of the scientific context (``session.context_ranges``), when
+    there is one; the range of the data needs no reading.
+    """
+    stated = session.context_ranges if isinstance(session.context_ranges, dict) else {}
+
+    def bound(key: str) -> float | None:
+        try:
+            value = float(stated.get(key))
+        except (TypeError, ValueError):
+            return None
+        return value if np.isfinite(value) else None
+
+    low, high = bound("low"), bound("high")
+    if low is not None and high is not None and low >= high:
+        low = high = None
+    y = np.asarray(session.fit_data.y, dtype=float)
+    # a limit the measured target itself breaks is not a limit of this context
+    if low is not None and np.nanmin(y) < low:
+        low = None
+    if high is not None and np.nanmax(y) > high:
+        high = None
+    return {
+        "id": "K0",
+        "type": "realistic_range",
+        "source": "the context",
+        "reason": str(stated.get("reason") or "").strip()[:300],
+        "conditions": "",
+        "origin": "context",
+        "binding": True,
+        "low": low,
+        "high": high,
+        "text": "realistic values of the target inside the range of the data",
+    }
+
+
+def build(session: DiscoverySession) -> LiteratureCoherence:
+    """The evaluator for the statements of the context and of the literature."""
+    constraints = [realistic_range_constraint(session), *(session.literature_constraints or [])]
+    return LiteratureCoherence(session, constraints)
