@@ -104,7 +104,8 @@ async def submit_analysis(
             "target_variable": target,
             "features": features,
         }
-        | ({"literature_text": params.literature_text} if params.literature_text else {}),
+        | ({"literature_text": params.literature_text} if params.literature_text else {})
+        | ({} if params.web_literature else {"web_literature": False}),
         csv_filename=metadata.filename,
         user_id=user.user_id,
         user_llm=user_llm,

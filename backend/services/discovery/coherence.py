@@ -13,7 +13,13 @@ from typing import Any
 
 import numpy as np
 
+from backend.services.discovery import literature_coherence
 from backend.services.discovery.fitting import ModelResult
+from backend.services.discovery.formula_space import (
+    STATUS_TEXT,
+    challenger_reading,
+    statement_checks,
+)
 from backend.services.discovery.profiling import _shape_kind, profile_shape
 from backend.services.discovery.relate import is_known
 from backend.services.discovery.selection import Selection, disagrees
@@ -33,7 +39,9 @@ LABELS = {
     "generalization": "Held-out generalization",
     "shap": "Agreement with SHAP effects",
     "literature": "Published laws",
-    "supplied_literature": "Coherence with the supplied literature",
+    "supplied_literature": "Coherence with the literature",
+    "literature_relations": "The literature's relationships in the data",
+    "web_statements": "Statements of the web literature research",
     "named_laws": "Named laws",
     "parameters": "Parameters and domain of definition",
     "agent": "Agent's own conclusion",
@@ -176,7 +184,7 @@ def _known_laws(
     ``fitted`` counts the laws of each kind that were fitted: relations only cover the ones
     better than the mean, so "none related" can still mean several were fitted.
     ``headline_reason`` tells why a known law is the headline: no discovered equation was
-    usable, or none was coherent with the supplied literature.
+    usable, or none was coherent with the literature.
     """
     fitted = fitted or {}
     checks = []
@@ -185,7 +193,7 @@ def _known_laws(
             # Only the headline's own kind is worth a caution; the other has nothing to add.
             if h.kind == kind:
                 why = (
-                    "no discovered equation is coherent with the supplied literature"
+                    "no discovered equation is coherent with the literature"
                     if headline_reason == "coherent_literature_law"
                     else "no discovered equation was usable"
                 )
@@ -255,10 +263,129 @@ def _agent(h: ModelResult, agent: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _supplied_literature(selection: Selection) -> list[dict[str, Any]]:
+def _reading_text(statements: list[dict[str, Any]] | None) -> str:
+    """What the data says about the statements the better-fitting expression breaks."""
+    reading = challenger_reading(statements or [])
+    if reading == "paradigm_shift":
+        parts = []
+        for s in statements or []:
+            if s["used_by_challenger"] and s["data"] == "contradicts":
+                text = (
+                    f"{s['variable']} explains {s['residual_share']:.0%} of what the "
+                    "recommendation leaves unexplained"
+                )
+                if s.get("conditions"):
+                    text += f" (the literature states it for: {s['conditions']})"
+                parts.append(text)
+        return (
+            ". The data speaks against the literature here, so this may be a paradigm shift: "
+            + "; ".join(parts[:3])
+        )
+    if reading == "wrong_relationship":
+        return (
+            ". The data does not speak against the statements it breaks, so this is more "
+            "likely a wrong relationship"
+        )
+    return ""
+
+
+def _web_statements(session: DiscoverySession, h: ModelResult) -> list[dict[str, Any]]:
+    """
+    The headline against the statements of the web literature research whose validity
+    in the context of this data is unknown: they warn, and never decide the selection.
+    """
+    literature = literature_coherence.build(session)
+    if literature is None or not any(not c.get("binding", True) for c in literature.constraints):
+        return []
+    open_conflicts = literature.conflicts(h, binding=False)
+    if open_conflicts:
+        return [
+            _check(
+                "web_statements",
+                "warn",
+                "the headline conflicts with statements of the web literature research that "
+                "may not be valid in the context of this data: " + "; ".join(open_conflicts[:3]),
+                len(open_conflicts),
+            )
+        ]
+    return [
+        _check(
+            "web_statements",
+            "pass",
+            "the headline agrees with the statements of the web literature research whose "
+            "validity in the context of this data is unknown",
+            0,
+        )
+    ]
+
+
+def _literature_relations(session: DiscoverySession, h: ModelResult) -> list[dict[str, Any]]:
+    """
+    The literature's relationships among the other variables, measured on the data
+    (``formula_space.py``): do they hold in the context of this data? Also says when the
+    headline uses variables together that a holding relationship already connects.
+    """
+    measured = [
+        r for r in (session.known_laws or {}).get("relations") or [] if r.get("status") != "na"
+    ]
+    if not measured:
+        return []
+    holding = [r for r in measured if r["status"] in ("holds", "holds_in_form")]
+    failing = [r for r in measured if r not in holding]
+
+    def one(r: dict[str, Any]) -> str:
+        scores = [v for v in (r.get("r2_published"), r.get("r2_refitted")) if v is not None]
+        score = r["r2_published"] if r["status"] == "holds" else max(scores)
+        text = f"{r['equation']} {STATUS_TEXT[r['status']]} (R2 {score:.2f})"
+        if r in failing and r.get("conditions"):
+            text += f", the literature states it for: {r['conditions']}"
+        return text
+
+    connected = []
+    for r in holding:
+        together = [v for v in r.get("variables") or [] if v in h.features]
+        if r.get("variable") in h.features and together:
+            connected.append(
+                f"{r['variable']} together with {', '.join(together)}, which the literature "
+                f"connects by {r['equation']}"
+            )
+    note = (
+        ". The headline uses " + "; ".join(connected[:2]) + ": check that it does not count "
+        "the same effect twice"
+        if connected
+        else ""
+    )
+    counts = f"{len(holding)} of {len(measured)}"
+    if failing:
+        return [
+            _check(
+                "literature_relations",
+                "warn",
+                f"{counts} relationships of the literature among the other variables hold in "
+                "the data, a hint that the context of the data differs from the literature's: "
+                + "; ".join(one(r) for r in failing[:3])
+                + note,
+                len(failing),
+            )
+        ]
+    return [
+        _check(
+            "literature_relations",
+            "pass",
+            f"all {len(measured)} relationships of the literature among the other variables "
+            "hold in the data: " + "; ".join(one(r) for r in holding[:3]) + note,
+            0,
+        )
+    ]
+
+
+def _supplied_literature(
+    selection: Selection, statements: list[dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
     """
     The headline against what the user's own literature states (coherence-first
-    selection). Absent when no literature was supplied.
+    selection). Absent when no literature was supplied. ``statements`` are the data
+    tests of the literature's statements (``formula_space.statement_checks``).
     """
     info = selection.coherence_first
     if not info:
@@ -269,24 +396,26 @@ def _supplied_literature(selection: Selection) -> list[dict[str, Any]]:
             _check(
                 "supplied_literature",
                 "fail",
-                "the headline conflicts with the supplied literature: " + "; ".join(conflicts[:3]),
+                "the headline conflicts with the literature: " + "; ".join(conflicts[:3]),
                 len(conflicts),
             )
         ]
     gap, challenger = info.get("gap_se"), info.get("challenger_model_id")
     if disagrees(info):
         lead = (
-            "the headline is a law of the supplied literature, because no discovered "
+            "the headline is a law of the literature, because no discovered "
             "equation is coherent with it; "
             if info.get("status") == "coherent_reference"
-            else "the headline is coherent with the supplied literature, but "
+            else "the headline is coherent with the literature, but "
         )
         return [
             _check(
                 "supplied_literature",
                 "warn",
                 f"{lead}{challenger} fits better by {gap:.1f} standard errors and conflicts "
-                "with it: " + "; ".join((info.get("challenger_conflicts") or [])[:3]),
+                "with it: "
+                + "; ".join((info.get("challenger_conflicts") or [])[:3])
+                + _reading_text(statements),
                 gap,
             )
         ]
@@ -297,7 +426,7 @@ def _supplied_literature(selection: Selection) -> list[dict[str, Any]]:
         _check(
             "supplied_literature",
             "pass",
-            f"the headline is coherent with the supplied literature ({counts})",
+            f"the headline is coherent with the literature ({counts})",
             gap,
         )
     ]
@@ -372,12 +501,20 @@ def coherence_report(
     h = selection.headline
     if h is None:
         return None
+    info = selection.coherence_first or {}
+    statements = (
+        statement_checks(session, h, session.models.get(info.get("challenger_model_id") or ""))
+        if info and not info.get("headline_conflicts")
+        else []
+    )
     checks = [
         _fit_vs_ceiling(session, h),
         _generalization(session, h),
         _shap(shap_agreement),
         *_known_laws(h, headline_relations, _fitted_known_laws(session), selection.headline_reason),
-        *_supplied_literature(selection),
+        *_supplied_literature(selection, statements),
+        *_web_statements(session, h),
+        *_literature_relations(session, h),
         _parameters(h),
         _agent(h, agent),
     ]
@@ -386,5 +523,7 @@ def coherence_report(
         "model_id": h.model_id,
         "overall": max(rated, key=STATUS_ORDER.get) if rated else "na",
         "checks": checks,
+        "literature_statements": statements,
+        "challenger_reading": challenger_reading(statements) if disagrees(info) else None,
         "effect_directions": effect_directions(session, h),
     }

@@ -100,7 +100,7 @@ def usable(
 
 
 # A challenger this many standard errors better than the coherent recommendation is
-# reported as a disagreement between the data and the supplied literature
+# reported as a disagreement between the data and the literature
 COHERENCE_GAP_WARN_SE = 1.0
 
 
@@ -155,7 +155,7 @@ def _coherent_reference(
     extra_guard: Callable[[ModelResult], str | None] | None,
 ) -> Selection | None:
     """
-    No discovered model is coherent with the supplied literature: recommend the best
+    No discovered model is coherent with the literature: recommend the best
     coherent supplied law instead, with the discovered headline as the challenger.
     """
     laws = [
@@ -186,7 +186,7 @@ def _coherent_reference(
         rejected.append(
             {
                 "model_id": challenger.model_id,
-                "reason": "conflicts with the supplied literature: "
+                "reason": "conflicts with the literature: "
                 + "; ".join(info["challenger_conflicts"][:3]),
             }
         )
@@ -213,7 +213,7 @@ def select(
     The headline among the candidates; models matching ``reference`` (known laws) are
     for comparison and become the headline only when no candidate is usable.
     ``extra_guard`` vetoes models on a problem-specific test (rate-law simulation).
-    ``conflicts`` lists a model's conflicts with the supplied literature; when given,
+    ``conflicts`` lists a model's conflicts with the literature; when given,
     the selection is coherence first (step 6 of the protocol).
     """
     if reference is not None:
@@ -248,7 +248,7 @@ def select(
             )
         return Selection(None, "no_eligible_model", [], rejected, vetoes=vetoes)
 
-    # Coherence first: rank among the models without a conflict with the supplied literature
+    # Coherence first: rank among the models without a conflict with the literature
     challenger = min(pool, key=lambda m: m.cv_rmse)
     conflict_of = {m.model_id: conflicts(m) for m in pool} if conflicts is not None else {}
     coherent = [m for m in pool if not conflict_of.get(m.model_id)] if conflicts else []
@@ -271,8 +271,7 @@ def select(
             rejected.append(
                 {
                     "model_id": mid,
-                    "reason": "conflicts with the supplied literature: "
-                    + "; ".join(conflict_of[mid][:3]),
+                    "reason": "conflicts with the literature: " + "; ".join(conflict_of[mid][:3]),
                 }
             )
         elif m.cv_rmse > threshold:

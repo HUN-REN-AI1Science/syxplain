@@ -212,7 +212,10 @@ def build_results(
         ranked,
         recommended,
         reference=is_known,
-        conflicts=literature.conflicts if literature else None,
+        # only statements that are valid in this context decide; the others warn
+        conflicts=literature.conflicts
+        if literature and any(c.get("binding", True) for c in literature.constraints)
+        else None,
     )
 
     def conflicts_field(m: ModelResult) -> dict[str, Any]:

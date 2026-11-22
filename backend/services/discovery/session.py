@@ -261,6 +261,8 @@ class DiscoverySession:
         self.literature_source: str = "web"
         self.literature_constraints_raw: list[Any] | None = None
         self.literature_constraints: list[dict[str, Any]] | None = None
+        # Relationships of the literature among the other variables (formula_space.py)
+        self.literature_relations_raw: list[Any] | None = None
         self.literature_task: asyncio.Task | None = None
         self.agent_finished_at: float | None = None
         self.cancelled = False

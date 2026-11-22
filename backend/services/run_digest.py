@@ -61,7 +61,16 @@ _SERIES_FIELDS = (
 )
 _LAG_FIELDS = ("feature", "description", "reason", "padded_rows")
 _AGENT_FIELDS = ("summary", "insights", "open_questions", "rejected_forms", "source", "error")
-_LAW_FIELDS = ("equation", "citations", "citation_titles", "cv_r2", "unmapped", "fit_error")
+_LAW_FIELDS = (
+    "equation",
+    "citations",
+    "citation_titles",
+    "cv_r2",
+    "unmapped",
+    "fit_error",
+    "origin",
+    "composed_from",
+)
 
 
 def _pick(source: Any, fields: tuple[str, ...]) -> dict[str, Any]:
@@ -122,7 +131,20 @@ def _literature_digest(literature: Any) -> dict[str, Any] | None:
         "laws": [_pick(law, _LAW_FIELDS) for law in laws[:MAX_DIGEST_LAWS]],
     }
     if constraints:
-        out["constraints"] = [_pick(c, ("id", "type", "text", "source")) for c in constraints]
+        out["constraints"] = [
+            _pick(c, ("id", "type", "text", "source", "conditions", "origin", "binding"))
+            for c in constraints
+        ]
+    relations = [r for r in literature.get("relations") or [] if isinstance(r, dict)]
+    if relations:
+        out["relations"] = [
+            _pick(
+                r,
+                ("equation", "status", "r2_published", "r2_refitted", "fitted_equation")
+                + ("source", "conditions", "error"),
+            )
+            for r in relations
+        ]
     return out
 
 

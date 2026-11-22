@@ -8,7 +8,7 @@ minimal structure optimized for programmatic clients.
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.core.constants import STANDARD_ANALYSIS
 from backend.schemas.requests import MAX_LITERATURE_CHARS, UserLLMFields
@@ -49,9 +49,23 @@ class AnalyzeParams(UserLLMFields):
         default=None,
         max_length=MAX_LITERATURE_CHARS,
         description="Optional: your own literature on the problem (papers, notes) as plain "
-        "text. When given, it replaces the web literature search, and the recommended "
-        "equation is chosen among those coherent with what it states",
+        "text. It is read in addition to the web literature research, and the recommended "
+        "equation is chosen among those coherent with what the literature states",
     )
+    web_literature: bool = Field(
+        default=True,
+        description="Web literature research. It can be turned off only when "
+        "`literature_text` is given: one of the two kinds of literature research is used",
+    )
+
+    @model_validator(mode="after")
+    def one_kind_of_literature_research(self):
+        if not self.web_literature and not (self.literature_text or "").strip():
+            raise ValueError(
+                "One kind of literature research must be used: keep the web literature "
+                "research on, or give your own literature in literature_text"
+            )
+        return self
 
     @field_validator("features")
     @classmethod

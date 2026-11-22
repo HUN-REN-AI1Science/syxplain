@@ -27,12 +27,14 @@ from backend.services.discovery.expression import (
     parameterize_constants,
     parse_expression,
 )
+from backend.services.discovery.formula_space import is_other_relation, measure_relations
 from backend.services.discovery.literature_coherence import normalize_constraints
 from backend.services.discovery.session import DiscoverySession
 
 logger = logging.getLogger(__name__)
 
 MAX_LAWS = 12
+MAX_COMPOSED = 4
 
 GREEK = {
     "alpha",
@@ -114,6 +116,8 @@ def fit_law(session: DiscoverySession, law: dict[str, Any], index: int) -> dict[
         "equation": text,
         "citations": [str(c) for c in law.get("citations") or []][:5],
         "citation_titles": [str(t).strip() for t in law.get("citation_titles") or []][:5],
+        "origin": law.get("origin"),
+        "composed_from": law.get("composed_from"),
         "model_id": None,
         "cv_r2": None,
         "unmapped": [],
@@ -175,7 +179,7 @@ def fit_law(session: DiscoverySession, law: dict[str, Any], index: int) -> dict[
             template,
             # declared, so a_PDSI is not taken for a typo of PDSI
             initial_params=dict.fromkeys(parameters, 1.0) | values,
-            label=f"Published law {index}",
+            label=f"Composed law {index}" if law.get("composed_from") else f"Published law {index}",
             kind="literature",
         )
     except ExpressionError as e:
@@ -186,6 +190,92 @@ def fit_law(session: DiscoverySession, law: dict[str, Any], index: int) -> dict[
     if model.error:
         record["fit_error"] = model.error
     return record
+
+
+def merged_lookup(
+    lookups: dict[str, Callable[[], Awaitable[dict[str, Any]]]],
+) -> Callable[[], Awaitable[dict[str, Any]]]:
+    """
+    One lookup for both kinds of literature research ("supplied" and "web"), run side by
+    side. Every equation, statement and relationship is marked with its origin; the
+    supplied literature comes first. One kind failing does not lose the other.
+    """
+
+    async def lookup() -> dict[str, Any]:
+        order = [k for k in ("supplied", "web") if k in lookups]
+        results = await asyncio.gather(*(lookups[k]() for k in order), return_exceptions=True)
+        merged: dict[str, Any] = {"equations": [], "constraints": [], "relations": []}
+        errors, used = [], []
+        for origin, result in zip(order, results, strict=True):
+            if isinstance(result, asyncio.CancelledError):
+                raise result
+            if isinstance(result, BaseException):
+                logger.warning(f"Literature research ({origin}) failed: {result}")
+                errors.append(f"{origin}: {str(result)[:150]}")
+                continue
+            used.append(origin)
+            for key in ("equations", "constraints", "relations"):
+                items = (result or {}).get(key)
+                for item in items if isinstance(items, list) else []:
+                    if isinstance(item, dict):
+                        merged[key].append(item | {"origin": origin})
+            if (result or {}).get("_parse_error"):
+                errors.append(f"{origin}: {result['_parse_error']}")
+        if not used:
+            raise RuntimeError("; ".join(errors) or "no literature research ran")
+        merged["source"] = "both" if len(used) == 2 else used[0]
+        if errors:
+            merged["_parse_error"] = "; ".join(errors)
+        return merged
+
+    return lookup
+
+
+def compose_laws(session: DiscoverySession, relations: list[dict[str, Any]]) -> list[dict]:
+    """
+    Laws for the target implied by the literature: a relationship that holds in the data
+    (``v = a*t``) is put into a law for the target that uses its left variable
+    (``s = v*t`` gives ``s = (a*t)*t``). One step only, and only what both state.
+    """
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for law in session.literature_raw or []:
+        text = str(law.get("equation") or "") if isinstance(law, dict) else ""
+        lhs, sep, rhs = text.partition("=")
+        rhs = rhs.strip()
+        if not sep or _map_identifier(lhs.strip(), session) != session.target_alias:
+            continue
+        for rel in relations:
+            if rel.get("status") not in ("holds", "holds_in_form"):
+                continue
+            name, _, body = str(rel.get("equation") or "").partition("=")
+            name, body = name.strip(), body.strip()
+            pattern = rf"(?<![A-Za-z_0-9]){re.escape(name)}(?![A-Za-z_0-9])"
+            if not name or not body or not re.search(pattern, rhs):
+                continue
+            # the relationship's free parameters must not collide with the law's
+            try:
+                names = parse_expression(body, variables=[]).parameters
+            except ExpressionError:
+                continue
+            free = [n for n in names if _map_identifier(n, session) is None]
+            for i, n in enumerate(sorted(free, key=len, reverse=True), start=1):
+                body = re.sub(rf"(?<![A-Za-z_0-9]){re.escape(n)}(?![A-Za-z_0-9])", f"q{i}", body)
+            composed = f"{lhs.strip()} = " + re.sub(pattern, lambda _m, b=body: f"({b})", rhs)
+            key = re.sub(r"\s+", "", composed)
+            if key in seen or len(out) >= MAX_COMPOSED:
+                continue
+            seen.add(key)
+            out.append(
+                {
+                    "equation": composed,
+                    "citations": [str(c) for c in law.get("citations") or []],
+                    "citation_titles": list(law.get("citation_titles") or []),
+                    "origin": law.get("origin"),
+                    "composed_from": [text.strip(), str(rel.get("equation") or "").strip()],
+                }
+            )
+    return out
 
 
 async def run_literature(
@@ -205,14 +295,25 @@ async def run_literature(
         constraints = (result or {}).get("constraints")
         if isinstance(constraints, list) and constraints:
             session.literature_constraints_raw = constraints
-        if (result or {}).get("source") == "supplied":
-            session.literature_source = "supplied"
+        relations = (result or {}).get("relations")
+        if isinstance(relations, list) and relations:
+            session.literature_relations_raw = relations
+        if (result or {}).get("source") in ("supplied", "both"):
+            session.literature_source = result["source"]
         if not raw and session.literature_constraints_raw:
             session.literature_raw = []  # statements about the target, but no equation for it
             await session.emit(
                 "literature",
-                f"Supplied literature: {len(constraints)} statements about the target; the "
+                f"Literature: {len(constraints)} statements about the target; the "
                 "recommendation is chosen among the equations coherent with them",
+            )
+            return
+        if not raw and session.literature_relations_raw:
+            session.literature_raw = []  # relationships among the other variables only
+            await session.emit(
+                "literature",
+                f"Literature: {len(relations)} relationships among the other variables; they "
+                "are measured against the data at the end",
             )
             return
         if not raw:
@@ -274,6 +375,25 @@ def fit_literature_laws(session: DiscoverySession) -> list[dict[str, Any]]:
         session.literature_constraints = kept or None
         session.known_laws["constraints"] = kept
         session.known_laws["dropped_constraints"] = dropped[:20]
+    # The formula space: every relationship of the literature that is not about the target
+    # is measured against the data too
+    others = [
+        law
+        for law in session.literature_raw
+        if isinstance(law, dict) and is_other_relation(session, law.get("equation"))
+    ]
+    try:
+        relations = measure_relations(session, [*(session.literature_relations_raw or []), *others])
+    except Exception as e:  # the scout's text must never sink the run
+        logger.warning(f"Measuring the literature's relationships failed: {e}")
+        relations = []
+    if relations:
+        session.known_laws["relations"] = relations
+        for i, law in enumerate(compose_laws(session, relations), start=len(laws) + 1):
+            try:
+                laws.append(fit_law(session, law, i))
+            except Exception as e:
+                logger.warning(f"Fitting a composed law failed: {e}")
     return [law for law in laws if law["model_id"] and law["cv_r2"] is not None]
 
 

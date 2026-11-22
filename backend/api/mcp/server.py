@@ -219,11 +219,18 @@ async def start_analysis(
         str | None,
         Field(
             description="Optional: the user's own literature on the problem (papers, notes) "
-            "as plain text. It replaces the web literature search, and the recommended "
-            "equation is then chosen among those coherent with what the text states. "
-            "Pass only text the user supplied."
+            "as plain text. It is read in addition to the web literature research, and the "
+            "recommended equation is then chosen among those coherent with what the "
+            "literature states. Pass only text the user supplied."
         ),
     ] = None,
+    web_literature: Annotated[
+        bool,
+        Field(
+            description="Web literature research (default on). It can be turned off only "
+            "when literature_text is given: one of the two kinds of research is used."
+        ),
+    ] = True,
 ) -> dict[str, Any]:
     """Start an equation-discovery analysis of a small table passed as CSV text.
 
@@ -250,6 +257,7 @@ async def start_analysis(
             target_variable=target_variable,
             features=features,
             literature_text=literature_text or None,
+            web_literature=web_literature,
         )
     except ValueError as e:
         raise ToolError(f"Invalid parameters: {e}")

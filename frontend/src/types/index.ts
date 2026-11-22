@@ -52,8 +52,10 @@ export interface ProblemDescription {
   project_description: string;
   target_variable: string;
   features: Record<string, string>;
-  /** The user's own literature; replaces the web search and makes the selection coherence first */
+  /** The user's own literature, read in addition to the web literature research */
   literature_text?: string | null;
+  /** false when the web literature research was turned off (needs literature_text) */
+  web_literature?: boolean;
 }
 
 export interface CsvMetadata {
@@ -457,12 +459,30 @@ export interface DiscoveryReport {
   literature?: {
     status: 'ok' | 'empty' | 'failed' | 'pending';
     laws: LiteratureLaw[];
+    /** 'web', 'supplied' or 'both' kinds of literature research */
+    source?: string;
+    /** The literature's relationships among the other variables, measured on the data */
+    relations?: LiteratureRelation[];
   };
   activity?: AgentEvent[];
   /** Rate-law results; null unless the agent confirmed a time structure */
   dynamics?: DynamicsReport | null;
   /** Long series: the time-dependent features chosen by the feature stage; null otherwise */
   series?: SeriesReport | null;
+}
+
+/** A relationship of the literature among the data's variables, measured on the data */
+export interface LiteratureRelation {
+  equation: string;
+  /** 'holds' | 'holds_in_form' | 'partly' | 'does_not_hold' | 'na' */
+  status: string;
+  r2_published: number | null;
+  r2_refitted: number | null;
+  fitted_equation: string | null;
+  source?: string;
+  /** The conditions under which the literature states it */
+  conditions?: string;
+  error?: string | null;
 }
 
 /** A time-dependent feature (lag or period aggregate) added by the feature stage */
@@ -649,6 +669,7 @@ export interface ProblemFormPayload {
   target_variable: string;
   features: Record<string, string>;
   literature_text?: string;
+  web_literature?: boolean;
 }
 
 // ============================================================================

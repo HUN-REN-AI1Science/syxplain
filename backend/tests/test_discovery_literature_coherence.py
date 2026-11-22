@@ -103,7 +103,7 @@ def test_selection_is_coherence_first_and_keeps_the_challenger():
     info = sel.to_dict()["coherence_first"]
     assert sel.headline is good and sel.headline_reason.startswith("coherent_")
     assert info["status"] == "coherent" and info["n_coherent"] == 1 and info["n_candidates"] == 2
-    assert "supplied literature" in sel.agent_pick_rejected[0]["reason"]
+    assert "the literature" in sel.agent_pick_rejected[0]["reason"]
     if info["challenger_model_id"]:  # the incoherent model scored better: it is kept beside
         assert info["challenger_model_id"] == with_noise.model_id
         assert with_noise in sel.shortlist and info["gap_se"] >= 0
@@ -125,14 +125,14 @@ def test_no_coherent_discovery_falls_back_to_a_coherent_law_or_the_metric():
     assert info["headline_conflicts"] == [] and info["challenger_conflicts"]
     # The discovered equations were usable: the check must not say they were not
     details = [c["detail"] for c in _known_laws(law, [], None, sel.headline_reason)]
-    assert any("coherent with the supplied literature" in d for d in details)
+    assert any("coherent with the literature" in d for d in details)
     assert not any("was usable" in d for d in details)
 
     # An agent's pick that the law overrules is recorded as rejected, with the reason
     sel = select([good, law], [good.model_id], reference=is_known, conflicts=lit.conflicts)
     assert sel.headline is law
     assert sel.agent_pick_rejected[-1]["model_id"] == good.model_id
-    assert "supplied literature" in sel.agent_pick_rejected[-1]["reason"]
+    assert "the literature" in sel.agent_pick_rejected[-1]["reason"]
 
     # No coherent law either: the metric decides, and the reason says so
     sel = select([good], [], reference=is_known, conflicts=lit.conflicts)

@@ -165,6 +165,7 @@ def test_tools_take_no_llm_settings(mcp):
         "features",
         "dataset_name",
         "literature_text",
+        "web_literature",
     }
     assert set(start["required"]) == {
         "csv_text",

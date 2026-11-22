@@ -46,6 +46,7 @@ const RunSettingsPanel: React.FC<RunSettingsPanelProps> = ({ runId }) => {
         target_variable: problem.target_variable,
         features: problem.features,
         ...(problem.literature_text ? { literature_text: problem.literature_text } : {}),
+        ...(problem.web_literature === false ? { web_literature: false } : {}),
       },
       `${base}_problem_config.json`
     );

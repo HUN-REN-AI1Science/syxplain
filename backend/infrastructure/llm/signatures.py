@@ -277,7 +277,14 @@ class LiteratureLaws(dspy.Signature):
        - You may introduce constants or parameters (e.g. kappa, g, cp, alpha, Pmax, A, B).
        - Provide citation links (DOI, journal URLs, textbook links) supporting the equation.
        - For each link give the cited work's title in "citation_titles", in the same order, exactly as the source states it; use "" when you could not see the title. Never invent a title.
-    4. Do not include explanations, extra text, or commentary — only the json.
+    4. Besides equations, return in "constraints" what the literature states about the TARGET, only when a peer-reviewed source states it clearly. An empty list is better than a weak statement; give at most 6. Types:
+       - "not_a_cause": a listed variable that does not act on the target directly once the other listed variables are known.
+       - "monotone": the target rises or falls with a variable (others fixed), without reversing; "direction" is "increasing" or "decreasing".
+       - "limit": what a quantity tends to when a variable becomes large or goes to zero; "toward" is "large" or "zero", "quantity" is a Python expression in the word target and variable names, "expect" is "finite_positive", "zero" or "infinite".
+       - "defined_over": "ranges" of variable values in which such systems are operated.
+       Every constraint has "source" (the citation link), a one-sentence "reason", "conditions" (the conditions under which the source states it: a regime, an operating window, a material, a scale), and "applies": "yes" only when those conditions clearly match the system that the feature dictionary describes, otherwise "unknown".
+       An equation may also carry "conditions", in the same sense.
+    5. Do not include explanations, extra text, or commentary — only the json.
 
     ### REQUIRED OUTPUT SCHEMA
     Return STRICT JSON only — no markdown, no code fences, no commentary. Output must parse with json.loads().
@@ -289,8 +296,12 @@ class LiteratureLaws(dspy.Signature):
             {
                 "equation": "ustar = (mflux / rho)**0.5",
                 "citations": ["https://doi.org/10.1007/978-94-007-2351-1_4"],
-                "citation_titles": ["<the title of the cited work, as the source states it>"]
+                "citation_titles": ["<the title of the cited work, as the source states it>"],
+                "conditions": "<when the source says it holds, or empty>"
             }
+        ],
+        "constraints": [
+            {"type": "monotone", "variable": "mflux", "direction": "increasing", "source": "https://doi.org/...", "reason": "...", "conditions": "neutral stratification", "applies": "unknown"}
         ]
     }
 
@@ -338,7 +349,7 @@ class LiteratureLaws(dspy.Signature):
 
     ---
 
-    Your final output must be valid JSON with an "equations" array. No narrative text, no explanations outside the JSON structure.
+    Your final output must be valid JSON with an "equations" array and, when the literature supports any, a "constraints" array. No narrative text, no explanations outside the JSON structure.
     """
 
     features_json: str = dspy.InputField(
@@ -392,7 +403,7 @@ class SuppliedLiteratureScout(dspy.Signature):
 
     FEATURES_JSON maps each variable name to its meaning; exactly one is marked TARGET. Use these names, exactly as written, in everything you return.
 
-    Return what LITERATURE_TEXT states about the TARGET:
+    Return what LITERATURE_TEXT states about the TARGET, and the relationships it states among the other variables:
 
     1. "equations": equations for the TARGET that the text states, completely or in form. Write each solved for the target ("<target> = <Python expression>"), using only the variable names of FEATURES_JSON. Write a form with unknown constants as free parameters p1, p2, ... and keep constants the text gives. Do not combine statements into an equation the text does not state. "citations" names where in the text the equation is (section, note or paper title). Leave the list empty if the text gives no equation for the target.
     2. "constraints": statements about the target, each of one of these types.
@@ -400,6 +411,10 @@ class SuppliedLiteratureScout(dspy.Signature):
        - "defined_over": a region of predictor values in which, according to the text, the system is operated, so an equation for the target must give a finite real number there. Include only predictors for which the text gives a range.
        - "monotone": the text says the target rises or falls with this predictor (other predictors fixed), without reversing.
        - "limit": the text says what a quantity tends to when a predictor becomes large or goes to zero. "quantity" is a Python expression in the word target and predictor names, for example "target" or "target*thickness".
+
+    3. "relations": equations the text states among the variables of FEATURES_JSON that are NOT solved for the TARGET (for example a gauge reading computed from two settings, or a balance between three measured quantities). Write each as "<variable> = <Python expression>" with only the variable names of FEATURES_JSON; the TARGET may appear on the right side. Keep the constants the text gives and write unknown ones as p1, p2, .... Leave out an equation that needs a variable that is not in FEATURES_JSON.
+
+    "conditions": for a constraint or a relation, the conditions under which the text says it holds (an operating window, a regime, an assumption), in a few words taken from the text. Leave it empty if the text states none.
 
     Rules: every entry names its "source" in the text and gives a one-sentence "reason" taken from it. Prefer fewer, well-founded entries over many weak ones. Python syntax: *, /, **, sqrt(), exp(), log().
 
@@ -414,7 +429,10 @@ class SuppliedLiteratureScout(dspy.Signature):
             {"type": "not_a_cause", "variable": "humidity", "source": "Note 1", "reason": "..."},
             {"type": "defined_over", "ranges": {"x": [0.1, 20]}, "source": "Note 1", "reason": "..."},
             {"type": "monotone", "variable": "x", "direction": "increasing", "source": "Note 3", "reason": "..."},
-            {"type": "limit", "variable": "x", "toward": "large", "quantity": "target", "expect": "finite_positive", "source": "Note 3", "reason": "..."}
+            {"type": "limit", "variable": "x", "toward": "large", "quantity": "target", "expect": "finite_positive", "source": "Note 3", "reason": "...", "conditions": "in the operating window"}
+        ],
+        "relations": [
+            {"equation": "gauge = 15 + x + 4 * z", "source": "Note 2", "conditions": ""}
         ]
     }
 
@@ -426,7 +444,7 @@ class SuppliedLiteratureScout(dspy.Signature):
         desc="JSON string of feature dictionary mapping variable names to descriptions"
     )
     findings: str = dspy.OutputField(
-        desc="STRICT JSON with the keys equations and constraints, as in the schema"
+        desc="STRICT JSON with the keys equations, constraints and relations, as in the schema"
     )
 
 

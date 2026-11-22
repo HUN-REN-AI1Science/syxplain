@@ -291,6 +291,7 @@ def read_supplied_literature(
         parsed = {"equations": parsed if isinstance(parsed, list) else []}
     parsed.setdefault("equations", [])
     parsed.setdefault("constraints", [])
+    parsed.setdefault("relations", [])
     parsed["source"] = "supplied"
     return parsed
 

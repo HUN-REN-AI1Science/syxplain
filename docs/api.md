@@ -91,7 +91,14 @@ it send none, and any they send are ignored.
 `literature_text` (optional, plain text, up to 60 000 characters) holds your own
 literature on the problem: papers, notes, reports. When it is given:
 
-- the literature step reads only this text, with the main LLM and without a web search;
+- it is read by the main LLM, without a web search, in addition to the web literature
+  research. `web_literature: false` turns the web research off; it is accepted only
+  together with `literature_text`, because one kind of literature research is always used;
+- statements of the web literature research decide the recommendation only when they are
+  marked valid for the context of your data (`binding`); the others only warn;
+- equations of the literature among the other variables are measured against the data
+  (`discovery.literature.relations`: as published and with constants fitted again), and a
+  law for the target implied by a holding relationship is fitted too (`composed_from`);
 - the exploration stays blind to it, as it is to every known law;
 - besides equations for the target, the step returns what the text states about it:
   variables that are not causes, the region where an equation must be defined, the

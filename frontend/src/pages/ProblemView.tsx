@@ -45,6 +45,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
   // Form state
   const [projectDescription, setProjectDescription] = useState('');
   const [literatureText, setLiteratureText] = useState('');
+  const [webLiterature, setWebLiterature] = useState(true);
   const [targetVariable, setTargetVariable] = useState('');
   const [featureDescriptions, setFeatureDescriptions] = useState<Record<string, string>>({});
   // Columns the user manually removed from the analysis (issue #49)
@@ -270,6 +271,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
       target_variable: targetVariable,
       features: features,
       ...(literatureText.trim() ? { literature_text: literatureText.trim() } : {}),
+      ...(literatureText.trim() && !webLiterature ? { web_literature: false } : {}),
     };
   };
 
@@ -484,6 +486,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
         const parsed = JSON.parse(jsonContent);
         if (parsed.project_description) setProjectDescription(parsed.project_description);
         setLiteratureText(typeof parsed.literature_text === 'string' ? parsed.literature_text : '');
+        setWebLiterature(parsed.web_literature !== false);
         if (parsed.target_variable) setTargetVariable(parsed.target_variable);
         if (parsed.features) {
           setFeatureDescriptions(parsed.features);
@@ -517,6 +520,7 @@ const ProblemView: React.FC<ProblemViewProps> = ({
             target_variable: targetVariable,
             features,
             ...(literatureText.trim() ? { literature_text: literatureText.trim() } : {}),
+            ...(literatureText.trim() && !webLiterature ? { web_literature: false } : {}),
           },
           null,
           2
@@ -565,7 +569,12 @@ const ProblemView: React.FC<ProblemViewProps> = ({
             onBlur={handleDescriptionBlur}
           />
 
-          <LiteratureSection literatureText={literatureText} onChange={setLiteratureText} />
+          <LiteratureSection
+            literatureText={literatureText}
+            onChange={setLiteratureText}
+            webLiterature={webLiterature}
+            onWebLiteratureChange={setWebLiterature}
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1">

@@ -51,9 +51,22 @@ class ProblemDescription(BaseModel):
     literature_text: str | None = Field(
         default=None,
         max_length=MAX_LITERATURE_CHARS,
-        description="Optional literature supplied by the user (plain text); replaces the "
-        "web literature search and makes the selection coherence first",
+        description="Optional literature supplied by the user (plain text); read in "
+        "addition to the web literature research",
     )
+    web_literature: bool = Field(
+        default=True,
+        description="Web literature research; can be turned off only with literature_text",
+    )
+
+    @model_validator(mode="after")
+    def one_kind_of_literature_research(self):
+        if not self.web_literature and not (self.literature_text or "").strip():
+            raise ValueError(
+                "One kind of literature research must be used: keep the web literature "
+                "research on, or give your own literature"
+            )
+        return self
 
     @field_validator("features")
     @classmethod

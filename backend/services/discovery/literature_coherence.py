@@ -1,5 +1,5 @@
 """
-Coherence with the supplied literature.
+Coherence with the literature.
 
 When the user supplies their own literature (papers, notes), a scout reads it and writes
 down what it states about the target: which variables are not causes, where an equation
@@ -69,11 +69,17 @@ def normalize_constraints(
             drop(c, "not an object")
             continue
         kind = str(c.get("type") or "")
+        origin = "web" if c.get("origin") == "web" else "supplied"
         base = {
             "id": f"K{len(kept) + 1}",
             "type": kind,
             "source": _source(c),
             "reason": str(c.get("reason") or "").strip()[:400],
+            "conditions": str(c.get("conditions") or "").strip()[:300],
+            "origin": origin,
+            # A statement of the web literature research decides the recommendation only
+            # when it is valid in the context of this data; otherwise it only warns
+            "binding": origin != "web" or str(c.get("applies") or "").lower() == "yes",
         }
         if kind == "defined_over":
             ranges = {}
@@ -344,13 +350,17 @@ class LiteratureCoherence:
         self._cache[m.model_id] = out
         return out
 
-    def conflicts(self, m: ModelResult) -> list[str]:
-        """Readable conflicts of ``m`` with the supplied literature ([] = coherent)."""
+    def conflicts(self, m: ModelResult, binding: bool = True) -> list[str]:
+        """
+        Readable conflicts of ``m`` with the literature ([] = coherent). ``binding=False``
+        gives the conflicts with web statements whose validity in this context is unknown:
+        they warn, and never remove an equation from the choice.
+        """
         by_id = self._by_id
         return [
             r["detail"] + (f" ({by_id[r['id']]['source']})" if by_id[r["id"]]["source"] else "")
             for r in self.evaluate(m)
-            if r["status"] == "conflict"
+            if r["status"] == "conflict" and by_id[r["id"]].get("binding", True) == binding
         ]
 
 

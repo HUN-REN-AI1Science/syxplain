@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { Checkbox } from 'primereact/checkbox';
 import { InputTextarea } from 'primereact/inputtextarea';
 import HelpButton from '@components/HelpButton';
 
@@ -13,12 +14,18 @@ export const MAX_LITERATURE_CHARS = 60000;
 interface LiteratureSectionProps {
   literatureText: string;
   onChange: (value: string) => void;
+  /** Web literature research; it can be turned off only when a text is given */
+  webLiterature: boolean;
+  onWebLiteratureChange: (value: boolean) => void;
 }
 
 export const LiteratureSection: React.FC<LiteratureSectionProps> = ({
   literatureText,
   onChange,
+  webLiterature,
+  onWebLiteratureChange,
 }) => {
+  const hasText = literatureText.trim().length > 0;
   const tooLong = literatureText.length > MAX_LITERATURE_CHARS;
   return (
     <div className="bg-surface p-6 rounded-xl border border-[var(--color-border)] shadow-sm">
@@ -33,7 +40,8 @@ export const LiteratureSection: React.FC<LiteratureSectionProps> = ({
               <h4>What is this for?</h4>
               <p>
                 Paste what is known about the problem: passages of papers, lab notes, published
-                equations. It replaces the web literature search.
+                equations. It is read in addition to the web literature research. Either kind of
+                research can be turned off, but one of them is always used.
               </p>
 
               <h4>How it is used</h4>
@@ -51,6 +59,11 @@ export const LiteratureSection: React.FC<LiteratureSectionProps> = ({
                   The recommended equation is chosen among those <strong>coherent</strong> with the
                   text. The equation with the lowest error is shown beside it when it conflicts with
                   the text, so you can judge which one to trust.
+                </li>
+                <li>
+                  Equations of the literature among your other variables are measured against your
+                  data. One that does not hold is a hint that the literature describes another
+                  context than yours.
                 </li>
               </ul>
             </HelpButton>
@@ -75,6 +88,20 @@ export const LiteratureSection: React.FC<LiteratureSectionProps> = ({
           {literatureText.length.toLocaleString()} / {MAX_LITERATURE_CHARS.toLocaleString()}{' '}
           characters{tooLong ? ': too long, shorten the text' : ''}
         </p>
+        <div className="flex items-center gap-2 mt-3">
+          <Checkbox
+            inputId="web-literature"
+            checked={webLiterature || !hasText}
+            disabled={!hasText}
+            onChange={(e) => onWebLiteratureChange(!!e.checked)}
+          />
+          <label htmlFor="web-literature" className="text-sm text-secondary">
+            Web literature research
+            {!hasText && (
+              <span className="text-muted"> (can be turned off when you give your own text)</span>
+            )}
+          </label>
+        </div>
       </div>
     </div>
   );
