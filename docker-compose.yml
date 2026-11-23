@@ -148,7 +148,7 @@ services:
         condition: service_healthy
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.1.4
+    image: quay.io/keycloak/keycloak:26.8.2
     container_name: syxplain-keycloak
     environment:
       - KC_DB=postgres
