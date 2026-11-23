@@ -57,6 +57,7 @@ from backend.services.discovery.fitting import (
     target_space,
     time_blocks,
 )
+from backend.services.discovery.orders import MAX_FROM_ORDERS, fit_orders
 from backend.services.discovery.profiling import (
     NEGLIGIBLE_SHARE,
     collinear_pairs,
@@ -359,6 +360,8 @@ class DiscoverySession:
         self.descriptions = dict(descriptions)
         self.series: dict[str, Any] | None = None
         self._series_ctx: SeriesContext | None = None
+        self._series_errors: np.ndarray | None = None
+        self.series_plot: str | None = None  # diagnostics of the automatic ARIMA fit (PNG)
         self._max_fit_rows = max_fit_rows
         keys = held = None
         if is_series(self.time_structure) and data.index.is_unique:
@@ -386,9 +389,10 @@ class DiscoverySession:
         ts = self.time_structure
         grid = SeriesGrid.build(data, ts)
         pos = data.index.get_indexer(frame.index)
-        keys, steps = grid.key[pos], grid.step[pos]
+        # Sorted by the time itself: unevenly spaced rows can share a step of the grid
+        keys, when = grid.key[pos], grid.time[pos]
         ok = keys >= 0
-        rows = np.flatnonzero(ok)[np.lexsort((steps[ok], keys[ok]))]
+        rows = np.flatnonzero(ok)[np.lexsort((when[ok], keys[ok]))]
         frame, keys, pos = frame.iloc[rows], keys[rows], pos[rows]
         held = (
             final_segment(keys, holdout_fraction)
@@ -408,6 +412,7 @@ class DiscoverySession:
             "group_column": ts.group_column,
             "n_series": len(np.unique(keys)),
             "time_step": grid.step_size,
+            "regular_spacing": bool(ts.regular),
             "lag_features": [],
             "padded_rows": 0,
             "feature_stage": {"status": "not_run"},
@@ -509,6 +514,39 @@ class DiscoverySession:
             "stats": list(STATS),
         }
 
+    def series_order_specs(self) -> list[FeatureSpec]:
+        """
+        The features named by the orders of an automatic ARIMA fit of the target (orders.py):
+        the target's earlier values (p, d) and the fit's earlier errors (q), nearest first.
+        """
+        ctx = self._series_ctx
+        if ctx is None:
+            raise ValueError("The data is not a long series")
+        train = ~ctx.held
+        when = ctx.grid.time[ctx.pos]
+        train_end = {
+            int(k): float(when[train & (ctx.keys == k)].max()) for k in np.unique(ctx.keys[train])
+        }
+        found = fit_orders(
+            ctx.grid,
+            self._raw_values(self.target_alias),
+            {a: self._raw_values(a) for a in self._series_sources()},
+            train_end,
+        )
+        self._series_errors = found.errors
+        self.series_plot = found.plot_b64
+        self.series["orders"] = found.record()
+        target = self.target_alias
+        p, d, q = found.order
+        why = f"named by the orders of the automatic ARIMA fit (p={p}, d={d}, q={q})"
+        named = [("lag", k) for k in found.target_lags] + [("error", k) for k in found.error_lags]
+        # Nearest first, a lag before an error at the same distance
+        named.sort(key=lambda item: (item[1], item[0] == "error"))
+        return [
+            FeatureSpec(source=target, kind=kind, steps=k, rationale=why, origin="orders")
+            for kind, k in named[:MAX_FROM_ORDERS]
+        ]
+
     def evaluate_feature_specs(
         self, specs: list[FeatureSpec]
     ) -> tuple[list[DerivedFeature], list[dict[str, str]], dict[str, Any]]:
@@ -526,6 +564,7 @@ class DiscoverySession:
             self.target_alias,
             set(self.features) | {self.target_alias},
             set(RESERVED_ALIASES),
+            self._series_errors,
         )
         frame = self._frame
         current = {a: frame[a].to_numpy(dtype=float) for a in [*sources, self.target_alias]}
@@ -970,6 +1009,8 @@ class DiscoverySession:
         }
         if self.series:
             out["lag_features"] = self.lag_features
+            if self.series.get("search_note"):
+                out["search_note"] = self.series["search_note"]
             out["residual_autocorrelation"] = self.series.get("residual_autocorrelation")
         return out
 

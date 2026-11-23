@@ -84,13 +84,24 @@ def generate_pysr_config(
 
 
 def propose_series_features(
-    project_description: str, series_context: str, feedback: str, lm: Any
+    project_description: str,
+    series_context: str,
+    feedback: str,
+    lm: Any,
+    sarimax: str = "",
+    plots: list[str] | None = None,
 ) -> str:
-    """Time-dependent feature specs for a long series (raw JSON text of a list)."""
+    """
+    Time-dependent feature specs for a long series and a note for the equation search (raw
+    JSON text: an object with ``specs`` and ``search_note``, or a list). ``sarimax`` is what an automatic ARIMA fit found (JSON, or empty),
+    ``plots`` its diagnostics as base64 PNGs.
+    """
     with dspy.settings.context(lm=lm):
         response = dspy.Predict(SeriesFeatureProposer)(
             project_description=project_description,
             series_context=series_context,
+            sarimax=sarimax,
+            plots=png_images(plots or []),
             feedback=feedback,
         )
     return clean_and_fix_json_string(response.specs_json)

@@ -85,6 +85,7 @@ These are budget ceilings; the agent stops earlier when it is done.
 | `DISCOVERY_AGENT_ENABLED` | `true` | `false` = fixed pipeline: one PySR search, no agent |
 | `DISCOVERY_AGENT_MODEL` | `OPENAI_MODEL_NAME` | Agent model for server keys |
 | `DISCOVERY_MAX_ITERS` | `40` | Agent reasoning steps |
+| `DISCOVERY_SERIES_FEATURES` | `orders` | Time-dependent features of a long series: `orders` (earlier values and errors of the target, named by the orders of an automatic ARIMA fit), `llm` (proposed and selected by an LLM) or `both` (the LLM is shown what the fit found and adds what it cannot) |
 | `DISCOVERY_MAX_PYSR_RUNS` | `6` | PySR searches per run, including the baseline |
 | `DISCOVERY_MAX_SINDY_RUNS` | `6` | SINDy rate-law searches per run |
 | `DISCOVERY_WALL_CLOCK_MIN` | `150` (dev: `30`) | Agent time budget in minutes |

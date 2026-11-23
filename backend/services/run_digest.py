@@ -58,6 +58,8 @@ _SERIES_FIELDS = (
     "padded_rows",
     "rows_without_history",
     "residual_autocorrelation",
+    "orders",
+    "search_note",
 )
 _LAG_FIELDS = ("feature", "description", "reason", "padded_rows")
 _AGENT_FIELDS = ("summary", "insights", "open_questions", "rejected_forms", "source", "error")

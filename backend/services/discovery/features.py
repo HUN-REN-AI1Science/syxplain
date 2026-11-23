@@ -6,8 +6,10 @@ and gets back ``FeatureSpec`` objects. This module checks every spec, computes i
 series grid (series.py) and measures what it adds, so the LLM's selection rests on numbers.
 LLMs propose; the code decides what is legal and how it is computed.
 
-Two kinds of feature:
+Three kinds of feature:
 - ``lag``: the source K grid steps earlier.
+- ``error``: the error of the automatic ARIMA fit of the target K steps earlier (orders.py:
+  measured minus predicted one step ahead). Only the orders of that fit add these.
 - ``period``: an aggregate (mean, sum, min, max, std) of the source over a period (a
   calendar year/quarter/month/week, a block of K steps, or a whole trajectory), repeated
   on every row of that period (``offset=0``) or taken from the previous period
@@ -41,6 +43,9 @@ MAX_SELECTED = 8  # derived features that may enter the data
 # Filled (padded) cells allowed per trajectory, as a share of its training rows: a safety
 # limit so that padding never stands in for a large part of a series
 MAX_PADDED_SHARE = 0.10
+# The same limit for the features named by the orders of the automatic ARIMA fit: a value
+# one season earlier (12 months) must stay possible on a series of a few years
+MAX_ORDERS_SHARE = 0.20
 N_EVIDENCE_FOLDS = 5
 
 Stat = Literal["mean", "sum", "min", "max", "std"]
@@ -55,18 +60,22 @@ class FeatureSpec(BaseModel):
     """One proposed time-dependent feature."""
 
     source: str = Field(description="alias of a continuous feature, or of the target")
-    kind: Literal["lag", "period"]
+    kind: Literal["lag", "period", "error"]
     steps: int | None = Field(default=None, description="lag: how many time steps earlier")
     period: Period | None = None
     block_steps: int | None = Field(default=None, description="period 'block': steps per block")
     stat: Stat = "mean"
     offset: Literal[0, 1] = Field(default=0, description="0: same period, 1: previous period")
     rationale: str = ""
+    # "orders": named by the orders of the automatic ARIMA fit, added without a selection
+    origin: Literal["proposed", "orders"] = "proposed"
 
     def label(self) -> str:
         """Compact text of the spec, for rejections."""
         if self.kind == "lag":
             return f"lag {self.steps} of {self.source}"
+        if self.kind == "error":
+            return f"error of the automatic ARIMA fit of {self.source}, {self.steps} steps earlier"
         block = f" of {self.block_steps} steps" if self.period == "block" else ""
         when = "previous" if self.offset else "same"
         return f"{self.stat} of {self.source} over the {when} {self.period}{block}"
@@ -105,6 +114,12 @@ class SeriesContext:
     @cached_property
     def max_padded_rows(self) -> int:
         return math.floor(MAX_PADDED_SHARE * self.train_rows_min)
+
+    def history_limit(self, spec: "FeatureSpec") -> int:
+        """Rows of a trajectory that may be filled or left out for this spec."""
+        if spec.origin == "orders":
+            return math.floor(MAX_ORDERS_SHARE * self.train_rows_min)
+        return self.max_padded_rows
 
     @cached_property
     def allowed_periods(self) -> list[str]:
@@ -146,7 +161,9 @@ class DerivedFeature:
             "source": s.source,
             "kind": s.kind,
         }
-        if s.kind == "lag":
+        if s.origin == "orders":
+            out["origin"] = "orders"
+        if s.kind in ("lag", "error"):
             out["steps"] = s.steps
         else:
             out |= {"period": s.period, "stat": s.stat, "offset": s.offset}
@@ -167,13 +184,17 @@ def validate_spec(
             f"unknown source {spec.source!r}: use a continuous feature alias or the target "
             "(the time and group columns are not sources)"
         )
-    if spec.kind == "lag":
+    if spec.kind == "error" and (spec.origin != "orders" or spec.source != target):
+        return (
+            "errors come from the automatic ARIMA fit of the target only; propose lags or periods"
+        )
+    if spec.kind in ("lag", "error"):
         if spec.steps is None or spec.steps < 1:
             return "a lag needs steps >= 1"
-        if spec.steps > ctx.max_padded_rows:
+        if spec.steps > ctx.history_limit(spec):
             return (
                 f"lag {spec.steps} needs more padded rows than allowed "
-                f"({ctx.max_padded_rows} per trajectory)"
+                f"({ctx.history_limit(spec)} per trajectory)"
             )
         return None
     if spec.period is None:
@@ -255,7 +276,7 @@ def _aggregate(
 
 def compute_spec(spec: FeatureSpec, ctx: SeriesContext, raw: np.ndarray) -> np.ndarray:
     """The spec's values on the analysed rows (NaN without history), before padding."""
-    if spec.kind == "lag":
+    if spec.kind in ("lag", "error"):
         return ctx.grid.lagged(raw, int(spec.steps))[ctx.pos]
     return _aggregate(spec, ctx, raw)[ctx.pos]
 
@@ -288,6 +309,8 @@ def _period_text(spec: FeatureSpec, ctx: SeriesContext) -> str:
 def alias_base(spec: FeatureSpec) -> str:
     if spec.kind == "lag":
         return f"{spec.source}_l{spec.steps}"
+    if spec.kind == "error":
+        return f"{spec.source}_err_l{spec.steps}"
     period = f"b{spec.block_steps}" if spec.period == "block" else spec.period
     prev = "_prev" if spec.offset else ""
     return f"{spec.source}_{spec.stat}{prev}_{period}"
@@ -303,6 +326,13 @@ def describe_spec(
         k = spec.steps
         name = f"{column} at t-{k}"
         text = f"{column} {k} step{'s' if k != 1 else ''} earlier {along}"
+    elif spec.kind == "error":
+        k = spec.steps
+        name = f"{column} error at t-{k}"
+        text = (
+            f"error of an automatic ARIMA fit of {column} (measured minus predicted one step "
+            f"ahead from earlier measurements) {k} step{'s' if k != 1 else ''} earlier {along}"
+        )
     else:
         period = _period_text(spec, ctx)
         if spec.offset:
@@ -331,32 +361,33 @@ def build_candidates(
     target: str,
     taken: set[str],
     reserved: set[str],
+    errors: np.ndarray | None = None,
 ) -> tuple[list[DerivedFeature], list[dict[str, str]]]:
     """
     Check and compute the specs. ``raw_of(alias)`` gives the uploaded rows' values of a
-    source. Returns the computed candidates and the rejected specs with their reasons.
+    source, ``errors`` the one-step errors of the automatic ARIMA fit (orders.py). Returns the computed candidates and the rejected specs with their reasons.
     """
     candidates: list[DerivedFeature] = []
     rejected: list[dict[str, str]] = []
     seen: set[str] = set()
     taken = set(taken)
     train = ~ctx.held
-    limit = ctx.max_padded_rows
     for spec in specs[:MAX_PROPOSED]:
+        limit = ctx.history_limit(spec)
         reason = validate_spec(spec, ctx, sources, target)
         if reason is None and alias_base(spec) in seen:
             reason = "duplicate of an earlier spec"
+        if reason is None and spec.kind == "error" and errors is None:
+            reason = "no automatic ARIMA fit of the target"
         if reason is None:
-            values = compute_spec(spec, ctx, raw_of(spec.source))
+            raw = errors if spec.kind == "error" else raw_of(spec.source)
+            values = compute_spec(spec, ctx, raw)
             values, padded, backfilled = pad_edge(values, ctx.keys)
             worst = int(ctx.per_trajectory(padded & train).max())
             if not np.all(np.isfinite(values)):
                 reason = "no value at all in some trajectory"
             elif worst > limit:
-                reason = (
-                    f"needs {worst} padded rows in a trajectory, more than the {limit} allowed "
-                    f"({MAX_PADDED_SHARE:.0%} of its training rows)"
-                )
+                reason = f"needs {worst} padded rows in a trajectory, more than the {limit} allowed"
             elif np.nanstd(values[train & ~padded]) == 0:
                 reason = "constant on the training rows"
         if reason is not None:
@@ -472,6 +503,7 @@ def feature_evidence(
             "feature": c.alias,
             "spec": c.spec.label(),
             "of_target": c.of_target,
+            "already_included": c.spec.origin == "orders",
             "gain": _r(gain, 3),
             "r_target": _r(_corr(v[rows], y[rows]), 3),
             "padded_share": _r(float(pad.mean()), 3),

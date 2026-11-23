@@ -380,6 +380,7 @@ def _series_context():
 
 
 def test_series_feature_stage_runs_before_the_baseline(orchestrator, monkeypatch):
+    monkeypatch.setenv("DISCOVERY_SERIES_FEATURES", "llm")  # the LLM's feature step
     specs = [{"source": "z", "kind": "lag", "steps": k} for k in (1, 2)]
     selection = {"selected": [{"feature": "z_l2", "reason": "delayed effect"}], "rationale": "r"}
     lm = DummyLM(
@@ -408,6 +409,8 @@ def test_series_feature_stage_runs_before_the_baseline(orchestrator, monkeypatch
 
 
 def test_series_feature_stage_failure_keeps_the_run_going(orchestrator, monkeypatch):
+    monkeypatch.setenv("DISCOVERY_SERIES_FEATURES", "llm")  # the LLM's feature step
+
     def broken_lm(ctx, name):
         raise RuntimeError("model not found")
 

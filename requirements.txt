@@ -10,6 +10,9 @@ pysindy>=2.0,<3
 matplotlib
 scipy
 scikit-learn
+# Automatic ARIMA orders of a long series (which earlier values and errors to offer)
+pmdarima>=2.1
+statsmodels
 shap
 sqlalchemy
 psycopg2-binary

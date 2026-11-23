@@ -169,7 +169,7 @@ written.
 | `equations` | The shortlist. Each has `equation`, `model_id`, `origin` (`symbolic`, `classic: ...`, `literature: ...`, `custom: ...`), `complexity`, `n_params`, `holdout_r2`, `holdout_n`, `cv_r2`, `cv_rmse`, `cv_se`, `verdict`, `reasons`, `variables`, `is_headline`, `agent_recommended`, `agent_why` |
 | `explanations` | The LLM's reading: one card per equation (`overview`, `term_explanations`, `citations`), `summary` (`key_drivers`, `findings`), `recommendation`, `coherence`. `{"error": ...}` when it could not be written |
 | `discovery.split` | Rows uploaded, complete and dropped; train and holdout sizes; `metric_basis` (`holdout`, or `cv` for data too small to hold rows out); `order` (`random` or `chronological`) |
-| `discovery.series` | Time series only, otherwise `null`: `time_column`, `group_column`, `n_series`, the derived `lag_features` with the reason for each, `feature_stage` |
+| `discovery.series` | Time series only, otherwise `null`: `time_column`, `group_column`, `n_series`, the derived `lag_features` with the reason for each (`origin: "orders"` marks those named by the automatic ARIMA fit), `orders` (p, d, q, the seasonal orders, the lags they name), `feature_stage` |
 | `discovery.selection` | Why the headline was chosen, and whether the agent's pick was overruled. With supplied literature also `coherence_first` (see above) |
 | `discovery.leaderboard` | Every fitted model with its scores, and with supplied literature its `literature_conflicts` |
 | `discovery.agent` | The agent's summary, insights, rejected forms and open questions |

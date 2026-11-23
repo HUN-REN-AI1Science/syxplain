@@ -983,6 +983,8 @@ class AnalysisOrchestrator:
             session,
             lambda: self._discovery_lm(context, model_name),
             self._discovery_project(context, session),
+            get_discovery_settings().series_features,
+            get_discovery_settings().shap_images,
         )
 
     def _review_fn(self, context: AnalysisContext, session: DiscoverySession, lm, steps: int):

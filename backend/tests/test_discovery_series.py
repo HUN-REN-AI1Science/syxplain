@@ -16,9 +16,10 @@ from backend.services.discovery.expression import (
 )
 from backend.services.discovery.feature_stage import run_series_feature_stage
 from backend.services.discovery.fitting import lag1_autocorrelation, time_blocks
-from backend.services.discovery.series import SeriesGrid, final_segment
+from backend.services.discovery.orders import lags_of
+from backend.services.discovery.series import SeriesGrid, final_segment, is_series
 from backend.services.discovery.session import DiscoverySession
-from backend.services.discovery.temporal import TimeStructure
+from backend.services.discovery.temporal import TimeStructure, detect_time_structure
 
 
 class FakeLauncher:
@@ -78,15 +79,22 @@ LAG_SPECS = [
 ]  # fmt: skip
 
 
-def _stage_lm(specs, selected):
-    """Scripted LLM: one proposal, then one selection."""
+def _stage_lm(specs, selected, note=None):
+    """Scripted LLM: one proposal (with a note for the search, if given), then one selection."""
     selection = {"selected": [{"feature": f, "reason": "test"} for f in selected], "rationale": "t"}
-    return DummyLM([{"specs_json": json.dumps(specs)}, {"selection_json": json.dumps(selection)}])
+    answer = specs if note is None else {"specs": specs, "search_note": note}
+    proposal = {"specs_json": json.dumps(answer)}
+    return DummyLM([proposal, {"selection_json": json.dumps(selection)}])
 
 
-def _staged(df, specs=LAG_SPECS, selected=("z_l2",), launcher=None, lm=None):
-    """A series session after the feature stage with a scripted LLM."""
+def _staged(df, specs=LAG_SPECS, selected=("z_l2",), launcher=None, lm=None, orders=False):
+    """
+    A series session after the feature stage with a scripted LLM. ``orders=False`` leaves
+    out the features named by the automatic ARIMA fit, to test the proposals alone.
+    """
     s = _session(df, launcher)
+    if not orders:
+        s.series_order_specs = lambda: []
     with dspy.settings.context(adapter=STRICT):
         asyncio.run(
             run_series_feature_stage(
@@ -103,6 +111,37 @@ def test_grid_lag_is_missing_across_a_gap():
     # 2004's previous year (2003) is missing: no value, never 2002's
     assert np.isnan(lag1[0]) and lag1[1] == 1.0 and lag1[2] == 2.0
     assert np.isnan(lag1[3]) and lag1[4] == 5.0
+
+
+def test_unevenly_spaced_series_are_series_and_lags_are_read_in_time():
+    # Measurements about every day, but never evenly: 0, 0.8, 2.1, 3.0, ...
+    rng = np.random.default_rng(0)
+    t = np.cumsum(rng.uniform(0.7, 1.3, 60))
+    df = pd.DataFrame({"day": t, "v": 2.0 * t})  # a line: any value read between is exact
+    ts = detect_time_structure(df, "v", {})
+    assert not ts.regular and is_series(ts)
+    grid = SeriesGrid.build(df, ts)
+    lag2 = grid.lagged(df["v"].to_numpy(float), 2)
+    known = np.isfinite(lag2)
+    assert known.sum() >= 50 and not known[0]
+    # The value two steps of time earlier, not the value two rows earlier
+    assert np.allclose(
+        lag2[known], 2.0 * (t[known] - 2 * grid.step_size), atol=0.25 * grid.step_size
+    )
+
+    # A long gap in the measurements gives a missing lag, never a value from far away
+    gap = df[(df["day"] < 20) | (df["day"] > 30)].reset_index(drop=True)
+    grid = SeriesGrid.build(gap, detect_time_structure(gap, "v", {}))
+    lag1 = grid.lagged(gap["v"].to_numpy(float), 1)
+    first_after = int(np.flatnonzero(gap["day"].to_numpy() > 30)[0])
+    assert np.isnan(lag1[first_after])
+
+    # Replicates at the same time are averaged, months of unequal length stay exact
+    months = pd.DataFrame({"date": pd.date_range("2020-01-01", periods=30, freq="MS")})
+    months["v"] = np.arange(30.0)
+    grid = SeriesGrid.build(months, TimeStructure("date", confidence="strong"))
+    assert grid.lagged(months["v"].to_numpy(), 3)[3:].tolist() == list(np.arange(27.0))
+    assert grid.dense(months["v"].to_numpy()).tolist() == list(np.arange(30.0))
 
 
 def test_time_blocks_and_final_segment_follow_each_trajectory():
@@ -199,6 +238,109 @@ def test_feature_stage_asks_again_after_malformed_json():
     s = _staged(_series(), lm=lm)
     assert s.series["feature_stage"]["status"] == "done"
     assert s.lag_features == ["z_l2"]
+
+
+def _moving_average_series(n=240, seed=3):
+    """y follows x and remembers the previous step's noise (a moving average of order 1)."""
+    rng = np.random.default_rng(seed)
+    x = np.linspace(0, 30, n) + rng.normal(0, 0.3, n)
+    e = rng.normal(0, 0.5, n)
+    y = 1.5 * x + e + 0.8 * np.concatenate([[0.0], e[:-1]])
+    return pd.DataFrame({"Year": 1700 + np.arange(n), "x": x, "y": y})
+
+
+def test_orders_name_the_lags_of_the_target_and_of_the_errors():
+    assert lags_of((2, 1, 1), (0, 0, 0, 1)) == ([1, 2, 3], [1])
+    assert lags_of((1, 1, 0), (0, 1, 0, 12)) == ([1, 2, 12, 13, 14], [])
+    assert lags_of((0, 0, 2), (0, 0, 1, 12)) == ([], [1, 2, 12])
+
+
+def test_feature_stage_adds_the_features_named_by_the_orders():
+    df = _moving_average_series()
+    s = _staged(df, specs=[], selected=(), orders=True)
+    orders = s.series["orders"]
+    assert orders["q"] >= 1 and orders["regressors"] == ["x"]
+    assert "y_err_l1" in s.lag_features
+    added = {f["feature"]: f for f in s.series["lag_features"]}
+    assert added["y_err_l1"]["origin"] == "orders" and "q=" in added["y_err_l1"]["reason"]
+    assert "measured minus predicted" in added["y_err_l1"]["description"]
+    assert s.series["feature_stage"]["from_orders"] == len(s.lag_features)
+    # The error one step earlier is the previous row's error, on training and holdout rows
+    errors = s._series_errors
+    assert np.isfinite(errors[1:]).all()
+    assert np.allclose(s.holdout["y_err_l1"].to_numpy(), errors[-len(s.holdout) - 1 : -1])
+    # ... and it explains what a line of the current features cannot
+    resid = s.train["y"] - 1.5 * s.train["x"]
+    assert np.corrcoef(resid, s.train["y_err_l1"])[0, 1] > 0.4
+
+
+def test_an_error_of_the_fit_never_contains_its_own_row():
+    df = _moving_average_series()
+    changed = df.copy()
+    changed.loc[len(df) - 1, "y"] += 50.0  # the last holdout row
+    a = _staged(df, specs=[], selected=(), orders=True)
+    b = _staged(changed, specs=[], selected=(), orders=True)
+    assert a.lag_features and a.lag_features == b.lag_features
+    for f in a.lag_features:
+        assert np.allclose(a.holdout[f], b.holdout[f])
+        assert np.allclose(a.train[f], b.train[f])
+
+
+def test_a_proposal_cannot_add_an_error_feature():
+    specs = [
+        {"source": "y", "kind": "error", "steps": 1, "origin": "orders"},
+        {"source": "z", "kind": "lag", "steps": 2},
+    ]
+    s = _staged(_series(), specs=specs)
+    assert s.lag_features == ["z_l2"]
+    assert any("automatic ARIMA fit" in r["reason"] for r in s.series["rejected"])
+
+
+def test_failed_orders_keep_the_proposed_features():
+    s = _session(_series())
+
+    def broken():
+        raise RuntimeError("no fit")
+
+    s.series_order_specs = broken
+    with dspy.settings.context(adapter=STRICT):
+        asyncio.run(
+            run_series_feature_stage(
+                s, lambda: _stage_lm(LAG_SPECS, ("z_l2",)), {"project_description": "t"}
+            )
+        )
+    assert s.series["orders"]["status"] == "failed"
+    assert s.lag_features == ["z_l2"]
+
+
+def test_the_source_of_the_features_can_be_chosen():
+    df = _moving_average_series()
+
+    def run(source):
+        s = _session(df)
+        made = []
+
+        def lm():
+            made.append(1)
+            specs = [{"source": "x", "kind": "lag", "steps": 1}]
+            return _stage_lm(specs, ("x_l1",), note="try a ratio of the last two values")
+
+        with dspy.settings.context(adapter=STRICT):
+            asyncio.run(run_series_feature_stage(s, lm, {"project_description": "t"}, source))
+        return s, made
+
+    only_llm, _ = run("llm")
+    assert only_llm.lag_features == ["x_l1"] and "orders" not in only_llm.series
+    only_orders, made = run("orders")
+    assert not made  # no LLM call at all
+    assert "y_err_l1" in only_orders.lag_features and "x_l1" not in only_orders.lag_features
+    both, _ = run("both")
+    assert set(both.lag_features) == set(only_orders.lag_features) | {"x_l1"}
+    # The LLM was shown what the fit leaves open, and its note reaches the agent
+    diagnostics = both.series["orders"]["diagnostics"]
+    assert {"memory_of_target", "memory_left_in_errors", "line_against_forest"} <= set(diagnostics)
+    assert both.series_plot and both.series["search_note"].startswith("try a ratio")
+    assert both.time_structure_brief()["search_note"] == both.series["search_note"]
 
 
 def test_missing_memory_is_diagnosed_and_the_lag_fixes_it():

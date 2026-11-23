@@ -526,6 +526,20 @@ export interface SeriesReport {
   n_series: number;
   time_step: number;
   lag_features: LagFeature[];
+  /** Orders of the automatic ARIMA fit that named earlier values and errors as features */
+  orders?: {
+    status?: 'failed';
+    message?: string;
+    p?: number;
+    d?: number;
+    q?: number;
+    season_steps?: number;
+    seasonal_p?: number;
+    seasonal_d?: number;
+    seasonal_q?: number;
+    target_lags?: number[];
+    error_lags?: number[];
+  };
   /** Rows whose derived values were filled by edge padding */
   padded_rows?: number;
   feature_stage?: {

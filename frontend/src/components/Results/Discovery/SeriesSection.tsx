@@ -34,11 +34,18 @@ export const SeriesSection: React.FC<SeriesSectionProps> = ({ series, targetColu
             Your rows form a series along {series.time_column}
             {series.group_column ? `, one per ${series.group_column}` : ''}. {targetColumn} may
             depend on earlier conditions as well as on the current ones. Before the first symbolic
-            regression search, an AI step proposed time-dependent features: lagged copies (X_l2 is X
-            two steps earlier) and period aggregates (X_mean_year is the mean of X over the same
-            calendar year, repeated on each of its rows; X_sum_prev_month the sum over the previous
-            month). Each was computed and measured by how much it lowers the cross-validated error
-            of a linear model, and a second AI step selected the useful ones as inputs.
+            regression search, an automatic ARIMA fit of {targetColumn} on the training rows names
+            time-dependent features: earlier values of {targetColumn} (X_l1 is X one step earlier)
+            and earlier errors of that fit (X_err_l1 is the measured value minus the value the fit
+            predicted, one step earlier). The ARIMA fit itself is not a candidate equation; the
+            symbolic regression decides which of these features an equation uses.
+          </p>
+          <p className="mt-2">
+            Depending on the server&apos;s setting, an AI step can add further features: lagged
+            copies of other columns and period aggregates (X_mean_year is the mean of X over the
+            same calendar year, repeated on each of its rows; X_sum_prev_month the sum over the
+            previous month). Each is computed and measured by how much it lowers the cross-validated
+            error of a linear model, and a second AI step selects the useful ones.
           </p>
           <p className="mt-2">
             Where a feature has no history yet (the first steps of a series), it takes the nearest
@@ -69,7 +76,7 @@ export const SeriesSection: React.FC<SeriesSectionProps> = ({ series, targetColu
             return (
               <li key={f.feature} className="text-secondary">
                 <code>{f.feature}</code>: {f.description}
-                {typeof gain === 'number' && (
+                {typeof gain === 'number' && gain > 0 && (
                   <span className="text-xs text-muted">
                     {' '}
                     · removes {Math.round(gain * 100)}% of the remaining CV error

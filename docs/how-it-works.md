@@ -89,12 +89,30 @@ data issues), which the explanation step reads.
 When the rows are measurements along time, the run detects the time structure. The
 agent can confirm or override the detection.
 
-**Long, regularly sampled series** (annual GPP, monthly groundwater levels) get a
-feature stage before the first PySR search. It covers the case where the target depends
-on earlier conditions as well as current ones:
-1. An LLM proposes time-dependent features: lags, and aggregates over earlier periods.
-2. Code computes them and measures how much each one explains.
-3. An LLM selects at most a handful.
+**Long series along time** (annual GPP, monthly groundwater levels; at least 20 points
+per series) get a feature stage before the first PySR search. The measurements need not be
+evenly spaced: the step is the typical distance between measurements, and a value "K steps
+earlier" is read between the two measurements around that moment when they are close
+together (a long gap gives a missing value). It covers the case where the target depends
+on earlier conditions as well as current ones.
+
+By default the features come from the orders of an automatic ARIMA search (`auto_arima`,
+with the current features as regressors) on the training rows:
+- orders p and d (and one season earlier for a seasonal fit) name the target's earlier
+  values;
+- order q names the earlier errors of that fit. An error is the measured value minus the
+  value predicted one step ahead from earlier measurements, so it is known before the row
+  it is used on.
+
+The ARIMA model itself is never a candidate equation; symbolic regression decides which
+of the features an equation uses.
+
+`DISCOVERY_SERIES_FEATURES` selects the source. With `llm`, an LLM proposes lags and
+aggregates over earlier periods of any column, code computes and measures them, and an LLM
+selects at most a handful. With `both`, the LLM is also shown the orders and what the fit
+leaves open (memory at longer distances, memory left in the errors, signs of nonlinear
+dynamics, as numbers and as a picture), adds features the fit cannot give, and writes a
+short note for the agent that steers the searches.
 
 For series, the holdout is **chronological**. A random split would let every held-out
 step sit between training steps, which measures interpolation rather than prediction

@@ -168,6 +168,11 @@ class DiscoverySettings:
     # Model for the agent (server keys); empty = OPENAI_MODEL_NAME
     model_name: str = field(default_factory=lambda: os.environ.get("DISCOVERY_AGENT_MODEL", ""))
     max_iters: float = field(default_factory=lambda: _budget_value("DISCOVERY_MAX_ITERS", 40))
+    # Time-dependent features of a long series: "llm" (proposed by the LLM), "orders" (named
+    # by the orders of an automatic ARIMA fit of the target) or "both"
+    series_features: str = field(
+        default_factory=lambda: os.environ.get("DISCOVERY_SERIES_FEATURES", "orders").lower()
+    )
     max_pysr_runs: float = field(
         default_factory=lambda: _budget_value("DISCOVERY_MAX_PYSR_RUNS", 6)
     )
