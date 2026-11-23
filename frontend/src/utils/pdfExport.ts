@@ -30,6 +30,7 @@ import {
 } from '@utils/discovery';
 import type {
   DiscoveryReport,
+  DiscoverySelection,
   DomainCoherence,
   EquationResults,
   Equation,
@@ -356,7 +357,7 @@ function renderRecommendation(
   recommendation: EquationResults['recommendation'] | undefined,
   equations: Equation[],
   targetVariable?: string | null,
-  headlineReason?: string
+  selection?: DiscoverySelection
 ): void {
   const { pdf, margin, contentWidth } = ctx;
 
@@ -370,7 +371,9 @@ function renderRecommendation(
     recommendation && recommendation.equation_id === recommendedId
       ? (recommendation.rationale ?? []).map((r) => w(r))
       : [];
-  const reasonText = headline ? w(headlineReasonText(headlineReason)) : '';
+  const reasonText = headline
+    ? w(headlineReasonText(selection?.headline_reason, selection?.coherence_first))
+    : '';
 
   const innerWidth = contentWidth - 10;
   const legend = recEq ? legendText(recEq) : '';
@@ -1205,13 +1208,7 @@ export async function generateResultsPdf(
 
   const headline = equations.find((eq) => eq.is_headline);
   const recommendedId = headline?.id ?? recommendation?.equation_id ?? 0;
-  renderRecommendation(
-    ctx,
-    recommendation,
-    equations,
-    targetVariable,
-    discovery?.selection?.headline_reason
-  );
+  renderRecommendation(ctx, recommendation, equations, targetVariable, discovery?.selection);
   if (discovery?.series) {
     renderSeries(ctx, discovery.series);
   }

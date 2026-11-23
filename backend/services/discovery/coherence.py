@@ -42,6 +42,7 @@ LABELS = {
     "supplied_literature": "Coherence with the context and the literature",
     "literature_relations": "The literature's relationships in the data",
     "web_statements": "Statements of the web literature research",
+    "web_statements_not_valid": "Statements that are not valid in this context",
     "named_laws": "Named laws",
     "parameters": "Parameters and domain of definition",
     "agent": "Agent's own conclusion",
@@ -295,33 +296,63 @@ def _reading_text(statements: list[dict[str, Any]] | None) -> str:
     return ""
 
 
-def _web_statements(session: DiscoverySession, h: ModelResult) -> list[dict[str, Any]]:
+def _web_statements(
+    session: DiscoverySession, h: ModelResult, info: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
     """
     The headline against the statements of the web literature research whose validity
-    in the context of this data is unknown: they warn, and never decide the selection.
+    in the context of this data is unknown: they never remove an equation, and decide
+    only between equally good equations (``selection.py``, step 7).
     """
+    decided = bool(((info or {}).get("unknown_validity") or {}).get("decided"))
     literature = literature_coherence.build(session)
-    if literature is None or not any(not c.get("binding", True) for c in literature.constraints):
+    if literature is None:
         return []
-    open_conflicts = literature.conflicts(h, binding=False)
+    out = []
+    if literature.has("no"):
+        broken = literature.conflicts(h, "no")
+        out.append(
+            _check(
+                "web_statements_not_valid",
+                "pass",
+                "statements of the web literature research that are not valid in the context "
+                "of this data are only shown, they do not decide"
+                + (
+                    "; the headline does not agree with: " + "; ".join(broken[:3])
+                    if broken
+                    else "; the headline agrees with them"
+                ),
+                len(broken),
+            )
+        )
+    if not literature.has("unknown"):
+        return out
+    open_conflicts = literature.conflicts(h, "unknown")
     if open_conflicts:
         return [
+            *out,
             _check(
                 "web_statements",
                 "warn",
                 "the headline conflicts with statements of the web literature research that "
                 "may not be valid in the context of this data: " + "; ".join(open_conflicts[:3]),
                 len(open_conflicts),
-            )
+            ),
         ]
     return [
+        *out,
         _check(
             "web_statements",
             "pass",
             "the headline agrees with the statements of the web literature research whose "
-            "validity in the context of this data is unknown",
+            "validity in the context of this data is unknown"
+            + (
+                "; these statements decided between equations that are equally good on the metric"
+                if decided
+                else ""
+            ),
             0,
-        )
+        ),
     ]
 
 
@@ -535,7 +566,7 @@ def coherence_report(
         _shap(shap_agreement),
         *_known_laws(h, headline_relations, _fitted_known_laws(session), selection.headline_reason),
         *_supplied_literature(selection, statements),
-        *_web_statements(session, h),
+        *_web_statements(session, h, info),
         *_literature_relations(session, h),
         _parameters(h),
         _agent(h, agent),

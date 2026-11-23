@@ -282,7 +282,7 @@ class LiteratureLaws(dspy.Signature):
        - "monotone": the target rises or falls with a variable (others fixed), without reversing; "direction" is "increasing" or "decreasing".
        - "limit": what a quantity tends to when a variable becomes large or goes to zero; "toward" is "large" or "zero", "quantity" is a Python expression in the word target and variable names, "expect" is "finite_positive", "zero" or "infinite".
        - "defined_over": "ranges" of variable values in which such systems are operated.
-       Every constraint has "source" (the citation link), a one-sentence "reason", "conditions" (the conditions under which the source states it: a regime, an operating window, a material, a scale), and "applies": "yes" only when those conditions clearly match the system that the feature dictionary describes, otherwise "unknown".
+       Every constraint has "source" (the citation link), a one-sentence "reason", "conditions" (the conditions under which the source states it: a regime, an operating window, a material, a scale), and "applies": "yes" only when those conditions clearly match the system that the feature dictionary describes, "no" only when they clearly do not match it (another regime, material or scale than the feature dictionary describes), otherwise "unknown".
        An equation may also carry "conditions", in the same sense.
     5. Do not include explanations, extra text, or commentary — only the json.
 

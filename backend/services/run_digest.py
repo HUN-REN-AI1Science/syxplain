@@ -132,7 +132,9 @@ def _literature_digest(literature: Any) -> dict[str, Any] | None:
     }
     if constraints:
         out["constraints"] = [
-            _pick(c, ("id", "type", "text", "source", "conditions", "origin", "binding"))
+            _pick(
+                c, ("id", "type", "text", "source", "conditions", "origin", "validity", "binding")
+            )
             for c in constraints
         ]
     relations = [r for r in literature.get("relations") or [] if isinstance(r, dict)]

@@ -23,6 +23,10 @@ Protocol (deterministic, no LLM):
    the literature; which of the two it is, is the reader's judgement. If no discovered
    model is coherent, a coherent supplied law is recommended; if there is none either,
    the metric alone decides and the reason says so.
+7. Statements of unknown validity (web literature research, conditions that may not match
+   this data) never remove a model. They decide only inside the tie of step 4: when some
+   tied models agree with all of them and others do not, the choice is made among those
+   that agree, and the selection records that these statements decided.
 """
 
 from collections.abc import Callable
@@ -208,13 +212,15 @@ def select(
     reference: Callable[[ModelResult], bool] | None = None,
     extra_guard: Callable[[ModelResult], str | None] | None = None,
     conflicts: Callable[[ModelResult], list[str]] | None = None,
+    open_conflicts: Callable[[ModelResult], list[str]] | None = None,
 ) -> Selection:
     """
     The headline among the candidates; models matching ``reference`` (known laws) are
     for comparison and become the headline only when no candidate is usable.
     ``extra_guard`` vetoes models on a problem-specific test (rate-law simulation).
     ``conflicts`` lists a model's conflicts with the literature; when given,
-    the selection is coherence first (step 6 of the protocol).
+    the selection is coherence first (step 6 of the protocol). ``open_conflicts`` lists
+    its conflicts with statements whose validity for this data is unknown (step 7).
     """
     if reference is not None:
         selection = select(
@@ -222,10 +228,15 @@ def select(
             recommended_ids,
             extra_guard=extra_guard,
             conflicts=conflicts,
+            open_conflicts=open_conflicts,
         )
         if selection.headline is None:
             selection = select(
-                models, recommended_ids, extra_guard=extra_guard, conflicts=conflicts
+                models,
+                recommended_ids,
+                extra_guard=extra_guard,
+                conflicts=conflicts,
+                open_conflicts=open_conflicts,
             )
             selection.headline_is_reference = selection.headline is not None
         elif selection.coherence_first and selection.coherence_first["n_coherent"] == 0:
@@ -258,37 +269,59 @@ def select(
     threshold = best.cv_rmse + (best.cv_se or 0.0)
     tied = [m for m in rank_pool if m.cv_rmse <= threshold]
 
-    headline, reason = None, ""
-    for mid in recommended_ids:
-        m = by_id.get(mid)
-        if m is None:
-            rejected.append({"model_id": mid, "reason": "unknown model"})
-            continue
-        why = guard(m, strict=strict, extra=extra_guard)
-        if why:
-            rejected.append({"model_id": mid, "reason": why})
-        elif coherent and conflict_of.get(mid):
-            rejected.append(
-                {
-                    "model_id": mid,
-                    "reason": "conflicts with the context or the literature: "
-                    + "; ".join(conflict_of[mid][:3]),
-                }
-            )
-        elif m.cv_rmse > threshold:
-            rejected.append(
-                {
-                    "model_id": mid,
-                    "reason": f"CV RMSE {m.cv_rmse:.4g} is more than one standard error worse "
-                    f"than the best ({best.model_id}, {best.cv_rmse:.4g})",
-                }
-            )
-        else:
-            headline, reason = m, "agent_pick_within_1se"
-            break
-    if headline is None:
-        headline = min(tied, key=_simplicity)
-        reason = "simplest_within_1se" if headline is not best else "best_cv"
+    def choose(tied: list[ModelResult], open_of: dict[str, list[str]]):
+        """The headline among ``tied``: the agent's first usable pick, else the simplest."""
+        rejected: list[dict[str, str]] = []
+        for mid in recommended_ids:
+            m = by_id.get(mid)
+            if m is None:
+                rejected.append({"model_id": mid, "reason": "unknown model"})
+                continue
+            why = guard(m, strict=strict, extra=extra_guard)
+            if why:
+                rejected.append({"model_id": mid, "reason": why})
+            elif coherent and conflict_of.get(mid):
+                rejected.append(
+                    {
+                        "model_id": mid,
+                        "reason": "conflicts with the context or the literature: "
+                        + "; ".join(conflict_of[mid][:3]),
+                    }
+                )
+            elif m.cv_rmse > threshold:
+                rejected.append(
+                    {
+                        "model_id": mid,
+                        "reason": f"CV RMSE {m.cv_rmse:.4g} is more than one standard error "
+                        f"worse than the best ({best.model_id}, {best.cv_rmse:.4g})",
+                    }
+                )
+            elif open_of.get(mid):
+                rejected.append(
+                    {
+                        "model_id": mid,
+                        "reason": "an equally good equation agrees with statements of the "
+                        "literature whose validity for this data is unknown, and this one "
+                        "does not: " + "; ".join(open_of[mid][:3]),
+                    }
+                )
+            else:
+                return m, "agent_pick_within_1se", rejected
+        m = min(tied, key=_simplicity)
+        return m, "simplest_within_1se" if m is not best else "best_cv", rejected
+
+    # Statements of unknown validity decide only inside the tie, and only when some tied
+    # model agrees with all of them
+    open_of = {m.model_id: open_conflicts(m) for m in tied} if open_conflicts else {}
+    agreeing = [m for m in tied if not open_of.get(m.model_id)]
+    open_decided = False
+    if open_of and agreeing and len(agreeing) < len(tied):
+        plain_headline = choose(tied, {})[0]
+        headline, reason, more = choose(agreeing, open_of)
+        open_decided = headline is not plain_headline
+    else:
+        headline, reason, more = choose(tied, {})
+    rejected.extend(more)
     if not strict:
         reason += "_weak"  # nothing passed the strict guards
 
@@ -307,6 +340,12 @@ def select(
             best if coherent else None,
             lambda m: conflict_of[m.model_id],
         )
+        coherence_first["unknown_validity"] = {
+            "decided": open_decided,
+            "n_tied": len(tied),
+            "n_tied_agreeing": len(agreeing),
+            "headline_conflicts": open_conflicts(headline) if open_conflicts else [],
+        }
 
     shortlist = [headline]
     for m in [challenger, best, *sorted(tied, key=_simplicity)]:

@@ -94,8 +94,10 @@ literature on the problem: papers, notes, reports. When it is given:
 - it is read by the main LLM, without a web search, in addition to the web literature
   research. `web_literature: false` turns the web research off; it is accepted only
   together with `literature_text`, because one kind of literature research is always used;
-- statements of the web literature research decide the recommendation only when they are
-  marked valid for the context of your data (`binding`); the others only warn;
+- every statement of the web literature research carries its `validity` for the context
+  of your data: `yes` removes equations that break it, `unknown` decides only between
+  equations that are equally good on the metric (within one standard error;
+  `selection.coherence_first.unknown_validity`), `no` is only shown;
 - equations of the literature among the other variables are measured against the data
   (`discovery.literature.relations`: as published and with constants fitted again), and a
   law for the target implied by a holding relationship is fitted too (`composed_from`);

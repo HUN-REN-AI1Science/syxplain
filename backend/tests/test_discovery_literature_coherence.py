@@ -167,6 +167,74 @@ def test_gap_is_measured_from_the_headline():
     assert sel.coherence_first["gap_se"] == pytest.approx(2.5)
 
 
+def test_statements_of_unknown_validity_decide_only_between_equally_good_equations():
+    def model(model_id: str, cv_rmse: float, complexity: int) -> ModelResult:
+        return ModelResult(
+            model_id=model_id,
+            kind="custom",
+            name=model_id,
+            label=model_id,
+            expression="x",
+            features=["x"],
+            complexity=complexity,
+            cv_r2=0.9,
+            cv_rmse=cv_rmse,
+            cv_se=0.1,
+            verdict="good",
+        )
+
+    best, tied, far = model("M1", 1.0, 3), model("M2", 1.05, 9), model("M3", 1.5, 5)
+
+    def coherent(m):
+        return []
+
+    def breaks(*models):
+        return lambda m: ["not true that it rises (web)"] if m in models else []
+
+    # The agent's pick and the simplest both break the statement; an equally good one agrees
+    sel = select(
+        [best, tied, far], [best.model_id], conflicts=coherent, open_conflicts=breaks(best)
+    )
+    open_info = sel.coherence_first["unknown_validity"]
+    assert sel.headline is tied and open_info["decided"]
+    assert open_info["n_tied"] == 2 and open_info["n_tied_agreeing"] == 1
+    assert open_info["headline_conflicts"] == []
+    assert "validity for this data is unknown" in sel.agent_pick_rejected[0]["reason"]
+
+    # The statement never removes an equation: the only one that agrees is not equally good
+    sel = select([best, tied, far], [], conflicts=coherent, open_conflicts=breaks(best, tied))
+    open_info = sel.coherence_first["unknown_validity"]
+    assert sel.headline is best and not open_info["decided"]
+    assert open_info["headline_conflicts"]
+
+    # Every equally good equation agrees: nothing is decided by the statement
+    sel = select([best, tied, far], [], conflicts=coherent, open_conflicts=breaks(far))
+    assert sel.headline is best and not sel.coherence_first["unknown_validity"]["decided"]
+
+    # A statement that is valid in the context still comes first
+    sel = select([best, tied, far], [], conflicts=breaks(tied), open_conflicts=breaks(best))
+    assert sel.headline is best and not sel.coherence_first["unknown_validity"]["decided"]
+
+
+def test_a_web_statement_carries_its_validity_in_the_context():
+    s = _interaction_session()
+    with_noise = s.fit_custom("k*x1*x2 + c*exp(x3) + d*noise", label="uses noise")
+    s.final_scoring()
+    raw = [
+        {"type": "not_a_cause", "variable": "noise", "origin": "web", "applies": applies}
+        for applies in ("yes", "no", "unknown", "")
+    ]
+    kept, _ = normalize_constraints(s, [*raw, {"type": "not_a_cause", "variable": "noise"}])
+    assert [c["validity"] for c in kept] == ["yes", "no", "unknown", "unknown", "yes"]
+    assert [c["binding"] for c in kept] == [True, False, False, False, True]
+
+    lit = LiteratureCoherence(s, kept[1:3])
+    assert lit.has("no") and lit.has("unknown") and not lit.has("yes")
+    assert lit.conflicts(with_noise) == []  # neither removes the equation
+    assert len(lit.conflicts(with_noise, "unknown")) == 1
+    assert len(lit.conflicts(with_noise, "no")) == 1
+
+
 def test_limit_on_a_single_variable_equation_and_the_target_by_its_alias():
     rng = np.random.default_rng(0)
     x = rng.uniform(0.5, 10, 300)

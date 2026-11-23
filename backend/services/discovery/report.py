@@ -214,8 +214,10 @@ def build_results(
         recommended,
         reference=is_known,
         # only statements that are valid in this context decide; the others warn
-        conflicts=literature.conflicts
-        if literature and any(c.get("binding", True) for c in literature.constraints)
+        conflicts=literature.conflicts if literature and literature.has("yes") else None,
+        # statements of unknown validity decide only between equally good equations
+        open_conflicts=(lambda m: literature.conflicts(m, "unknown"))
+        if literature and literature.has("unknown")
         else None,
     )
 

@@ -78,6 +78,9 @@ def normalize_constraints(
             continue
         kind = str(c.get("type") or "")
         origin = "web" if c.get("origin") == "web" else "supplied"
+        applies = str(c.get("applies") or "").lower()
+        # Supplied literature is the user's own context; a web statement states its validity
+        validity = "yes" if origin != "web" else applies if applies in ("yes", "no") else "unknown"
         base = {
             "id": f"K{len(kept) + 1}",
             "type": kind,
@@ -85,9 +88,10 @@ def normalize_constraints(
             "reason": str(c.get("reason") or "").strip()[:400],
             "conditions": str(c.get("conditions") or "").strip()[:300],
             "origin": origin,
-            # A statement of the web literature research decides the recommendation only
-            # when it is valid in the context of this data; otherwise it only warns
-            "binding": origin != "web" or str(c.get("applies") or "").lower() == "yes",
+            # "yes": valid in the context of this data, removes equations that break it.
+            # "unknown": decides only between equally good equations. "no": only shown.
+            "validity": validity,
+            "binding": validity == "yes",
         }
         if kind == "defined_over":
             ranges = {}
@@ -414,17 +418,20 @@ class LiteratureCoherence:
         self._cache[m.model_id] = out
         return out
 
-    def conflicts(self, m: ModelResult, binding: bool = True) -> list[str]:
+    def has(self, validity: str) -> bool:
+        return any(c.get("validity", "yes") == validity for c in self.constraints)
+
+    def conflicts(self, m: ModelResult, validity: str = "yes") -> list[str]:
         """
-        Readable conflicts of ``m`` with the literature ([] = coherent). ``binding=False``
-        gives the conflicts with web statements whose validity in this context is unknown:
-        they warn, and never remove an equation from the choice.
+        Readable conflicts of ``m`` with the statements of that validity ([] = coherent).
+        "yes" (the default) are the statements that are valid in the context of this data;
+        "unknown" decide only between equally good equations; "no" are only shown.
         """
         by_id = self._by_id
         return [
             r["detail"] + (f" ({by_id[r['id']]['source']})" if by_id[r["id"]]["source"] else "")
             for r in self.evaluate(m)
-            if r["status"] == "conflict" and by_id[r["id"]].get("binding", True) == binding
+            if r["status"] == "conflict" and by_id[r["id"]].get("validity", "yes") == validity
         ]
 
 
@@ -460,6 +467,7 @@ def realistic_range_constraint(session: DiscoverySession) -> dict[str, Any]:
         "reason": str(stated.get("reason") or "").strip()[:300],
         "conditions": "",
         "origin": "context",
+        "validity": "yes",
         "binding": True,
         "low": low,
         "high": high,

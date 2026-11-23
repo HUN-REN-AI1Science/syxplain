@@ -353,6 +353,13 @@ export interface CoherenceFirst {
   gap_se: number | null;
   challenger_conflicts: string[];
   headline_conflicts: string[];
+  /** Statements whose validity for this data is unknown: they decide only between equally good equations */
+  unknown_validity?: {
+    decided: boolean;
+    n_tied: number;
+    n_tied_agreeing: number;
+    headline_conflicts: string[];
+  };
 }
 
 export interface DiscoverySelection {

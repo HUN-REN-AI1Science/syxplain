@@ -426,7 +426,9 @@ const EquationResultsView: React.FC<EquationResultsViewProps> = ({
     recommendation?.agrees_with_headline === false &&
     recommendation.equation_id > 0 &&
     recommendation.equation_id !== headline.id;
-  const headlineReason = headline ? headlineReasonText(selection?.headline_reason) : '';
+  const headlineReason = headline
+    ? headlineReasonText(selection?.headline_reason, selection?.coherence_first)
+    : '';
   const others = equations.filter((eq) => eq.id !== recommendedId);
   const tiedIds = tiedModelIds(equations, selection);
 

@@ -5,6 +5,7 @@
 import type {
   CoherenceStatus,
   DiscoveryReport,
+  CoherenceFirst,
   DiscoverySelection,
   DomainCoherence,
   KnownLawRelation,
@@ -106,7 +107,10 @@ export const splitModelIds = (text: string): string[] =>
   text.split(new RegExp(MODEL_ID_PATTERN.source, 'g'));
 
 /** Human wording for the selector's headline reason */
-export const headlineReasonText = (reason: string | null | undefined): string => {
+export const headlineReasonText = (
+  reason: string | null | undefined,
+  info?: CoherenceFirst | null
+): string => {
   if (!reason) return '';
   if (reason === 'coherent_literature_law')
     return 'A law from your literature: no discovered equation is coherent with it.';
@@ -118,7 +122,7 @@ export const headlineReasonText = (reason: string | null | undefined): string =>
   let base = reason.replace(/^coherent_/, '').replace(/_no_coherent_model$/, '');
   const weak = base.endsWith('_weak');
   base = base.replace(/_weak$/, '');
-  const among = coherent ? ' among the equations coherent with your literature' : '';
+  const among = coherent ? ' among the equations coherent with the context and the literature' : '';
   let text: string;
   switch (base) {
     case 'agent_pick_within_1se':
@@ -135,8 +139,16 @@ export const headlineReasonText = (reason: string | null | undefined): string =>
       return '';
   }
   if (noCoherent)
-    text += ' No equation is coherent with your literature, so the score alone decided.';
+    text +=
+      ' No equation is coherent with the context and the literature, so the score alone decided.';
   if (weak) text += ' No model passed the strict quality checks.';
+  // Statements of the literature whose validity for this data is unknown
+  const open = info?.unknown_validity;
+  if (open?.decided)
+    text += ` Statements of the literature whose validity for this data is unknown decided between the ${open.n_tied} equally good equations: ${open.n_tied_agreeing} of them agree with these statements.`;
+  const broken = asArray(open?.headline_conflicts);
+  if (broken.length > 0)
+    text += ` It does not agree with ${broken.length === 1 ? 'a statement' : `${broken.length} statements`} of the literature whose validity for this data is unknown: ${broken.slice(0, 3).join('; ')}.`;
   return text;
 };
 
