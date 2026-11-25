@@ -4,7 +4,7 @@ version = "1.0.0"
 description = "AI-scientist agent for interpretable equation discovery: LLM reasoning + PySR symbolic regression, related to known scientific laws"
 readme = "README.md"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE.txt"]
 requires-python = ">=3.10,<3.11"
 authors = [{ name = "HUN-REN AI1Science" }]
 keywords = ["symbolic-regression", "pysr", "llm", "scientific-discovery", "ai-scientist", "equation-discovery"]
@@ -14,7 +14,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 # Runtime dependencies are pinned for the Docker images in requirements.txt (backend) and
-# slurm_worker/requirements.txt (compute worker).
+# src/slurm_worker/requirements.txt (compute worker).
 dependencies = []
 
 [project.urls]
@@ -26,14 +26,14 @@ Issues = "https://github.com/HUN-REN-AI1Science/syxplain/issues"
 dev = ["pytest>=8", "ruff>=0.6", "pre-commit>=3"]
 
 [tool.pytest.ini_options]
-testpaths = ["backend/tests"]
-pythonpath = ["."]
+testpaths = ["src/backend/tests"]
+pythonpath = ["src"]
 
 [tool.ruff]
 target-version = "py310"
 line-length = 100
-include = ["backend/**/*.py", "slurm_worker/**/*.py", "dev/**/*.py", "examples/**/*.py", "*.py"]
-exclude = [".git", ".venv", "__pycache__", "backend/alembic/versions/*.py"]
+include = ["src/backend/**/*.py", "src/slurm_worker/**/*.py", "dev/**/*.py", "examples/**/*.py", "*.py"]
+exclude = [".git", ".venv", "__pycache__", "src/backend/alembic/versions/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "RUF"]

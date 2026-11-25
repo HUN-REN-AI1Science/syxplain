@@ -18,12 +18,12 @@ GitHub Container Registry. It runs only in the canonical repository. To build yo
 images:
 
 ```bash
-docker build -t <registry>/syxplain-backend:latest -f backend/Dockerfile .
+docker build -t <registry>/syxplain-backend:latest -f src/backend/Dockerfile .
 docker build -t <registry>/syxplain-frontend:latest \
   --build-arg VITE_KEYCLOAK_URL=https://syxplain.example.org/keycloak \
   --build-arg VITE_KEYCLOAK_REALM=syxplain \
   --build-arg VITE_KEYCLOAK_CLIENT_ID=syxplain-frontend \
-  frontend
+  src/frontend
 ```
 
 The Keycloak URL is compiled into the frontend, so build it for your domain. Point

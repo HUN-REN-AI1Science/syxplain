@@ -276,14 +276,14 @@ Prices for OpenAI models are built in. Other models are priced with `LLM_PRICES_
 
 | Step | Code |
 |---|---|
-| Pipeline orchestration | `backend/services/orchestrator_service.py` |
-| Agent and its tools | `backend/services/discovery/agent.py`, `tools.py`, `session.py` |
-| Fitting, CV, diagnostics | `backend/services/discovery/fitting.py`, `selection.py` |
-| Profiling and SHAP | `backend/services/discovery/profiling.py` |
+| Pipeline orchestration | `src/backend/services/orchestrator_service.py` |
+| Agent and its tools | `src/backend/services/discovery/agent.py`, `tools.py`, `session.py` |
+| Fitting, CV, diagnostics | `src/backend/services/discovery/fitting.py`, `selection.py` |
+| Profiling and SHAP | `src/backend/services/discovery/profiling.py` |
 | Time series, features, SINDy | `series.py`, `features.py`, `feature_stage.py`, `temporal.py`, `sindy.py` |
 | Known laws | `families.py`, `literature.py`, `relate.py` |
 | Context and literature statements, relationships | `literature_coherence.py`, `formula_space.py` |
 | Orders of the automatic ARIMA fit | `orders.py` |
 | Headline, coherence | `report.py`, `coherence.py` |
-| LLM prompts (DSPy signatures) | `backend/infrastructure/llm/signatures.py` |
-| PySR worker | `slurm_worker/tasks/pysr_task.py` |
+| LLM prompts (DSPy signatures) | `src/backend/infrastructure/llm/signatures.py` |
+| PySR worker | `src/slurm_worker/tasks/pysr_task.py` |

@@ -1,7 +1,7 @@
 # Syxplain
 
 [![CI](https://github.com/HUN-REN-AI1Science/syxplain/actions/workflows/ci.yml/badge.svg)](https://github.com/HUN-REN-AI1Science/syxplain/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.txt)
 [![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/release/python-3100/)
 [![Node.js 24](https://img.shields.io/badge/node.js-24-339933.svg)](https://nodejs.org/)
 
@@ -140,7 +140,7 @@ connects with, and the LibreChat configuration.
 |---|---|
 | Backend tests | `uv run --with-requirements requirements.txt pytest` |
 | Python lint/format | `ruff check . && ruff format --check .` |
-| Frontend lint/types/format | `cd frontend && npm run lint && npm run typecheck && npm run format:check` |
+| Frontend lint/types/format | `cd src/frontend && npm run lint && npm run typecheck && npm run format:check` |
 | Classic-law screen, no services | `python dev/run_worker_task.py --task classic --example 1` |
 | Agent on an example (needs an LLM key; no cluster, DB or auth) | `python dev/try_discovery_agent.py --example 1` |
 
@@ -150,9 +150,10 @@ setup, conventions and pull requests.
 ### Repository layout
 
 ```
-backend/        FastAPI app: API, orchestration, discovery agent (services/discovery/)
-frontend/       React + TypeScript web app (Vite, PrimeReact, Tailwind)
-slurm_worker/   Compute worker (PySR) and its Singularity image definitions
+src/
+  backend/      FastAPI app: API, orchestration, discovery agent (services/discovery/)
+  frontend/     React + TypeScript web app (Vite, PrimeReact, Tailwind)
+  slurm_worker/ Compute worker (PySR) and its Singularity image definitions
 keycloak/       Realm export and login/email theme
 dev/            Local Slurm emulator, dev login and technical-client scripts, local runners
 docs/           How it works, configuration, deployment, Slurm, API, MCP
@@ -183,7 +184,7 @@ in [SECURITY.md](SECURITY.md).
 
 ## License and acknowledgements
 
-Syxplain is released under the [MIT License](LICENSE).
+Syxplain is released under the [MIT License](LICENSE.txt).
 
 It is developed by the AI1Science group of the HUN-REN Hungarian Research Network and
 Óbuda University.

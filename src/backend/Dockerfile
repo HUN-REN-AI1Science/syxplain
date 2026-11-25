@@ -31,7 +31,7 @@ RUN useradd -m -u 1000 appuser \
 COPY --from=builder /install /usr/local
 
 # Only the backend package is needed at runtime (alembic + progress config live in it)
-COPY --chown=appuser:appuser backend/ /app/backend/
+COPY --chown=appuser:appuser src/backend/ /app/backend/
 
 USER appuser
 

@@ -7,7 +7,7 @@ result.
 
 This README is for people working on the worker code. To connect Syxplain to a cluster
 (configuration, building and deploying the image, network requirements, troubleshooting)
-see [docs/slurm.md](../docs/slurm.md).
+see [docs/slurm.md](../../docs/slurm.md).
 
 Current version: `__version__` in [`__init__.py`](__init__.py) (3.2.0). The `Version`
 labels in the `.def` files are not authoritative.
@@ -116,11 +116,11 @@ the job script:
 | `JULIA_CPU_TARGET` | broad x86_64 target | Matches the build-time precompilation, so the native code runs on different node CPUs. |
 
 The backend-side settings (`SLURM_*`, `WORKER_CALLBACK_*`) are listed in
-[docs/slurm.md](../docs/slurm.md#configuration-reference).
+[docs/slurm.md](../../docs/slurm.md#configuration-reference).
 
 ## Backend endpoints
 
-All under `CALLBACK_URL` (the backend's `/api/internal` router, `backend/api/routers/progress.py`).
+All under `CALLBACK_URL` (the backend's `/api/internal` router, `src/backend/api/routers/progress.py`).
 Every request carries `X-Worker-Token: <CALLBACK_TOKEN>`; the backend answers `401` if
 the token is wrong or not configured.
 
@@ -216,7 +216,7 @@ completion.
 1. Create a module in `tasks/`:
 
    ```python
-   # slurm_worker/tasks/my_task.py
+   # src/slurm_worker/tasks/my_task.py
    from slurm_worker.tasks.base import Task, TaskResult
    from slurm_worker.tasks.registry import TaskRegistry
 
@@ -243,7 +243,7 @@ completion.
    ```
 
 3. Submit it from the backend with a `TaskInput(task_type="my_task", ...)`
-   (`backend/infrastructure/slurm/models.py`). The task type may contain only letters, digits,
+   (`src/backend/infrastructure/slurm/models.py`). The task type may contain only letters, digits,
    `_` and `-` (the backend checks this before putting it into the job script).
 
 4. Add any new dependency to `requirements.txt` and to the `pip install` line in
@@ -259,7 +259,7 @@ directory, so code changes apply to the next job. PySR searches are faked with
 least-squares fits unless you start it with `LOCAL_PYSR=true docker compose up --build`,
 which builds Julia and PySR into the emulator image and runs this package's real PySR
 task (`SLURM_CPUS`, default 4, sets the CPUs per search). Details in
-[docs/slurm.md](../docs/slurm.md#local-development-without-a-cluster).
+[docs/slurm.md](../../docs/slurm.md#local-development-without-a-cluster).
 
 **One task directly.** `dev/run_worker_task.py` (run from the repository root) runs a
 task on an example data set, with progress printed to the console and no backend, Slurm
@@ -270,7 +270,7 @@ or database:
 # engine; needs the backend's Python dependencies, not Julia
 python dev/run_worker_task.py --task classic --example 1
 
-# the PySR task; needs PySR and Julia (pip install -r slurm_worker/requirements.txt)
+# the PySR task; needs PySR and Julia (pip install -r src/slurm_worker/requirements.txt)
 python dev/run_worker_task.py --task pysr --example 1 --niterations 5 --output results.json
 
 # PySR on log(target), seeded with a guess
@@ -323,4 +323,4 @@ singularity exec syxplain-worker.sif python -c "import slurm_worker; print(slurm
 
 Where to build, build space, deploying the image to a running installation and keeping
 backend and worker versions in step are covered in
-[docs/slurm.md](../docs/slurm.md#building-the-worker-image).
+[docs/slurm.md](../../docs/slurm.md#building-the-worker-image).

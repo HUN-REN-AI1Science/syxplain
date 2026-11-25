@@ -46,6 +46,9 @@ All notable changes to this project are documented here. The format follows
   relationships and the coherence-first selection reason.
 
 ### Changed
+- Repository layout: the source code is now under `src/` (`src/backend/`, `src/frontend/`,
+  `src/slurm_worker/`), and the licence file is `LICENSE.txt`. The container images, the
+  Python package names and the commands inside the containers are unchanged.
 - A long series no longer has to be evenly spaced: the step is the typical distance
   between measurements, and an earlier value is read between the two measurements around
   that moment.

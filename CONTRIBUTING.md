@@ -23,7 +23,7 @@ uv run --with-requirements requirements.txt pytest       # backend tests
 uv run ruff check . && uv run ruff format --check .      # lint + format (ruff from uv.lock)
 
 # Frontend (Node 24)
-cd frontend && npm ci
+cd src/frontend && npm ci
 npm run lint && npm run typecheck && npm run format:check
 ```
 
@@ -36,7 +36,7 @@ The backend tests need no database, cluster, Keycloak or LLM key: LLM calls use 
 ## Principles for the discovery pipeline
 
 These keep the results trustworthy. Please keep them in mind when changing anything in
-`backend/services/discovery/`:
+`src/backend/services/discovery/`:
 
 1. Code decides, the LLM proposes and explains. Model selection, metrics, relations
    to known laws and the coherence verdict are computed with fixed rules. LLMs choose
@@ -57,14 +57,14 @@ These keep the results trustworthy. Please keep them in mind when changing anyth
 
 ### Backend (Python 3.10, FastAPI)
 
-- Routers live in `backend/api/routers/`, schemas in `backend/schemas/`, and business
-  logic in `backend/services/`.
+- Routers live in `src/backend/api/routers/`, schemas in `src/backend/schemas/`, and business
+  logic in `src/backend/services/`.
 - New LLM capabilities:
-  - Add a DSPy signature to `backend/infrastructure/llm/signatures.py`. Its docstring is
+  - Add a DSPy signature to `src/backend/infrastructure/llm/signatures.py`. Its docstring is
     the prompt.
-  - Call it from a service with a model from `backend/infrastructure/llm/client.py`.
+  - Call it from a service with a model from `src/backend/infrastructure/llm/client.py`.
   - Token usage and cost inside a run are counted automatically.
-- New settings go in `backend/core/config.py`. Also document them in `.env.example` and
+- New settings go in `src/backend/core/config.py`. Also document them in `.env.example` and
   `docs/configuration.md`, and pass them through `docker-compose.prod.yml`.
 - Ruff settings are in `pyproject.toml`. Line length is 100.
 
@@ -75,13 +75,13 @@ These keep the results trustworthy. Please keep them in mind when changing anyth
 - Feature components go in `src/components/<Feature>/`, and shared ones in
   `src/components/common/`.
 - Fetch data in pages or hooks, not in presentational components.
-- Prettier settings are in `frontend/.prettierrc`.
+- Prettier settings are in `src/frontend/.prettierrc`.
 
-### Compute worker (`slurm_worker/`)
+### Compute worker (`src/slurm_worker/`)
 
 - The worker runs on Python 3.11 in the Singularity image. PySR is pinned (`pysr==2.7.0`)
   because the backend relies on its equation format.
-- Bump the version in `slurm_worker/__init__.py` when the worker changes, and see
+- Bump the version in `src/slurm_worker/__init__.py` when the worker changes, and see
   [docs/slurm.md](docs/slurm.md) for rebuilding the image.
 
 ## Pull requests
@@ -89,7 +89,7 @@ These keep the results trustworthy. Please keep them in mind when changing anyth
 - Keep each pull request focused on one change, with a description of what and why.
 - Add or update tests for behaviour changes.
 - Update the docs (`README.md`, `docs/`, `.env.example`, the in-app help in
-  `frontend/src/pages/HelpView.tsx`) when behaviour or settings change.
+  `src/frontend/src/pages/HelpView.tsx`) when behaviour or settings change.
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
   (`feat:`, `fix:`, `docs:`, `chore:`, with an optional scope such as `fix(worker):`).
 - CI must pass: backend lint and tests, frontend lint, types and build.
@@ -97,4 +97,4 @@ These keep the results trustworthy. Please keep them in mind when changing anyth
 ## License
 
 By contributing, you agree that your contributions are licensed under the
-[MIT License](LICENSE).
+[MIT License](LICENSE.txt).

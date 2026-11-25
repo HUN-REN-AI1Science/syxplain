@@ -32,9 +32,9 @@ from typing import Any
 
 import pandas as pd
 
-# Repository root (slurm_worker package and data/ live there)
+# Repository root (data/ lives there; the backend and slurm_worker packages are in src/)
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from slurm_worker.reporting.reporter import ProgressObserver
 from slurm_worker.tasks import TaskRegistry

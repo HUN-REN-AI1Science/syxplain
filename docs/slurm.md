@@ -9,7 +9,7 @@ classic fits, SHAP, the LLM agent) runs inside the backend.
 This guide is for the person connecting a Syxplain installation to their own cluster.
 It covers the requirements, the configuration, building and deploying the worker image,
 checking the setup, and troubleshooting. For the worker code itself (package layout, CLI,
-adding task types) see [slurm_worker/README.md](../slurm_worker/README.md).
+adding task types) see [src/slurm_worker/README.md](../src/slurm_worker/README.md).
 
 You do not need a cluster to develop or try Syxplain: the development compose file starts
 a local Slurm emulator by default. See [Local development without a cluster](#local-development-without-a-cluster).
@@ -173,7 +173,7 @@ reports; if not, the mount is an empty local directory and nothing else changes.
 ## Configuration reference
 
 All settings are environment variables read by the backend (`SlurmSettings` and
-`ComputeSettings` in `backend/core/config.py`). Defaults are the code defaults;
+`ComputeSettings` in `src/backend/core/config.py`). Defaults are the code defaults;
 `docker-compose.prod.yml` uses `SLURM_CPUS=8` and `SLURM_MEMORY=16G` when they are unset.
 
 ### Cluster connection
@@ -217,7 +217,7 @@ jobs' scripts on the cluster can read them, so use a dedicated random secret.
 
 ## Building the worker image
 
-The worker image is defined in `slurm_worker/syxplain-worker.def`. It contains Python 3.11,
+The worker image is defined in `src/slurm_worker/syxplain-worker.def`. It contains Python 3.11,
 Julia 1.11.5, PySR 2.7.0 (pinned, because the backend relies on its `guesses` argument and
 equation format) and the worker code under `/app/slurm_worker`. The build installs and
 precompiles every Julia package PySR uses into the image and fails if that does not work.
@@ -227,11 +227,11 @@ environment points juliacall at the baked Julia project (`PYTHON_JULIACALL_EXE`,
 `PYTHON_JULIACALL_PROJECT`).
 
 Build on the login node (or any x86_64 machine with Singularity or Apptainer), from the
-`slurm_worker` directory:
+`src/slurm_worker` directory:
 
 ```bash
 # copy the worker sources to the cluster
-rsync -a --exclude __pycache__ slurm_worker/ \
+rsync -a --exclude __pycache__ src/slurm_worker/ \
     <cluster-user>@slurm.example.org:/storage/<cluster-user>/syxplain/build/src/
 
 ssh <cluster-user>@slurm.example.org
@@ -280,7 +280,7 @@ singularity build --fakeroot \
 
 ### Version
 
-The worker version is `__version__` in `slurm_worker/__init__.py` (currently 3.2.0). The
+The worker version is `__version__` in `src/slurm_worker/__init__.py` (currently 3.2.0). The
 `Version` label in the `.def` files is not kept in sync and may show an older number.
 To see which version an image contains:
 
@@ -309,7 +309,7 @@ To prepare that environment on the cluster:
 # on the login node; the environment must be visible on the compute nodes
 conda create -n syxplain_worker python=3.11
 conda activate syxplain_worker
-pip install -r slurm_worker/requirements.txt
+pip install -r src/slurm_worker/requirements.txt
 
 # install and precompile PySR's Julia packages once, here rather than in the first job
 python -c "import pysr; pysr.load_all_packages()"
@@ -369,7 +369,7 @@ compute nodes cannot reach the backend, and every search will fail.
 
 ### 4. A worker job without the backend
 
-`slurm_worker/example-job.sbatch` runs the image
+`src/slurm_worker/example-job.sbatch` runs the image
 on a local input file (`--input`), so it works without callbacks. In the copy on the
 cluster, adjust its `#SBATCH --output`/`--error` paths (the directory must exist) and its
 `--bind` option to your storage, then write a small input:
@@ -489,7 +489,7 @@ backend's defaults point at it (`SLURM_API_URL=http://mock-slurm:6820`,
 - Task types other than `pysr` always run for real, as `python -m slurm_worker`
   subprocesses.
 
-The repository's `slurm_worker/` directory is mounted into the emulator, so worker code
+The repository's `src/slurm_worker/` directory is mounted into the emulator, so worker code
 changes apply to the next job without a rebuild.
 
 To run a worker task directly, without the backend or any Slurm:
@@ -499,7 +499,7 @@ python dev/run_worker_task.py --task classic --example 1   # classic-law screen,
 python dev/run_worker_task.py --task pysr --example 1 --niterations 5   # needs Julia and PySR installed
 ```
 
-See [slurm_worker/README.md](../slurm_worker/README.md#running-locally) for more options.
+See [src/slurm_worker/README.md](../src/slurm_worker/README.md#running-locally) for more options.
 
 ## Backend on a laptop, compute on a remote cluster
 
@@ -618,9 +618,9 @@ Common reasons: `Resources` (no free nodes), `Priority` (other jobs first),
 
 #### `No module named slurm_worker` (conda mode)
 
-- The package is `slurm_worker`. Copy the `slurm_worker/` directory into
-  `SLURM_STAGING_DIR` (the job's working directory) or put it on the environment's
-  `PYTHONPATH`.
+- The package is `slurm_worker`. Copy the `src/slurm_worker/` directory, under the name
+  `slurm_worker`, into `SLURM_STAGING_DIR` (the job's working directory) or put it on the
+  environment's `PYTHONPATH`.
 
 #### `No module named pysr`, `requests`, ... (conda mode)
 
@@ -670,7 +670,7 @@ Common reasons: `Resources` (no free nodes), `Priority` (other jobs first),
 
 - [configuration.md](configuration.md) and [deployment.md](deployment.md): all other
   settings, and deploying the rest of Syxplain
-- [slurm_worker/README.md](../slurm_worker/README.md): the worker package, task input and
+- [src/slurm_worker/README.md](../src/slurm_worker/README.md): the worker package, task input and
   output, adding task types
 - [Slurm documentation](https://slurm.schedmd.com/documentation.html),
   [slurmrestd](https://slurm.schedmd.com/rest.html),

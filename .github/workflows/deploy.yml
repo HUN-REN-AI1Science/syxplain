@@ -53,8 +53,8 @@ jobs:
       - name: Build and push frontend Docker image
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
+          context: ./src/frontend
+          file: ./src/frontend/Dockerfile
           push: true
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
@@ -101,7 +101,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./backend/Dockerfile
+          file: ./src/backend/Dockerfile
           push: true
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend

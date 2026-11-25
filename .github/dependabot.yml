@@ -9,7 +9,7 @@ updates:
         patterns: ['*']
 
   - package-ecosystem: npm
-    directory: /frontend
+    directory: /src/frontend
     schedule:
       interval: monthly
     groups:
@@ -22,6 +22,6 @@ updates:
       interval: monthly
 
   - package-ecosystem: docker
-    directories: [/backend, /frontend]
+    directories: [/src/backend, /src/frontend]
     schedule:
       interval: monthly

@@ -3,7 +3,7 @@
 .gitignore
 
 # Frontend
-frontend/
+src/frontend/
 node_modules/
 
 # Data and Outputs
@@ -49,4 +49,4 @@ docs/
 .ruff_cache/
 .pytest_cache/
 *.ipynb
-backend/tests/
+src/backend/tests/

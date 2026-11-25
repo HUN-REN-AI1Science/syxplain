@@ -37,7 +37,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: src/backend/Dockerfile
     container_name: syxplain-backend
     ports:
       - "8000:8000"
@@ -89,7 +89,7 @@ services:
       # CORS (allow all for local dev)
       - CORS_ORIGINS=*
     volumes:
-      - ./backend:/app/backend  # Mount source for hot reload
+      - ./src/backend:/app/backend  # Mount source for hot reload
       - ./data:/app/data
       - ./outputs:/app/outputs
     command: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
@@ -118,7 +118,7 @@ services:
     ports:
       - "127.0.0.1:6820:6820"
     volumes:
-      - ./slurm_worker:/app/slurm_worker
+      - ./src/slurm_worker:/app/slurm_worker
       - ./dev:/app/dev
     environment:
       - PYTHONPATH=/app
@@ -140,7 +140,7 @@ services:
       - VITE_KEYCLOAK_REALM=syxplain
       - VITE_KEYCLOAK_CLIENT_ID=syxplain-frontend
     volumes:
-      - ./frontend:/app
+      - ./src/frontend:/app
       - frontend_node_modules:/app/node_modules  # Persist node_modules
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     depends_on:

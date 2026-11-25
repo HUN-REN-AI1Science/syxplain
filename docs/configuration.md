@@ -1,6 +1,6 @@
 # Configuration
 
-All settings are environment variables, read by `backend/core/config.py`. Put them in
+All settings are environment variables, read by `src/backend/core/config.py`. Put them in
 `.env` at the repository root; [`.env.example`](../.env.example) lists them with
 comments.
 
