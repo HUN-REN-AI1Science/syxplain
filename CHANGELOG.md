@@ -72,6 +72,8 @@ All notable changes to this project are documented here. The format follows
   at startup.
 - The API reported `analysis_type: "quick"` for new runs and documented result fields and
   artifacts that no longer exist.
+- A run opened by its link (`/?run=<id>`) or after a page reload stayed on "Loading
+  results..." forever, because the progress stream was opened before the login token was set.
 
 ## [1.0.0] - 2026-11
 

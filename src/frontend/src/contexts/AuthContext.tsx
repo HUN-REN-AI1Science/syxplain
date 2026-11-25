@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useRef,
+} from 'react';
 import { useAuth as useOidcAuth } from 'react-oidc-context';
 import { permissionsService, setTokenGetter, setSignOutHandler } from '@services/api';
 
@@ -53,8 +61,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [oidc.user]);
 
-  // Update the token getter whenever the oidc user changes (token refresh)
-  useEffect(() => {
+  // Update the token getter whenever the oidc user changes (session restore, token refresh).
+  // A layout effect, because the effects of child components run before the effects of this
+  // provider: a child mounted in the same commit as the restored user (a run opened by URL)
+  // would otherwise still read the previous getter, which has no token.
+  useLayoutEffect(() => {
     setTokenGetter(() => oidc.user?.access_token ?? null);
   }, [oidc.user]);
 
