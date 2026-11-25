@@ -5,16 +5,19 @@ type: software
 authors:
   - name: "HUN-REN AI1Science"
 version: 1.0.0
-date-released: "2026-11-03"
+date-released: "2026-11-25"
+doi: 10.5281/zenodo.24528561
 license: MIT
 repository-code: "https://github.com/HUN-REN-AI1Science/syxplain"
 url: "https://syxplain.ai1science.net"
 abstract: >-
   Syxplain finds interpretable equations in tabular and time-series data. An LLM agent
-  steers PySR symbolic-regression searches while exploring blind to known laws; the
-  discoveries are then related to classic and published laws, the headline model is
-  selected by cross-validation and a holdout, and a coherence verdict checks it against
-  the noise ceiling, SHAP effects and known laws.
+  steers PySR and SINDy searches while exploring blind to known laws. Numerical code
+  fits every candidate and chooses the recommended equation coherence first: equations
+  that conflict with the scientific context of the data or with statements of the
+  literature are excluded, and the rest are ranked by cross-validated error. The
+  recommendation is scored once on a holdout and checked against the noise ceiling,
+  SHAP effects and known laws.
 keywords:
   - symbolic regression
   - equation discovery
