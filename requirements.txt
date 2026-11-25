@@ -6,12 +6,12 @@ pandas
 numpy
 sympy
 # SINDy rate-law searches (discovery agent, run in the backend)
-pysindy>=2.0,<3
+pysindy>=2.1.0,<3
 matplotlib
 scipy
 scikit-learn
 # Automatic ARIMA orders of a long series (which earlier values and errors to offer)
-pmdarima>=2.1
+pmdarima>=2.1.1
 statsmodels
 shap
 sqlalchemy
@@ -19,7 +19,7 @@ psycopg2-binary
 alembic
 pyjwt[crypto]
 # Pinned: the discovery agent extends dspy.ReAct internals
-dspy>=3.4,<3.5
+dspy>=3.5.0,<3.6
 # The MCP endpoint (src/backend/api/mcp, the 2.x MCPServer API); LiteLLM also imports it
 # for every Responses API call with tools (literature web search)
 mcp>=2.3,<3
