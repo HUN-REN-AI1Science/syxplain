@@ -1,10 +1,14 @@
 {
-  "project_description": "This project investigates a biologically plausible universal formula describing how neuronal wire length relates to connectivity metrics across species. It seeks to capture the fundamental scaling laws between structural (Length) and network (Synapses, Degree, LocalDensity) properties of neurons in diverse connectomes.",
-  "target_variable": "Length",
+  "project_description": "Thin-film coating line in a laboratory. Each row is one sample: a film is deposited in a plasma-assisted reactor under the listed process settings, its deposition rate is monitored in situ, the film is then annealed, and its thickness, grain size, sheet resistance and optical transmittance are measured. We want an interpretable equation for the film deposition rate measured in situ by a quartz crystal monitor (nm/min), to choose settings for new samples.",
+  "target_variable": "rate",
   "features": {
-    "Synapses": "Total number of synaptic connections per neuron, representing overall communication capacity.",
-    "Degree": "Number of unique neuronal partners, reflecting connectivity in the network.",
-    "LocalDensity": "Local synaptic density measure, indicating clustering or spatial compactness of connections."
-  }
+    "precursor": "Partial pressure of the precursor gas in the reactor, a process setting (Pa)",
+    "temp": "Substrate temperature during deposition, a process setting (deg C)",
+    "flow": "Carrier gas flow rate, a process setting (L/min)",
+    "power": "Plasma power during deposition, a process setting (W)",
+    "dep_time": "Duration of the deposition, a process setting (min)",
+    "humidity": "Relative humidity of the laboratory air during the run (%)",
+    "chamber_pressure": "Total chamber pressure read by the gauge during deposition (Pa)"
+  },
+  "literature_text": "# Pseudo-papers for the synthetic coating line\n\nFICTITIOUS. These notes are invented for a demonstration of Syxplain. They describe no\nreal study, and the \"coating line\" does not exist. They play the role of the published literature on this\ntype of coating line.\n\n## Note 1. Operating window of the reactor type\nThe reactor type is operated at precursor partial pressures of 0.1 to 20 Pa, substrate\ntemperatures of 100 to 300 deg C and carrier flows of 0 to 6 L/min. The chamber is sealed\nduring deposition, so the humidity of the laboratory air does not reach the film. Films\nare produced from 5 to 1000 nm, with grain sizes of 5 to 100 nm.\n\n## Note 2. Chamber pressure\nThe gauge reads the base pressure plus the partial pressures of precursor and carrier gas:\n    chamber_pressure = 15 + precursor + 4 * flow        (Pa)\nIt is therefore determined by the two settings and is not an independent cause.\n\n## Note 3. Precursor supply\nGrowth is limited by adsorption of the precursor: the rate rises with the precursor\npartial pressure and saturates (Langmuir form, precursor / (K + precursor)); it does not\nfall again at high pressure. Carrier gas dilutes the precursor at the surface, so the\nrate decreases with flow. In the operating window the growth is\nlimited by mass transport, so the rate does not depend on the substrate temperature.\n\n## Note 4. Steady-state growth\nAfter a short start-up the rate is constant during a run, so\n    thickness = rate * dep_time                          (nm)\nand the rate does not depend on how long the deposition lasts.\n\n## Note 5. Grain growth\nGrains coarsen with film thickness and with the annealing temperature, and are refined\nby plasma power:\n    grain_size = g0 + a * sqrt(thickness) + b * anneal_temp - c * power      (nm)\nAnnealing changes the film through its grain structure.\n\n## Note 6. Electrical transport\nThe sheet resistance is the resistivity divided by the thickness,\n    sheet_resistance = 10 * rho / thickness              (ohm/sq; rho in micro-ohm cm)\nGrain boundaries scatter electrons, so rho rises as grains get smaller and tends to a\nfinite bulk value for large grains.\n\n## Note 7. Optics\nThe transmittance at 550 nm decays exponentially with thickness (Beer-Lambert law)."
 }
-

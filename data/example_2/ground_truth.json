@@ -1,0 +1,157 @@
+{
+ "seed": 20261119,
+ "rows": 200,
+ "r2_true_value_vs_measured": {
+  "chamber_pressure": 0.9258382454512538,
+  "rate": 0.9469750036719276,
+  "thickness": 0.9965649691419172,
+  "grain_size": 0.9445513105506893,
+  "sheet_resistance": 0.9974854023529834,
+  "transmittance": 0.9974668327335735
+ },
+ "reference_fits_on_measured_columns": {
+  "rate": {
+   "planted": [
+    0.9477385345884954,
+    [
+     0.05876,
+     2.354,
+     0.3936
+    ]
+   ],
+   "without_flow": [
+    0.9049699147155351,
+    [
+     0.05597,
+     2.908
+    ]
+   ],
+   "prior_langmuir_only": [
+    0.5503484695061411,
+    [
+     11.34,
+     3.08
+    ]
+   ]
+  },
+  "thickness": {
+   "planted_identity_no_fit": [
+    0.9808457647920762,
+    []
+   ]
+  },
+  "grain_size": {
+   "planted": [
+    0.9463663150463669,
+    [
+     -1.08,
+     0.8998,
+     0.04816,
+     0.01641
+    ]
+   ],
+   "prior_anneal_only": [
+    0.4705016314187088,
+    [
+     9.041,
+     0.04953
+    ]
+   ]
+  },
+  "sheet_resistance": {
+   "planted_fit_in_log": [
+    {
+     "r2_raw": 0.9818593943496439,
+     "r2_log": 0.9922413642304895
+    },
+    [
+     222.1,
+     7416.0
+    ]
+   ],
+   "prior_constant_resistivity_fit_in_log": [
+    {
+     "r2_raw": 0.9455598301716581,
+     "r2_log": 0.9602682269747203
+    },
+    [
+     519.3
+    ]
+   ]
+  },
+  "transmittance": {
+   "planted": [
+    0.9953088939542436,
+    [
+     91.93,
+     0.003999
+    ]
+   ]
+  },
+  "chamber_pressure": {
+   "planted": [
+    0.9258838240789539,
+    [
+     14.99,
+     0.9934,
+     4.012
+    ]
+   ]
+  }
+ },
+ "ranges": {
+  "precursor": [
+   1.14,
+   11.91
+  ],
+  "temp": [
+   150.3,
+   249.2
+  ],
+  "flow": [
+   0.52,
+   3.98
+  ],
+  "power": [
+   51.0,
+   299.0
+  ],
+  "dep_time": [
+   5.2,
+   59.0
+  ],
+  "humidity": [
+   20.5,
+   59.9
+  ],
+  "chamber_pressure": [
+   16.7,
+   43.0
+  ],
+  "rate": [
+   1.82,
+   12.09
+  ],
+  "thickness": [
+   13.7,
+   659.8
+  ],
+  "anneal_temp": [
+   200.0,
+   500.0
+  ],
+  "grain_size": [
+   12.8,
+   42.9
+  ],
+  "sheet_resistance": [
+   0.7393,
+   48.16
+  ],
+  "transmittance": [
+   8.2,
+   86.9
+  ]
+ },
+ "corr_precursor_chamber_pressure": 0.5740072881368294
+}

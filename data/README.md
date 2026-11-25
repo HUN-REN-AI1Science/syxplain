@@ -15,10 +15,12 @@ python examples/api_client.py data/example_1
 
 | Folder | Domain | Rows | Target | Kind |
 |---|---|---|---|---|
-| `example_1` | Soil chemistry | 119 | AL-soluble phosphate (`al_p2o5`) | Cross-sectional, with a categorical soil type |
-| `example_2` | Materials (perovskite solar cells) | 33 | Power conversion efficiency | Small cross-sectional dataset (cross-validation only) |
-| `example_3` | Neuroscience (connectomes) | 100 to 129k per species | Neuron wire length (`Length`) | Scaling law across eight species |
-| `example_4` | Ecology (grassland) | 249 (yearly) | Gross primary production (`GPP`) | Long time series |
+| `example_1` | Soil chemistry | 119 | AL-soluble phosphate (`al_p2o5`) | Measured, cross-sectional, with a categorical soil type |
+| `example_2` | Thin-film coating line (synthetic) | 200 | Sheet resistance (`sheet_resistance`) | Known laws, with supplied literature that agrees with the data |
+| `example_3` | Thin-film coating line (synthetic) | 200 | Deposition rate (`rate`) | The same data, with supplied literature that contains one false sentence |
+| `example_4` | Hydrology (river) | 606 (daily) | Water temperature (`water_temp`) | Measured time series |
+
+These are the four use cases of the Syxplain paper and its supplementary material.
 
 ## example_1: Soil phosphorus
 
@@ -27,41 +29,35 @@ Mehlich-3), plus organic matter, lime content, pH (KCl) and USDA soil type code.
 task is to predict AL-P2O5 from the other properties. The soil type is an integer code
 and is treated as a category.
 
-## example_2: Perovskite solar cells
+## example_2: Coating line, sheet resistance
 
-Perovskite solar cells fabricated under different environmental conditions. The
-conditions are temperature, absolute humidity and solvent partial pressure during spin
-coating and thermal annealing. The task is to relate them to power conversion
-efficiency. With only 33 rows, models are scored by cross-validation alone.
+A fictitious thin-film coating line: 200 samples with process settings (precursor
+pressure, temperature, flow, plasma power, deposition time, annealing temperature),
+laboratory humidity, and measured chamber pressure, deposition rate, thickness, grain
+size, sheet resistance and transmittance. The data are synthetic. `generate.py` holds
+the laws they were generated from and the noise of each column, and `ground_truth.json`
+the fits of those laws on the generated columns. Run from another directory,
+`generate.py` writes its files there.
 
-## example_3: Neuron wire length across connectomes
+`pseudo_papers.md` is invented literature for this system (seven short notes). Its text
+is also in `problem_description.json` as `literature_text`, so the run reads it as
+supplied literature and chooses the recommended equation among the equations that are
+coherent with it. The notes agree with the laws of the data.
 
-Per-neuron aggregates of wire length, synapse count, degree (number of partners) and
-local density. They come from public connectome reconstructions of eight species and
-brain regions:
-- *C. elegans*
-- *Drosophila* larva
-- adult *Drosophila* brain (FlyWire, Hemibrain)
-- *Drosophila* ventral nerve cord (MANC)
-- zebrafish
-- mouse visual cortex (MICrONS MM3)
-- human cortex (H01)
+## example_3: Coating line, deposition rate
 
-The question is whether one formula relates structure (length) to connectivity across
-species. `problem_description.json` refers to `Celegans_AggregatedData.csv`; the other
-files are there for comparison.
+The same data with the deposition rate as target. The supplied literature
+(`pseudo_papers_false_sentence.md`, also in `problem_description.json`) contains one false
+sentence: that the rate does not depend on the substrate temperature. The run shows
+what Syxplain reports when the data contradict the literature.
 
-## example_4: Grassland productivity
+## example_4: River water temperature
 
-Yearly gross primary production of a grassland from 1772 onwards, together with:
-- atmospheric CO₂
-- climate indices (AMO, NAO)
-- drought and moisture indicators (PDSI, soil moisture index, vapour pressure deficit
-  and its variability)
-- spring-summer mean temperature
-
-The rows form a long, regular time series. The run detects it, considers lagged and
-period features, and holds out the last years chronologically.
+Daily mean water temperature, air temperature and discharge of the Neversink River near
+Claryville, New York, from 2023-12-01 to 2025-07-28 (US Geological Survey, site 01435000;
+public domain, some values provisional). The rows form one time series. The run detects
+it, adds earlier values of the target as features, and holds out the last days
+chronologically.
 
 ## Using your own data
 

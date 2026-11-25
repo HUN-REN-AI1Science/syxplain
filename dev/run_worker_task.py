@@ -15,7 +15,7 @@ Usage:
     python dev/run_worker_task.py --task pysr --example 3 --niterations 10
 
     # PySR on a log-transformed target, seeded with a guess
-    python dev/run_worker_task.py --task pysr --example 3 --target-transform log --guesses "Synapses + Degree"
+    python dev/run_worker_task.py --task pysr --example 3 --target-transform log --guesses "precursor + temp"
 
     # Save output to file
     python dev/run_worker_task.py --task pysr --example 1 --output results.json
@@ -48,22 +48,42 @@ EXAMPLES: dict[int, dict[str, Any]] = {
         "description": "Soil phosphate prediction (119 rows, 5 features)",
     },
     2: {
-        "path": "data/example_2/Summary table.xlsx",
-        "target": "Power conversion efficiency [%]",
-        "predictors": None,  # Auto-detect numeric columns
-        "description": "Perovskite solar cell efficiency (33 rows)",
+        "path": "data/example_2/coating_line.csv",
+        "target": "sheet_resistance",
+        "predictors": [
+            "precursor",
+            "temp",
+            "flow",
+            "power",
+            "dep_time",
+            "humidity",
+            "chamber_pressure",
+            "rate",
+            "thickness",
+            "anneal_temp",
+            "grain_size",
+        ],
+        "description": "Synthetic coating line, sheet resistance (200 rows, 11 features)",
     },
     3: {
-        "path": "data/example_3/Celegans_AggregatedData.csv",
-        "target": "Length",
-        "predictors": ["Synapses", "Degree"],
-        "description": "C. elegans neuron connectome (299 rows, 2 features)",
+        "path": "data/example_3/coating_line.csv",
+        "target": "rate",
+        "predictors": [
+            "precursor",
+            "temp",
+            "flow",
+            "power",
+            "dep_time",
+            "humidity",
+            "chamber_pressure",
+        ],
+        "description": "Synthetic coating line, deposition rate (200 rows, 7 features)",
     },
     4: {
-        "path": "data/example_4/grassland_data.csv",
-        "target": "GPP",
-        "predictors": ["CO2", "AMO", "SD_VPDI", "PDSI", "SMI", "Tm_sprsum", "VPDI", "NAO"],
-        "description": "Grassland gross primary production from climate indices (yearly)",
+        "path": "data/example_4/river_water_temperature.csv",
+        "target": "water_temp",
+        "predictors": ["air_temp", "discharge"],
+        "description": "River water temperature from air temperature and discharge (daily)",
     },
 }
 
@@ -331,7 +351,7 @@ Examples:
         "--example",
         type=int,
         choices=list(EXAMPLES.keys()),
-        help="Use built-in example data (1, 2, or 3)",
+        help="Use built-in example data (1 to 4)",
     )
     data_group.add_argument(
         "--data",

@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT / "dev"))
 
 EXAMPLES = {
     1: ("data/example_1/sample_data.csv", "data/example_1/problem_description.json"),
-    3: ("data/example_3/Celegans_AggregatedData.csv", "data/example_3/problem_description.json"),
+    3: ("data/example_3/coating_line.csv", "data/example_3/problem_description.json"),
 }
 
 

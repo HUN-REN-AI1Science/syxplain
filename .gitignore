@@ -3,6 +3,7 @@ credentials/
 outputs/
 /scripts/
 /publication/
+/paper/
 .claude/
 api_results/
 # Third-party data that may not be redistributed

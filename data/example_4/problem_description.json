@@ -1,15 +1,8 @@
 {
-  "project_description": "I want to predict annual gross primary production (GPP) from all the other factors.",
-  "target_variable": "GPP",
+  "project_description": "Daily measurements at one river gauge: Neversink River near Claryville, New York, USA (US Geological Survey site 01435000), a small forested mountain river without a reservoir upstream of the gauge. Each row is one day, from 2023-12-01 to 2025-07-28, without missing days. We want an interpretable equation for the daily mean water temperature of the river from the air temperature and the discharge, including the days before, to estimate the water temperature when it is not measured.",
+  "target_variable": "water_temp",
   "features": {
-    "AMO": "Atlantic Multidecadal Oscillation (indicator of sea-surface temperature in the North Atlantic)",
-    "CO2": "Atmospheric carbon dioxide concentration",
-    "NAO": "North Atlantic Oscillation (indicator of sea-surface atmospheric pressure in the North Atlantic)",
-    "SMI": "soil moisture indicator",
-    "PDSI": "Palmer drought severity index",
-    "VPDI": "vapour pressure deficit indicator",
-    "Year": "Year",
-    "SD_VPDI": "standard deviation of vapour pressure deficit indicator",
-    "Tm_sprsum": "spring-summer mean temperature"
+    "air_temp": "Daily mean air temperature at the gauge (degrees Celsius)",
+    "discharge": "Daily mean discharge of the river (cubic feet per second)"
   }
 }
