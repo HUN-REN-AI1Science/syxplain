@@ -15,8 +15,9 @@ Protocol (deterministic, no LLM):
 5. Rate laws (d target/dt) are scored on the derivative, so they get their own headline
    (``select_dynamic``) by the same protocol, after a simulation guard: a law that
    diverges, or does not reproduce the training trajectories when integrated, is vetoed.
-6. Coherence first (only when the user supplied literature, ``literature_coherence.py``):
-   the models without a conflict with that literature are selected among by steps 1-4,
+6. Coherence first (``literature_coherence.py``; always on, because the scientific context
+   states the realistic range of the target, and the literature adds its statements):
+   the models without a conflict with a valid statement are selected among by steps 1-4,
    and the best-scoring model overall is kept beside the headline as the challenger,
    with the gap between the two in standard errors. A small gap with a conflicting
    challenger points to a wrong relationship, a large one to data that disagree with

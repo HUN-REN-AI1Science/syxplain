@@ -13,20 +13,22 @@ comments.
 
 | Variable | Default | Description |
 |---|---|---|
-| `OPENAI_API_KEY` | – | **Required.** Server-side key, used for users with server-key access |
-| `OPENAI_API_BASE` | – | OpenAI-compatible endpoint; empty = api.openai.com |
-| `OPENAI_MODEL_NAME` | `gpt-4o` | Main model: agent, configuration, explanation, literature scout |
+| `OPENAI_API_KEY` | none | **Required.** Server-side key, used for users with server-key access |
+| `OPENAI_API_BASE` | none | OpenAI-compatible endpoint; empty = api.openai.com |
+| `OPENAI_MODEL_NAME` | `gpt-4o` | Main model: agent, configuration, explanation, context reading, literature research |
 | `SMALL_MODEL_NAME` | `gpt-5-mini` | Small model for lightweight tasks (column description suggestions) |
 | `SMALL_USER_MODEL_NAME` | `gemini-2.5-flash` | Small model used with a user's own Gemini key |
 | `USER_API_MODELS` | `gemini-3.1-pro-preview,gemini-3-pro-preview,gemini-2.5-pro` | Models users can choose with their own key |
-| `LLM_PRICES_JSON` | – | Extra or overriding prices, USD per 1M tokens `[input, cached input, output]` per model |
+| `LLM_PRICES_JSON` | none | Extra or overriding prices, USD per 1M tokens `[input, cached input, output]` per model |
 | `LLM_WEB_SEARCH_USD` | `0.01` | Price per web search call |
 
-The literature scout calls the main model through the OpenAI Responses API with the
-web-search tool, so it needs an endpoint that supports it (OpenAI does). If the scout
-fails or is unavailable, the run continues: the discoveries are still related to the
-classic named laws. Users on their own keys get the literature step only when they also
-give an OpenAI key.
+The web literature research calls the main model through the OpenAI Responses API with the
+web-search tool, so it needs an endpoint that supports it (OpenAI does). If it fails or is
+unavailable, the run continues: the discoveries are still related to the classic named
+laws, and the context still gives the realistic limits of the target. Users on their own
+keys get the web literature research only when they also give an OpenAI key. Literature
+supplied as text is read by the main model without a web search, so it works with any
+endpoint.
 
 Users without server-key access bring their own key in the web app or the API: Gemini, or
 any OpenAI-compatible endpoint.
@@ -39,9 +41,9 @@ any OpenAI-compatible endpoint.
 | `KEYCLOAK_REALM` | `syxplain` | Realm |
 | `KEYCLOAK_CLIENT_ID` | `syxplain-frontend` | Public OIDC client of the web app |
 | `KEYCLOAK_ADMIN_USERNAME` / `KEYCLOAK_ADMIN_PASSWORD` | `admin` / `admin` | Admin account, used to manage user roles. **Change in production** |
-| `KEYCLOAK_ISSUER` | – | Expected token issuer. Empty in development; `https://<domain>/keycloak/realms/syxplain` in production |
+| `KEYCLOAK_ISSUER` | none | Expected token issuer. Empty in development; `https://<domain>/keycloak/realms/syxplain` in production |
 | `SERVER_KEYS_ROLE` | `server-llm-access` | Realm role that lets a user run on the server's LLM keys (`syxplain-admin` always can) |
-| `KEYCLOAK_ALLOWED_CLIENTS` | – | Comma-separated Keycloak client ids whose access tokens are accepted (the token's `azp`). Empty accepts any client of the realm; in production list the web client and the [technical clients](mcp.md#technical-account) |
+| `KEYCLOAK_ALLOWED_CLIENTS` | none | Comma-separated Keycloak client ids whose access tokens are accepted (the token's `azp`). Empty accepts any client of the realm; in production list the web client and the [technical clients](mcp.md#technical-account) |
 | `VITE_KEYCLOAK_URL` / `VITE_KEYCLOAK_REALM` / `VITE_KEYCLOAK_CLIENT_ID` | dev values | Frontend build-time settings (browser-reachable Keycloak URL) |
 
 ## Compute (Slurm)
@@ -52,20 +54,20 @@ running on a real cluster.
 
 | Variable | Default | Description |
 |---|---|---|
-| `SLURM_API_URL` | – (dev: local emulator) | slurmrestd URL, e.g. `http://slurm.example.org:6820` |
-| `SLURM_AUTH_TOKEN` | – | JWT from `scontrol token username=<user> lifespan=<seconds>` |
+| `SLURM_API_URL` | none (dev: local emulator) | slurmrestd URL, e.g. `http://slurm.example.org:6820` |
+| `SLURM_AUTH_TOKEN` | none | JWT from `scontrol token username=<user> lifespan=<seconds>` |
 | `SLURM_USER_NAME` | `slurm` | Cluster user the jobs run as |
 | `SLURM_STAGING_DIR` | `/tmp/syxplain` | Shared directory for job logs and output |
-| `SLURM_CONTAINER_PATH` | – | Singularity worker image. Empty = run `python -m slurm_worker` in the conda env `syxplain_worker` |
+| `SLURM_CONTAINER_PATH` | none | Singularity worker image. Empty = run `python -m slurm_worker` in the conda env `syxplain_worker` |
 | `SLURM_CONTAINER_BINDS` | `SLURM_STAGING_DIR` | Host paths mounted into the container (comma-separated `--bind` specs) |
 | `SLURM_JULIA_DEPOT` | `$SLURM_STAGING_DIR/.julia` | Writable Julia depot, stacked on the image's precompiled one |
-| `SLURM_PARTITION` | – | Partition; empty = the cluster's default |
+| `SLURM_PARTITION` | none | Partition; empty = the cluster's default |
 | `SLURM_CPUS` | `4` | CPUs per job |
 | `SLURM_MEMORY` | `8G` | Memory per job |
 | `SLURM_TIME_LIMIT` | `04:00:00` | Time limit per job |
 | `SLURM_RETRY_INTERVAL` | `60` | Seconds before retrying a submission rejected by quota |
-| `WORKER_CALLBACK_URL` | – (dev: `http://backend:8000/api/internal`) | Where workers fetch input and report progress. Must be reachable from the compute nodes |
-| `WORKER_CALLBACK_TOKEN` | – | Shared secret for worker callbacks |
+| `WORKER_CALLBACK_URL` | none (dev: `http://backend:8000/api/internal`) | Where workers fetch input and report progress. Must be reachable from the compute nodes |
+| `WORKER_CALLBACK_TOKEN` | none | Shared secret for worker callbacks |
 | `JOB_POLL_INTERVAL` | `10` | Seconds between job status polls |
 | `COMPUTE_MAX_RETRIES` | `3` | Retries of a failed submission |
 
@@ -108,7 +110,7 @@ These are budget ceilings; the agent stops earlier when it is done.
 | `MAX_ACTIVE_RUNS_PER_USER` | `3` | Pending and running analyses one account may have at a time; `0` removes the limit. Raise it for a technical account shared by many people |
 | `MCP_MAX_CSV_KB` | `256` | Largest CSV the MCP `start_analysis` tool accepts as text |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins (set your domain in production) |
-| `GITHUB_FEEDBACK_TOKEN` / `_REPO_OWNER` / `_REPO_NAME` | – | When all three are set, in-app feedback opens GitHub issues; otherwise it is only logged |
+| `GITHUB_FEEDBACK_TOKEN` / `_REPO_OWNER` / `_REPO_NAME` | none | When all three are set, in-app feedback opens GitHub issues; otherwise it is only logged |
 
 ## Production deployment
 

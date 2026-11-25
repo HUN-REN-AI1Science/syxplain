@@ -5,49 +5,63 @@
 [![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/release/python-3100/)
 [![Node.js 24](https://img.shields.io/badge/node.js-24-339933.svg)](https://nodejs.org/)
 
-**Interpretable equations from your data, checked against the evidence and related to
-known science.**
+Interpretable equations from your data, checked against the evidence and related to
+known science.
 
 Syxplain is an AI-scientist agent for equation discovery. You give it a table of
 measurements, the quantity you want to explain, and a sentence about the problem. It
 searches for compact formulas with symbolic regression ([PySR](https://github.com/MilesCranmer/PySR))
 steered by an LLM agent, and then reports:
 
-- **the best equation**, chosen by cross-validation and scored once on a holdout set, with
-  the simplest adequate model preferred
-- **how far the data allows**: a noise ceiling estimates the best accuracy any model could
+- the recommended equation, chosen coherence first: equations that conflict with the
+  scientific context of your data, or with what the literature states, are set aside, and
+  cross-validation decides among the rest, with the simplest adequate model preferred. It
+  is scored once on a holdout set
+- how far the data allows: a noise ceiling estimates the best accuracy any model could
   reach
-- **whether the evidence agrees**: SHAP effects, the holdout, parameter identifiability and
-  known laws are each checked against the headline equation
-- **its relation to known science**: whether the equation rediscovers a published or
-  textbook law, extends one, or describes something new
-- **a plain-language explanation** of what the equation means and where it falls short
+- whether the evidence agrees: SHAP effects, the holdout, parameter identifiability,
+  known laws and the statements of the context and the literature are each checked
+  against the recommended equation
+- its relation to known science: whether the equation rediscovers a published or
+  textbook law, extends one, or describes something new. The literature comes from a web
+  search, from text you supply, or from both
+- the equation with the best score, shown beside the recommendation when it was set
+  aside, with a reading of whether the data speak against the literature
+- a plain-language explanation of what the equation means and where it falls short
 
-It works on cross-sectional data (soil chemistry, materials, connectomics) and on time
-series, where it adds lagged and period features and SINDy rate laws.
+It works on cross-sectional data (soil chemistry, process data) and on time series, where
+it adds earlier values of the target as features, chosen from the orders of an automatic
+ARIMA fit, and searches SINDy rate laws.
 
 ## How it works
 
 ```mermaid
 flowchart LR
     A[Data + problem<br/>description] --> B[Profiling<br/>noise ceiling, SHAP]
+    A -.-> L[Context and literature<br/>web search, your own text]
     B --> C[Blind exploration<br/>agent steers PySR and SINDy]
     C --> R[Relate to<br/>known laws]
-    R --> S[Model selection<br/>CV, holdout, SHAP check]
-    S --> E[Coherence verdict<br/>and explanation]
+    L -.-> R
+    R --> S[Model selection<br/>coherence first, then CV]
+    S --> E[Coherence checks<br/>and explanation]
 ```
 
-1. **Profiling.** Feature importance, interactions, partial-effect shapes (SHAP), and a
-   noise ceiling for the best achievable accuracy.
-2. **Blind exploration.** The agent never sees known laws during the search, so existing
-   knowledge cannot bias it. It designs formulas, gets diagnosed reasons why each one
-   falls short (wrong shape, missing variable, unidentifiable parameters), and launches
-   targeted PySR searches.
-3. **Relation to known laws.** Only afterwards are the discoveries compared with classic
-   named laws and with published laws found by a literature scout. Each discovery is
-   classed as equivalent, similar, partial or different.
-4. **Selection and coherence.** Code picks the headline model and checks it against every
-   line of evidence. The LLM explains, but does not overrule, the computed verdicts.
+1. Profiling computes feature importance, interactions, partial-effect shapes (SHAP), and
+   a noise ceiling for the best achievable accuracy.
+2. The exploration is blind: the agent never sees known laws during the search, so
+   existing knowledge cannot bias it. It designs formulas, gets diagnosed reasons why each
+   one falls short (wrong shape, missing variable, unidentifiable parameters), and
+   launches targeted PySR searches.
+3. After the search, the discoveries are compared with classic named laws and with the
+   laws of the literature. The literature research is a web search (the default), a
+   reading of text you supply, or both. Each discovery is classed as equivalent, similar,
+   partial or different.
+4. The selection is coherence first. The context gives the realistic limits of the
+   target, and the literature gives statements about it (a variable is not a cause, an
+   effect has a direction, a limiting value, an operating range). Equations that conflict
+   with them are set aside, and cross-validation decides among the rest.
+5. Code checks the recommended equation against every line of evidence. The LLM explains
+   the computed verdicts and cannot overrule them.
 
 [docs/how-it-works.md](docs/how-it-works.md) gives the full description.
 
@@ -86,7 +100,7 @@ run real PySR searches locally:
 LOCAL_PYSR=true docker compose up --build
 ```
 
-The first build installs Julia and PySR into the emulator image, which takes 10–20
+The first build installs Julia and PySR into the emulator image, which takes 10 to 20
 minutes. `SLURM_CPUS` (default 4) sets the CPUs per search, as on a cluster.
 
 ### Your own Slurm cluster

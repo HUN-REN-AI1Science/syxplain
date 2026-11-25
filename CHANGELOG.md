@@ -18,19 +18,41 @@ All notable changes to this project are documented here. The format follows
   accepts column names as written in the file.
 - `GET /api/v1/models` reports `server_keys`.
 - Settings: `KEYCLOAK_ALLOWED_CLIENTS`, `MAX_ACTIVE_RUNS_PER_USER`, `MCP_MAX_CSV_KB`.
-- Supplied literature: `literature_text` on `POST /api/v1/analyze`, the MCP
-  `start_analysis` tool and the problem description. The literature step then reads only
-  that text (no web search) and returns, besides the published laws, what the text states
-  about the target. Every fitted equation is tested against those statements, and the
-  selection is coherence first: the recommended equation is chosen among the equations
-  without a conflict, and the best-scoring equation overall is kept beside it as the
-  challenger, with the gap between the two in standard errors
-  (`discovery.selection.coherence_first`, `literature_conflicts` per equation, a
-  `supplied_literature` coherence check). Runs without `literature_text` are unchanged.
-- Web application: a field for your own literature on the Define Problem step; the
-  results name the coherence-first selection reason.
+- Coherence-first selection. Every fitted equation is tested by code against statements
+  about the target, and the recommended equation is chosen among the equations without a
+  conflict. The best-scoring equation overall is kept beside it as the challenger, with
+  the gap between the two in standard errors (`discovery.selection.coherence_first`,
+  `literature_conflicts` per equation, a coherence check for the context and the
+  literature). The statements come from three sources:
+  - the scientific context: an LLM reads the realistic limits of the target from its
+    meaning and unit (`discovery.context`), and an equation that leaves them inside the
+    range of the data conflicts;
+  - the web literature research, whose statements carry their validity for the data
+    (`yes`, `unknown`, `no`). `unknown` decides only between equally good equations;
+  - supplied literature: `literature_text` on `POST /api/v1/analyze`, the MCP
+    `start_analysis` tool and the problem description. `web_literature: false` turns the
+    web research off when a text is given; one kind of literature research is always used.
+- Relationships of the literature among the other variables are measured on the data, as
+  published and with refitted constants (`discovery.literature.relations`), and a law for
+  the target implied by a holding relationship is fitted.
+- When the challenger breaks a "not a cause" statement, the coherence check reports
+  whether the data speak against the literature or the better score is more likely a
+  wrong relationship.
+- Time series: the earlier values offered as features come from the orders of an
+  automatic ARIMA fit (`pmdarima`): earlier values of the target and earlier errors of
+  that fit. `DISCOVERY_SERIES_FEATURES` selects `orders` (default), `llm` or `both`.
+- Web application: a field for your own literature on the Define Problem step, with a
+  switch for the web literature research; the results show the statements, the
+  relationships and the coherence-first selection reason.
 
 ### Changed
+- A long series no longer has to be evenly spaced: the step is the typical distance
+  between measurements, and an earlier value is read between the two measurements around
+  that moment.
+- The example datasets in `data/` are the four use cases of the paper: soil phosphorus,
+  two problems on a synthetic coating line with supplied literature, and a river water
+  temperature series. The perovskite, connectome and grassland examples were removed.
+- Keycloak 26.8.2.
 - An account can have 3 pending or running analyses at a time by default
   (`MAX_ACTIVE_RUNS_PER_USER`; `0` removes the limit).
 - `/api/v1` and `/mcp` are rate-limited per credential instead of per client address.
@@ -38,7 +60,7 @@ All notable changes to this project are documented here. The format follows
 - ID and refresh tokens no longer authenticate API calls.
 - API-key roles are re-checked against Keycloak every five minutes, also for keys in
   constant use.
-- Requires `mcp` 2.3 or later.
+- Requires `mcp` 2.3 or later, and `pmdarima` and `statsmodels`.
 
 ### Fixed
 - A run could load another user's file when both had uploaded the same filename.

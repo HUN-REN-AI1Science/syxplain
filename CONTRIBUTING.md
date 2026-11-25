@@ -2,10 +2,10 @@
 
 Thanks for your interest! Bug reports, ideas, documentation fixes and code are all welcome.
 
-- **Questions and ideas:** open an issue.
-- **Bugs:** open an issue with steps to reproduce (the bug template asks for what we need).
-- **Security issues:** never in public issues. See [SECURITY.md](SECURITY.md).
-- **Larger changes:** open an issue first, so we can agree on the approach before you
+- For questions and ideas, open an issue.
+- For bugs, open an issue with steps to reproduce (the bug template asks for what we need).
+- Never report security issues in public issues. See [SECURITY.md](SECURITY.md).
+- For larger changes, open an issue first, so we can agree on the approach before you
   invest the time.
 
 By participating you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
@@ -38,22 +38,25 @@ The backend tests need no database, cluster, Keycloak or LLM key: LLM calls use 
 These keep the results trustworthy. Please keep them in mind when changing anything in
 `backend/services/discovery/`:
 
-1. **Code decides, the LLM proposes and explains.** Model selection, metrics, relations
+1. Code decides, the LLM proposes and explains. Model selection, metrics, relations
    to known laws and the coherence verdict are computed with fixed rules. LLMs choose
    what to try and put results into words. They never override a computed check.
-2. **Exploration stays blind to known laws.** The agent must not see the classic catalog
+2. Exploration stays blind to known laws. The agent must not see the classic catalog
    or the literature while it searches. Known laws are fitted and compared only
-   afterwards (`relate.py`), so the search is not steered towards textbook answers.
-3. **A general tool, not tuned to examples.** Do not shape algorithms, thresholds or
+   afterwards (`relate.py`), so the search is not steered towards textbook answers. The
+   statements of the context and the literature take part only in the final selection
+   (`literature_coherence.py`).
+3. A general tool, not tuned to examples. Do not shape algorithms, thresholds or
    prompts around a particular example dataset. Validate a change on independent data
    (synthetic generators with neutral variable names, and real datasets the change was
    not developed on), and report the results in the pull request.
-4. **Every candidate is scored the same way.** Agent formulas, PySR equations and known
+4. Every candidate is scored the same way. Agent formulas, PySR equations and known
    laws all go through `fitting.fit_model`.
 
 ## Code conventions
 
-**Backend (Python 3.10, FastAPI)**
+### Backend (Python 3.10, FastAPI)
+
 - Routers live in `backend/api/routers/`, schemas in `backend/schemas/`, and business
   logic in `backend/services/`.
 - New LLM capabilities:
@@ -65,7 +68,8 @@ These keep the results trustworthy. Please keep them in mind when changing anyth
   `docs/configuration.md`, and pass them through `docker-compose.prod.yml`.
 - Ruff settings are in `pyproject.toml`. Line length is 100.
 
-**Frontend (React + TypeScript)**
+### Frontend (React + TypeScript)
+
 - Use PrimeReact components (for example `Button`, not a raw `<button>`) and Tailwind
   for layout.
 - Feature components go in `src/components/<Feature>/`, and shared ones in
@@ -73,7 +77,8 @@ These keep the results trustworthy. Please keep them in mind when changing anyth
 - Fetch data in pages or hooks, not in presentational components.
 - Prettier settings are in `frontend/.prettierrc`.
 
-**Compute worker (`slurm_worker/`)**
+### Compute worker (`slurm_worker/`)
+
 - The worker runs on Python 3.11 in the Singularity image. PySR is pinned (`pysr==2.7.0`)
   because the backend relies on its equation format.
 - Bump the version in `slurm_worker/__init__.py` when the worker changes, and see

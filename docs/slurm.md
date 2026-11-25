@@ -88,17 +88,17 @@ files (in the node's `/tmp`), and the Julia depot (see `SLURM_JULIA_DEPOT`).
 
 On the cluster (ask your cluster administrators if you are unsure):
 
-- **slurmrestd with JWT authentication.** The cluster must run slurmrestd and accept JWT
+- slurmrestd with JWT authentication. The cluster must run slurmrestd and accept JWT
   tokens (`AuthAltTypes=auth/jwt`), so that `scontrol token` works for your account. The
   backend uses API version `v0.0.41`, which Slurm 23.11 and later provide.
-- **A cluster account** that may submit jobs, with access to a login node.
-- **A shared directory** that exists on every compute node and is writable by that
+- A cluster account that may submit jobs, with access to a login node.
+- A shared directory that exists on every compute node and is writable by that
   account. It becomes `SLURM_STAGING_DIR` (job logs, the Julia depot, and the worker image
   if you like). Jobs also use it as their working directory.
-- **Singularity or Apptainer** on the compute nodes, to run the worker image (Apptainer
+- Singularity or Apptainer on the compute nodes, to run the worker image (Apptainer
   installs a `singularity` command too). Without it, use a
   [conda environment](#running-without-a-container-conda) instead.
-- **x86_64 compute nodes.** The image definition installs the x86_64 build of Julia.
+- x86_64 compute nodes. The image definition installs the x86_64 build of Julia.
 
 Network:
 
@@ -121,14 +121,14 @@ The examples use `slurm.example.org` for the login node, `<cluster-user>` for yo
 cluster account, and `/storage/<cluster-user>/syxplain` as the shared directory. Replace
 them with your site's values.
 
-1. **Create the shared directory** on the cluster:
+1. Create the shared directory on the cluster:
 
    ```bash
    ssh <cluster-user>@slurm.example.org \
        "mkdir -p /storage/<cluster-user>/syxplain/containers"
    ```
 
-2. **Generate a slurmrestd token** for the account (lifespan in seconds; your site may cap
+2. Generate a slurmrestd token for the account (lifespan in seconds; your site may cap
    it):
 
    ```bash
@@ -138,14 +138,14 @@ them with your site's values.
 
    The command prints `SLURM_JWT=<token>`; the part after `=` is `SLURM_AUTH_TOKEN`.
 
-3. **Build and copy the worker image** to the shared directory, as described in
+3. Build and copy the worker image to the shared directory, as described in
    [Building the worker image](#building-the-worker-image).
 
-4. **Choose a callback URL and token.** `WORKER_CALLBACK_URL` is the backend's public
+4. Choose a callback URL and token. `WORKER_CALLBACK_URL` is the backend's public
    base URL followed by `/api/internal`, as seen from a compute node. The token is any
    random secret, for example from `openssl rand -hex 32`.
 
-5. **Configure the backend** in `.env`:
+5. Configure the backend in `.env`:
 
    ```bash
    SLURM_API_URL="http://slurm.example.org:6820"
@@ -162,7 +162,7 @@ them with your site's values.
    your cluster (see the reference below), and `SLURM_CONTAINER_BINDS` if the shared
    directory is not the only host path the container needs.
 
-6. **Restart the backend** and run the checks in [Verifying the setup](#verifying-the-setup).
+6. Restart the backend and run the checks in [Verifying the setup](#verifying-the-setup).
 
 `docker-compose.prod.yml` requires `SLURM_API_URL`, `SLURM_AUTH_TOKEN`, `SLURM_USER_NAME`
 and `SLURM_STAGING_DIR`. It also bind-mounts `SLURM_STAGING_DIR` into the backend
@@ -333,7 +333,9 @@ build time and identical on every node.
 
 ## Verifying the setup
 
-**1. Backend to slurmrestd.** From the backend host (or container):
+### 1. Backend to slurmrestd
+
+From the backend host (or container):
 
 ```bash
 curl -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
@@ -344,14 +346,18 @@ curl -H "Authorization: Bearer $SLURM_AUTH_TOKEN" \
 A JSON response with `"pings"` and the Slurm version in `meta` means the URL, token and
 user name work. `401` means the token is wrong, expired or issued for another user.
 
-**2. The image.** On the login node:
+### 2. The image
+
+On the login node:
 
 ```bash
 singularity test /storage/<cluster-user>/syxplain/containers/syxplain-worker.sif
 singularity run  /storage/<cluster-user>/syxplain/containers/syxplain-worker.sif --help
 ```
 
-**3. Compute node to backend.** The callback endpoint `/health` needs no token:
+### 3. Compute node to backend
+
+The callback endpoint `/health` needs no token:
 
 ```bash
 srun --time=00:02:00 curl -sS https://syxplain.example.org/api/internal/health
@@ -361,7 +367,9 @@ srun --time=00:02:00 curl -sS https://syxplain.example.org/api/internal/health
 Expected: `{"status":"healthy","service":"syxplain-backend"}`. A timeout here means the
 compute nodes cannot reach the backend, and every search will fail.
 
-**4. A worker job without the backend.** `slurm_worker/example-job.sbatch` runs the image
+### 4. A worker job without the backend
+
+`slurm_worker/example-job.sbatch` runs the image
 on a local input file (`--input`), so it works without callbacks. In the copy on the
 cluster, adjust its `#SBATCH --output`/`--error` paths (the directory must exist) and its
 `--bind` option to your storage, then write a small input:
@@ -392,7 +400,9 @@ CONTAINER_PATH=/storage/<cluster-user>/syxplain/containers/syxplain-worker.sif \
 
 `smoke-output.json` should contain `"status": "success"` and a list of equations.
 
-**5. End to end.** Start an analysis in the web interface. The run's activity feed shows
+### 5. End to end
+
+Start an analysis in the web interface. The run's activity feed shows
 each search as it is submitted and its live progress; `squeue -u <cluster-user>` shows
 jobs named `syxplain-<task_key>-<run id prefix>`.
 
@@ -469,11 +479,11 @@ submit, job status, cancel) and runs the submitted jobs inside its own container
 backend's defaults point at it (`SLURM_API_URL=http://mock-slurm:6820`,
 `WORKER_CALLBACK_URL=http://backend:8000/api/internal`), so nothing needs configuring.
 
-- **Default:** PySR searches are faked. The emulator fetches the task input from the
+- By default, PySR searches are faked. The emulator fetches the task input from the
   backend like a real worker and returns least-squares fits of a few simple forms over
   the requested features. The image builds in seconds and needs no Julia, which is enough
   for UI and pipeline work.
-- **Real PySR:** `LOCAL_PYSR=true docker compose up --build` builds Julia and PySR into
+- For real PySR, `LOCAL_PYSR=true docker compose up --build` builds Julia and PySR into
   the emulator image (the first build takes 10 to 20 minutes) and runs real searches with
   the worker code. Each search gets the job's `SLURM_CPUS` (default 4), as on a cluster.
 - Task types other than `pysr` always run for real, as `python -m slurm_worker`
@@ -497,7 +507,7 @@ To test against a real cluster while the backend runs on your own machine, two
 connections are needed: the backend must reach slurmrestd, and the compute nodes must
 reach the backend.
 
-**Backend to slurmrestd: SSH tunnel.** If slurmrestd is only reachable from inside the
+For the connection from the backend to slurmrestd, use an SSH tunnel. If slurmrestd is only reachable from inside the
 cluster network, forward it through the login node. Replace `localhost` in the forward
 target with the slurmrestd host if it does not run on the login node.
 
@@ -515,7 +525,7 @@ ssh -N -L 0.0.0.0:16820:localhost:6820 <cluster-user>@slurm.example.org
 Binding to `0.0.0.0` exposes the tunnel to your local network; restrict it with a
 firewall or bind to the Docker bridge address instead if that matters to you.
 
-**Compute nodes to backend: public URL.** A tunnelling service such as
+For the connection from the compute nodes to the backend, use a public URL. A tunnelling service such as
 [ngrok](https://ngrok.com/) gives your local backend a public address:
 
 ```bash
@@ -535,18 +545,21 @@ usage policy. Ask first.
 
 ### Connecting to slurmrestd
 
-**Connection refused or timeout**
+#### Connection refused or timeout
+
 - Check `SLURM_API_URL` (scheme, host, port) and that the backend host may connect to it.
 - When tunnelling, check that the tunnel is up and, for Docker, bound to an address the
   container can reach (`host.docker.internal` with a `0.0.0.0` bind).
 - Run the `ping` request from [Verifying the setup](#verifying-the-setup) from the same
   host or container as the backend.
 
-**401 Unauthorized**
+#### 401 Unauthorized
+
 - The token has expired: generate a new one and restart the backend with it.
 - `SLURM_USER_NAME` does not match the `username=` the token was issued for.
 
-**Job submission rejected**
+#### Job submission rejected
+
 - `Invalid partition name`: set `SLURM_PARTITION` to a partition you may use, or leave it
   empty for the default partition.
 - Memory, CPU or time requests above the partition's limits: lower `SLURM_MEMORY`,
@@ -557,7 +570,8 @@ usage policy. Ask first.
 
 ### Jobs
 
-**Job stays PENDING**
+#### Job stays PENDING
+
 ```bash
 squeue -u <cluster-user> -l
 scontrol show job <job_id> | grep Reason
@@ -565,75 +579,90 @@ scontrol show job <job_id> | grep Reason
 Common reasons: `Resources` (no free nodes), `Priority` (other jobs first),
 `QOSMaxJobsPerUserLimit` (too many running jobs).
 
-**Job fails immediately, no log file**
+#### Job fails immediately, no log file
+
 - The staging directory is not writable by the cluster account on the compute nodes, or
   it is not on shared storage (the logs then end up on the node's local disk). The job
   script creates `logs/<date>/` itself but cannot create it without write permission.
   Check with `srun ls -ld /storage/<cluster-user>/syxplain`.
 
-**`No input source: provide --input file or configure callback URL`**
+#### `No input source: provide --input file or configure callback URL`
+
 - `WORKER_CALLBACK_URL` or `WORKER_CALLBACK_TOKEN` is empty in the backend's environment.
   Both are required.
 
-**Input fetch fails (connection error or timeout in `.stdout`)**
+#### Input fetch fails (connection error or timeout in `.stdout`)
+
 - The compute nodes cannot reach `WORKER_CALLBACK_URL`. Test with the `srun curl .../health`
   command above.
 
-**Input fetch returns 401**
+#### Input fetch returns 401
+
 - `WORKER_CALLBACK_TOKEN` differs between the backend that submitted the job and the
   backend that answers, or it is unset on the backend.
 
-**Input fetch returns 404 or 410**
+#### Input fetch returns 404 or 410
+
 - 404: the run or its task input does not exist in the database the callback URL leads
   to. Check that `WORKER_CALLBACK_URL` points at the same installation that submitted the job.
 - 410 Gone: the input was already fetched. Inputs are one-time; a job that Slurm requeued
   (after a node failure or preemption) cannot run again. The agent reports the search as
   failed and the run goes on.
 
-**Job completes but the search reports "results missing"**
+#### Job completes but the search reports "results missing"
+
 - The completion callback did not reach the backend. The worker logs failed callbacks as
   warnings (`Request to complete failed`) in `.stdout` and still exits 0. Check
   connectivity and timeouts between the compute nodes and the backend; large results
   are posted in a single request with a 30-second timeout.
 
-**`No module named slurm_worker` (conda mode)**
+#### `No module named slurm_worker` (conda mode)
+
 - The package is `slurm_worker`. Copy the `slurm_worker/` directory into
   `SLURM_STAGING_DIR` (the job's working directory) or put it on the environment's
   `PYTHONPATH`.
 
-**`No module named pysr`, `requests`, ... (conda mode)**
+#### `No module named pysr`, `requests`, ... (conda mode)
+
 - The `syxplain_worker` environment was not activated: `conda` is not on the `PATH` of
   batch jobs, or the environment has another name.
 
-**`unrecognized arguments: --task-key`**
+#### `unrecognized arguments: --task-key`
+
 - The worker image is older than the backend. Rebuild it from the backend's commit; see
   [Updating the worker image](#updating-the-worker-image).
 
-**Job killed for memory (`OUT_OF_MEMORY`) or time (`TIMEOUT`)**
+#### Job killed for memory (`OUT_OF_MEMORY`) or time (`TIMEOUT`)
+
 - Raise `SLURM_MEMORY` or `SLURM_TIME_LIMIT`. Memory use grows with the number of CPUs,
   because PySR starts one Julia worker process per CPU.
 
 ### Container
 
-**`FATAL: could not open image` / image not found**
+#### `FATAL: could not open image` / image not found
+
 - `SLURM_CONTAINER_PATH` must be the path on the compute nodes, on storage they mount.
 
-**Permission denied or missing files inside the container**
+#### Permission denied or missing files inside the container
+
 - The container sees only the paths in `SLURM_CONTAINER_BINDS` (default:
   `SLURM_STAGING_DIR`) plus Singularity's defaults. If `SLURM_STAGING_DIR` is a symlink,
   bind the real path as well, and include the directory of `SLURM_JULIA_DEPOT` if you
   moved it.
 
-**Julia tries to download or compile packages at job start**
+#### Julia tries to download or compile packages at job start
+
 - The image was not built from `syxplain-worker.def`, or its build did not finish. A
   correct image passes `singularity test` offline. Jobs only write to the depot in
   `SLURM_JULIA_DEPOT`; delete that directory if it was filled by an older image.
 
-**Build fails with `--fakeroot` errors**
+#### Build fails with `--fakeroot` errors
+
 - Your account has no subordinate UID/GID range (`/etc/subuid`, `/etc/subgid`) on that
   machine. Ask the administrators, or build as root elsewhere and copy the `.sif` over.
 
-**Build runs out of space**
+#### Build runs out of space
+
 - Set `SINGULARITY_TMPDIR` and `SINGULARITY_CACHEDIR` (or the `APPTAINER_` equivalents)
   to a directory with several GB free.
 

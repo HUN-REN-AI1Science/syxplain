@@ -241,29 +241,41 @@ const Analysis: React.FC = () => (
         targeted symbolic regression searches and records its findings in a lab notebook.
       </li>
       <li>
-        <strong>Time-ordered data.</strong> When the rows form a series in time, earlier conditions
-        (lagged values and aggregates over earlier periods) are proposed, measured, and kept as
-        inputs only when they help. For measurements over time, the agent also looks for a rate law
-        (how fast the target changes), using its own formulas and SINDy.
+        <strong>Time-ordered data.</strong> When the rows form a long series in time, earlier values
+        of the target are added as inputs before the first search. Which ones is decided by an
+        automatic ARIMA fit on the training rows: its orders give the earlier values of the target
+        and the earlier errors of that fit. The series need not be evenly spaced. For measurements
+        over time, the agent also looks for a rate law (how fast the target changes), using its own
+        formulas and SINDy.
       </li>
       <li>
-        <strong>Relation to known laws.</strong> Only after exploration, classic named laws and
-        published laws found by a literature search are fitted to the same data. Each discovered
-        equation is classified against them as <em>equivalent</em> (the same law in another form),{' '}
-        <em>similar</em>, <em>partial</em>, or <em>different</em> (a new relationship).
+        <strong>Context and literature.</strong> In the background, an LLM reads the realistic
+        limits of the target from its description and unit (a concentration cannot be negative), and
+        the literature research collects published laws, statements about the target and
+        relationships among the other variables. The literature research is a web search, a reading
+        of your own text, or both. None of this reaches the agent.
       </li>
       <li>
-        <strong>Selection and scoring, by code.</strong> Models are ranked by 5-fold
-        cross-validation on the training rows, and the simplest model within one standard error of
-        the best becomes the recommended equation. A 20% holdout, set aside at the start, is scored
-        once at the end. Datasets under 40 rows use cross-validation only; for time series the
-        holdout is the final part of each series. The recommended equation is then checked against
-        the SHAP effects.
+        <strong>Relation to known laws.</strong> Only after exploration, classic named laws and the
+        laws of the literature are fitted to the same data. Each discovered equation is classified
+        against them as <em>equivalent</em> (the same law in another form), <em>similar</em>,{' '}
+        <em>partial</em>, or <em>different</em> (a new relationship).
+      </li>
+      <li>
+        <strong>Selection and scoring, by code.</strong> The selection is coherence first. Equations
+        that conflict with the context, or with a statement of the literature that is valid for your
+        data, are set aside. The rest are ranked by 5-fold cross-validation on the training rows,
+        and the simplest model within one standard error of the best becomes the recommended
+        equation. Statements of unknown validity decide only between equally good equations. The
+        equation with the best score is shown beside the recommendation when it was set aside. A 20%
+        holdout, set aside at the start, is scored once at the end. Datasets under 40 rows use
+        cross-validation only; for time series the holdout is the final part of each series.
       </li>
       <li>
         <strong>Coherence.</strong> Code checks whether the independent lines of evidence agree on
-        the recommended equation (noise ceiling, holdout, SHAP, known laws, parameters, and the
-        agent&apos;s conclusion).
+        the recommended equation (noise ceiling, holdout, SHAP, known laws, the statements of the
+        context and the literature, the literature&apos;s relationships in your data, parameters,
+        and the agent&apos;s conclusion).
       </li>
       <li>
         <strong>Explanation.</strong> An LLM writes the summary, the explanation of each equation
@@ -273,13 +285,13 @@ const Analysis: React.FC = () => (
     </ol>
     <InfoBox variant="info">
       Literature and known laws never steer the search. The agent does not see them while it
-      explores; they are used only at the end to show how the discoveries relate to what is already
-      known.
+      explores; they are used only at the end, to choose among the discovered equations and to show
+      how the discoveries relate to what is already known.
     </InfoBox>
     <InfoBox variant="tip">
-      If you use your own LLM key, an OpenAI key is optional; it enables the literature search.
-      Without it the analysis still runs and the discoveries are compared with the classic named
-      laws only.
+      If you use your own LLM key, an OpenAI key is optional; it enables the web literature
+      research. Without it the analysis still runs: the discoveries are compared with the classic
+      named laws and with any literature you supply.
     </InfoBox>
 
     <SubHeading id="understanding-results" title="Understanding results" />

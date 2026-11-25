@@ -10,7 +10,7 @@ Chat assistants reach the same analyses through the [MCP endpoint](mcp.md).
 
 Every endpoint accepts either credential.
 
-**API key.** Create one in the web app under **Profile → API Keys**. Each user has one
+To use an API key, create one in the web app under **Profile → API Keys**. Each user has one
 key; regenerating it revokes the old one. Send it in the `X-API-Key` header:
 
 ```bash
@@ -18,7 +18,7 @@ export SYXPLAIN_API_KEY=syxp_...
 curl -H "X-API-Key: $SYXPLAIN_API_KEY" http://localhost:8000/api/v1/models
 ```
 
-**Keycloak access token.** A technical client with a service account (see
+To use a Keycloak access token, a technical client with a service account (see
 [Technical account](mcp.md#technical-account)) requests a token with the
 client-credentials grant and sends it as `Authorization: Bearer <token>`:
 
@@ -86,37 +86,58 @@ it send none, and any they send are ignored.
 | `api_base` | Base URL for OpenAI-compatible providers (default `https://api.openai.com/v1`) |
 | `openai_api_key` | OpenAI key for the literature search. Without it there is no literature step, unless `api_key` is itself an OpenAI key on the default endpoint |
 
-### Supplying your own literature
+### Context and literature
 
-`literature_text` (optional, plain text, up to 60 000 characters) holds your own
-literature on the problem: papers, notes, reports. When it is given:
+Every run chooses its recommended equation coherence first: equations that conflict with
+the scientific context of the data or with what the literature states are removed, and
+the usual cross-validation rule decides among the rest. Three sources give the statements.
+None of them reaches the exploration, which stays blind to every known law.
 
-- it is read by the main LLM, without a web search, in addition to the web literature
-  research. `web_literature: false` turns the web research off; it is accepted only
-  together with `literature_text`, because one kind of literature research is always used;
-- every statement of the web literature research carries its `validity` for the context
-  of your data: `yes` removes equations that break it, `unknown` decides only between
-  equations that are equally good on the metric (within one standard error;
-  `selection.coherence_first.unknown_validity`), `no` is only shown;
-- equations of the literature among the other variables are measured against the data
-  (`discovery.literature.relations`: as published and with constants fitted again), and a
-  law for the target implied by a holding relationship is fitted too (`composed_from`);
-- the exploration stays blind to it, as it is to every known law;
-- besides equations for the target, the step returns what the text states about it:
-  variables that are not causes, the region where an equation must be defined, the
-  direction of an effect, the limit of a quantity;
-- every fitted equation is tested against these statements by code;
-- the recommended equation is chosen among the equations without a conflict
-  (coherence first), by the usual cross-validation rule. The best-scoring equation
-  overall is kept beside it as the challenger.
+- The context: the project description and the description of the target (with its
+  unit) give the realistic limits of the target, for example that a concentration cannot
+  be negative. `discovery.context.realistic_range` reports `low`, `high` and the `reason`.
+  An equation that leaves these limits, or the measured range of the target by a wide
+  margin, for values of its variables inside the range of the data conflicts with the
+  context.
+- The web literature research (the default), which returns published laws for the
+  target, statements about the target and relationships among the other variables.
+- Your own literature: `literature_text` (optional, plain text, up to 60 000
+  characters) holds papers, notes or reports on the problem. It is read by the main LLM,
+  without a web search, in addition to the web literature research.
+  `web_literature: false` turns the web research off; it is accepted only together with
+  `literature_text`, because one kind of literature research is always used.
+
+A statement says that a variable is not a cause, that the target rises or falls with a
+variable, what a quantity tends to at a limit, or in which ranges such systems are
+operated. Each statement in `discovery.literature.constraints` has its `origin`
+(`supplied`, `web` or `context`), the `conditions` under which its source states it, and
+its `validity` for the context of your data:
+
+- `yes` (the context, your own literature, and web statements whose conditions clearly
+  match): equations that break it are removed;
+- `unknown`: it never removes an equation and decides only between equations that are
+  equally good on the metric (within one standard error;
+  `selection.coherence_first.unknown_validity`);
+- `no`: it is only shown.
+
+Every fitted equation is tested against the statements by code, and
+`literature_conflicts` in the leaderboard lists what each one breaks.
 
 `discovery.selection.coherence_first` reports the outcome: `n_candidates`, `n_coherent`,
-`challenger_model_id`, `gap_se` (how much better the challenger scores, in standard
-errors) and `challenger_conflicts`. A small gap with a conflicting challenger points to a
-wrong relationship; a large gap means the data and the literature disagree, and a
-warning says so. If no discovered equation is coherent, a coherent law from the
-literature is recommended (`headline_reason` `coherent_literature_law`); if there is none
-either, the cross-validated error alone decides (`..._no_coherent_model`).
+`challenger_model_id` (the best-scoring equation overall, when it conflicts), `gap_se`
+(how much better the challenger scores, in its standard errors) and
+`challenger_conflicts`. When the challenger uses a variable that the literature calls
+not a cause, the coherence check also says how much of what the recommended equation
+leaves unexplained that variable explains: at least half means the data speak against
+the literature, less points to a wrong relationship. If no discovered equation is
+coherent, a coherent law from the literature is recommended (`headline_reason`
+`coherent_literature_law`); if there is none either, the cross-validated error alone
+decides (`..._no_coherent_model`).
+
+Equations of the literature among the other variables are measured against the data
+(`discovery.literature.relations`: `r2_published`, `r2_refitted` and a `status` such as
+`holds`, `holds_in_form`, `partly`, `does_not_hold` or `not_testable_alone`), and a law
+for the target implied by a holding relationship is fitted too (`composed_from`).
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/analyze \
@@ -127,17 +148,19 @@ curl -X POST http://localhost:8000/api/v1/analyze \
 #  "cancel_url": "…", "summary_url": "…", "renamed_columns": {}}
 ```
 
-**Column names.** Names that are not valid identifiers (spaces, dots, hyphens,
+Column names that are not valid identifiers (spaces, dots, hyphens,
 parentheses) are rewritten with underscores, because the equations use them as variable
 names. `target_variable` and `features` may use the names as written in the file or the
 rewritten ones; `renamed_columns` in the response maps one to the other, and the results
 use the rewritten names.
 
-**Time series.** Keep the time column in the file, and the column that identifies each
+For a time series, keep the time column in the file, and the column that identifies each
 series when there are several. They need not be listed in `features`. When the data is
-time-ordered, the holdout is the last part of each series instead of a random sample, and
-an LLM step may add features of earlier periods (lags and period aggregates) before the
-search.
+time-ordered, the holdout is the last part of each series instead of a random sample. For
+a long series (at least 20 points, evenly spaced or not), earlier values of the target
+and earlier errors of an automatic ARIMA fit are added as features before the search;
+`DISCOVERY_SERIES_FEATURES` can let an LLM propose lags and period aggregates instead or
+in addition.
 
 The request is refused before anything is stored when the file cannot be parsed, a column
 does not exist (`400`), the account is at its limit of active runs (`429`) or the
@@ -170,12 +193,13 @@ written.
 | `explanations` | The LLM's reading: one card per equation (`overview`, `term_explanations`, `citations`), `summary` (`key_drivers`, `findings`), `recommendation`, `coherence`. `{"error": ...}` when it could not be written |
 | `discovery.split` | Rows uploaded, complete and dropped; train and holdout sizes; `metric_basis` (`holdout`, or `cv` for data too small to hold rows out); `order` (`random` or `chronological`) |
 | `discovery.series` | Time series only, otherwise `null`: `time_column`, `group_column`, `n_series`, the derived `lag_features` with the reason for each (`origin: "orders"` marks those named by the automatic ARIMA fit), `orders` (p, d, q, the seasonal orders, the lags they name), `feature_stage` |
-| `discovery.selection` | Why the headline was chosen, and whether the agent's pick was overruled. With supplied literature also `coherence_first` (see above) |
-| `discovery.leaderboard` | Every fitted model with its scores, and with supplied literature its `literature_conflicts` |
+| `discovery.selection` | Why the headline was chosen, whether the agent's pick was overruled, and `coherence_first` (see above) |
+| `discovery.leaderboard` | Every fitted model with its scores and its `literature_conflicts` |
 | `discovery.agent` | The agent's summary, insights, rejected forms and open questions |
-| `discovery.literature` | Published laws found by the literature search and how each fits the data. With supplied literature, `source` is `supplied` and `constraints` lists the statements read from it |
+| `discovery.literature` | Laws of the literature and how each fits the data (`laws`), the statements (`constraints`) and the relationships among the other variables (`relations`). `source` is `supplied` or `both` when you gave your own literature |
+| `discovery.context` | `realistic_range`: the limits of the target read from the context |
 | `discovery.relations` | How the headline relates to classic and published laws |
-| `discovery.coherence` | Consistency checks of the headline (noise ceiling, holdout, SHAP, known laws) |
+| `discovery.coherence` | Consistency checks of the headline (noise ceiling, holdout, SHAP, known laws, the statements of the context and the literature, the literature's relationships, parameters, the agent's conclusion), each `pass`, `warn` or `fail`, and the `overall` status |
 | `discovery.dynamics` | Rate laws (SINDy), for time-ordered data |
 | `scatter_data` | Actual and predicted values for plotting |
 | `warnings` | Same list as the top-level `warnings` |
@@ -193,7 +217,7 @@ plots (`feature_0_vs_target.png`, ...) and the SHAP plots (`shap_summary.png`,
 `GET /api/v1/runs/{run_id}/summary` returns the run state and a `summary` object that
 keeps what is needed to judge the outcome and leaves out the plot data, the leaderboard
 and the agent's activity log: `headline`, `equations`, `data` (the split), `series`,
-`selection`, `agent`, `literature`, `known_laws`, `explanation`, `warnings` and
+`selection`, `agent`, `context`, `literature`, `known_laws`, `explanation`, `warnings` and
 `llm_cost_usd`. It is typically a tenth of the size of `results` or less. `summary` is
 `null` until results exist.
 
@@ -207,8 +231,6 @@ artifact:
 python examples/api_client.py data/example_1 --base-url http://localhost:8000
 ```
 
-For a folder with several data files, name the one to analyse:
-
-```bash
-python examples/api_client.py data/example_3 --data-file Celegans_AggregatedData.csv
-```
+`data/example_2` and `data/example_3` carry supplied literature in their
+`problem_description.json` (`literature_text`). For a folder with several data files, name
+the one to analyse with `--data-file <name>`.

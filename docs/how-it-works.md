@@ -7,7 +7,7 @@ plain-language explanation.
 
 The pipeline combines an LLM agent (reasoning, planning, explanation) with numerical
 tools (symbolic regression, least-squares fitting, cross-validation, SHAP, SINDy). The
-rule throughout is that **code decides, the LLM proposes and explains**:
+rule throughout is that code decides, and the LLM proposes and explains:
 - Which model is the headline, how well it fits, and whether the evidence agrees are
   all computed.
 - The LLM chooses what to try next and puts the results into words.
@@ -16,13 +16,13 @@ rule throughout is that **code decides, the LLM proposes and explains**:
 flowchart LR
     A[Upload data<br/>+ problem description] --> B[Profiling<br/>noise ceiling, SHAP]
     A --> P[Baseline PySR search<br/>starts immediately]
-    A -.-> L[Literature scout<br/>runs in background]
+    A -.-> L[Context and literature<br/>read in the background]
     B --> C[Blind exploration<br/>agent + PySR + SINDy]
     P --> C
     C --> R[Relate to known laws]
     L -.-> R
-    R --> S[Model selection<br/>CV, holdout, SHAP check]
-    S --> K[Coherence verdict]
+    R --> S[Model selection<br/>coherence first, then CV]
+    S --> K[Coherence checks<br/>holdout, SHAP, known laws]
     K --> E[Explanation<br/>LLM]
 ```
 
@@ -42,9 +42,9 @@ as `level(x, k)` indicators.
 The agent profiles the data with:
 - correlations and mutual information
 - random-forest permutation importance
-- a **noise ceiling**: the out-of-fold random-forest R², roughly the best accuracy any
+- a noise ceiling: the out-of-fold random-forest R², roughly the best accuracy any
   model can reach on this data
-- **SHAP** on that forest: feature importance, interacting feature pairs (candidates
+- SHAP on that forest: feature importance, interacting feature pairs (candidates
   for product terms and multiplicative laws), and each feature's partial-effect shape
   with the other features accounted for
 
@@ -58,20 +58,20 @@ SHAP runs in the backend in seconds (rows, trees and the interaction sample are 
 
 ## 3. Blind exploration
 
-**Exploration is blind to known laws**, so existing knowledge does not bias the search:
+Exploration is blind to known laws, so existing knowledge does not bias the search:
 - the agent has no access to the classic law catalog or the literature
 - shape labels name no model family
 
 The agent designs its own formulas from the shapes and interactions it sees. Every
-candidate is fitted the same way, and comes back with **diagnosed reasons it falls
-short**:
+candidate is fitted the same way, and comes back with diagnosed reasons it falls
+short:
 - wrong curve shape, and where
 - a missing variable, and which one
 - variance growing with the value
 - unidentifiable parameters
 - "matches the noise ceiling"
 
-Guided by those reasons, the agent launches **targeted PySR searches**. For each one it
+Guided by those reasons, the agent launches targeted PySR searches. For each one it
 chooses:
 - the feature subset
 - the operators
@@ -81,7 +81,7 @@ chooses:
 
 It compares the results with its own formulas.
 
-It records its findings in a **lab notebook** (rejected forms with reasons, insights,
+It records its findings in a lab notebook (rejected forms with reasons, insights,
 data issues), which the explanation step reads.
 
 ### Time-ordered data
@@ -89,7 +89,7 @@ data issues), which the explanation step reads.
 When the rows are measurements along time, the run detects the time structure. The
 agent can confirm or override the detection.
 
-**Long series along time** (annual GPP, monthly groundwater levels; at least 20 points
+Long series along time (annual GPP, monthly groundwater levels; at least 20 points
 per series) get a feature stage before the first PySR search. The measurements need not be
 evenly spaced: the step is the typical distance between measurements, and a value "K steps
 earlier" is read between the two measurements around that moment when they are close
@@ -114,57 +114,100 @@ leaves open (memory at longer distances, memory left in the errors, signs of non
 dynamics, as numbers and as a picture), adds features the fit cannot give, and writes a
 short note for the agent that steers the searches.
 
-For series, the holdout is **chronological**. A random split would let every held-out
+For series, the holdout is chronological. A random split would let every held-out
 step sit between training steps, which measures interpolation rather than prediction
 forward in time.
 
-**Rate laws** (how a state changes, `d(target)/dt = f(state, inputs)`) are searched with
-**SINDy**:
+Rate laws (how a state changes, `d(target)/dt = f(state, inputs)`) are searched with
+SINDy:
 - sparse regression over a library of named terms, swept from the simplest law to the
   fullest
 - each law is integrated from every trajectory's start, because a law that fits the
   derivatives can still drift or blow up
 - SINDy takes seconds and runs in the backend
 
-## 4. Relation to known laws
+## 4. Context, literature and known laws
 
-Only after exploration are the discoveries compared with existing knowledge, from two
-sources:
-- **Classic named laws**, screened on the variables the discoveries use: Mitscherlich,
+Three readings run in the background from the start of the run. None of them reaches the
+agent; they are used only after exploration.
+
+- The context: an LLM reads the project description and the meaning and unit of the
+  target, and returns the realistic limits of the target when they follow from what it is
+  (a concentration is not negative, a percentage lies between 0 and 100). It does not
+  guess a typical range.
+- The web literature research (the default): the main model searches the web and
+  returns published laws solved for the target, statements about the target, and
+  relationships among the other variables. Each statement carries the conditions under
+  which its source states it and its validity for the system the data describes: `yes`,
+  `unknown` or `no`.
+- Supplied literature: text you give (papers, notes, reports; up to 60 000 characters)
+  is read by the main model without a web search. It returns the same three things, and
+  its statements are treated as valid.
+
+Either kind of literature research can be off, but not both.
+
+A statement is one of four kinds:
+- a variable is not a cause of the target
+- the target rises or falls with a variable
+- a quantity tends to a limit when a variable becomes large or goes to zero
+- the ranges in which such systems are operated
+
+After exploration the discoveries are compared with existing knowledge:
+- Classic named laws, screened on the variables the discoveries use: Mitscherlich,
   Michaelis-Menten/Langmuir, Freundlich/power, logistic, Gompertz,
   linear/quadratic-plateau, Gaussian peak, Mitscherlich-Baule, Cobb-Douglas, and others.
-- **Published laws**, collected by a literature scout. The scout runs in the background
-  from the start of the run, using the main model with web search. It writes the laws
-  solved for the target, and they are fitted with the published constants as starting
-  values. The agent never sees them.
+- Laws of the literature, fitted with the published constants as starting values.
 
 Code compares each discovered equation with each known law through their predictions.
 The relation is one of:
 
 | Relation | Meaning |
 |---|---|
-| **equivalent** | The same law in another algebraic form, i.e. a rediscovery |
-| **similar** | The predictions agree closely |
-| **partial** | The law describes some of the variables; the discovery adds the others |
-| **different** | A new relationship |
+| equivalent | The same law in another algebraic form, i.e. a rediscovery |
+| similar | The predictions agree closely |
+| partial | The law describes some of the variables; the discovery adds the others |
+| different | A new relationship |
 
 Code also records whether the law fits better, as well, or worse than the discovery,
 beyond noise.
 
+Relationships among the other variables are measured on the held-out rows, as
+published and with their constants fitted again. A relationship that holds says the
+literature describes the context of your data; one that does not is a hint that the
+context differs. A relationship that holds is also substituted into a law for the target,
+and the composed law is fitted.
+
 ## 5. Model selection
 
-**Code, not an LLM, picks the headline model** among the discovered equations:
-1. Models are ranked by 5-fold cross-validation on the training rows.
-2. They are checked by guards.
-3. The simplest model within one standard error of the best wins.
+Code, not an LLM, picks the headline model among the discovered equations. The
+selection is coherence first, metric second:
+1. Guards remove models that cannot be recommended (a failed fit, a cross-validated R²
+   not above zero, parameters the data do not determine).
+2. Every equation is tested against the statements. It conflicts with the context when,
+   for values of its variables inside the range of the data, it leaves the realistic
+   limits of the target or the measured range of the target by a wide margin. Equations
+   that conflict with the context, or with a statement of validity `yes`, are removed.
+3. The remaining models are ranked by 5-fold cross-validation on the training rows. All
+   models within one standard error of the best are equally good.
+4. Statements of validity `unknown` never remove a model. They decide only between
+   equally good models.
+5. Among the equally good models the agent's first recommendation wins, otherwise the
+   simplest.
 
 Known laws are references. One becomes the headline only when no discovered equation is
-usable.
+coherent or usable.
+
+The equation with the best score overall is kept beside the headline when it conflicts
+(the *challenger*), with the gap between the two in standard errors. When the challenger
+uses a variable that the literature calls "not a cause", code measures how much of what
+the headline leaves unexplained that variable explains. At least half means the data
+speak against the literature; less means the better score is more likely a wrong
+relationship. This reading is a hint and never changes the selection.
 
 The 20% holdout is scored once, at the end. Datasets under 40 rows use cross-validation
 only.
 
-The headline equation is then **checked against SHAP**. For each important feature, the
+The headline equation is then checked against SHAP. For each important feature, the
 check asks whether the equation's effect follows the forest's SHAP effect:
 - agrees
 - disagrees
@@ -182,11 +225,18 @@ Code checks it against:
 - the SHAP effects
 - the published and named laws: a known law that fits better than the discovery is a
   caution; a rediscovered law agrees
+- the statements of the context and the literature, and the challenger when it scores
+  clearly better
+- the literature's relationships among the other variables, as measured on the data
+- the statements of the web literature research of validity `unknown` or `no`
 - its own parameters: are they determined by the data, and defined on every row?
 - the agent's conclusion
 
 Each check comes out as agrees, caution or conflict, and the worst one is the overall
 verdict.
+
+The statements of the context and the literature are tested on ordinary equations. Rate
+laws are selected by their own protocol, without these statements.
 
 ## 7. Explanation
 
@@ -232,6 +282,8 @@ Prices for OpenAI models are built in. Other models are priced with `LLM_PRICES_
 | Profiling and SHAP | `backend/services/discovery/profiling.py` |
 | Time series, features, SINDy | `series.py`, `features.py`, `feature_stage.py`, `temporal.py`, `sindy.py` |
 | Known laws | `families.py`, `literature.py`, `relate.py` |
+| Context and literature statements, relationships | `literature_coherence.py`, `formula_space.py` |
+| Orders of the automatic ARIMA fit | `orders.py` |
 | Headline, coherence | `report.py`, `coherence.py` |
 | LLM prompts (DSPy signatures) | `backend/infrastructure/llm/signatures.py` |
 | PySR worker | `slurm_worker/tasks/pysr_task.py` |
